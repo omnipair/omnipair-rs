@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("D9JZvLjZx2zqAKqfLBQB5keRRi8oQYfXPSZwf4rPW1XL");
+declare_id!("2P89snMvrN1qRTS9sVE2tNee74A8AVSAgSAwog1Hv7aZ");
 
 #[program]
 pub mod omnipair {
