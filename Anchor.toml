@@ -5,13 +5,13 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-omnipair = "D9JZvLjZx2zqAKqfLBQB5keRRi8oQYfXPSZwf4rPW1XL"
+omnipair = "2P89snMvrN1qRTS9sVE2tNee74A8AVSAgSAwog1Hv7aZ"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Devnet"
+cluster = "Localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
