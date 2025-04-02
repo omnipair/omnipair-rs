@@ -5,7 +5,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-omnipair = "2P89snMvrN1qRTS9sVE2tNee74A8AVSAgSAwog1Hv7aZ"
+omnipair = "GZqkUaCeaf96tm2Jw1QaY88fduMHnP7bhLTwjqDk6LM6"
 
 [registry]
 url = "https://api.apr.dev"
