@@ -1,20 +1,11 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
-use crate::state::factory::Factory;
-use crate::state::pair::Pair;
-use crate::errors::ErrorCode;
+use crate::state::*;
 use crate::constants::*;
+use crate::errors::ErrorCode;
 
 #[derive(Accounts)]
-pub struct CreatePair<'info> {
-    #[account(mut)]
-    pub factory: Account<'info, Factory>,
-    
-    /// CHECK: Only storing token mint address
-    pub token0: UncheckedAccount<'info>,
-    /// CHECK: Only storing token mint address
-    pub token1: UncheckedAccount<'info>,
-    
+pub struct InitializePair<'info> {
     #[account(
         init,
         payer = payer,
@@ -24,6 +15,11 @@ pub struct CreatePair<'info> {
     )]
     pub pair: Account<'info, Pair>,
     
+    /// CHECK: Only storing token mint address
+    pub token0: UncheckedAccount<'info>,
+    /// CHECK: Only storing token mint address
+    pub token1: UncheckedAccount<'info>,
+    
     #[account(mut)]
     pub payer: Signer<'info>,
     
@@ -32,7 +28,7 @@ pub struct CreatePair<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn create_pair(ctx: Context<CreatePair>, rate_model: Pubkey) -> Result<()> {
+pub fn initialize_pair(ctx: Context<InitializePair>) -> Result<()> {
     let token0 = ctx.accounts.token0.key();
     let token1 = ctx.accounts.token1.key();
     
@@ -46,19 +42,9 @@ pub fn create_pair(ctx: Context<CreatePair>, rate_model: Pubkey) -> Result<()> {
     let pair = &mut ctx.accounts.pair;
     pair.token0 = token0;
     pair.token1 = token1;
-    pair.rate_model = rate_model;
     pair.last_update = current_time;
     pair.last_rate0 = MIN_RATE;
     pair.last_rate1 = MIN_RATE;
     
-    let factory = &mut ctx.accounts.factory;
-    require!(
-        factory.all_pairs.len() < Factory::MAX_PAIRS,
-        ErrorCode::FactoryFull
-    );
-    
-    factory.all_pairs.push(pair.key());
-    factory.pair_count += 1;
-    
     Ok(())
-}
+} 
