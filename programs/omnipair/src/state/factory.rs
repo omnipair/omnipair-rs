@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use crate::state::pair::Pair;
 
 #[account]
 pub struct Factory {
