@@ -1,14 +1,35 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
-use crate::state::factory::Factory;
+use crate::state::factory::{Factory, PairRegistry};
 use crate::state::pair::Pair;
 use crate::errors::ErrorCode;
 use crate::constants::*;
 
 #[derive(Accounts)]
 pub struct CreatePair<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"factory", factory.owner.as_ref()],
+        bump
+    )]
     pub factory: Account<'info, Factory>,
+    
+    #[account(
+        mut,
+        seeds = [b"pair_registry", factory.key().as_ref(), &current_registry.registry_index.to_le_bytes()],
+        bump
+    )]
+    pub current_registry: Account<'info, PairRegistry>,
+    
+    /// CHECK: This account is created on-demand when needed
+    #[account(
+        init_if_needed,
+        payer = payer,
+        space = PairRegistry::SIZE,
+        seeds = [b"pair_registry", factory.key().as_ref(), &(current_registry.registry_index + 1).to_le_bytes()],
+        bump
+    )]
+    pub next_registry: Account<'info, PairRegistry>,
     
     /// CHECK: Only storing token mint address
     pub token0: UncheckedAccount<'info>,
@@ -52,12 +73,32 @@ pub fn create_pair(ctx: Context<CreatePair>, rate_model: Pubkey) -> Result<()> {
     pair.last_rate1 = MIN_RATE;
     
     let factory = &mut ctx.accounts.factory;
-    require!(
-        factory.all_pairs.len() < Factory::MAX_PAIRS,
-        ErrorCode::FactoryFull
-    );
+    let current_registry = &mut ctx.accounts.current_registry;
     
-    factory.all_pairs.push(pair.key());
+    // Check if the current registry is full
+    if current_registry.pairs.len() >= PairRegistry::MAX_PAIRS_PER_REGISTRY {
+        // Initialize the next registry if it's not already initialized
+        let next_registry = &mut ctx.accounts.next_registry;
+        
+        // Only initialize if it's a new account
+        if next_registry.factory == Pubkey::default() {
+            next_registry.factory = factory.key();
+            next_registry.next_registry = None;
+            next_registry.registry_index = current_registry.registry_index + 1;
+            next_registry.pairs = Vec::with_capacity(PairRegistry::MAX_PAIRS_PER_REGISTRY);
+            
+            // Link the current registry to the next one
+            current_registry.next_registry = Some(next_registry.key());
+        }
+        
+        // Add the pair to the next registry
+        next_registry.pairs.push(pair.key());
+    } else {
+        // Add the pair to the current registry
+        current_registry.pairs.push(pair.key());
+    }
+    
+    // Increment the pair count in the factory
     factory.pair_count += 1;
     
     Ok(())
