@@ -15,36 +15,7 @@ describe("create_rate_model", () => {
 
   it("Creates a rate model and uses it to create a pair", async () => {
     try {
-      // 1. Get the factory address
-      const [factoryAddress, factoryBump] = await PublicKey.findProgramAddress(
-        [Buffer.from("factory"), owner.publicKey.toBuffer()],
-        program.programId
-      );
-      console.log("Factory address:", factoryAddress.toBase58());
-
-      // 2. Get the current registry address (index 0)
-      const [registryAddress, registryBump] = await PublicKey.findProgramAddress(
-        [
-          Buffer.from("pair_registry"),
-          factoryAddress.toBuffer(),
-          new anchor.BN(0).toArrayLike(Buffer, "le", 4)
-        ],
-        program.programId
-      );
-      console.log("Registry address:", registryAddress.toBase58());
-
-      // 3. Get the next registry address (index 1)
-      const [nextRegistryAddress, nextRegistryBump] = await PublicKey.findProgramAddress(
-        [
-          Buffer.from("pair_registry"),
-          factoryAddress.toBuffer(),
-          new anchor.BN(1).toArrayLike(Buffer, "le", 4)
-        ],
-        program.programId
-      );
-      console.log("Next registry address:", nextRegistryAddress.toBase58());
-
-      // 4. Create a rate model
+      // 1. Create a rate model
       const rateModel = Keypair.generate();
       console.log("Rate model address:", rateModel.publicKey.toBase58());
 
@@ -60,32 +31,29 @@ describe("create_rate_model", () => {
 
       console.log("Rate model created successfully");
 
-      // 5. Create token mints for the pair (for testing)
-      const token0Mint = Keypair.generate();
-      const token1Mint = Keypair.generate();
-      console.log("Token0 mint:", token0Mint.publicKey.toBase58());
-      console.log("Token1 mint:", token1Mint.publicKey.toBase58());
+      // 2. Create token mints for the pair (for testing)
+      const token0Mint = new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
+      const token1Mint = new PublicKey("So11111111111111111111111111111111111111112");
+      console.log("Token0 mint:", token0Mint.toBase58());
+      console.log("Token1 mint:", token1Mint.toBase58());
 
-      // 6. Get the pair address
+      // 3. Get the pair address
       const [pairAddress, pairBump] = await PublicKey.findProgramAddress(
         [
           Buffer.from("pair"),
-          token0Mint.publicKey.toBuffer(),
-          token1Mint.publicKey.toBuffer()
+          token0Mint.toBuffer(),
+          token1Mint.toBuffer()
         ],
         program.programId
       );
       console.log("Pair address:", pairAddress.toBase58());
 
-      // 7. Create the pair using the rate model
+      // 4. Create the pair using the rate model
       await program.methods
         .createPair(rateModel.publicKey)
         .accounts({
-          factory: factoryAddress,
-          currentRegistry: registryAddress,
-          nextRegistry: nextRegistryAddress,
-          token0: token0Mint.publicKey,
-          token1: token1Mint.publicKey,
+          token0: token0Mint,
+          token1: token1Mint,
           pair: pairAddress,
           payer: owner.publicKey,
           systemProgram: SystemProgram.programId,
@@ -96,10 +64,10 @@ describe("create_rate_model", () => {
 
       console.log("Pair created successfully");
 
-      // 8. Verify the pair was created correctly
+      // 5. Verify the pair was created correctly
       const pair = await program.account.pair.fetch(pairAddress);
-      assert.ok(pair.token0.equals(token0Mint.publicKey));
-      assert.ok(pair.token1.equals(token1Mint.publicKey));
+      assert.ok(pair.token0.equals(token0Mint));
+      assert.ok(pair.token1.equals(token1Mint));
       assert.ok(pair.rateModel.equals(rateModel.publicKey));
 
       console.log("Pair verification successful");

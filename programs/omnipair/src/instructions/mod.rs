@@ -1,6 +1,3 @@
-pub mod factory_create_pair;
-pub mod factory_initialize;
-pub mod factory_get_pairs;
 pub mod pair_adjust_collateral;
 pub mod pair_adjust_debt;
 pub mod pair_adjust_liquidity;
@@ -13,9 +10,6 @@ pub mod pair_sync;
 pub mod pair_withdraw_liquidation_bond;
 pub mod rate_model_create;
 
-pub use factory_initialize::*;
-pub use factory_create_pair::*;
-pub use factory_get_pairs::*;
 pub use pair_adjust_collateral::*;
 pub use pair_adjust_debt::*;
 pub use pair_adjust_liquidity::*;
