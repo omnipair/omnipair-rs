@@ -18,27 +18,14 @@ declare_id!("GZqkUaCeaf96tm2Jw1QaY88fduMHnP7bhLTwjqDk6LM6");
 pub mod omnipair {
     use super::*;
 
-    // Factory instructions
-    pub fn initialize_factory(ctx: Context<InitializeFactory>) -> Result<()> {
-        instructions::factory_initialize::initialize_factory(ctx)
-    }
-
-    pub fn create_pair(ctx: Context<CreatePair>, rate_model: Pubkey) -> Result<()> {
-        instructions::factory_create_pair::create_pair(ctx, rate_model)
-    }
-
-    pub fn get_pairs(ctx: Context<GetPairs>) -> Result<Vec<Pubkey>> {
-        instructions::factory_get_pairs::get_pairs(ctx)
-    }
-
     // Rate model instructions
     pub fn create_rate_model(ctx: Context<CreateRateModel>) -> Result<()> {
         instructions::rate_model_create::create_rate_model(ctx)
     }
 
     // Pair instructions
-    pub fn initialize_pair(ctx: Context<InitializePair>) -> Result<()> {
-        instructions::pair_initialize::initialize_pair(ctx)
+    pub fn initialize_pair(ctx: Context<InitializePair>, rate_model: Pubkey) -> Result<()> {
+        instructions::pair_initialize::initialize_pair(ctx, rate_model)
     }
 
     pub fn swap(

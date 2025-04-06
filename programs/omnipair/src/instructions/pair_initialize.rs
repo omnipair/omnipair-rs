@@ -1,11 +1,16 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
-use crate::state::*;
-use crate::constants::*;
+use crate::state::pair::Pair;
 use crate::errors::ErrorCode;
+use crate::constants::*;
 
 #[derive(Accounts)]
 pub struct InitializePair<'info> {
+    /// CHECK: Only storing token mint address
+    pub token0: UncheckedAccount<'info>,
+    /// CHECK: Only storing token mint address
+    pub token1: UncheckedAccount<'info>,
+    
     #[account(
         init,
         payer = payer,
@@ -15,11 +20,6 @@ pub struct InitializePair<'info> {
     )]
     pub pair: Account<'info, Pair>,
     
-    /// CHECK: Only storing token mint address
-    pub token0: UncheckedAccount<'info>,
-    /// CHECK: Only storing token mint address
-    pub token1: UncheckedAccount<'info>,
-    
     #[account(mut)]
     pub payer: Signer<'info>,
     
@@ -28,7 +28,7 @@ pub struct InitializePair<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn initialize_pair(ctx: Context<InitializePair>) -> Result<()> {
+pub fn initialize_pair(ctx: Context<InitializePair>, rate_model: Pubkey) -> Result<()> {
     let token0 = ctx.accounts.token0.key();
     let token1 = ctx.accounts.token1.key();
     
@@ -45,6 +45,7 @@ pub fn initialize_pair(ctx: Context<InitializePair>) -> Result<()> {
     pair.last_update = current_time;
     pair.last_rate0 = MIN_RATE;
     pair.last_rate1 = MIN_RATE;
+    pair.rate_model = rate_model;
     
     Ok(())
 } 
