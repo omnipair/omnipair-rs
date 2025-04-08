@@ -1,13 +1,14 @@
 use anchor_lang::prelude::*;
 use crate::state::rate_model::RateModel;
 use crate::constants::*;
+use crate::utils::account::get_size_with_discriminator;
 
 #[derive(Accounts)]
 pub struct CreateRateModel<'info> {
     #[account(
         init,
         payer = payer,
-        space = 8 + std::mem::size_of::<RateModel>(),
+        space = get_size_with_discriminator::<RateModel>(),
     )]
     pub rate_model: Account<'info, RateModel>,
     

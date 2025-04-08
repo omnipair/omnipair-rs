@@ -11,6 +11,7 @@ pub mod utils;
 pub use state::*;
 pub use utils::*;
 pub use instructions::*;
+pub use utils::account::*;
 
 declare_id!("GZqkUaCeaf96tm2Jw1QaY88fduMHnP7bhLTwjqDk6LM6");
 
@@ -24,8 +25,8 @@ pub mod omnipair {
     }
 
     // Pair instructions
-    pub fn initialize_pair(ctx: Context<InitializePair>, rate_model: Pubkey) -> Result<()> {
-        instructions::pair_initialize::initialize_pair(ctx, rate_model)
+    pub fn initialize_pair(ctx: Context<InitializePair>) -> Result<()> {
+        instructions::pair_initialize::initialize_pair(ctx)
     }
 
     pub fn swap(
