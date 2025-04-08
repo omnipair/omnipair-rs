@@ -1,5 +1,6 @@
 use solana_program::pubkey::Pubkey;
 use std::str::FromStr;
+use omnipair::constants::FACTORY_SEED_PREFIX;
 
 fn main() {
     // Test the factory initialization logic
@@ -18,7 +19,7 @@ fn main() {
         .expect("Invalid program ID");
     
     let (factory_pda, bump) = Pubkey::find_program_address(
-        &[b"factory", owner_bytes.as_ref()],
+        &[FACTORY_SEED_PREFIX, owner_bytes.as_ref()],
         &program_id
     );
     
