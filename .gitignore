@@ -6,3 +6,4 @@ node_modules
 test-ledger
 .yarn
 .env
+wallet-keypair.json
