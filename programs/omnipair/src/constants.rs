@@ -25,3 +25,6 @@ pub const MAX_X_E12: u64 = 289_279_112_968_179;
 pub const GAMM_LP_MINT_SEED_PREFIX: &[u8] = b"gamm_lp_mint";
 pub const GAMM_PAIR_SEED_PREFIX: &[u8] = b"gamm_pair";
 pub const GAMM_FACTORY_SEED_PREFIX: &[u8] = b"gamm_factory";
+pub const GAMM_RESERVE_VAULT_SEED_PREFIX: &[u8] = b"gamm_reserve_vault";
+pub const GAMM_COLLATERAL_VAULT_SEED_PREFIX: &[u8] = b"gamm_collateral_vault";
+

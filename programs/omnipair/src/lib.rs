@@ -25,8 +25,9 @@ pub mod omnipair {
     }
 
     // Pair instructions
+    #[access_control(ctx.accounts.validate())]
     pub fn initialize_pair(ctx: Context<InitializePair>) -> Result<()> {
-        instructions::pair_initialize::initialize_pair(ctx)
+        InitializePair::handle_initialize(ctx)
     }
 
     pub fn swap(
