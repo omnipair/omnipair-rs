@@ -1,170 +1,266 @@
-use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount};
+use anchor_lang::{
+    prelude::*,
+    accounts::interface_account::InterfaceAccount,
+};
+use anchor_spl::{
+    token::Token,
+    token_interface::{Mint, TokenAccount},
+    associated_token::AssociatedToken,
+};
 use crate::state::*;
 use crate::constants::*;
-use crate::utils::math::*;
+use crate::utils::calc::*;
 use crate::errors::ErrorCode;
 use crate::events::*;
 
+#[derive(Debug)]
+pub enum LiquidityAction {
+    Add(u64),
+    Remove(u64),
+}
+
+impl LiquidityAction {
+    pub fn from_amount(amount: i64) -> Option<Self> {
+        match amount {
+            x if x > 0 => Some(LiquidityAction::Add(x as u64)),
+            x if x < 0 => Some(LiquidityAction::Remove((-x) as u64)),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Accounts)]
 pub struct AdjustLiquidity<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [
+            GAMM_PAIR_SEED_PREFIX, 
+            pair.token0.as_ref(),
+            pair.token1.as_ref()
+        ],
+        bump
+    )]
     pub pair: Account<'info, Pair>,
     
-    #[account(mut)]
-    pub token0: Account<'info, TokenAccount>,
-    #[account(mut)]
-    pub token1: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        seeds = [
+            GAMM_RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            pair.token0.as_ref()
+        ],
+        bump,
+    )]
+    pub token0_reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     
-    #[account(mut)]
-    pub user_token0: Account<'info, TokenAccount>,
-    #[account(mut)]
-    pub user_token1: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        seeds = [
+            GAMM_RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            pair.token1.as_ref()
+        ],
+        bump,
+    )]
+    pub token1_reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     
-    #[account(mut)]
-    pub user_lp_token: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        token::mint = pair.token0,
+        token::authority = user,
+    )]
+    pub user_token0: Box<InterfaceAccount<'info, TokenAccount>>,
     
+    #[account(
+        mut,
+        token::mint = pair.token1,
+        token::authority = user,
+    )]
+    pub user_token1: Box<InterfaceAccount<'info, TokenAccount>>,
+    
+    #[account(
+        mut,
+        associated_token::mint = lp_mint,
+        associated_token::authority = user,
+        token::token_program = token_program,
+    )]
+    pub user_lp_token: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        seeds = [
+            GAMM_LP_MINT_SEED_PREFIX,
+            pair.key().as_ref(),
+        ],
+        bump,
+    )]
+    pub lp_mint: Box<InterfaceAccount<'info, Mint>>,
+
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
+
+    #[account(mut)]
+    pub rate_model: Account<'info, RateModel>,
 }
 
-pub fn adjust_liquidity(
-    ctx: Context<AdjustLiquidity>,
-    amount0_desired: u64,
-    amount1_desired: u64,
-    amount0_min: u64,
-    amount1_min: u64,
+fn handle_token_transfer<'info>(
+    from: &AccountInfo<'info>,
+    to: &AccountInfo<'info>,
+    amount: u64,
+    user: &Signer<'info>,
+    system_program: &Program<'info, System>,
 ) -> Result<()> {
-    let pair_key = ctx.accounts.pair.key();
-    let pair_info = ctx.accounts.pair.to_account_info();
-    let pair_info_clone = pair_info.clone();
-    let pair = &mut ctx.accounts.pair;
-    let current_time = Clock::get()?.unix_timestamp;
-    
-    // Update state
-    if current_time > pair.last_update {
-        // Update oracles
-        let time_elapsed = current_time - pair.last_update;
-        if time_elapsed > 0 {
-            pair.last_price0_ema = compute_ema(
-                pair.last_price0_ema,
-                pair.last_update,
-                if pair.reserve0 > 0 { pair.reserve1 * SCALE / pair.reserve0 } else { 0 },
-                DEFAULT_HALF_LIFE,
-                current_time,
-            );
-            pair.last_price1_ema = compute_ema(
-                pair.last_price1_ema,
-                pair.last_update,
-                if pair.reserve1 > 0 { pair.reserve0 * SCALE / pair.reserve1 } else { 0 },
-                DEFAULT_HALF_LIFE,
-                current_time,
-            );
-        }
-        pair.last_update = current_time;
+    anchor_lang::solana_program::program::invoke(
+        &anchor_lang::solana_program::system_instruction::transfer(
+            &from.key(),
+            &to.key(),
+            amount,
+        ),
+        &[
+            from.to_account_info(),
+            to.to_account_info(),
+            user.to_account_info(),
+            system_program.to_account_info(),
+        ],
+    ).map_err(|e| e.into())
+}
+
+impl AdjustLiquidity<'_> {
+    pub fn validate(
+        ctx: Context<Self>,
+        args: AdjustLiquidityArgs,
+    ) -> Result<()> {
+        let pair = &ctx.accounts.pair;
+        
+        require!(pair.total_supply > 0, ErrorCode::PairNotInitialized);
+
+        require_gte!(pair.reserve0, args.amount0_in as u64);
+        require_gte!(pair.reserve1, args.amount1_in as u64);
+
+        Ok(())
     }
-    
-    // Calculate optimal amounts
-    let (amount0, amount1) = if pair.reserve0 == 0 && pair.reserve1 == 0 {
-        (amount0_desired, amount1_desired)
-    } else {
-        let amount1_optimal = (amount0_desired * pair.reserve1) / pair.reserve0;
-        if amount1_optimal <= amount1_desired {
-            require!(
-                amount1_optimal >= amount1_min,
-                ErrorCode::InsufficientAmount1
-            );
-            (amount0_desired, amount1_optimal)
-        } else {
-            let amount0_optimal = (amount1_desired * pair.reserve0) / pair.reserve1;
-            require!(
-                amount0_optimal >= amount0_min,
-                ErrorCode::InsufficientAmount0
-            );
-            (amount0_optimal, amount1_desired)
+
+
+    pub fn adjust_liquidity(
+        ctx: Context<Self>,
+        args: AdjustLiquidityArgs,
+    ) -> Result<()> {
+        let pair = &mut ctx.accounts.pair;
+        let current_time = Clock::get()?.unix_timestamp;
+        
+        pair.update(&ctx.accounts.rate_model);
+
+        // Handle token0
+        if let Some(action) = LiquidityAction::from_amount(args.amount0_in) {
+            match action {
+                LiquidityAction::Add(amount) => {
+                    handle_token_transfer(
+                        &ctx.accounts.user_token0.to_account_info(),
+                        &ctx.accounts.token0_reserve_vault.to_account_info(),
+                        amount,
+                        &ctx.accounts.user,
+                        &ctx.accounts.system_program,
+                    )?;
+                    pair.reserve0 += amount;
+                }
+                LiquidityAction::Remove(amount) => {
+                    handle_token_transfer(
+                        &ctx.accounts.token0_reserve_vault.to_account_info(),
+                        &ctx.accounts.user_token0.to_account_info(),
+                        amount,
+                        &ctx.accounts.user,
+                        &ctx.accounts.system_program,
+                    )?;
+                    pair.reserve0 -= amount;
+                }
+            }
         }
-    };
-    
-    // Transfer tokens
-    anchor_lang::solana_program::program::invoke(
-        &anchor_lang::solana_program::system_instruction::transfer(
-            &ctx.accounts.user_token0.key(),
-            &ctx.accounts.token0.key(),
-            amount0,
-        ),
-        &[
-            ctx.accounts.user_token0.to_account_info(),
-            ctx.accounts.token0.to_account_info(),
-            ctx.accounts.user.to_account_info(),
-            ctx.accounts.system_program.to_account_info(),
-        ],
-    )?;
-    
-    anchor_lang::solana_program::program::invoke(
-        &anchor_lang::solana_program::system_instruction::transfer(
-            &ctx.accounts.user_token1.key(),
-            &ctx.accounts.token1.key(),
-            amount1,
-        ),
-        &[
-            ctx.accounts.user_token1.to_account_info(),
-            ctx.accounts.token1.to_account_info(),
-            ctx.accounts.user.to_account_info(),
-            ctx.accounts.system_program.to_account_info(),
-        ],
-    )?;
-    
-    // Calculate liquidity
-    let liquidity = if pair.total_supply == 0 {
-        let liquidity = sqrt(amount0 * amount1) - MINIMUM_LIQUIDITY;
-        // Mint minimum liquidity to address(0)
-        anchor_lang::solana_program::program::invoke(
-            &anchor_lang::solana_program::system_instruction::transfer(
-                &pair_key,
-                &Pubkey::default(),
-                MINIMUM_LIQUIDITY,
-            ),
-            &[
-                pair_info,
-                ctx.accounts.system_program.to_account_info(),
-            ],
-        )?;
-        liquidity
-    } else {
-        min(
-            amount0 * pair.total_supply / pair.reserve0,
-            amount1 * pair.total_supply / pair.reserve1,
-        )
-    };
-    
-    // Mint LP tokens
-    anchor_lang::solana_program::program::invoke(
-        &anchor_lang::solana_program::system_instruction::transfer(
-            &pair_key,
-            &ctx.accounts.user_lp_token.key(),
-            liquidity,
-        ),
-        &[
-            pair_info_clone,
-            ctx.accounts.user_lp_token.to_account_info(),
-            ctx.accounts.system_program.to_account_info(),
-        ],
-    )?;
-    
-    // Update reserves
-    pair.reserve0 += amount0;
-    pair.reserve1 += amount1;
-    pair.total_supply += liquidity;
-    
-    // Emit event
-    emit!(AdjustLiquidityEvent {
-        user: ctx.accounts.user.key(),
-        amount0,
-        amount1,
-        liquidity,
-        timestamp: current_time,
-    });
-    
-    Ok(())
+
+        // Handle token1
+        if let Some(action) = LiquidityAction::from_amount(args.amount1_in) {
+            match action {
+                LiquidityAction::Add(amount) => {
+                    handle_token_transfer(
+                        &ctx.accounts.user_token1.to_account_info(),
+                        &ctx.accounts.token1_reserve_vault.to_account_info(),
+                        amount,
+                        &ctx.accounts.user,
+                        &ctx.accounts.system_program,
+                    )?;
+                    pair.reserve1 += amount;
+                }
+                LiquidityAction::Remove(amount) => {
+                    handle_token_transfer(
+                        &ctx.accounts.token1_reserve_vault.to_account_info(),
+                        &ctx.accounts.user_token1.to_account_info(),
+                        amount,
+                        &ctx.accounts.user,
+                        &ctx.accounts.system_program,
+                    )?;
+                    pair.reserve1 -= amount;
+                }
+            }
+        }
+
+        // Calculate and handle LP tokens
+        let liquidity = if pair.total_supply == 0 {
+            let liquidity = sqrt((args.amount0_in as u64) * (args.amount1_in as u64)) - MINIMUM_LIQUIDITY;
+            // Mint minimum liquidity to address(0)
+            anchor_lang::solana_program::program::invoke(
+                &anchor_lang::solana_program::system_instruction::transfer(
+                    &pair.key(),
+                    &Pubkey::default(),
+                    MINIMUM_LIQUIDITY,
+                ),
+                &[
+                    pair.to_account_info(),
+                    ctx.accounts.system_program.to_account_info(),
+                ],
+            )?;
+            liquidity
+        } else {
+            min(
+                (args.amount0_in as u64) * pair.total_supply / pair.reserve0,
+                (args.amount1_in as u64) * pair.total_supply / pair.reserve1,
+            )
+        };
+
+        // Handle LP tokens
+        if let Some(action) = LiquidityAction::from_amount(liquidity as i64) {
+            match action {
+                LiquidityAction::Add(amount) => {
+                    handle_token_transfer(
+                        &pair.to_account_info(),
+                        &ctx.accounts.user_lp_token.to_account_info(),
+                        amount,
+                        &ctx.accounts.user,
+                        &ctx.accounts.system_program,
+                    )?;
+                    pair.total_supply += amount;
+                }
+                LiquidityAction::Remove(amount) => {
+                    handle_token_transfer(
+                        &ctx.accounts.user_lp_token.to_account_info(),
+                        &pair.to_account_info(),
+                        amount,
+                        &ctx.accounts.user,
+                        &ctx.accounts.system_program,
+                    )?;
+                    pair.total_supply -= amount;
+                }
+            }
+        }
+
+        // Emit event
+        emit!(AdjustLiquidityEvent {
+            user: ctx.accounts.user.key(),
+            amount0: args.amount0_in as u64,
+            amount1: args.amount1_in as u64,
+            liquidity: liquidity as u64,
+            timestamp: current_time,
+        });
+        
+        Ok(())
+    }
 }

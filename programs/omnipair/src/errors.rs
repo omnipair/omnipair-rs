@@ -23,6 +23,15 @@ pub enum ErrorCode {
     
     #[msg("Insufficient collateral")]
     InsufficientCollateral,
+
+    #[msg("Amount cannot be zero")]
+    AmountZero,
+
+    #[msg("Insufficient amount0 in")]
+    InsufficientAmount0In,
+    
+    #[msg("Insufficient amount1 in")]
+    InsufficientAmount1In,
     
     #[msg("Borrowing power exceeded")]
     BorrowingPowerExceeded,

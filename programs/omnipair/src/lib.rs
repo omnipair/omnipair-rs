@@ -25,9 +25,25 @@ pub mod omnipair {
     }
 
     // Pair instructions
-    #[access_control(ctx.accounts.validate())]
-    pub fn initialize_pair(ctx: Context<InitializePair>) -> Result<()> {
-        InitializePair::handle_initialize(ctx)
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn initialize_pair(ctx: Context<InitializePair>, args: AddLiquidityArgs) -> Result<()> {
+        InitializePair::handle_initialize(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.validate_add_and_update(&args))]
+    pub fn add_liquidity(
+        ctx: Context<AdjustLiquidity>,
+        args: AddLiquidityArgs,
+    ) -> Result<()> {
+        AdjustLiquidity::handle_add(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.validate_remove_and_update(&args))]
+    pub fn remove_liquidity(
+        ctx: Context<AdjustLiquidity>,
+        args: RemoveLiquidityArgs,
+    ) -> Result<()> {
+        AdjustLiquidity::handle_remove(ctx, args)
     }
 
     pub fn swap(
@@ -54,16 +70,8 @@ pub mod omnipair {
         instructions::pair_adjust_debt::adjust_debt(ctx, amount0, amount1)
     }
 
-    pub fn flashloan(
-        ctx: Context<Flashloan>,
-        amount0: u64,
-        amount1: u64,
-        data: Vec<u8>,
-    ) -> Result<()> {
-        instructions::pair_flashloan::flashloan(ctx, amount0, amount1, data)
-    }
 
-    pub fn withdraw_liquidation_bond(ctx: Context<WithdrawLiquidationBond>) -> Result<()> {
-        instructions::pair_withdraw_liquidation_bond::withdraw_liquidation_bond(ctx)
-    }
+    // pub fn update_pair(ctx: Context<Pair>) -> Result<()> {
+    //     Pair::update(ctx)
+    // }
 }

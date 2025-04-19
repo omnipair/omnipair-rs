@@ -105,8 +105,8 @@ pub fn swap(
     )?;
     
     // Update prices
-    pair.price0_last = (pair.reserve1 * PRICE_PRECISION) / pair.reserve0;
-    pair.price1_last = (pair.reserve0 * PRICE_PRECISION) / pair.reserve1;
+    pair.price0_last = (pair.reserve1 * SCALE) / pair.reserve0;
+    pair.price1_last = (pair.reserve0 * SCALE) / pair.reserve1;
     
     // Emit event
     emit!(SwapEvent {
