@@ -18,11 +18,13 @@ pub struct CreateRateModel<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn create_rate_model(ctx: Context<CreateRateModel>) -> Result<()> {
-    let rate_model = &mut ctx.accounts.rate_model;
-    rate_model.exp_rate = SCALED_NATURAL_LOG_OF_TWO / SECONDS_PER_DAY;
-    rate_model.target_util_start = TARGET_UTIL_START;
-    rate_model.target_util_end = TARGET_UTIL_END;
-    
-    Ok(())
+impl<'info> CreateRateModel<'info> {
+    pub fn handle_create(ctx: Context<Self>) -> Result<()> {
+        let rate_model = &mut ctx.accounts.rate_model;
+        rate_model.exp_rate = SCALED_NATURAL_LOG_OF_TWO / SECONDS_PER_DAY;
+        rate_model.target_util_start = TARGET_UTIL_START;
+        rate_model.target_util_end = TARGET_UTIL_END;
+        
+        Ok(())
+    }
 } 

@@ -7,8 +7,6 @@ pub mod instructions;
 pub mod state;
 pub mod utils;
 
-// Re-export modules to simplify the program interface.
-pub use state::*;
 pub use utils::*;
 pub use instructions::*;
 pub use utils::account::*;
@@ -21,7 +19,7 @@ pub mod omnipair {
 
     // Rate model instructions
     pub fn create_rate_model(ctx: Context<CreateRateModel>) -> Result<()> {
-        instructions::rate_model_create::create_rate_model(ctx)
+        CreateRateModel::handle_create(ctx)
     }
 
     // Pair instructions
