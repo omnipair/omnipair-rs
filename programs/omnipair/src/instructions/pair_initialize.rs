@@ -177,12 +177,15 @@ impl InitializePair<'_> {
         let current_time = Clock::get()?.unix_timestamp;
         
         let pair = &mut ctx.accounts.pair;
-        pair.token0 = ctx.accounts.token0_mint.key();
-        pair.token1 = ctx.accounts.token1_mint.key();
-        pair.last_update = current_time;
-        pair.last_rate0 = MIN_RATE;
-        pair.last_rate1 = MIN_RATE;
-        pair.rate_model = ctx.accounts.rate_model.key();
+        let (
+            token0, 
+            token1, 
+            rate_model
+        ) = (
+            ctx.accounts.token0_mint.key(), 
+            ctx.accounts.token1_mint.key(), 
+            ctx.accounts.rate_model.key()
+        );
 
         let AddLiquidityArgs { 
             amount0_in, 
@@ -235,6 +238,17 @@ impl InitializePair<'_> {
             liquidity,
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
+
+        Pair::initialize(
+            token0,
+            token1,
+            rate_model,
+            current_time,
+            amount0_in,
+            amount1_in,
+            liquidity,
+            pair.bump,
+        );
 
         Ok(())
     }   

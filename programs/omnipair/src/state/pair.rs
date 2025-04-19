@@ -40,30 +40,32 @@ pub struct Pair {
     // Collateral tracking
     pub total_collateral0: u64,
     pub total_collateral1: u64,
-    
-    // Liquidation bond
-    pub liquidation_bond: u64,
 
     // PDA bump
     pub bump: u8,
 }
 
 impl Pair {
-    pub fn new(
+    pub fn initialize(
         token0: Pubkey,
         token1: Pubkey,
         rate_model: Pubkey,
         current_time: i64,
+        reserve0: u64,
+        reserve1: u64,
+        total_supply: u64,
         bump: u8,
     ) -> Self {
         Self {
             token0,
             token1,
-            reserve0: 0,
-            reserve1: 0,
+            reserve0,
+            reserve1,
             rate_model,
-
             last_update: current_time,
+            total_supply,
+            bump,
+
             price0_cumulative_last: 0,
             price1_cumulative_last: 0,
             price0_last: 0,
@@ -77,11 +79,8 @@ impl Pair {
             total_debt1: 0,
             total_debt0_shares: 0,
             total_debt1_shares: 0,
-            total_supply: 0,
             total_collateral0: 0,
             total_collateral1: 0,
-            liquidation_bond: 0,
-            bump: bump,
         }
     }
 
@@ -204,42 +203,6 @@ impl Pair {
             self.token0.as_ref(), 
             self.token1.as_ref()
         ], &crate::ID).0
-    }
-}
-
-#[account]
-pub struct UserState {
-    // Collateral
-    pub collateral0: u64,
-    pub collateral1: u64,
-    
-    // Debt shares
-    pub debt0_shares: u64,
-    pub debt1_shares: u64,
-    
-    // Liquidation bond
-    pub liquidation_bond: u64,
-    
-    // Delegation
-    pub delegate: Pubkey,
-}
-
-impl UserState {
-    pub const SIZE: usize = 
-        8 + 8 + // collateral0, collateral1
-        8 + 8 + // debt0_shares, debt1_shares
-        8 + // liquidation_bond
-        32; // delegate
-
-    pub fn new() -> Self {
-        Self {
-            collateral0: 0,
-            collateral1: 0,
-            debt0_shares: 0,
-            debt1_shares: 0,
-            liquidation_bond: 0,
-            delegate: Pubkey::default(),
-        }
     }
 }
 
