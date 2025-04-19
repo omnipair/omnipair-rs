@@ -1,11 +1,10 @@
-pub const SCALE: u64 = 1_000_000;
-pub const PRICE_PRECISION: u64 = 1_000_000;
+pub const SCALE: u64 = 1_000_000_000; // 1e9
 pub const DEFAULT_HALF_LIFE: u64 = 24 * 60 * 60; // 24 hours
 pub const TAYLOR_TERMS: u64 = 5;
 pub const SCALED_NATURAL_LOG_OF_TWO: u64 = 693_147_180; // ln(2) scaled by 1e9
 
 // Pair constants
-pub const MINIMUM_LIQUIDITY: u64 = 1_000; // 10^3
+pub const MIN_LIQUIDITY: u64 = 1_000; // 10^3
 pub const FEE_BPS: u64 = 30;
 pub const CF_BPS: u64 = 8_500;
 pub const MIN_RATE: u64 = 1; // 0.0001%
