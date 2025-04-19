@@ -11,7 +11,7 @@ describe("omnipair", () => {
   anchor.setProvider(provider);
 
   // Initialize program with proper ID from Anchor.toml
-  const PROGRAM_ID = new PublicKey("GZqkUaCeaf96tm2Jw1QaY88fduMHnP7bhLTwjqDk6LM6");
+  const PROGRAM_ID = new PublicKey("Hp5xcpcLe24PBrdGZkdQ9gz9VTT9xciPcumiLY7t89EY");
   const program = anchor.workspace.Omnipair;
   
   // Test accounts
