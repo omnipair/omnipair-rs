@@ -1,10 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::errors::ErrorCode;
 use crate::constants::*;
-use crate::utils::{
-    token::{transfer_from_user_to_pool_vault, token_mint_to},
-    U128,
-};
+use crate::utils::token::{transfer_from_user_to_pool_vault, token_mint_to};
 use crate::generate_gamm_pair_seeds;
 use crate::AdjustLiquidity;
 
@@ -79,36 +76,15 @@ impl<'info> AdjustLiquidity<'info> {
         )?;
         
         // Calculate liquidity
-        let total_supply = lp_mint.supply;
-        let liquidity: u64 = match total_supply {
-            0 => {
-                U128::from(args.amount0_in)
-                .checked_mul(U128::from(args.amount1_in))
-                .unwrap()
-                .integer_sqrt()
-                .checked_sub(U128::from(MIN_LIQUIDITY))
-                .unwrap()
-                .as_u64()
-            },
-            _ => {
-                std::cmp::min(
-                    // amount0_in * total_supply / pair.reserve0
-                    args.amount0_in
-                    .checked_mul(total_supply).unwrap()
-                    .checked_div(pair.reserve0)
-                    .unwrap(),
-                    // amount1_in * total_supply / pair.reserve1
-                    args.amount1_in
-                    .checked_mul(total_supply).unwrap()
-                    .checked_div(pair.reserve1)
-                    .unwrap()
-                )
-            }
-        };
+        let liquidity = (args.amount0_in as u128)
+            .checked_mul(args.amount1_in as u128)
+            .ok_or(ErrorCode::Overflow)?
+            .checked_sub(MIN_LIQUIDITY as u128)
+            .ok_or(ErrorCode::Overflow)?;
         
         // Check if liquidity is sufficient
         require!(
-            liquidity >= args.min_liquidity_out,
+            liquidity >= args.min_liquidity_out as u128,
             ErrorCode::InsufficientLiquidity
         );
         
@@ -118,14 +94,14 @@ impl<'info> AdjustLiquidity<'info> {
             token_program.to_account_info(),
             lp_mint.to_account_info(),
             user_lp_token_account.to_account_info(),
-            liquidity,
+            liquidity as u64,
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
         
         // Update reserves
         pair.reserve0 = pair.reserve0.checked_add(args.amount0_in).unwrap();
         pair.reserve1 = pair.reserve1.checked_add(args.amount1_in).unwrap();
-        pair.total_supply = pair.total_supply.checked_add(liquidity).unwrap();
+        pair.total_supply = pair.total_supply.checked_add(liquidity as u64).unwrap();
         
         Ok(())
     }

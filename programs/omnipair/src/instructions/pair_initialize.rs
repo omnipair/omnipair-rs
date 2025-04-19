@@ -21,8 +21,7 @@ use crate::utils::{
     token::{
         transfer_from_user_to_pool_vault, 
         token_mint_to
-    },
-    U128,
+    }
 };
 use crate::AddLiquidityArgs;
 
@@ -222,13 +221,11 @@ impl InitializePair<'_> {
             ctx.accounts.token1_mint.decimals,
         )?;
 
-        let liquidity = U128::from(amount0_in)
-        .checked_mul(U128::from(amount1_in))
-        .unwrap()
-        .integer_sqrt()
-        .checked_sub(U128::from(MIN_LIQUIDITY))
-        .unwrap()
-        .as_u64();
+        let liquidity = (amount0_in as u128)
+            .checked_mul(amount1_in as u128)
+            .ok_or(ErrorCode::Overflow)?
+            .checked_sub(MIN_LIQUIDITY as u128)
+            .ok_or(ErrorCode::Overflow)?;
 
         // mint lp tokens to deployer
         token_mint_to(
@@ -236,7 +233,7 @@ impl InitializePair<'_> {
             ctx.accounts.token_program.to_account_info(),
             ctx.accounts.deployer_lp_token_account.to_account_info(),
             ctx.accounts.lp_mint.to_account_info(),
-            liquidity,
+            liquidity as u64,
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
 
@@ -247,7 +244,7 @@ impl InitializePair<'_> {
             current_time,
             amount0_in,
             amount1_in,
-            liquidity,
+            liquidity as u64,
             pair.bump,
         );
 
