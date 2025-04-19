@@ -12,7 +12,7 @@ use crate::{
     state::{
         pair::Pair,
         rate_model::RateModel,
-    }, U128,
+    }
 };
 use crate::errors::ErrorCode;
 use crate::constants::*;
@@ -22,6 +22,7 @@ use crate::utils::{
         transfer_from_user_to_pool_vault, 
         token_mint_to
     },
+    U128,
 };
 use crate::AddLiquidityArgs;
 

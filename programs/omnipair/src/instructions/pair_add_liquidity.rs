@@ -1,9 +1,11 @@
 use anchor_lang::prelude::*;
 use crate::errors::ErrorCode;
 use crate::constants::*;
-use crate::utils::token::{transfer_from_user_to_pool_vault, token_mint_to};
+use crate::utils::{
+    token::{transfer_from_user_to_pool_vault, token_mint_to},
+    U128,
+};
 use crate::generate_gamm_pair_seeds;
-use crate::U128;
 use crate::AdjustLiquidity;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
