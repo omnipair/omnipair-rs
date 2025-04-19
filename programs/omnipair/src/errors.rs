@@ -107,4 +107,7 @@ pub enum ErrorCode {
 
     #[msg("Flashloan not repaid")]
     FlashloanNotRepaid,
+
+    #[msg("Arithmetic overflow")]
+    Overflow,
 }
