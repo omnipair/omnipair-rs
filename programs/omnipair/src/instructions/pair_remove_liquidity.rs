@@ -40,9 +40,6 @@ impl<'info> AdjustLiquidity<'info> {
     }
 
     pub fn handle_remove(ctx: Context<Self>, args: RemoveLiquidityArgs) -> Result<()> {
-        // update 
-        ctx.accounts.pair.update(&ctx.accounts.rate_model)?;
-
         let pair = &mut ctx.accounts.pair;
         let reserve0_vault_ata = &mut ctx.accounts.reserve0_vault_ata;
         let reserve1_vault_ata = &mut ctx.accounts.reserve1_vault_ata;
@@ -110,13 +107,14 @@ impl<'info> AdjustLiquidity<'info> {
             token_program.to_account_info(),
             lp_mint.to_account_info(),
             user_lp_token_account.to_account_info(),
-            args.liquidity_in, // Using amount0_in as the liquidity to burn
+            args.liquidity_in,
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
 
         // Update reserves
         pair.reserve0 = pair.reserve0.checked_sub(amount0_out).unwrap();
         pair.reserve1 = pair.reserve1.checked_sub(amount1_out).unwrap();
+        pair.total_supply = pair.total_supply.checked_sub(args.liquidity_in).unwrap();
 
         Ok(())
     }

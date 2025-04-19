@@ -41,7 +41,6 @@ impl<'info> AdjustLiquidity<'info> {
     }
 
     pub fn handle_add(ctx: Context<Self>, args: AddLiquidityArgs) -> Result<()> {
-
         let pair = &mut ctx.accounts.pair;
         let reserve0_vault_ata = &mut ctx.accounts.reserve0_vault_ata;
         let reserve1_vault_ata = &mut ctx.accounts.reserve1_vault_ata;
@@ -124,6 +123,7 @@ impl<'info> AdjustLiquidity<'info> {
         // Update reserves
         pair.reserve0 = pair.reserve0.checked_add(args.amount0_in).unwrap();
         pair.reserve1 = pair.reserve1.checked_add(args.amount1_in).unwrap();
+        pair.total_supply = pair.total_supply.checked_add(liquidity).unwrap();
         
         Ok(())
     }
