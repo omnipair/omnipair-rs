@@ -7,3 +7,4 @@ test-ledger
 .yarn
 .env
 wallet-keypair.json
+deployer-keypair.json
