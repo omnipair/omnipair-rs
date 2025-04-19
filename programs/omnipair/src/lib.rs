@@ -46,32 +46,11 @@ pub mod omnipair {
         AdjustLiquidity::handle_remove(ctx, args)
     }
 
-    pub fn swap(
-        ctx: Context<Swap>,
-        amount_in: u64,
-        min_amount_out: u64,
-    ) -> Result<()> {
-        instructions::pair_swap::swap(ctx, amount_in, min_amount_out)
-    }
-
-    pub fn adjust_collateral(
-        ctx: Context<AdjustCollateral>,
-        amount0: i64,
-        amount1: i64,
-    ) -> Result<()> {
-        instructions::pair_adjust_collateral::adjust_collateral(ctx, amount0, amount1)
-    }
-
-    pub fn adjust_debt(
-        ctx: Context<AdjustDebt>,
-        amount0: i64,
-        amount1: i64,
-    ) -> Result<()> {
-        instructions::pair_adjust_debt::adjust_debt(ctx, amount0, amount1)
-    }
-
-
-    // pub fn update_pair(ctx: Context<Pair>) -> Result<()> {
-    //     Pair::update(ctx)
+    // pub fn swap(
+    //     ctx: Context<Swap>,
+    //     amount_in: u64,
+    //     min_amount_out: u64,
+    // ) -> Result<()> {
+    //     instructions::pair_swap::swap(ctx, amount_in, min_amount_out)
     // }
 }
