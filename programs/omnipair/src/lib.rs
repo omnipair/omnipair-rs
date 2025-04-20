@@ -11,7 +11,7 @@ pub use utils::*;
 pub use instructions::*;
 pub use utils::account::*;
 
-declare_id!("Hp5xcpcLe24PBrdGZkdQ9gz9VTT9xciPcumiLY7t89EY");
+declare_id!("DQFBXQqg6eWv3f8GFibQJE73LR8yrLgBAUjMy7wzZusk");
 
 #[program]
 pub mod omnipair {
