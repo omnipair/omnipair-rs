@@ -96,18 +96,23 @@ pub struct InitializePair<'info> {
             token0_mint.key().as_ref()
         ],
         bump,
+        token::mint = token0_mint,
+        token::authority = pair,
     )]
-    pub token0_vault: UncheckedAccount<'info>,
+    pub token0_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
+        mut,
         seeds = [
             GAMM_TOKEN_VAULT_SEED_PREFIX,
             pair.key().as_ref(),
             token1_mint.key().as_ref()
         ],
         bump,
+        token::mint = token1_mint,
+        token::authority = pair,
     )]
-    pub token1_vault: UncheckedAccount<'info>,
+    pub token1_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     
     // system programs
     /// Spl token program or token program 2022
@@ -163,7 +168,6 @@ impl InitializePair<'_> {
             token0_vault,
             token1_vault,
             system_program,
-            token_program,
             token_0_program,
             token_1_program,
             ..
@@ -171,7 +175,7 @@ impl InitializePair<'_> {
 
         // create token0 vault
         create_token_account(
-            &deployer.to_account_info(),
+            &pair.to_account_info(),
             &deployer.to_account_info(),
             &token0_vault.to_account_info(),
             &token0_mint.to_account_info(),
@@ -182,7 +186,7 @@ impl InitializePair<'_> {
 
         // create token1 vault
         create_token_account(
-            &deployer.to_account_info(),
+            &pair.to_account_info(),
             &deployer.to_account_info(),
             &token1_vault.to_account_info(),
             &token1_mint.to_account_info(),
