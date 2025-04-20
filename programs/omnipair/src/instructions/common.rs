@@ -33,24 +33,24 @@ pub struct AdjustLiquidity<'info> {
     #[account(
         mut,
         seeds = [
-            GAMM_RESERVE_VAULT_SEED_PREFIX,
+            GAMM_TOKEN_VAULT_SEED_PREFIX,
             pair.key().as_ref(),
             pair.token0.as_ref()
         ],
         bump,
     )]
-    pub reserve0_vault_ata: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token0_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     
     #[account(
         mut,
         seeds = [
-            GAMM_RESERVE_VAULT_SEED_PREFIX,
+            GAMM_TOKEN_VAULT_SEED_PREFIX,
             pair.key().as_ref(),
             pair.token1.as_ref()
         ],
         bump,
     )]
-    pub reserve1_vault_ata: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token1_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     
     #[account(
         mut,
@@ -67,14 +67,14 @@ pub struct AdjustLiquidity<'info> {
     pub user_token1_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
-        address = reserve0_vault_ata.mint
+        address = token0_vault.mint
     )]
-    pub reserve0_vault_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token0_vault_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
-        address = reserve1_vault_ata.mint
+        address = token1_vault.mint
     )]
-    pub reserve1_vault_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token1_vault_mint: Box<InterfaceAccount<'info, Mint>>,
     
     #[account(
         mut,
