@@ -4,7 +4,7 @@ use anchor_lang::{
 };
 use anchor_spl::{
     token::Token,
-    token_interface::{Mint, TokenAccount, Token2022},
+    token_interface::{Mint, TokenAccount, Token2022, TokenInterface},
     associated_token::AssociatedToken,
 };
 use crate::{
@@ -97,10 +97,9 @@ pub struct InitializePair<'info> {
         ],
         bump,
     )]
-    pub token0_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token0_vault: UncheckedAccount<'info>,
 
     #[account(
-        mut,
         seeds = [
             GAMM_TOKEN_VAULT_SEED_PREFIX,
             pair.key().as_ref(),
@@ -108,9 +107,13 @@ pub struct InitializePair<'info> {
         ],
         bump,
     )]
-    pub token1_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token1_vault: UncheckedAccount<'info>,
     
     // system programs
+    /// Spl token program or token program 2022
+    pub token_0_program: Interface<'info, TokenInterface>,
+    /// Spl token program or token program 2022
+    pub token_1_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
@@ -161,6 +164,8 @@ impl InitializePair<'_> {
             token1_vault,
             system_program,
             token_program,
+            token_0_program,
+            token_1_program,
             ..
         } = ctx.accounts;
 
@@ -171,7 +176,7 @@ impl InitializePair<'_> {
             &token0_vault.to_account_info(),
             &token0_mint.to_account_info(),
             &system_program.to_account_info(),
-            &token_program.to_account_info(),
+            &token_0_program.to_account_info(),
             generate_gamm_token_vault_seeds!(pair, token0_mint, ctx.bumps.token0_vault),
         )?;
 
@@ -182,7 +187,7 @@ impl InitializePair<'_> {
             &token1_vault.to_account_info(),
             &token1_mint.to_account_info(),
             &system_program.to_account_info(),
-            &token_program.to_account_info(),
+            &token_1_program.to_account_info(),
             generate_gamm_token_vault_seeds!(pair, token1_mint, ctx.bumps.token1_vault),
         )?;
         
