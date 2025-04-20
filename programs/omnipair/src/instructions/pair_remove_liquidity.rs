@@ -41,8 +41,8 @@ impl<'info> AdjustLiquidity<'info> {
 
     pub fn handle_remove(ctx: Context<Self>, args: RemoveLiquidityArgs) -> Result<()> {
         let pair = &mut ctx.accounts.pair;
-        let reserve0_vault_ata = &mut ctx.accounts.reserve0_vault_ata;
-        let reserve1_vault_ata = &mut ctx.accounts.reserve1_vault_ata;
+        let token0_vault = &mut ctx.accounts.token0_vault;
+        let token1_vault = &mut ctx.accounts.token1_vault;
         let user_token0_account = &mut ctx.accounts.user_token0_account;
         let user_token1_account = &mut ctx.accounts.user_token1_account;
         let lp_mint = &mut ctx.accounts.lp_mint;
@@ -75,29 +75,29 @@ impl<'info> AdjustLiquidity<'info> {
         // Transfer tokens from pool to user
         transfer_from_pool_vault_to_user(
             pair.to_account_info(),
-            reserve0_vault_ata.to_account_info(),
+            token0_vault.to_account_info(),
             user_token0_account.to_account_info(),
-            ctx.accounts.reserve0_vault_mint.to_account_info(),
-            match ctx.accounts.reserve0_vault_mint.to_account_info().owner == ctx.accounts.token_program.key {
+            ctx.accounts.token0_vault_mint.to_account_info(),
+            match ctx.accounts.token0_vault_mint.to_account_info().owner == ctx.accounts.token_program.key {
                 true => ctx.accounts.token_program.to_account_info(),
                 false => ctx.accounts.token_2022_program.to_account_info(),
             },
             amount0_out,
-            ctx.accounts.reserve0_vault_mint.decimals,
+            ctx.accounts.token0_vault_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
 
         transfer_from_pool_vault_to_user(
             pair.to_account_info(),
-            reserve1_vault_ata.to_account_info(),
+            token1_vault.to_account_info(),
             user_token1_account.to_account_info(),
-            ctx.accounts.reserve1_vault_mint.to_account_info(),
-            match ctx.accounts.reserve1_vault_mint.to_account_info().owner == ctx.accounts.token_program.key {
+            ctx.accounts.token1_vault_mint.to_account_info(),
+            match ctx.accounts.token1_vault_mint.to_account_info().owner == ctx.accounts.token_program.key {
                 true => ctx.accounts.token_program.to_account_info(),
                 false => ctx.accounts.token_2022_program.to_account_info(),
             },
             amount1_out,
-            ctx.accounts.reserve1_vault_mint.decimals,
+            ctx.accounts.token1_vault_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
 

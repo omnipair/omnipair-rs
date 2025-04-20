@@ -21,9 +21,7 @@ pub const MAX_X_E18: u128 = 161_324_830_204_992_680_279;
 pub const MAX_X_E12: u64 = 289_279_112_968_179;
 
 // Global Seeds for deterministic PDAs
-pub const GAMM_LP_MINT_SEED_PREFIX: &[u8] = b"gamm_lp_mint";
 pub const GAMM_PAIR_SEED_PREFIX: &[u8] = b"gamm_pair";
+pub const GAMM_LP_MINT_SEED_PREFIX: &[u8] = b"gamm_lp_mint";
 pub const GAMM_FACTORY_SEED_PREFIX: &[u8] = b"gamm_factory";
-pub const GAMM_RESERVE_VAULT_SEED_PREFIX: &[u8] = b"gamm_reserve_vault";
-pub const GAMM_COLLATERAL_VAULT_SEED_PREFIX: &[u8] = b"gamm_collateral_vault";
-
+pub const GAMM_TOKEN_VAULT_SEED_PREFIX: &[u8] = b"gamm_token_vault";
