@@ -6,17 +6,17 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-omnipair = "DQFBXQqg6eWv3f8GFibQJE73LR8yrLgBAUjMy7wzZusk"
+omnipair = "6YBQ4Smu4ydRYzpntpS4Hr89JhVv97NS6XtzjbvbZACf"
 
 [programs.devnet]
-omnipair = "DQFBXQqg6eWv3f8GFibQJE73LR8yrLgBAUjMy7wzZusk"
+omnipair = "6YBQ4Smu4ydRYzpntpS4Hr89JhVv97NS6XtzjbvbZACf"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
 cluster = "Devnet"
-wallet = "~/.config/solana/id.json"
+wallet = "deployer-keypair.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts --require ts-node/register"

@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
-use crate::utils::calc::*;
+use crate::utils::math::*;
 
 #[account]
 pub struct RateModel {

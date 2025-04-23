@@ -10,8 +10,9 @@ pub mod utils;
 pub use utils::*;
 pub use instructions::*;
 pub use utils::account::*;
+pub use instructions::pair_initialize::InitializePair;
 
-declare_id!("DQFBXQqg6eWv3f8GFibQJE73LR8yrLgBAUjMy7wzZusk");
+declare_id!("6yrECZ3GNeKfKhyAq9Ne8hJu4gUhVUmaB9pXneKosnPb");
 
 #[program]
 pub mod omnipair {
@@ -23,9 +24,14 @@ pub mod omnipair {
     }
 
     // Pair instructions
+    #[access_control(ctx.accounts.validate())]
+    pub fn initialize_pair(ctx: Context<InitializePair>) -> Result<()> {
+        InitializePair::handle_initialize(ctx)
+    }
+
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn initialize_pair(ctx: Context<InitializePair>, args: AddLiquidityArgs) -> Result<()> {
-        InitializePair::handle_initialize(ctx, args)
+    pub fn bootstrap_pair(ctx: Context<BootstrapPair>, args: AddLiquidityArgs) -> Result<()> {
+        BootstrapPair::handle_bootstrap(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate_add_and_update(&args))]
