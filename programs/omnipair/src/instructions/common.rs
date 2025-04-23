@@ -12,6 +12,13 @@ use crate::{
     constants::*,
 };
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct AddLiquidityArgs {
+    pub amount0_in: u64,
+    pub amount1_in: u64,
+    pub min_liquidity_out: u64,
+}
+
 #[derive(Accounts)]
 pub struct AdjustLiquidity<'info> {
     #[account(
@@ -107,3 +114,4 @@ impl<'info> AdjustLiquidity<'info> {
         Ok(())
     }
 }
+

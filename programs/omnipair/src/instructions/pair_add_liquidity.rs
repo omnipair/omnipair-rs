@@ -4,13 +4,8 @@ use crate::constants::*;
 use crate::utils::token::{transfer_from_user_to_pool_vault, token_mint_to};
 use crate::generate_gamm_pair_seeds;
 use crate::AdjustLiquidity;
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct AddLiquidityArgs {
-    pub amount0_in: u64,
-    pub amount1_in: u64,
-    pub min_liquidity_out: u64,
-}
+use crate::instructions::common::AddLiquidityArgs;
+use crate::utils::math::SqrtU128;
 
 impl<'info> AdjustLiquidity<'info> {
     fn validate_add(&self, args: &AddLiquidityArgs) -> Result<()> {
@@ -77,32 +72,33 @@ impl<'info> AdjustLiquidity<'info> {
 
         // Calculate liquidity
         let total_supply = lp_mint.supply;
-        let liquidity = match total_supply {
+        let liquidity: u64 = match total_supply {
             0 => {
-                let product = (args.amount0_in as u128)
-                    .checked_mul(args.amount1_in as u128)
-                    .ok_or(ErrorCode::Overflow)?;
-                let sqrt = (product as f64).sqrt() as u128;
-                sqrt.checked_sub(MIN_LIQUIDITY as u128)
-                    .ok_or(ErrorCode::Overflow)?
+                (args.amount0_in as u128).checked_mul(args.amount1_in as u128)
+                    .unwrap()
+                    .sqrt()
+                    .unwrap()
+                    .checked_sub(MIN_LIQUIDITY as u128)
+                    .unwrap()
+                    .try_into().unwrap()
             },
             _ => {
-                let liquidity0 = (args.amount0_in as u128)
-                    .checked_mul(total_supply as u128)
-                    .ok_or(ErrorCode::Overflow)?
-                    .checked_div(pair.reserve0 as u128)
-                    .ok_or(ErrorCode::Overflow)?;
-                let liquidity1 = (args.amount1_in as u128)
-                    .checked_mul(total_supply as u128)
-                    .ok_or(ErrorCode::Overflow)?
-                    .checked_div(pair.reserve1 as u128)
-                    .ok_or(ErrorCode::Overflow)?;
+                let liquidity0 = (args.amount0_in)
+                    .checked_mul(total_supply)
+                    .unwrap()
+                    .checked_div(pair.reserve0)
+                    .unwrap();
+                let liquidity1 = (args.amount1_in)
+                    .checked_mul(total_supply)
+                    .unwrap()
+                    .checked_div(pair.reserve1)
+                    .unwrap();
                 liquidity0.min(liquidity1)
             }
         };
         // Check if liquidity is sufficient
         require!(
-            liquidity >= args.min_liquidity_out as u128,
+            liquidity >= args.min_liquidity_out,
             ErrorCode::InsufficientLiquidity
         );
         

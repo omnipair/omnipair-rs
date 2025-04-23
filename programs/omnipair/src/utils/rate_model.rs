@@ -1,5 +1,5 @@
 use crate::constants::*;
-use crate::utils::calc::taylor_exp;
+use crate::utils::math::taylor_exp;
 
 pub fn calculate_rate(
     last_rate: u64,

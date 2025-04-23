@@ -8,3 +8,4 @@ test-ledger
 .env
 wallet-keypair.json
 deployer-keypair.json
+program-keypair.json

@@ -1,0 +1,23 @@
+{
+  "name": "ata-address-calculator",
+  "version": "1.0.0",
+  "description": "Calculate Associated Token Account Address",
+  "type": "module",
+  "main": "get_ata_address.ts",
+  "scripts": {
+    "start": "ts-node --esm get_ata_address.ts",
+    "initialize": "ts-node --esm initialize_pair.ts",
+    "create-rate-model": "ts-node --esm create_rate_model.ts",
+    "bootstrap-liquidity": "ts-node --esm bootstrap_liquidity.ts"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.78.0",
+    "@solana/spl-token": "^0.3.9",
+    "@coral-xyz/anchor": "^0.28.0",
+    "bn.js": "^5.2.1"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.1",
+    "typescript": "^5.3.3"
+  }
+} 

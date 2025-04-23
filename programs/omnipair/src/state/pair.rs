@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
-use crate::utils::calc::compute_ema;
+use crate::utils::math::compute_ema;
 use crate::state::RateModel;
 use crate::events::UpdatePairEvent;
 
@@ -51,20 +51,18 @@ impl Pair {
         token1: Pubkey,
         rate_model: Pubkey,
         current_time: i64,
-        reserve0: u64,
-        reserve1: u64,
-        total_supply: u64,
         bump: u8,
     ) -> Self {
         Self {
             token0,
             token1,
-            reserve0,
-            reserve1,
             rate_model,
             last_update: current_time,
-            total_supply,
             bump,
+
+            reserve0: 0,
+            reserve1: 0,
+            total_supply: 0,
 
             price0_cumulative_last: 0,
             price1_cumulative_last: 0,
@@ -117,6 +115,10 @@ impl Pair {
             self.last_update, 
             self.spot_price1_mantissa(), 
             DEFAULT_HALF_LIFE)
+    }
+
+    pub fn is_initialized(&self) -> bool {
+        self.reserve0 > 0 && self.reserve1 > 0 && self.total_supply > 0
     }
 
     pub fn update(&mut self, rate_model: &Account<RateModel>) -> Result<()> {
