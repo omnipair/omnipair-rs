@@ -11,13 +11,12 @@
     "bootstrap-liquidity": "ts-node --esm bootstrap_liquidity.ts"
   },
   "dependencies": {
-    "@solana/web3.js": "^1.78.0",
-    "@solana/spl-token": "^0.3.9",
     "@coral-xyz/anchor": "^0.28.0",
-    "bn.js": "^5.2.1"
+    "@solana/spl-token": "^0.3.9",
+    "@solana/web3.js": "^1.78.0"
   },
   "devDependencies": {
     "ts-node": "^10.9.1",
     "typescript": "^5.3.3"
   }
-} 
+}
