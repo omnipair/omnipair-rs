@@ -3,18 +3,15 @@ use anchor_lang::{
     accounts::interface_account::InterfaceAccount,
 };
 use anchor_spl::{
-    token::Token,
+    token::{self, MintTo, Token},
     token_interface::{Mint, TokenAccount, Token2022},
     associated_token::AssociatedToken,
 };
 use crate::{
-    generate_gamm_pair_seeds,
-    state::pair::Pair,
-    state::rate_model::RateModel,
-    constants::*,
+    constants::*, generate_gamm_pair_seeds, state::{pair::Pair, rate_model::RateModel}
 };
 use crate::errors::ErrorCode;
-use crate::utils::token::{transfer_from_user_to_pool_vault, token_mint_to};
+use crate::utils::token::transfer_from_user_to_pool_vault;
 use crate::instructions::common::AddLiquidityArgs;
 use crate::utils::math::SqrtU128;
 
@@ -69,9 +66,7 @@ pub struct BootstrapPair<'info> {
     )]
     pub user_token1_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    #[account(
-        address = token0_vault.mint
-    )]
+    #[account(address = token0_vault.mint)]
     pub token0_vault_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
@@ -93,7 +88,6 @@ pub struct BootstrapPair<'info> {
         mut,
         associated_token::mint = lp_mint,
         associated_token::authority = user,
-        token::token_program = token_program,
     )]
     pub user_lp_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
     
@@ -131,11 +125,11 @@ impl<'info> BootstrapPair<'info> {
             token1_vault,
             user_token0_account,
             user_token1_account,
-            lp_mint,
-            user_lp_token_account,
             token_program,
             token_2022_program,
             user,
+            user_lp_token_account,
+            lp_mint,
             token0_vault_mint,
             token1_vault_mint,
             ..
@@ -183,13 +177,36 @@ impl<'info> BootstrapPair<'info> {
         );
         
         // Mint LP tokens to user
-        token_mint_to(
-            pair.to_account_info(),
-            token_program.to_account_info(),
-            lp_mint.to_account_info(),
-            user_lp_token_account.to_account_info(),
+        // token_mint_to(
+        //     pair.to_account_info(),
+        //     token_program.to_account_info(),
+        //     lp_mint.to_account_info(),
+        //     user_lp_token_account.to_account_info(),
+        //     liquidity as u64,
+        //     &[
+        //         &[
+        //             GAMM_LP_MINT_SEED_PREFIX,
+        //             pair.token0.as_ref(),
+        //             pair.token1.as_ref(),
+        //             &[pair.bump][..]
+        //         ],
+        //     ],
+        // )?;
+
+        let seeds = generate_gamm_pair_seeds!(pair);
+        let signer = &[&seeds[..]];
+
+        token::mint_to(
+            CpiContext::new_with_signer(
+                token_program.to_account_info(),
+                MintTo {
+                    mint: lp_mint.to_account_info(),
+                    to: user_lp_token_account.to_account_info(),
+                    authority: pair.to_account_info(),
+                },
+                signer,
+            ),
             liquidity as u64,
-            &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
         
         // Update reserves

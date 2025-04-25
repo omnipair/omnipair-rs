@@ -1,14 +1,15 @@
 {
-  "name": "ata-address-calculator",
+  "name": "omnipair",
   "version": "1.0.0",
-  "description": "Calculate Associated Token Account Address",
+  "description": "Omnipair",
   "type": "module",
-  "main": "get_ata_address.ts",
+  "main": "deploy_tokens.ts",
   "scripts": {
-    "start": "ts-node --esm get_ata_address.ts",
+    "start": "ts-node --esm get_ata_address.ts", 
+    "deploy-tokens": "ts-node --esm deploy_tokens.ts",
     "initialize": "ts-node --esm initialize_pair.ts",
-    "create-rate-model": "ts-node --esm create_rate_model.ts",
-    "bootstrap-liquidity": "ts-node --esm bootstrap_liquidity.ts"
+    "create-rm": "ts-node --esm create_rate_model.ts",
+    "bootstrap": "ts-node --esm bootstrap_liquidity.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.28.0",

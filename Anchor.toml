@@ -2,20 +2,20 @@
 anchor_version = "0.29.0"
 
 [features]
-resolution = true
+seeds = false
 skip-lint = false
 
-[programs.localnet]
-omnipair = "6YBQ4Smu4ydRYzpntpS4Hr89JhVv97NS6XtzjbvbZACf"
-
 [programs.devnet]
-omnipair = "6YBQ4Smu4ydRYzpntpS4Hr89JhVv97NS6XtzjbvbZACf"
+omnipair = "4DcEXKL6LxWNTxp3jZUrj1jjzU4VXPNMHsVs7Jp9NPb9"
+
+[programs.localnet]
+omnipair = "Hpdn6J4uNxp3xYqER2o7mdTumTzkNV7Xiwr1xmEEnFwz"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Devnet"
+cluster = "Localnet"
 wallet = "deployer-keypair.json"
 
 [scripts]

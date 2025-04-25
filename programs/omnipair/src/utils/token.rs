@@ -4,9 +4,10 @@
 use crate::errors::ErrorCode;
 use anchor_lang::{prelude::*, system_program};
 use anchor_spl::{
-    token::{Token, TokenAccount},
+    token::{self, Token, TokenAccount},
     token_2022::{
         self,
+        Token2022,
         spl_token_2022::{
             self,
             extension::{
@@ -33,19 +34,36 @@ pub fn transfer_from_user_to_pool_vault<'a>(
     if amount == 0 {
         return Ok(());
     }
-    token_2022::transfer_checked(
-        CpiContext::new(
-            token_program.to_account_info(),
-            token_2022::TransferChecked {
-                from,
-                to: to_vault,
-                authority,
-                mint,
-            },
-        ),
-        amount,
-        mint_decimals,
-    )
+
+    if *token_program.key == Token2022::id() {
+        token_2022::transfer_checked(
+            CpiContext::new(
+                token_program.to_account_info(),
+                token_2022::TransferChecked {
+                    from,
+                    to: to_vault,
+                    authority,
+                    mint,
+                },
+            ),
+            amount,
+            mint_decimals,
+        )
+    } else {
+        token::transfer_checked(
+            CpiContext::new(
+                token_program.to_account_info(),
+                token::TransferChecked {
+                    from,
+                    to: to_vault,
+                    authority,
+                    mint,
+                },
+            ),
+            amount,
+            mint_decimals,
+        )
+    }
 }
 
 pub fn transfer_from_pool_vault_to_user<'a>(

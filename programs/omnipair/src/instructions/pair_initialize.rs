@@ -4,7 +4,7 @@ use anchor_lang::{
 };
 use anchor_spl::{
     token::Token,
-    token_interface::{Mint, TokenAccount, Token2022},
+    token_interface::{Mint, TokenAccount},
     associated_token::AssociatedToken,
 };
 use crate::state::{
@@ -62,7 +62,6 @@ pub struct InitializePair<'info> {
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
-    pub token_2022_program: Program<'info, Token2022>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub rent: Sysvar<'info, Rent>,
 }
@@ -82,6 +81,14 @@ impl InitializePair<'_> {
             token0_mint.key() < token1_mint.key(),
             ErrorCode::InvalidTokenOrder
         );
+
+        // Enforce address of lp mint is postfixed with "omni"
+        #[cfg(feature = "production")]
+        {
+            let token_key: String = self.lp_mint.key().to_string();
+            let last_4_chars = &token_key[token_key.len() - 4..];
+            require_eq!("omni", last_4_chars, ErrorCode::InvalidTokenKey);
+        }
         
         Ok(())
     }
@@ -105,7 +112,7 @@ impl InitializePair<'_> {
             token1,
             rate_model,
             current_time,
-            pair.bump,
+            ctx.bumps.pair,
         ));
 
         Ok(())
