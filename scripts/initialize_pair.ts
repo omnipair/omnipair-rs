@@ -1,7 +1,6 @@
 import { 
     Connection, 
     PublicKey, 
-    Transaction, 
     sendAndConfirmTransaction,
     Keypair,
     SystemProgram,
@@ -24,11 +23,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Replace these with your actual values
-const PROGRAM_ID = new PublicKey('BWRF4JuAbMkUz89LrCQgSWgqpMphx1X7oFS3z9D1CW7M');
-const RPC_URL = 'https://api.devnet.solana.com'; // or your preferred network
-const TOKEN0_MINT = new PublicKey('mocutmjR99msoyWhDiWBjLwfA3wRTh8PU89K7BsSki3');
-const TOKEN1_MINT = new PublicKey('usdnLputVsvJkArDzwmum5efguTixtcxtgsEaBzs5PQ');
-const RATE_MODEL = new PublicKey('BtcALp5gXGAqzPc4XJpJFJu84qR4kUiyihxifLDriiLw');
+const PROGRAM_ID = new PublicKey('4DcEXKL6LxWNTxp3jZUrj1jjzU4VXPNMHsVs7Jp9NPb9');
+const RPC_URL = 'http://127.0.0.1:8899'; // or your preferred network
+const TOKEN0_MINT = new PublicKey('EJC5LVe13Pv4B3afsWXu3Nq9Hq5GcdBQQL4K8bByUkbp');
+const TOKEN1_MINT = new PublicKey('GiZM66o3ZsBRrLkweYDbX2pqNzpdidBdUj3jn6CdV8Wh');
+const RATE_MODEL = new PublicKey('GaKVkjkfDDb11cLxyDJXM78Zj8eH4bgznmF3y5212C5F');
 
 // Load deployer keypair from file
 const deployerKeypairPath = path.join(__dirname, '..', 'deployer-keypair.json');
@@ -38,8 +37,8 @@ const DEPLOYER_KEYPAIR = Keypair.fromSecretKey(
 );
 
 // Token accounts that already exist
-const DEPLOYER_TOKEN0_ACCOUNT = new PublicKey('GJE4k6kNoyC9kYpvLShHWbvfPkkkbRTEiigctAiayH8D');
-const DEPLOYER_TOKEN1_ACCOUNT = new PublicKey('8DnhxbDGx9yF7Z6V6i194d13ZupkctZZjGaCxQZpBKR7');
+const DEPLOYER_TOKEN0_ACCOUNT = new PublicKey('BVfHFrHMtBfWDKW1ve4q7Fm3M66dmj5Zg1sQnX6mvNKk');
+const DEPLOYER_TOKEN1_ACCOUNT = new PublicKey('GenCsiGtXFdAxQsRLTNRwbCMBTCukuh3KAmNygFfv5xp');
 
 async function main() {
     console.log('Starting pair initialization...');
@@ -102,8 +101,9 @@ async function main() {
             rateModel: RATE_MODEL,
             deployerLpTokenAccount,
             systemProgram: SystemProgram.programId,
+            // tokenProgram: TOKEN_2022_PROGRAM_ID,
             tokenProgram: TOKEN_PROGRAM_ID,
-            token2022Program: TOKEN_2022_PROGRAM_ID,
+            // token2022Program: TOKEN_2022_PROGRAM_ID,
             associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
             rent: SYSVAR_RENT_PUBKEY,
         })

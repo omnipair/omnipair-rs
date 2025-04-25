@@ -18,8 +18,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Replace these with your actual values
-const PROGRAM_ID = new PublicKey('BWRF4JuAbMkUz89LrCQgSWgqpMphx1X7oFS3z9D1CW7M');
-const RPC_URL = 'https://api.devnet.solana.com'; // or your preferred network
+const PROGRAM_ID = new PublicKey('4DcEXKL6LxWNTxp3jZUrj1jjzU4VXPNMHsVs7Jp9NPb9');
+const RPC_URL = 'http://127.0.0.1:8899'; // or your preferred network
 
 // Load deployer keypair from file
 const deployerKeypairPath = path.join(__dirname, '..', 'deployer-keypair.json');

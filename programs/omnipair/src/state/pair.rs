@@ -225,7 +225,7 @@ macro_rules! generate_gamm_token_vault_seeds {
     ($pair:expr, $token:expr, $bump:expr) => {{
         &[
             GAMM_TOKEN_VAULT_SEED_PREFIX, 
-            $pair.key().as_ref(), 
+            $pair.key().as_ref(),
             $token.key().as_ref(), 
             &[$bump]
         ]
