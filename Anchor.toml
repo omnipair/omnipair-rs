@@ -6,7 +6,7 @@ seeds = false
 skip-lint = false
 
 [programs.devnet]
-omnipair = "CBAu564qqqNCkJ7VxnahmPkVBRRrsY68jqXy61c3uTrG"
+omnipair = "CsnwgVfKmeLivEjPcLEBCWd8ndmq2aFBBd54q8w32JVM"
 
 [programs.localnet]
 omnipair = "CBAu564qqqNCkJ7VxnahmPkVBRRrsY68jqXy61c3uTrG"

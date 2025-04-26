@@ -26,10 +26,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Replace these with your actual values
-const PROGRAM_ID = new PublicKey('2BpW6PG5VjRHab2gFdWE19wKBPVUGnSpNUwqfWP1NtWV');
+const PROGRAM_ID = new PublicKey('CBAu564qqqNCkJ7VxnahmPkVBRRrsY68jqXy61c3uTrG');
 const RPC_URL = 'http://127.0.0.1:8899';
-const TOKEN0_MINT = new PublicKey('EJC5LVe13Pv4B3afsWXu3Nq9Hq5GcdBQQL4K8bByUkbp');
-const TOKEN1_MINT = new PublicKey('GiZM66o3ZsBRrLkweYDbX2pqNzpdidBdUj3jn6CdV8Wh');
+const TOKEN0_MINT = new PublicKey('4spNMSmiS7dMgyyfEWnKFkRYtML7MNyotxxvNLVAQEoQ');
+const TOKEN1_MINT = new PublicKey('8deLbx5szhJfghjaX7Y8jrbj1c23AnyaM9oq8vZe9S64');
+const RATE_MODEL = new PublicKey('7HgFGk2vGZcmjLHdhW1M9niuYe3eNoms6x8tehCDdWoe');
 
 // Load deployer keypair from file
 const deployerKeypairPath = path.join(__dirname, '..', 'deployer-keypair.json');
@@ -128,10 +129,13 @@ async function main() {
         .accounts({
             user: DEPLOYER_KEYPAIR.publicKey,
             pair: pairPda,
+            rateModel: RATE_MODEL,
             token0Vault: token0Vault,
             token1Vault: token1Vault,
             userToken0Account: DEPLOYER_TOKEN0_ACCOUNT,
             userToken1Account: DEPLOYER_TOKEN1_ACCOUNT,
+            token0VaultMint: TOKEN0_MINT,
+            token1VaultMint: TOKEN1_MINT,
             lpMint: lpMintPda,
             userLpTokenAccount: deployerLpTokenAccount,
             tokenProgram: lpTokenProgram,

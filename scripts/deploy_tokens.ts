@@ -85,7 +85,8 @@ async function main() {
 
     // Mint 1000 tokens to deployer for each token
     console.log('\nMinting tokens to deployer...');
-    const mintAmount = 1000 * Math.pow(10, 6); // 1000 tokens with 6 decimals
+    const mint0Amount = 2000 * Math.pow(10, 6); // 1000 tokens with 6 decimals
+    const mint1Amount = 10_000 * Math.pow(10, 6); // 1000 tokens with 6 decimals
 
     await mintTo(
         connection,
@@ -93,7 +94,7 @@ async function main() {
         token0Mint,
         deployerToken0Account,
         DEPLOYER_KEYPAIR,
-        mintAmount
+        mint0Amount
     );
     console.log('Minted 1000 Token0 to deployer');
 
@@ -103,7 +104,7 @@ async function main() {
         token1Mint,
         deployerToken1Account,
         DEPLOYER_KEYPAIR,
-        mintAmount
+        mint1Amount
     );
     console.log('Minted 1000 Token1 to deployer');
 
