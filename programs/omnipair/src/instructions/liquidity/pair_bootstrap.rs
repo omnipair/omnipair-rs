@@ -15,7 +15,7 @@ use crate::utils::token::{
     transfer_from_user_to_pool_vault,
     token_mint_to,  
 };
-use crate::instructions::common::AddLiquidityArgs;
+use crate::instructions::liquidity::common::AddLiquidityArgs;
 use crate::utils::math::SqrtU128;
 
 #[derive(Accounts)]
@@ -114,6 +114,7 @@ impl<'info> BootstrapPair<'info> {
             .. 
         } = args;
         
+        require!(self.pair.total_supply == 0, ErrorCode::PairAlreadyInitialized);
         require!(*amount0_in > 0 && *amount1_in > 0, ErrorCode::AmountZero);
         require_gte!(user_token0_account.amount, *amount0_in, ErrorCode::InsufficientAmount0In);
         require_gte!(user_token1_account.amount, *amount1_in, ErrorCode::InsufficientAmount1In);

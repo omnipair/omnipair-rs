@@ -18,6 +18,9 @@ pub enum AmmError {
 
 #[error_code]
 pub enum ErrorCode {
+    #[msg("Pair already initialized")]
+    PairAlreadyInitialized,
+
     #[msg("Invalid K value")]
     InvalidK,
     
@@ -113,4 +116,9 @@ pub enum ErrorCode {
 
     #[msg("Undercollateralized")]
     Undercollateralized,
+
+    #[msg("Insufficient collateral for token0")]
+    InsufficientCollateral0,
+    #[msg("Insufficient collateral for token1")]
+    InsufficientCollateral1,
 }

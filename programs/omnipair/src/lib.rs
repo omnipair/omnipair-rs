@@ -57,4 +57,26 @@ pub mod omnipair {
     ) -> Result<()> {
         Swap::handle_swap(ctx, amount_in, min_amount_out)
     }
+
+    // Lending instructions
+    #[access_control(ctx.accounts.validate_add_and_update(&args))]
+    pub fn add_collateral(ctx: Context<AdjustCollateral>, args: AdjustCollateralArgs) -> Result<()> {
+        AdjustCollateral::handle_add_collateral(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.validate_remove_and_update(&args))]
+    pub fn remove_collateral(ctx: Context<AdjustCollateral>, args: AdjustCollateralArgs) -> Result<()> {
+        AdjustCollateral::handle_remove_collateral(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.validate_borrow_and_update(&args))]
+    pub fn borrow(ctx: Context<AdjustDebt>, args: AdjustDebtArgs) -> Result<()> {
+        AdjustDebt::handle_borrow(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.validate_repay_and_update(&args))]
+    pub fn repay(ctx: Context<AdjustDebt>, args: AdjustDebtArgs) -> Result<()> {
+        AdjustDebt::handle_repay(ctx, args)
+    }
+    
 }
