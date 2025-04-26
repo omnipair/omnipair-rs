@@ -1,7 +1,6 @@
 import { 
     Connection, 
     PublicKey, 
-    Transaction, 
     sendAndConfirmTransaction,
     Keypair,
     SystemProgram,
@@ -12,7 +11,8 @@ import {
     TOKEN_2022_PROGRAM_ID,
     ASSOCIATED_TOKEN_PROGRAM_ID,
     getAssociatedTokenAddress,
-    createAssociatedTokenAccount
+    createAssociatedTokenAccount,
+    getAccount
 } from '@solana/spl-token';
 import { Program, AnchorProvider, Wallet } from '@coral-xyz/anchor';
 import { IDL } from '../target/types/omnipair.ts';
@@ -26,11 +26,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Replace these with your actual values
-const PROGRAM_ID = new PublicKey('CBAu564qqqNCkJ7VxnahmPkVBRRrsY68jqXy61c3uTrG');
-const RPC_URL = 'http://127.0.0.1:8899'; // or your preferred network
+const PROGRAM_ID = new PublicKey('2BpW6PG5VjRHab2gFdWE19wKBPVUGnSpNUwqfWP1NtWV');
+const RPC_URL = 'http://127.0.0.1:8899';
 const TOKEN0_MINT = new PublicKey('EJC5LVe13Pv4B3afsWXu3Nq9Hq5GcdBQQL4K8bByUkbp');
 const TOKEN1_MINT = new PublicKey('GiZM66o3ZsBRrLkweYDbX2pqNzpdidBdUj3jn6CdV8Wh');
-const RATE_MODEL = new PublicKey('FcebjLtChmCBqPzKJGY58SsLMdbzwsFNwMvQ6AXwmDCt');
 
 // Load deployer keypair from file
 const deployerKeypairPath = path.join(__dirname, '..', 'deployer-keypair.json');
@@ -38,12 +37,13 @@ const deployerKeypairFile = fs.readFileSync(deployerKeypairPath, 'utf-8');
 const DEPLOYER_KEYPAIR = Keypair.fromSecretKey(
     new Uint8Array(JSON.parse(deployerKeypairFile))
 );
+
 // Token accounts that already exist
 const DEPLOYER_TOKEN0_ACCOUNT = new PublicKey('BVfHFrHMtBfWDKW1ve4q7Fm3M66dmj5Zg1sQnX6mvNKk');
 const DEPLOYER_TOKEN1_ACCOUNT = new PublicKey('GenCsiGtXFdAxQsRLTNRwbCMBTCukuh3KAmNygFfv5xp');
 
 async function main() {
-    console.log('Starting liquidity bootstrapping...');
+    console.log('Starting liquidity removal...');
     
     // Setup connection and provider
     const connection = new Connection(RPC_URL, 'confirmed');
@@ -55,11 +55,8 @@ async function main() {
     console.log('Network:', RPC_URL);
     console.log('Program ID:', PROGRAM_ID.toBase58());
     console.log('Deployer address:', DEPLOYER_KEYPAIR.publicKey.toBase58());
-    console.log('Rate Model address:', RATE_MODEL.toBase58());
     console.log('Token0 Mint:', TOKEN0_MINT.toBase58());
     console.log('Token1 Mint:', TOKEN1_MINT.toBase58());
-    console.log('Deployer Token0 Account:', DEPLOYER_TOKEN0_ACCOUNT.toBase58());
-    console.log('Deployer Token1 Account:', DEPLOYER_TOKEN1_ACCOUNT.toBase58());
 
     // Find PDA for the pair
     const [pairPda] = PublicKey.findProgramAddressSync(
@@ -88,10 +85,6 @@ async function main() {
         ? TOKEN_2022_PROGRAM_ID
         : TOKEN_PROGRAM_ID;
 
-    console.log('Token0 Program:', token0Program.toBase58());
-    console.log('Token1 Program:', token1Program.toBase58());
-    console.log('LP Token Program:', lpTokenProgram.toBase58());
-
     // Get associated token addresses for vaults
     const token0Vault = await getAssociatedTokenAddress(
         TOKEN0_MINT,
@@ -106,41 +99,7 @@ async function main() {
         token1Program
     );
 
-    console.log('Pair PDA:', pairPda.toBase58());
-    console.log('LP Mint PDA:', lpMintPda.toBase58());
-    console.log('Token0 Vault:', token0Vault.toBase58());
-    console.log('Token1 Vault:', token1Vault.toBase58());
-
-    // Create token vault accounts if they don't exist
-    try {
-        await createAssociatedTokenAccount(
-            connection,
-            DEPLOYER_KEYPAIR,
-            TOKEN0_MINT,
-            pairPda,
-            { commitment: 'confirmed' },
-            token0Program
-        );
-        console.log('Created Token0 Vault account');
-    } catch (e) {
-        console.log('Token0 Vault account already exists');
-    }
-
-    try {
-        await createAssociatedTokenAccount(
-            connection,
-            DEPLOYER_KEYPAIR,
-            TOKEN1_MINT,
-            pairPda,
-            { commitment: 'confirmed' },
-            token1Program
-        );
-        console.log('Created Token1 Vault account');
-    } catch (e) {
-        console.log('Token1 Vault account already exists');
-    }
-
-    // Get or create LP token account
+    // Get LP token account
     const deployerLpTokenAccount = await getAssociatedTokenAddress(
         lpMintPda,
         DEPLOYER_KEYPAIR.publicKey,
@@ -148,55 +107,35 @@ async function main() {
         lpTokenProgram
     );
 
-    console.log('LP Token ATA:', deployerLpTokenAccount.toBase58());
+    // Get current LP token balance
+    const lpBalance = (await getAccount(connection, deployerLpTokenAccount)).amount;
+    const removeAmount = new BN(lpBalance.toString()).divn(2); // Remove half of LP tokens
+    const minAmount0 = new BN(0); // Minimum amount of token0 to receive
+    const minAmount1 = new BN(0); // Minimum amount of token1 to receive
 
-    // Create LP token account if it doesn't exist
-    try {
-        await createAssociatedTokenAccount(
-            connection,
-            DEPLOYER_KEYPAIR,
-            lpMintPda,
-            DEPLOYER_KEYPAIR.publicKey,
-            { commitment: 'confirmed' },
-            lpTokenProgram
-        );
-        console.log('Created LP Token account');
-    } catch (e) {
-        console.log('LP Token account already exists');
-    }
-
-    // Bootstrap liquidity
-    const amount0 = new BN(200_000_000); // 200
-    const amount1 = new BN(100_000_000); // 100 tokens
-    const minLiquidity = new BN(1000); // Minimum liquidity
-
-    console.log('Bootstrapping with amounts:');
-    console.log('Token0:', amount0.toString());
-    console.log('Token1:', amount1.toString());
-    console.log('Min Liquidity:', minLiquidity.toString());
+    console.log('Removing liquidity:');
+    console.log('LP Amount:', removeAmount.toString());
+    console.log('Min Token0:', minAmount0.toString());
+    console.log('Min Token1:', minAmount1.toString());
 
     // Create transaction
     const tx = await program.methods
-        .bootstrapPair({
-            amount0In: amount0,
-            amount1In: amount1,
-            minLiquidityOut: minLiquidity
+        .removeLiquidity({
+            liquidityIn: removeAmount,
+            minAmount0Out: minAmount0,
+            minAmount1Out: minAmount1
         })
         .accounts({
             user: DEPLOYER_KEYPAIR.publicKey,
             pair: pairPda,
-            rateModel: RATE_MODEL,
             token0Vault: token0Vault,
             token1Vault: token1Vault,
             userToken0Account: DEPLOYER_TOKEN0_ACCOUNT,
             userToken1Account: DEPLOYER_TOKEN1_ACCOUNT,
-            token0VaultMint: TOKEN0_MINT,
-            token1VaultMint: TOKEN1_MINT,
             lpMint: lpMintPda,
             userLpTokenAccount: deployerLpTokenAccount,
             tokenProgram: lpTokenProgram,
             token2022Program: TOKEN_2022_PROGRAM_ID,
-            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
             systemProgram: SystemProgram.programId,
         })
         .signers([DEPLOYER_KEYPAIR])

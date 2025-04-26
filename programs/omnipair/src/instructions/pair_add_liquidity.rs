@@ -35,65 +35,64 @@ impl<'info> AdjustLiquidity<'info> {
     }
 
     pub fn handle_add(ctx: Context<Self>, args: AddLiquidityArgs) -> Result<()> {
-        let pair = &mut ctx.accounts.pair;
-        let token0_vault = &mut ctx.accounts.token0_vault;
-        let token1_vault = &mut ctx.accounts.token1_vault;
-        let user_token0_account = &mut ctx.accounts.user_token0_account;
-        let user_token1_account = &mut ctx.accounts.user_token1_account;
-        let lp_mint = &mut ctx.accounts.lp_mint;
-        let user_lp_token_account = &mut ctx.accounts.user_lp_token_account;
-        let token_program = &ctx.accounts.token_program;
-
+        let AdjustLiquidity {
+            pair,
+            user_token0_account,
+            user_token1_account,
+            token0_vault,
+            token1_vault,
+            user_lp_token_account,
+            lp_mint,
+            token_program,
+            token_2022_program,
+            token0_vault_mint,
+            token1_vault_mint,
+            user,
+            ..
+        } = ctx.accounts;
         // transfer token0 from user to pair
         transfer_from_user_to_pool_vault(
-            ctx.accounts.user.to_account_info(),
+            user.to_account_info(),
             user_token0_account.to_account_info(),
             token0_vault.to_account_info(),
-            ctx.accounts.token0_vault_mint.to_account_info(),
-            match ctx.accounts.token0_vault_mint.to_account_info().owner == ctx.accounts.token_program.key {
-                true => ctx.accounts.token_program.to_account_info(),
-                false => ctx.accounts.token_2022_program.to_account_info(),
+            token0_vault_mint.to_account_info(),
+            match token0_vault_mint.to_account_info().owner == token_program.key {
+                true => token_program.to_account_info(),
+                false => token_2022_program.to_account_info(),
             },
             args.amount0_in,
-            ctx.accounts.token0_vault_mint.decimals,
+            token0_vault_mint.decimals,
         )?;
         transfer_from_user_to_pool_vault(
-            ctx.accounts.user.to_account_info(),
+            user.to_account_info(),
             user_token1_account.to_account_info(),
             token1_vault.to_account_info(),
-            ctx.accounts.token1_vault_mint.to_account_info(),
-            match ctx.accounts.token1_vault_mint.to_account_info().owner == ctx.accounts.token_program.key {
-                true => ctx.accounts.token_program.to_account_info(),
-                false => ctx.accounts.token_2022_program.to_account_info(),
+            token1_vault_mint.to_account_info(),
+            match token1_vault_mint.to_account_info().owner == token_program.key {
+                true => token_program.to_account_info(),
+                false => token_2022_program.to_account_info(),
             },
             args.amount1_in,
-            ctx.accounts.token1_vault_mint.decimals,
+            token1_vault_mint.decimals,
         )?;
 
         // Calculate liquidity
         let total_supply = lp_mint.supply;
         let liquidity: u64 = match total_supply {
             0 => {
-                (args.amount0_in as u128).checked_mul(args.amount1_in as u128)
-                    .unwrap()
-                    .sqrt()
-                    .unwrap()
-                    .checked_sub(MIN_LIQUIDITY as u128)
-                    .unwrap()
+                (args.amount0_in as u128).checked_mul(args.amount1_in as u128).unwrap()
+                    .sqrt().unwrap()
+                    .checked_sub(MIN_LIQUIDITY as u128).unwrap()
                     .try_into().unwrap()
             },
             _ => {
-                let liquidity0 = (args.amount0_in)
-                    .checked_mul(total_supply)
-                    .unwrap()
-                    .checked_div(pair.reserve0)
-                    .unwrap();
-                let liquidity1 = (args.amount1_in)
-                    .checked_mul(total_supply)
-                    .unwrap()
-                    .checked_div(pair.reserve1)
-                    .unwrap();
-                liquidity0.min(liquidity1)
+                let liquidity0 = (args.amount0_in as u128)
+                    .checked_mul(total_supply as u128).unwrap()
+                    .checked_div(pair.reserve0 as u128).unwrap();
+                let liquidity1 = (args.amount1_in as u128)
+                    .checked_mul(total_supply as u128).unwrap()
+                    .checked_div(pair.reserve1 as u128).unwrap();
+                liquidity0.min(liquidity1).try_into().unwrap()
             }
         };
         // Check if liquidity is sufficient

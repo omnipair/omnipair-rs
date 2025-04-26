@@ -3,7 +3,7 @@ use anchor_lang::{
     accounts::interface_account::InterfaceAccount,
 };
 use anchor_spl::{
-    token::{self, MintTo, Token},
+    token::Token,
     token_interface::{Mint, TokenAccount, Token2022},
     associated_token::AssociatedToken,
 };
@@ -11,7 +11,10 @@ use crate::{
     constants::*, generate_gamm_pair_seeds, state::{pair::Pair, rate_model::RateModel}
 };
 use crate::errors::ErrorCode;
-use crate::utils::token::transfer_from_user_to_pool_vault;
+use crate::utils::token::{
+    transfer_from_user_to_pool_vault,
+    token_mint_to,  
+};
 use crate::instructions::common::AddLiquidityArgs;
 use crate::utils::math::SqrtU128;
 
@@ -162,13 +165,9 @@ impl<'info> BootstrapPair<'info> {
         )?;
 
         // Calculate liquidity
-        let liquidity: u64 = (args.amount0_in as u128)
-            .checked_mul(args.amount1_in as u128)
-            .unwrap()
-            .sqrt()
-            .unwrap()
-            .checked_sub(MIN_LIQUIDITY as u128)
-            .unwrap()
+        let liquidity: u64 = (args.amount0_in as u128).checked_mul(args.amount1_in as u128).unwrap() 
+            .sqrt().unwrap() 
+            .checked_sub(MIN_LIQUIDITY as u128).unwrap()
             .try_into().unwrap();
 
         require!(
@@ -177,36 +176,13 @@ impl<'info> BootstrapPair<'info> {
         );
         
         // Mint LP tokens to user
-        // token_mint_to(
-        //     pair.to_account_info(),
-        //     token_program.to_account_info(),
-        //     lp_mint.to_account_info(),
-        //     user_lp_token_account.to_account_info(),
-        //     liquidity as u64,
-        //     &[
-        //         &[
-        //             GAMM_LP_MINT_SEED_PREFIX,
-        //             pair.token0.as_ref(),
-        //             pair.token1.as_ref(),
-        //             &[pair.bump][..]
-        //         ],
-        //     ],
-        // )?;
-
-        let seeds = generate_gamm_pair_seeds!(pair);
-        let signer = &[&seeds[..]];
-
-        token::mint_to(
-            CpiContext::new_with_signer(
-                token_program.to_account_info(),
-                MintTo {
-                    mint: lp_mint.to_account_info(),
-                    to: user_lp_token_account.to_account_info(),
-                    authority: pair.to_account_info(),
-                },
-                signer,
-            ),
+        token_mint_to(
+            pair.to_account_info(),
+            token_program.to_account_info(),
+            lp_mint.to_account_info(),
+            user_lp_token_account.to_account_info(),
             liquidity as u64,
+            &[&generate_gamm_pair_seeds!(pair)[..]]
         )?;
         
         // Update reserves
