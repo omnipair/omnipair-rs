@@ -12,7 +12,7 @@ pub use instructions::*;
 pub use utils::account::*;
 pub use instructions::pair_initialize::InitializePair;
 
-declare_id!("4DcEXKL6LxWNTxp3jZUrj1jjzU4VXPNMHsVs7Jp9NPb9");
+declare_id!("CBAu564qqqNCkJ7VxnahmPkVBRRrsY68jqXy61c3uTrG");
 
 #[program]
 pub mod omnipair {
@@ -50,11 +50,11 @@ pub mod omnipair {
         AdjustLiquidity::handle_remove(ctx, args)
     }
 
-    // pub fn swap(
-    //     ctx: Context<Swap>,
-    //     amount_in: u64,
-    //     min_amount_out: u64,
-    // ) -> Result<()> {
-    //     instructions::pair_swap::swap(ctx, amount_in, min_amount_out)
-    // }
+    pub fn swap(
+        ctx: Context<Swap>,
+        amount_in: u64,
+        min_amount_out: u64,
+    ) -> Result<()> {
+        Swap::handle_swap(ctx, amount_in, min_amount_out)
+    }
 }

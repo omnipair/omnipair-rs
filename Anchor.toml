@@ -6,10 +6,10 @@ seeds = false
 skip-lint = false
 
 [programs.devnet]
-omnipair = "4DcEXKL6LxWNTxp3jZUrj1jjzU4VXPNMHsVs7Jp9NPb9"
+omnipair = "CBAu564qqqNCkJ7VxnahmPkVBRRrsY68jqXy61c3uTrG"
 
 [programs.localnet]
-omnipair = "Hpdn6J4uNxp3xYqER2o7mdTumTzkNV7Xiwr1xmEEnFwz"
+omnipair = "CBAu564qqqNCkJ7VxnahmPkVBRRrsY68jqXy61c3uTrG"
 
 [registry]
 url = "https://api.apr.dev"

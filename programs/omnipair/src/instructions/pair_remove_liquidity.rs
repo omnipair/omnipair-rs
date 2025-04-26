@@ -27,7 +27,6 @@ impl<'info> AdjustLiquidity<'info> {
 
         require!(*liquidity_in > 0, ErrorCode::AmountZero);
         require!(*liquidity_in <= pair.total_supply, ErrorCode::InsufficientLiquidity);
-        // ensure user has enough lp balance
         require!(user_lp_token_account.amount >= *liquidity_in, ErrorCode::InsufficientLiquidity);
         
         Ok(())
@@ -40,14 +39,20 @@ impl<'info> AdjustLiquidity<'info> {
     }
 
     pub fn handle_remove(ctx: Context<Self>, args: RemoveLiquidityArgs) -> Result<()> {
-        let pair = &mut ctx.accounts.pair;
-        let token0_vault = &mut ctx.accounts.token0_vault;
-        let token1_vault = &mut ctx.accounts.token1_vault;
-        let user_token0_account = &mut ctx.accounts.user_token0_account;
-        let user_token1_account = &mut ctx.accounts.user_token1_account;
-        let lp_mint = &mut ctx.accounts.lp_mint;
-        let user_lp_token_account = &mut ctx.accounts.user_lp_token_account;
-        let token_program = &ctx.accounts.token_program;
+        let AdjustLiquidity {
+            pair,
+            user_lp_token_account,
+            token0_vault,
+            token1_vault,
+            user_token0_account,
+            user_token1_account,
+            lp_mint,
+            token_program,
+            token_2022_program,
+            token0_vault_mint,
+            token1_vault_mint,
+            ..
+        } = ctx.accounts;
 
         // Calculate amounts to remove
         let total_supply = lp_mint.supply;
@@ -77,13 +82,13 @@ impl<'info> AdjustLiquidity<'info> {
             pair.to_account_info(),
             token0_vault.to_account_info(),
             user_token0_account.to_account_info(),
-            ctx.accounts.token0_vault_mint.to_account_info(),
-            match ctx.accounts.token0_vault_mint.to_account_info().owner == ctx.accounts.token_program.key {
-                true => ctx.accounts.token_program.to_account_info(),
-                false => ctx.accounts.token_2022_program.to_account_info(),
+            token0_vault_mint.to_account_info(),
+            match token0_vault_mint.to_account_info().owner == token_program.key {
+                true => token_program.to_account_info(),
+                false => token_2022_program.to_account_info(),
             },
             amount0_out,
-            ctx.accounts.token0_vault_mint.decimals,
+            token0_vault_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
 
@@ -91,15 +96,25 @@ impl<'info> AdjustLiquidity<'info> {
             pair.to_account_info(),
             token1_vault.to_account_info(),
             user_token1_account.to_account_info(),
-            ctx.accounts.token1_vault_mint.to_account_info(),
-            match ctx.accounts.token1_vault_mint.to_account_info().owner == ctx.accounts.token_program.key {
-                true => ctx.accounts.token_program.to_account_info(),
-                false => ctx.accounts.token_2022_program.to_account_info(),
+            token1_vault_mint.to_account_info(),
+            match token1_vault_mint.to_account_info().owner == token_program.key {
+                true => token_program.to_account_info(),
+                false => token_2022_program.to_account_info(),
             },
             amount1_out,
-            ctx.accounts.token1_vault_mint.decimals,
+            token1_vault_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
+
+        // Check collateral requirements
+        require!(
+            token0_vault.amount >= pair.total_collateral0,
+            ErrorCode::Undercollateralized
+        );
+        require!(
+            token1_vault.amount >= pair.total_collateral1,
+            ErrorCode::Undercollateralized
+        );
 
         // Burn LP tokens from user
         token_burn(

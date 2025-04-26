@@ -110,4 +110,7 @@ pub enum ErrorCode {
 
     #[msg("Arithmetic overflow")]
     Overflow,
+
+    #[msg("Undercollateralized")]
+    Undercollateralized,
 }

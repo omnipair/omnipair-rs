@@ -10,12 +10,15 @@ import {
     TOKEN_PROGRAM_ID, 
     TOKEN_2022_PROGRAM_ID,
     ASSOCIATED_TOKEN_PROGRAM_ID,
-    getAssociatedTokenAddress
+    getAssociatedTokenAddress,
+    createAssociatedTokenAccount,
+    getAccount
 } from '@solana/spl-token';
 import { Program, AnchorProvider, Wallet } from '@coral-xyz/anchor';
 import { IDL } from '../target/types/omnipair.ts';
-import fs from 'fs';
+import BN from 'bn.js';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 // Get the directory name in ES modules
@@ -24,10 +27,10 @@ const __dirname = path.dirname(__filename);
 
 // Replace these with your actual values
 const PROGRAM_ID = new PublicKey('CBAu564qqqNCkJ7VxnahmPkVBRRrsY68jqXy61c3uTrG');
-const RPC_URL = 'http://127.0.0.1:8899'; // or your preferred network
+const RPC_URL = 'http://127.0.0.1:8899';
 const TOKEN0_MINT = new PublicKey('EJC5LVe13Pv4B3afsWXu3Nq9Hq5GcdBQQL4K8bByUkbp');
 const TOKEN1_MINT = new PublicKey('GiZM66o3ZsBRrLkweYDbX2pqNzpdidBdUj3jn6CdV8Wh');
-const RATE_MODEL = new PublicKey('FcebjLtChmCBqPzKJGY58SsLMdbzwsFNwMvQ6AXwmDCt');
+const RATE_MODEL = new PublicKey('7HgFGk2vGZcmjLHdhW1M9niuYe3eNoms6x8tehCDdWoe');
 
 // Load deployer keypair from file
 const deployerKeypairPath = path.join(__dirname, '..', 'deployer-keypair.json');
@@ -41,7 +44,7 @@ const DEPLOYER_TOKEN0_ACCOUNT = new PublicKey('BVfHFrHMtBfWDKW1ve4q7Fm3M66dmj5Zg
 const DEPLOYER_TOKEN1_ACCOUNT = new PublicKey('GenCsiGtXFdAxQsRLTNRwbCMBTCukuh3KAmNygFfv5xp');
 
 async function main() {
-    console.log('Starting pair initialization...');
+    console.log('Starting token swap...');
     
     // Setup connection and provider
     const connection = new Connection(RPC_URL, 'confirmed');
@@ -49,11 +52,12 @@ async function main() {
     const provider = new AnchorProvider(connection, wallet, {});
     const program = new Program(IDL, PROGRAM_ID, provider);
 
-    console.log('Connected to network:', RPC_URL);
+    // Log all addresses
+    console.log('Network:', RPC_URL);
+    console.log('Program ID:', PROGRAM_ID.toBase58());
     console.log('Deployer address:', DEPLOYER_KEYPAIR.publicKey.toBase58());
-    console.log('Rate Model address:', RATE_MODEL.toBase58());
-    console.log('Token0 Account:', DEPLOYER_TOKEN0_ACCOUNT.toBase58());
-    console.log('Token1 Account:', DEPLOYER_TOKEN1_ACCOUNT.toBase58());
+    console.log('Token0 Mint:', TOKEN0_MINT.toBase58());
+    console.log('Token1 Mint:', TOKEN1_MINT.toBase58());
 
     // Find PDA for the pair
     const [pairPda] = PublicKey.findProgramAddressSync(
@@ -61,68 +65,59 @@ async function main() {
         PROGRAM_ID
     );
 
-    // Find PDA for the LP mint
-    const [lpMintPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('gamm_lp_mint'), pairPda.toBuffer()],
-        PROGRAM_ID
-    );
-
-    console.log('Pair PDA:', pairPda.toBase58());
-    console.log('LP Mint PDA:', lpMintPda.toBase58());
-
-    // Get or create LP token account
-    const deployerLpTokenAccount = await getAssociatedTokenAddress(
-        lpMintPda,
-        DEPLOYER_KEYPAIR.publicKey
-    );
-
-    console.log('LP Token ATA:', deployerLpTokenAccount.toBase58());
-
     // Get token program for each mint
-    const token0Program = (await connection.getAccountInfo(TOKEN0_MINT))?.owner.equals(TOKEN_2022_PROGRAM_ID) 
+    const token0Info = await connection.getAccountInfo(TOKEN0_MINT);
+    const token1Info = await connection.getAccountInfo(TOKEN1_MINT);
+    
+    const token0Program = token0Info?.owner.equals(TOKEN_2022_PROGRAM_ID) 
         ? TOKEN_2022_PROGRAM_ID 
         : TOKEN_PROGRAM_ID;
-    const token1Program = (await connection.getAccountInfo(TOKEN1_MINT))?.owner.equals(TOKEN_2022_PROGRAM_ID) 
+    const token1Program = token1Info?.owner.equals(TOKEN_2022_PROGRAM_ID) 
         ? TOKEN_2022_PROGRAM_ID 
         : TOKEN_PROGRAM_ID;
 
-    console.log('Token0 Program:', token0Program.toBase58());
-    console.log('Token1 Program:', token1Program.toBase58());
+    // Get associated token addresses for vaults
+    const token0Vault = await getAssociatedTokenAddress(
+        TOKEN0_MINT,
+        pairPda,
+        true,
+        token0Program
+    );
+    const token1Vault = await getAssociatedTokenAddress(
+        TOKEN1_MINT,
+        pairPda,
+        true,
+        token1Program
+    );
+
+    // Swap parameters
+    const amountIn = new BN(1000000); // Amount of token0 to swap
+    const minAmountOut = new BN(0); // Minimum amount of token1 to receive
+
+    console.log('Swap parameters:');
+    console.log('Amount In:', amountIn.toString());
+    console.log('Min Amount Out:', minAmountOut.toString());
 
     // Create transaction
     const tx = await program.methods
-        .initializePair()
+        .swap(amountIn, minAmountOut)
         .accounts({
-            deployer: DEPLOYER_KEYPAIR.publicKey,
+            user: DEPLOYER_KEYPAIR.publicKey,
             pair: pairPda,
-            lpMint: lpMintPda,
-            token0Mint: TOKEN0_MINT,
-            token1Mint: TOKEN1_MINT,
-            rateModel: RATE_MODEL,
-            deployerLpTokenAccount,
-            systemProgram: SystemProgram.programId,
-            // tokenProgram: TOKEN_2022_PROGRAM_ID,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            // token2022Program: TOKEN_2022_PROGRAM_ID,
-            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-            rent: SYSVAR_RENT_PUBKEY,
+            tokenInVault: token0Vault,
+            tokenOutVault: token1Vault,
+            userTokenInAccount: DEPLOYER_TOKEN0_ACCOUNT,
+            userTokenOutAccount: DEPLOYER_TOKEN1_ACCOUNT,
+            tokenInMint: TOKEN0_MINT,
+            tokenOutMint: TOKEN1_MINT,
+            tokenProgram: token0Program,
+            token2022Program: TOKEN_2022_PROGRAM_ID,
         })
-        .transaction();
-
-    console.log('Transaction created. Sending...');
-
-    // Send transaction
-    const signature = await sendAndConfirmTransaction(
-        connection,
-        tx,
-        [DEPLOYER_KEYPAIR]
-    );
+        .signers([DEPLOYER_KEYPAIR])
+        .rpc();
 
     console.log('Transaction successful!');
-    console.log('Signature:', signature);
+    console.log('Signature:', tx);
 }
 
-main().catch(error => {
-    console.error('Error:', error);
-    process.exit(1);
-}); 
+main().catch(console.error); 

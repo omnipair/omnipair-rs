@@ -9,7 +9,10 @@
     "deploy-tokens": "ts-node --esm deploy_tokens.ts",
     "initialize": "ts-node --esm initialize_pair.ts",
     "create-rm": "ts-node --esm create_rate_model.ts",
-    "bootstrap": "ts-node --esm bootstrap_liquidity.ts"
+    "bootstrap": "ts-node --esm bootstrap_liquidity.ts",
+    "add-liq": "ts-node --esm add_liquidity.ts",
+    "swap": "ts-node --esm swap.ts",
+    "remove-liq": "ts-node --esm remove_liquidity.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.28.0",
