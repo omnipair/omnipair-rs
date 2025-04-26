@@ -3,8 +3,7 @@ use crate::errors::ErrorCode;
 use crate::constants::*;
 use crate::utils::token::{transfer_from_user_to_pool_vault, token_mint_to};
 use crate::generate_gamm_pair_seeds;
-use crate::AdjustLiquidity;
-use crate::instructions::common::AddLiquidityArgs;
+use crate::liquidity::common::{AdjustLiquidity, AddLiquidityArgs};
 use crate::utils::math::SqrtU128;
 
 impl<'info> AdjustLiquidity<'info> {

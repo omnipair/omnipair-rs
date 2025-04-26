@@ -164,7 +164,13 @@ impl<'info> BootstrapPair<'info> {
             token1_vault_mint.decimals,
         )?;
 
-        // Calculate liquidity
+        // Calculate liquidity:
+        // sqrt(amount0_in * amount1_in) - MINIMUM_LIQUIDITY
+        // MINIMUM_LIQUIDITY = 1000
+        // 9 decimals: 1000 / 10^9 = 1e-6 full LP tokens
+        // 1000 units are burned permanently.
+        // This burn (~1e-6 of supply) is larger than Uniswap V2's 1e-15 burn (with 18 decimals),
+        // but still negligible for users and significantly raises the cost of share inflation attacks.
         let liquidity: u64 = (args.amount0_in as u128).checked_mul(args.amount1_in as u128).unwrap() 
             .sqrt().unwrap() 
             .checked_sub(MIN_LIQUIDITY as u128).unwrap()

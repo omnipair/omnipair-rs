@@ -3,7 +3,7 @@ use crate::errors::ErrorCode;
 use crate::constants::*;
 use crate::utils::token::{transfer_from_pool_vault_to_user, token_burn};
 use crate::generate_gamm_pair_seeds;
-use crate::AdjustLiquidity;
+use crate::liquidity::common::AdjustLiquidity;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct RemoveLiquidityArgs {
