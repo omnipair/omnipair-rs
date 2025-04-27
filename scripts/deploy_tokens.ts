@@ -8,8 +8,6 @@ import {
     createAssociatedTokenAccount,
     mintTo
 } from '@solana/spl-token';
-import { Program, AnchorProvider, Wallet } from '@coral-xyz/anchor';
-import { IDL } from '../target/types/omnipair.ts';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -85,8 +83,8 @@ async function main() {
 
     // Mint 1000 tokens to deployer for each token
     console.log('\nMinting tokens to deployer...');
-    const mint0Amount = 2000 * Math.pow(10, 6); // 1000 tokens with 6 decimals
-    const mint1Amount = 10_000 * Math.pow(10, 6); // 1000 tokens with 6 decimals
+    const mint0Amount = 20_000 * Math.pow(10, 6); // 1000 tokens with 6 decimals
+    const mint1Amount = 100_000 * Math.pow(10, 6); // 1000 tokens with 6 decimals
 
     await mintTo(
         connection,

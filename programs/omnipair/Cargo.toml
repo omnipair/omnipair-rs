@@ -16,14 +16,14 @@ no-log-ix-name = []
 cpi = ["no-entrypoint"]
 default = []
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+anchor-debug = []
 
 [dependencies]
-anchor-lang = { version = "0.31.0", features = ["init-if-needed", "event-cpi"] }
+anchor-lang = { version = "0.31.0", features = ["init-if-needed", "event-cpi", "derive"] }
 anchor-spl = { version = "0.31.0", features = ["metadata"] }
 spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
 spl-token-2022 = { version = "6.0.0", features = ["no-entrypoint"] }
 spl-math = { version = "0.3.0", features = ["no-entrypoint"] }
-solana-program = "=2.1.0"
 solana-security-txt = "1.1.1"
 num-traits = "0.2.19"
 spl-memo = "4.0.0"

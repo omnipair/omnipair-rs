@@ -12,7 +12,7 @@ pub use instructions::*;
 pub use utils::account::*;
 pub use instructions::pair_initialize::InitializePair;
 
-declare_id!("CsnwgVfKmeLivEjPcLEBCWd8ndmq2aFBBd54q8w32JVM");
+declare_id!("85nX5xYkHMxphPn7tycTybeg2GACNdwTscA8k8SfKkzr");
 
 #[program]
 pub mod omnipair {
@@ -60,23 +60,23 @@ pub mod omnipair {
 
     // Lending instructions
     #[access_control(ctx.accounts.validate_add_and_update(&args))]
-    pub fn add_collateral(ctx: Context<AdjustCollateral>, args: AdjustCollateralArgs) -> Result<()> {
-        AdjustCollateral::handle_add_collateral(ctx, args)
+    pub fn add_collateral(ctx: Context<AddCollateral>, args: AdjustPositionArgs) -> Result<()> {
+        AddCollateral::handle_add_collateral(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate_remove_and_update(&args))]
-    pub fn remove_collateral(ctx: Context<AdjustCollateral>, args: AdjustCollateralArgs) -> Result<()> {
-        AdjustCollateral::handle_remove_collateral(ctx, args)
+    pub fn remove_collateral(ctx: Context<CommonAdjustPosition>, args: AdjustPositionArgs) -> Result<()> {
+        CommonAdjustPosition::handle_remove_collateral(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate_borrow_and_update(&args))]
-    pub fn borrow(ctx: Context<AdjustDebt>, args: AdjustDebtArgs) -> Result<()> {
-        AdjustDebt::handle_borrow(ctx, args)
+    pub fn borrow(ctx: Context<CommonAdjustPosition>, args: AdjustPositionArgs) -> Result<()> {
+        CommonAdjustPosition::handle_borrow(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate_repay_and_update(&args))]
-    pub fn repay(ctx: Context<AdjustDebt>, args: AdjustDebtArgs) -> Result<()> {
-        AdjustDebt::handle_repay(ctx, args)
+    pub fn repay(ctx: Context<CommonAdjustPosition>, args: AdjustPositionArgs) -> Result<()> {
+        CommonAdjustPosition::handle_repay(ctx, args)
     }
     
 }

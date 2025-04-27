@@ -132,8 +132,6 @@ impl<'info> Liquidate<'info> {
         let borrowing_power1 = pair.total_collateral1
             .checked_mul(pair.price1_mantissa())
             .unwrap()
-            .checked_mul(CF_BPS)
-            .unwrap()
             .checked_div(SCALE)
             .unwrap()
             .checked_div(10000)
@@ -141,8 +139,6 @@ impl<'info> Liquidate<'info> {
         
         let borrowing_power0 = pair.total_collateral0
             .checked_mul(pair.price0_mantissa())
-            .unwrap()
-            .checked_mul(CF_BPS)
             .unwrap()
             .checked_div(SCALE)
             .unwrap()

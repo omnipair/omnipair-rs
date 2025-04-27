@@ -1,29 +1,29 @@
 use anchor_lang::prelude::*;
+use anchor_spl::{
+    token::Token,
+    token_interface::{Mint, TokenAccount, Token2022},
+};
 use crate::{
     errors::ErrorCode,
     events::AdjustCollateralEvent,
     utils::{token::transfer_from_user_to_pool_vault, account::get_size_with_discriminator},
-    instructions::lending::common::{BaseAdjustPosition, AdjustPositionArgs},
-    state::{user_position::UserPosition, pair::Pair},
+    instructions::lending::common::AdjustPositionArgs,
+    state::{user_position::UserPosition, pair::Pair, rate_model::RateModel},
     constants::*,
 };
 
-
 #[derive(Accounts)]
 pub struct AddCollateral<'info> {
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    // #[account(
-    //     mut,
-    //     seeds = [
-    //         PAIR_SEED_PREFIX, 
-    //         pair.token0.as_ref(),
-    //         pair.token1.as_ref()
-    //     ],
-    //     bump
-    // )]
-    // pub pair: Account<'info, Pair>,
+    #[account(
+        mut,
+        seeds = [
+            PAIR_SEED_PREFIX,
+            pair.token0.as_ref(),
+            pair.token1.as_ref()
+        ],
+        bump
+    )]
+    pub pair: Account<'info, Pair>,
 
     #[account(
         init_if_needed,
@@ -31,21 +31,43 @@ pub struct AddCollateral<'info> {
         space = get_size_with_discriminator::<UserPosition>(),
         seeds = [
             POSITION_SEED_PREFIX,
-            common.pair.key().as_ref(),
-            common.user.key().as_ref()
+            pair.key().as_ref(),
+            user.key().as_ref()
         ],
         bump
     )]
     pub user_position: Account<'info, UserPosition>,
 
-    #[account(mut)]
-    pub common: BaseAdjustPosition<'info>,
+    #[account(
+        mut,
+        address = pair.rate_model,
+    )]
+    pub rate_model: Account<'info, RateModel>,
 
+    #[account(
+        mut,
+        constraint = collateral_vault.mint == pair.token0 || collateral_vault.mint == pair.token1,
+    )]
+    pub collateral_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        constraint = user_collateral_token_account.mint == pair.token0 || user_collateral_token_account.mint == pair.token1,
+        token::authority = user,
+    )]
+    pub user_collateral_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(address = collateral_vault.mint)]
+    pub collateral_token_mint: Box<InterfaceAccount<'info, Mint>>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+    pub token_2022_program: Program<'info, Token2022>,
     pub system_program: Program<'info, System>,
 }
 
-
-impl<'info> BaseAdjustPosition<'info> {
+impl<'info> AddCollateral<'info> {
     pub fn validate_add(&self, args: &AdjustPositionArgs) -> Result<()> {
         let AdjustPositionArgs { amount } = args;
         
@@ -59,6 +81,11 @@ impl<'info> BaseAdjustPosition<'info> {
         
         Ok(())
     }
+    
+    pub fn update(&mut self) -> Result<()> {
+        self.pair.update(&self.rate_model)?;
+        Ok(())
+    }
 
     pub fn validate_add_and_update(&mut self, args: &AdjustPositionArgs) -> Result<()> {
         self.validate_add(args)?;
@@ -67,19 +94,17 @@ impl<'info> BaseAdjustPosition<'info> {
     }
 
     pub fn handle_add_collateral(ctx: Context<Self>, args: AdjustPositionArgs) -> Result<()> {
-        let BaseAdjustPosition {
-            pair,
+        let AddCollateral { 
+            pair, 
+            user, 
             collateral_vault,
-            user_collateral_token_account,
             collateral_token_mint,
             token_program,
+            user_collateral_token_account,
+            user_position,
             token_2022_program,
-            user,
             ..
         } = ctx.accounts;
-
-        // Update pair state
-        pair.update(&ctx.accounts.rate_model)?;
 
         // Transfer tokens from user to collateral vault
         match user_collateral_token_account.mint == pair.token0 {
@@ -99,7 +124,7 @@ impl<'info> BaseAdjustPosition<'info> {
                 
                 // Update collateral
                 pair.total_collateral0 = pair.total_collateral0.checked_add(args.amount).unwrap();
-                
+                user_position.collateral0 = user_position.collateral0.checked_add(args.amount).unwrap();
             },
             false => {
                 transfer_from_user_to_pool_vault(
@@ -117,6 +142,7 @@ impl<'info> BaseAdjustPosition<'info> {
                 
                 // Update collateral
                 pair.total_collateral1 = pair.total_collateral1.checked_add(args.amount).unwrap();
+                user_position.collateral1 = user_position.collateral1.checked_add(args.amount).unwrap();
             }
         }
 

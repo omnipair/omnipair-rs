@@ -125,4 +125,10 @@ pub enum ErrorCode {
 
     #[msg("Insufficient balance for collateral")]
     InsufficientBalanceForCollateral,
+
+    #[msg("Insufficient amount")]
+    InsufficientAmount,
+
+    #[msg("Insufficient debt")]
+    InsufficientDebt,
 }

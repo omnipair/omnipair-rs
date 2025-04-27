@@ -102,19 +102,27 @@ impl Pair {
 
     /// EMA prices scaled by 1e9
     pub fn price0_mantissa(&self) -> u64 {
-        compute_ema(
-            self.last_price0_ema, 
-            self.last_update, 
-            self.spot_price0_mantissa(), 
-            DEFAULT_HALF_LIFE)
+        if self.reserve0 == 0 {
+            0
+        } else {
+            compute_ema(
+                self.last_price0_ema, 
+                self.last_update, 
+                self.spot_price0_mantissa(), 
+                DEFAULT_HALF_LIFE)
+        }
     }
 
     pub fn price1_mantissa(&self) -> u64 {
-        compute_ema(
-            self.last_price1_ema, 
-            self.last_update, 
-            self.spot_price1_mantissa(), 
-            DEFAULT_HALF_LIFE)
+        if self.reserve1 == 0 {
+            0
+        } else {
+            compute_ema(
+                self.last_price1_ema, 
+                self.last_update, 
+                self.spot_price1_mantissa(), 
+                DEFAULT_HALF_LIFE)
+        }
     }
 
     pub fn is_initialized(&self) -> bool {

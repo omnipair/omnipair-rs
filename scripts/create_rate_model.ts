@@ -1,14 +1,12 @@
 import { 
     Connection, 
-    PublicKey, 
-    Transaction, 
     sendAndConfirmTransaction,
     Keypair,
     SystemProgram,
-    SYSVAR_RENT_PUBKEY
 } from '@solana/web3.js';
 import { Program, AnchorProvider, Wallet } from '@coral-xyz/anchor';
-import { IDL } from '../target/types/omnipair.ts';
+import idl from '../target/idl/omnipair.json' with { type: "json" };
+import type { Omnipair } from '../target/types/omnipair';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -18,7 +16,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Replace these with your actual values
-const PROGRAM_ID = new PublicKey('CBAu564qqqNCkJ7VxnahmPkVBRRrsY68jqXy61c3uTrG');
 const RPC_URL = 'http://127.0.0.1:8899'; // or your preferred network
 
 // Load deployer keypair from file
@@ -35,7 +32,7 @@ async function main() {
     const connection = new Connection(RPC_URL, 'confirmed');
     const wallet = new Wallet(DEPLOYER_KEYPAIR);
     const provider = new AnchorProvider(connection, wallet, {});
-    const program = new Program(IDL, PROGRAM_ID, provider);
+    const program = new Program<Omnipair>(idl, provider);
 
     console.log('Connected to network:', RPC_URL);
     console.log('Deployer address:', DEPLOYER_KEYPAIR.publicKey.toBase58());
@@ -50,7 +47,6 @@ async function main() {
         .accounts({
             rateModel: rateModelKeypair.publicKey,
             payer: DEPLOYER_KEYPAIR.publicKey,
-            systemProgram: SystemProgram.programId,
         })
         .signers([rateModelKeypair])
         .transaction();

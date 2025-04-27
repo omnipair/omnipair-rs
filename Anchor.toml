@@ -1,22 +1,22 @@
 [toolchain]
 anchor_version = "0.31.0"
-solana-version = "2.1.0"
+package_manager = "yarn"
 
 [features]
-seeds = false
+resolution = true
 skip-lint = false
 
 [programs.devnet]
-omnipair = "CsnwgVfKmeLivEjPcLEBCWd8ndmq2aFBBd54q8w32JVM"
+omnipair = "85nX5xYkHMxphPn7tycTybeg2GACNdwTscA8k8SfKkzr"
 
 [programs.localnet]
-omnipair = "CBAu564qqqNCkJ7VxnahmPkVBRRrsY68jqXy61c3uTrG"
+omnipair = "85nX5xYkHMxphPn7tycTybeg2GACNdwTscA8k8SfKkzr"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
+cluster = "localnet"
 wallet = "deployer-keypair.json"
 
 [scripts]
