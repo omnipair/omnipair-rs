@@ -11,7 +11,11 @@
     "bootstrap": "ts-node --esm scripts/bootstrap_liquidity.ts",
     "add-liq": "ts-node --esm scripts/add_liquidity.ts",
     "swap": "ts-node --esm scripts/swap.ts",
-    "remove-liq": "ts-node --esm scripts/remove_liquidity.ts"
+    "remove-liq": "ts-node --esm scripts/remove_liquidity.ts",
+    "add-collateral": "ts-node --esm scripts/add_collateral.ts",
+    "remove-collateral": "ts-node --esm scripts/remove_collateral.ts",
+    "borrow": "ts-node --esm scripts/borrow.ts",
+    "repay": "ts-node --esm scripts/repay.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.31.0",
