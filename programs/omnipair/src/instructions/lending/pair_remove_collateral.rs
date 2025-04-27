@@ -5,102 +5,108 @@ use crate::{
     events::AdjustCollateralEvent,
     utils::token::transfer_from_pool_vault_to_user,
     generate_gamm_pair_seeds,
-    instructions::lending::common::{AdjustCollateral, AdjustCollateralArgs},
+    instructions::lending::common::{CommonAdjustPosition, AdjustPositionArgs},
 };
 
-impl<'info> AdjustCollateral<'info> {
-    pub fn validate_remove(&self, args: &AdjustCollateralArgs) -> Result<()> {
-        let AdjustCollateralArgs { amount0, amount1 } = args;
+impl<'info> CommonAdjustPosition<'info> {
+    pub fn validate_remove(&self, args: &AdjustPositionArgs) -> Result<()> {
+        let AdjustPositionArgs { amount } = args;
         
-        require!(*amount0 > 0 || *amount1 > 0, ErrorCode::AmountZero);
+        require!(*amount > 0, ErrorCode::AmountZero);
         
-        if *amount0 > 0 {
-            require_gte!(
-                self.pair.total_collateral0,
-                *amount0,
-                ErrorCode::InsufficientCollateral0
-            );
-        }
-        
-        if *amount1 > 0 {
-            require_gte!(
-                self.pair.total_collateral1,
-                *amount1,
-                ErrorCode::InsufficientCollateral1
-            );
+        // Check if user has enough collateral
+        match self.user_token_account.mint == self.pair.token0 {
+            true => {
+                require_gte!(
+                    self.user_position.collateral0,
+                    *amount,
+                    ErrorCode::InsufficientCollateral
+                );
+            },
+            false => {
+                require_gte!(
+                    self.user_position.collateral1,
+                    *amount,
+                    ErrorCode::InsufficientCollateral
+                );
+            }
         }
         
         Ok(())
     }
 
-    pub fn validate_remove_and_update(&mut self, args: &AdjustCollateralArgs) -> Result<()> {
+    pub fn validate_remove_and_update(&mut self, args: &AdjustPositionArgs) -> Result<()> {
         self.validate_remove(args)?;
         self.update()?;
         Ok(())
     }
 
-    pub fn handle_remove_collateral(ctx: Context<Self>, args: AdjustCollateralArgs) -> Result<()> {
-        let AdjustCollateral {
+    pub fn handle_remove_collateral(ctx: Context<Self>, args: AdjustPositionArgs) -> Result<()> {
+        let CommonAdjustPosition {
             pair,
-            token0_vault,
-            token1_vault,
-            user_token0_account,
-            user_token1_account,
-            token0_vault_mint,
-            token1_vault_mint,
+            token_vault,
+            user_token_account,
+            vault_token_mint,
             token_program,
             token_2022_program,
             user,
+            user_position,
             ..
         } = ctx.accounts;
 
-        // Update pair state
-        pair.update(&ctx.accounts.rate_model)?;
-
         // Transfer tokens from vault to user
-        if args.amount0 > 0 {
-            transfer_from_pool_vault_to_user(
-                pair.to_account_info(),
-                token0_vault.to_account_info(),
-                user_token0_account.to_account_info(),
-                token0_vault_mint.to_account_info(),
-                match token0_vault_mint.to_account_info().owner == token_program.key {
-                    true => token_program.to_account_info(),
-                    false => token_2022_program.to_account_info(),
-                },
-                args.amount0,
-                token0_vault_mint.decimals,
-                &[&generate_gamm_pair_seeds!(pair)[..]],
-            )?;
-            
-            // Update collateral
-            pair.total_collateral0 = pair.total_collateral0.checked_sub(args.amount0).unwrap();
-        }
-
-        if args.amount1 > 0 {
-            transfer_from_pool_vault_to_user(
-                pair.to_account_info(),
-                token1_vault.to_account_info(),
-                user_token1_account.to_account_info(),
-                token1_vault_mint.to_account_info(),
-                match token1_vault_mint.to_account_info().owner == token_program.key {
-                    true => token_program.to_account_info(),
-                    false => token_2022_program.to_account_info(),
-                },
-                args.amount1,
-                token1_vault_mint.decimals,
-                &[&generate_gamm_pair_seeds!(pair)[..]],
-            )?;
-            
-            // Update collateral
-            pair.total_collateral1 = pair.total_collateral1.checked_sub(args.amount1).unwrap();
+        match user_token_account.mint == pair.token0 {
+            true => {
+                transfer_from_pool_vault_to_user(
+                    pair.to_account_info(),
+                    token_vault.to_account_info(),
+                    user_token_account.to_account_info(),
+                    vault_token_mint.to_account_info(),
+                    match vault_token_mint.to_account_info().owner == token_program.key {
+                        true => token_program.to_account_info(),
+                        false => token_2022_program.to_account_info(),
+                    },
+                    args.amount,
+                    vault_token_mint.decimals,
+                    &[&generate_gamm_pair_seeds!(pair)[..]],
+                )?;
+                
+                // Update collateral
+                pair.total_collateral0 = pair.total_collateral0.checked_sub(args.amount).unwrap();
+                user_position.collateral0 = user_position.collateral0.checked_sub(args.amount).unwrap();
+            },
+            false => {
+                transfer_from_pool_vault_to_user(
+                    pair.to_account_info(),
+                    token_vault.to_account_info(),
+                    user_token_account.to_account_info(),
+                    vault_token_mint.to_account_info(),
+                    match vault_token_mint.to_account_info().owner == token_program.key {
+                        true => token_program.to_account_info(),
+                        false => token_2022_program.to_account_info(),
+                    },
+                    args.amount,
+                    vault_token_mint.decimals,
+                    &[&generate_gamm_pair_seeds!(pair)[..]],
+                )?;
+                
+                // Update collateral
+                pair.total_collateral1 = pair.total_collateral1.checked_sub(args.amount).unwrap();
+                user_position.collateral1 = user_position.collateral1.checked_sub(args.amount).unwrap();
+            }
         }
 
         // Emit event
+        let (amount0, amount1) = if user_token_account.mint == pair.token0 {
+            (-(args.amount as i64), 0)
+        } else {
+            (0, -(args.amount as i64))
+        };
+        
         emit!(AdjustCollateralEvent {
             user: user.key(),
-            amount0: -(args.amount0 as i64),
-            amount1: -(args.amount1 as i64),
+            amount0,
+            amount1,
             timestamp: Clock::get()?.unix_timestamp,
         });
 

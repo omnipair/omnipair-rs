@@ -14,7 +14,8 @@ import {
     createAssociatedTokenAccount
 } from '@solana/spl-token';
 import { Program, AnchorProvider, Wallet } from '@coral-xyz/anchor';
-import { IDL } from '../target/types/omnipair.ts';
+import idl from '../target/idl/omnipair.json' with { type: "json" };
+import type { Omnipair } from '../target/types/omnipair';
 import BN from 'bn.js';
 import path from 'path';
 import fs from 'fs';
@@ -25,11 +26,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Replace these with your actual values
-const PROGRAM_ID = new PublicKey('2BpW6PG5VjRHab2gFdWE19wKBPVUGnSpNUwqfWP1NtWV');
 const RPC_URL = 'http://127.0.0.1:8899';
-const TOKEN0_MINT = new PublicKey('4spNMSmiS7dMgyyfEWnKFkRYtML7MNyotxxvNLVAQEoQ');
-const TOKEN1_MINT = new PublicKey('8deLbx5szhJfghjaX7Y8jrbj1c23AnyaM9oq8vZe9S64');
-const RATE_MODEL = new PublicKey('7HgFGk2vGZcmjLHdhW1M9niuYe3eNoms6x8tehCDdWoe');
+const TOKEN0_MINT = new PublicKey('GhUR1uKdtVkTnDEBF3rfhBcARptEcGCQnyA7TaKgYeF3');
+const TOKEN1_MINT = new PublicKey('JCPvZK9gf6R8YmaDnMN5YUTwV8RyYiTFN4iFAnkvR1W3');
+const RATE_MODEL = new PublicKey('6kJcX5Bx8uhjpLE6C8vBqSv6eq9Zc3VLoY9T1PBktGgZ');
 
 // Load deployer keypair from file
 const deployerKeypairPath = path.join(__dirname, '..', 'deployer-keypair.json');
@@ -39,8 +39,8 @@ const DEPLOYER_KEYPAIR = Keypair.fromSecretKey(
 );
 
 // Token accounts that already exist
-const DEPLOYER_TOKEN0_ACCOUNT = new PublicKey('BVfHFrHMtBfWDKW1ve4q7Fm3M66dmj5Zg1sQnX6mvNKk');
-const DEPLOYER_TOKEN1_ACCOUNT = new PublicKey('GenCsiGtXFdAxQsRLTNRwbCMBTCukuh3KAmNygFfv5xp');
+const DEPLOYER_TOKEN0_ACCOUNT = new PublicKey('6DRAu1N3ZsNxRRXtdbx5fRMFhDqdSz4n1vzLdQ28TRZ8');
+const DEPLOYER_TOKEN1_ACCOUNT = new PublicKey('46XmvJ7Wt7PbfyWuPsgjQrXENRiNU9BFmzfb6aYPef85');
 
 async function main() {
     console.log('Starting liquidity addition...');
@@ -49,11 +49,11 @@ async function main() {
     const connection = new Connection(RPC_URL, 'confirmed');
     const wallet = new Wallet(DEPLOYER_KEYPAIR);
     const provider = new AnchorProvider(connection, wallet, {});
-    const program = new Program(IDL, PROGRAM_ID, provider);
+    const program = new Program<Omnipair>(idl, provider);
 
     // Log all addresses
     console.log('Network:', RPC_URL);
-    console.log('Program ID:', PROGRAM_ID.toBase58());
+    console.log('Program ID:', program.programId.toBase58());
     console.log('Deployer address:', DEPLOYER_KEYPAIR.publicKey.toBase58());
     console.log('Token0 Mint:', TOKEN0_MINT.toBase58());
     console.log('Token1 Mint:', TOKEN1_MINT.toBase58());
@@ -61,13 +61,13 @@ async function main() {
     // Find PDA for the pair
     const [pairPda] = PublicKey.findProgramAddressSync(
         [Buffer.from('gamm_pair'), TOKEN0_MINT.toBuffer(), TOKEN1_MINT.toBuffer()],
-        PROGRAM_ID
+        program.programId
     );
 
     // Find PDA for the LP mint
     const [lpMintPda] = PublicKey.findProgramAddressSync(
         [Buffer.from('gamm_lp_mint'), pairPda.toBuffer()],
-        PROGRAM_ID
+        program.programId
     );
 
     // Get token program for each mint
@@ -100,35 +100,6 @@ async function main() {
         token1Program,
         ASSOCIATED_TOKEN_PROGRAM_ID
     );
-
-    // Create token vault accounts if they don't exist
-    const token0VaultInfo = await connection.getAccountInfo(token0Vault);
-    if (!token0VaultInfo) {
-        console.log('Creating token0 vault account...');
-        await createAssociatedTokenAccount(
-            connection,
-            DEPLOYER_KEYPAIR,
-            TOKEN0_MINT,
-            pairPda,
-            { commitment: 'confirmed' },
-            token0Program,
-            ASSOCIATED_TOKEN_PROGRAM_ID
-        );
-    }
-
-    const token1VaultInfo = await connection.getAccountInfo(token1Vault);
-    if (!token1VaultInfo) {
-        console.log('Creating token1 vault account...');
-        await createAssociatedTokenAccount(
-            connection,
-            DEPLOYER_KEYPAIR,
-            TOKEN1_MINT,
-            pairPda,
-            { commitment: 'confirmed' },
-            token1Program,
-            ASSOCIATED_TOKEN_PROGRAM_ID
-        );
-    }
 
     // Get or create LP token account
     const deployerLpTokenAccount = await getAssociatedTokenAddress(

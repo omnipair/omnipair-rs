@@ -4,7 +4,14 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "test": "anchor test"
+    "test": "anchor test",
+    "deploy-tokens": "ts-node --esm scripts/deploy_tokens.ts",
+    "initialize": "ts-node --esm scripts/initialize_pair.ts",
+    "create-rm": "ts-node --esm scripts/create_rate_model.ts",
+    "bootstrap": "ts-node --esm scripts/bootstrap_liquidity.ts",
+    "add-liq": "ts-node --esm scripts/add_liquidity.ts",
+    "swap": "ts-node --esm scripts/swap.ts",
+    "remove-liq": "ts-node --esm scripts/remove_liquidity.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.31.0",
@@ -19,6 +26,7 @@
     "chai": "^4.3.0",
     "mocha": "^10.0.0",
     "ts-mocha": "^10.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.1"
   }
 }

@@ -39,23 +39,15 @@ pub struct AdjustLiquidity<'info> {
     
     #[account(
         mut,
-        seeds = [
-            TOKEN_VAULT_SEED_PREFIX,
-            pair.key().as_ref(),
-            pair.token0.as_ref()
-        ],
-        bump,
+        associated_token::mint = pair.token0,
+        associated_token::authority = pair,
     )]
     pub token0_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     
     #[account(
         mut,
-        seeds = [
-            TOKEN_VAULT_SEED_PREFIX,
-            pair.key().as_ref(),
-            pair.token1.as_ref()
-        ],
-        bump,
+        associated_token::mint = pair.token1,
+        associated_token::authority = pair,
     )]
     pub token1_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     
