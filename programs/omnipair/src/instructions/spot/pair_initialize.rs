@@ -29,7 +29,7 @@ pub struct InitializePair<'info> {
         payer = deployer,
         space = get_size_with_discriminator::<Pair>(),
         seeds = [
-            GAMM_PAIR_SEED_PREFIX, 
+            PAIR_SEED_PREFIX, 
             token0_mint.key().as_ref(), 
             token1_mint.key().as_ref()
             ],
@@ -40,7 +40,7 @@ pub struct InitializePair<'info> {
     #[account(
         init,
         seeds = [
-            GAMM_LP_MINT_SEED_PREFIX,
+            LP_MINT_SEED_PREFIX,
             pair.key().as_ref(),
         ],
         bump,

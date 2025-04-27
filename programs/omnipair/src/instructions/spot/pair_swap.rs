@@ -16,7 +16,7 @@ use crate::{
 pub struct Swap<'info> {
     #[account(
         mut,
-        seeds = [GAMM_PAIR_SEED_PREFIX, token_in_mint.key().as_ref(), token_out_mint.key().as_ref()],
+        seeds = [PAIR_SEED_PREFIX, token_in_mint.key().as_ref(), token_out_mint.key().as_ref()],
         bump
     )]
     pub pair: Account<'info, Pair>,

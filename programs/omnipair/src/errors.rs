@@ -119,6 +119,10 @@ pub enum ErrorCode {
 
     #[msg("Insufficient collateral for token0")]
     InsufficientCollateral0,
+
     #[msg("Insufficient collateral for token1")]
     InsufficientCollateral1,
+
+    #[msg("Insufficient balance for collateral")]
+    InsufficientBalanceForCollateral,
 }

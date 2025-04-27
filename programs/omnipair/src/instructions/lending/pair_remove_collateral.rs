@@ -1,11 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{
-    token::Token,
-    token_interface::{Mint, TokenAccount, Token2022},
-};
 use crate::{
-    state::pair::Pair,
-    state::rate_model::RateModel,
     constants::*,
     errors::ErrorCode,
     events::AdjustCollateralEvent,
@@ -13,78 +7,6 @@ use crate::{
     generate_gamm_pair_seeds,
     instructions::lending::common::{AdjustCollateral, AdjustCollateralArgs},
 };
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct RemoveCollateralArgs {
-    pub amount0: u64,
-    pub amount1: u64,
-}
-
-#[derive(Accounts)]
-pub struct RemoveCollateral<'info> {
-    #[account(
-        mut,
-        seeds = [
-            GAMM_PAIR_SEED_PREFIX, 
-            pair.token0.as_ref(),
-            pair.token1.as_ref()
-        ],
-        bump
-    )]
-    pub pair: Account<'info, Pair>,
-    
-    #[account(
-        mut,
-        address = pair.rate_model,
-    )]
-    pub rate_model: Account<'info, RateModel>,
-    
-    #[account(
-        mut,
-        seeds = [
-            GAMM_TOKEN_VAULT_SEED_PREFIX,
-            pair.key().as_ref(),
-            pair.token0.as_ref()
-        ],
-        bump,
-    )]
-    pub token0_vault: Box<InterfaceAccount<'info, TokenAccount>>,
-    
-    #[account(
-        mut,
-        seeds = [
-            GAMM_TOKEN_VAULT_SEED_PREFIX,
-            pair.key().as_ref(),
-            pair.token1.as_ref()
-        ],
-        bump,
-    )]
-    pub token1_vault: Box<InterfaceAccount<'info, TokenAccount>>,
-    
-    #[account(
-        mut,
-        token::mint = pair.token0,
-        token::authority = user,
-    )]
-    pub user_token0_account: Box<InterfaceAccount<'info, TokenAccount>>,
-    
-    #[account(
-        mut,
-        token::mint = pair.token1,
-        token::authority = user,
-    )]
-    pub user_token1_account: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    #[account(address = token0_vault.mint)]
-    pub token0_vault_mint: Box<InterfaceAccount<'info, Mint>>,
-
-    #[account(address = token1_vault.mint)]
-    pub token1_vault_mint: Box<InterfaceAccount<'info, Mint>>,
-    
-    pub user: Signer<'info>,
-    pub token_program: Program<'info, Token>,
-    pub token_2022_program: Program<'info, Token2022>,
-}
 
 impl<'info> AdjustCollateral<'info> {
     pub fn validate_remove(&self, args: &AdjustCollateralArgs) -> Result<()> {

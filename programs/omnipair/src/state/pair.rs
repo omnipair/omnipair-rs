@@ -201,7 +201,7 @@ impl Pair {
 
     pub fn key(&self) -> Pubkey {
         Pubkey::find_program_address(&[
-            GAMM_PAIR_SEED_PREFIX, 
+            PAIR_SEED_PREFIX, 
             self.token0.as_ref(), 
             self.token1.as_ref()
         ], &crate::ID).0
@@ -212,7 +212,7 @@ impl Pair {
 macro_rules! generate_gamm_pair_seeds {
     ($pair:expr) => {{
         &[
-            GAMM_PAIR_SEED_PREFIX,
+            PAIR_SEED_PREFIX,
             $pair.token0.as_ref(),
             $pair.token1.as_ref(),
             &[$pair.bump],
@@ -224,7 +224,7 @@ macro_rules! generate_gamm_pair_seeds {
 macro_rules! generate_gamm_token_vault_seeds {
     ($pair:expr, $token:expr, $bump:expr) => {{
         &[
-            GAMM_TOKEN_VAULT_SEED_PREFIX, 
+            TOKEN_VAULT_SEED_PREFIX, 
             $pair.key().as_ref(),
             $token.key().as_ref(), 
             &[$bump]
