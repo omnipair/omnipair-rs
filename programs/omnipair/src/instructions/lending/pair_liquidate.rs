@@ -24,7 +24,7 @@ pub struct Liquidate<'info> {
     #[account(
         mut,
         seeds = [
-            GAMM_PAIR_SEED_PREFIX, 
+            PAIR_SEED_PREFIX, 
             pair.token0.as_ref(),
             pair.token1.as_ref()
         ],
@@ -41,7 +41,7 @@ pub struct Liquidate<'info> {
     #[account(
         mut,
         seeds = [
-            GAMM_TOKEN_VAULT_SEED_PREFIX,
+            TOKEN_VAULT_SEED_PREFIX,
             pair.key().as_ref(),
             pair.token0.as_ref()
         ],
@@ -52,7 +52,7 @@ pub struct Liquidate<'info> {
     #[account(
         mut,
         seeds = [
-            GAMM_TOKEN_VAULT_SEED_PREFIX,
+            TOKEN_VAULT_SEED_PREFIX,
             pair.key().as_ref(),
             pair.token1.as_ref()
         ],

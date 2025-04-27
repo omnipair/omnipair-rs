@@ -26,7 +26,7 @@ pub struct BootstrapPair<'info> {
     #[account(
         mut,
         seeds = [
-            GAMM_PAIR_SEED_PREFIX, 
+            PAIR_SEED_PREFIX, 
             pair.token0.as_ref(),
             pair.token1.as_ref()
         ],
@@ -80,7 +80,7 @@ pub struct BootstrapPair<'info> {
     #[account(
         mut,
         seeds = [
-            GAMM_LP_MINT_SEED_PREFIX,
+            LP_MINT_SEED_PREFIX,
             pair.key().as_ref(),
         ],
         bump,
@@ -114,7 +114,7 @@ impl<'info> BootstrapPair<'info> {
             .. 
         } = args;
         
-        require!(self.pair.total_supply == 0, ErrorCode::PairAlreadyInitialized);
+        require!(!self.pair.is_initialized(), ErrorCode::PairAlreadyInitialized);
         require!(*amount0_in > 0 && *amount1_in > 0, ErrorCode::AmountZero);
         require_gte!(user_token0_account.amount, *amount0_in, ErrorCode::InsufficientAmount0In);
         require_gte!(user_token1_account.amount, *amount1_in, ErrorCode::InsufficientAmount1In);
