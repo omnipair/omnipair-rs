@@ -93,6 +93,7 @@ impl InitializePair<'_> {
         Ok(())
     }
 
+    // TODO: create rate model in the same instruction
     pub fn handle_initialize(ctx: Context<Self>) -> Result<()> {
         let current_time = Clock::get()?.unix_timestamp;
         let pair = &mut ctx.accounts.pair;
@@ -100,16 +101,24 @@ impl InitializePair<'_> {
         let (
             token0, 
             token1, 
+            token0_decimals,
+            token1_decimals,
             rate_model
         ) = (
             ctx.accounts.token0_mint.key(), 
             ctx.accounts.token1_mint.key(), 
+            ctx.accounts.token0_mint.decimals,
+            ctx.accounts.token1_mint.decimals,
             ctx.accounts.rate_model.key()
         );
 
         pair.set_inner(Pair::initialize(
             token0,
             token1,
+            token0_decimals,
+            token1_decimals,
+            // maybe precompute `token0_scale_to_nad` and `token1_scale_to_nad` for cheaper calculations later
+            // only if token0_decimals and token1_decimals are < 9
             rate_model,
             current_time,
             ctx.bumps.pair,

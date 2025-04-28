@@ -29,7 +29,7 @@ const __dirname = path.dirname(__filename);
 const RPC_URL = 'http://127.0.0.1:8899';
 const TOKEN0_MINT = new PublicKey('GhUR1uKdtVkTnDEBF3rfhBcARptEcGCQnyA7TaKgYeF3');
 const TOKEN1_MINT = new PublicKey('JCPvZK9gf6R8YmaDnMN5YUTwV8RyYiTFN4iFAnkvR1W3');
-const RATE_MODEL = new PublicKey('6kJcX5Bx8uhjpLE6C8vBqSv6eq9Zc3VLoY9T1PBktGgZ');
+const RATE_MODEL = new PublicKey('3F2T4JBCAzSm6VYHezoQJrKdRaa6kk125xrhaBccF1Jw');
 
 // Load deployer keypair from file
 const deployerKeypairPath = path.join(__dirname, '..', 'deployer-keypair.json');
@@ -99,7 +99,7 @@ async function main() {
 
     // Borrow parameters
     const borrowAmount = new BN(1_000_000); // 10 tokens
-    const borrowToken0 = true; // Set to false to borrow token1
+    const borrowToken0 = false; // Set to false to borrow token1
 
     console.log('Borrowing with parameters:');
     console.log('Amount:', borrowAmount.toString());

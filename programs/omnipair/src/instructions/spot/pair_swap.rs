@@ -162,14 +162,14 @@ impl<'info> Swap<'info> {
         
         // Update prices
         pair.price0_last = (pair.reserve1 as u128)
-            .checked_mul(SCALE as u128)
+            .checked_mul(NAD as u128)
             .unwrap()
             .checked_div(pair.reserve0 as u128)
             .unwrap()
             .try_into()
             .unwrap();
         pair.price1_last = (pair.reserve0 as u128)
-            .checked_mul(SCALE as u128)
+            .checked_mul(NAD as u128)
             .unwrap()
             .checked_div(pair.reserve1 as u128)
             .unwrap()

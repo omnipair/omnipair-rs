@@ -9,6 +9,8 @@ pub struct Pair {
     // Token addresses
     pub token0: Pubkey,
     pub token1: Pubkey,
+    pub token0_decimals: u8,
+    pub token1_decimals: u8,
     
     // Reserves
     pub reserve0: u64,
@@ -49,6 +51,8 @@ impl Pair {
     pub fn initialize(
         token0: Pubkey,
         token1: Pubkey,
+        token0_decimals: u8,
+        token1_decimals: u8,
         rate_model: Pubkey,
         current_time: i64,
         bump: u8,
@@ -56,6 +60,8 @@ impl Pair {
         Self {
             token0,
             token1,
+            token0_decimals,
+            token1_decimals,
             rate_model,
             last_update: current_time,
             bump,
@@ -86,41 +92,41 @@ impl Pair {
         self.reserve0 as u128 * self.reserve1 as u128
     }
 
-    pub fn spot_price0_mantissa(&self) -> u64 {
+    pub fn spot_price0_nad(&self) -> u64 {
         match self.reserve0 {
             0 => 0,
-            _ => self.reserve1 * SCALE / self.reserve0,
+            _ => self.reserve1 * NAD / self.reserve0,
         }
     }
 
-    pub fn spot_price1_mantissa(&self) -> u64 {
+    pub fn spot_price1_nad(&self) -> u64 {
         match self.reserve1 {
             0 => 0,
-            _ => self.reserve0 * SCALE / self.reserve1,
+            _ => self.reserve0 * NAD / self.reserve1,
         }
     }
 
     /// EMA prices scaled by 1e9
-    pub fn price0_mantissa(&self) -> u64 {
+    pub fn price0_nad(&self) -> u64 {
         if self.reserve0 == 0 {
             0
         } else {
             compute_ema(
                 self.last_price0_ema, 
                 self.last_update, 
-                self.spot_price0_mantissa(), 
+                self.spot_price0_nad(), 
                 DEFAULT_HALF_LIFE)
         }
     }
 
-    pub fn price1_mantissa(&self) -> u64 {
+    pub fn price1_nad(&self) -> u64 {
         if self.reserve1 == 0 {
             0
         } else {
             compute_ema(
                 self.last_price1_ema, 
                 self.last_update, 
-                self.spot_price1_mantissa(), 
+                self.spot_price1_nad(), 
                 DEFAULT_HALF_LIFE)
         }
     }
@@ -140,13 +146,13 @@ impl Pair {
                 self.last_price0_ema = compute_ema(
                     self.last_price0_ema,
                     self.last_update,
-                    if self.reserve0 > 0 { self.reserve1 * SCALE / self.reserve0 } else { 0 },
+                    if self.reserve0 > 0 { self.reserve1 * NAD / self.reserve0 } else { 0 },
                     DEFAULT_HALF_LIFE
                 );
                 self.last_price1_ema = compute_ema(
                     self.last_price1_ema,
                     self.last_update,
-                    if self.reserve1 > 0 { self.reserve0 * SCALE / self.reserve1 } else { 0 },
+                    if self.reserve1 > 0 { self.reserve0 * NAD / self.reserve1 } else { 0 },
                     DEFAULT_HALF_LIFE
                 );
                 
@@ -156,12 +162,12 @@ impl Pair {
                 
                 // Calculate utilization rates
                 let util0 = if self.reserve0 > 0 {
-                    (self.total_debt0 * SCALE) / self.reserve0
+                    (self.total_debt0 * NAD) / self.reserve0
                 } else {
                     0
                 };
                 let util1 = if self.reserve1 > 0 {
-                    (self.total_debt1 * SCALE) / self.reserve1
+                    (self.total_debt1 * NAD) / self.reserve1
                 } else {
                     0
                 };
@@ -183,8 +189,8 @@ impl Pair {
                 self.last_rate1 = new_rate1;
                 
                 // Calculate and apply interest
-                let interest0 = (self.total_debt0 as u128 * integral0 as u128) / SCALE as u128;
-                let interest1 = (self.total_debt1 as u128 * integral1 as u128) / SCALE as u128;
+                let interest0 = (self.total_debt0 as u128 * integral0 as u128) / NAD as u128;
+                let interest1 = (self.total_debt1 as u128 * integral1 as u128) / NAD as u128;
                 
                 self.total_debt0 += interest0 as u64;
                 self.total_debt1 += interest1 as u64;

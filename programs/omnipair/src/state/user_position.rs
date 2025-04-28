@@ -57,26 +57,20 @@ impl UserPosition {
     }
 
     pub fn calculate_debt0(&self, total_debt0: u64, total_debt0_shares: u64) -> u64 {
-        if total_debt0_shares == 0 {
-            0
-        } else {
-            self.debt0_shares
-                .checked_mul(total_debt0)
-                .unwrap()
-                .checked_div(total_debt0_shares)
-                .unwrap()
+        match total_debt0_shares {
+            0 => 0,
+            _ => self.debt0_shares
+                .checked_mul(total_debt0).unwrap()
+                .checked_div(total_debt0_shares).unwrap()
         }
     }
 
     pub fn calculate_debt1(&self, total_debt1: u64, total_debt1_shares: u64) -> u64 {
-        if total_debt1_shares == 0 {
-            0
-        } else {
-            self.debt1_shares
-                .checked_mul(total_debt1)
-                .unwrap()
-                .checked_div(total_debt1_shares)
-                .unwrap()
+        match total_debt1_shares {
+            0 => 0,
+            _ => self.debt1_shares
+                .checked_mul(total_debt1).unwrap()
+                .checked_div(total_debt1_shares).unwrap()
         }
     }
 }

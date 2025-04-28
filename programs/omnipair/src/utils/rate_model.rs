@@ -10,14 +10,14 @@ pub fn calculate_rate(
     target_util_end: u64,
 ) -> (u64, u64) {
     let x = exp_rate * time_elapsed;
-    let growth_decay = taylor_exp(-(x as i64), SCALE, TAYLOR_TERMS);
+    let growth_decay = taylor_exp(-(x as i64), NAD, TAYLOR_TERMS);
 
     let (curr_borrow_rate, integral) = if last_util > target_util_end {
-        let curr_rate = last_rate * SCALE / growth_decay;
-        let integral = (curr_rate - last_rate) * SCALE / exp_rate / SECONDS_PER_YEAR;
+        let curr_rate = last_rate * NAD / growth_decay;
+        let integral = (curr_rate - last_rate) * NAD / exp_rate / SECONDS_PER_YEAR;
         (curr_rate, integral)
     } else if last_util < target_util_start {
-        let mut curr_rate = last_rate * growth_decay / SCALE;
+        let mut curr_rate = last_rate * growth_decay / NAD;
         if curr_rate < MIN_RATE {
             curr_rate = MIN_RATE;
             let integral = if last_rate <= MIN_RATE {
@@ -25,13 +25,13 @@ pub fn calculate_rate(
                 MIN_RATE * time_elapsed / SECONDS_PER_YEAR
             } else {
                 // Calculate time until min rate is reached
-                let time_to_min = taylor_exp(-((MIN_RATE * SCALE / last_rate) as i64), SCALE, TAYLOR_TERMS) * SCALE / exp_rate;
+                let time_to_min = taylor_exp(-((MIN_RATE * NAD / last_rate) as i64), NAD, TAYLOR_TERMS) * NAD / exp_rate;
                 // Decaying integral up to min rate, then add flat rate portion
-                ((last_rate - MIN_RATE) * SCALE / exp_rate + MIN_RATE * (time_elapsed - time_to_min)) / SECONDS_PER_YEAR
+                ((last_rate - MIN_RATE) * NAD / exp_rate + MIN_RATE * (time_elapsed - time_to_min)) / SECONDS_PER_YEAR
             };
             (curr_rate, integral)
         } else {
-            let integral = (last_rate - curr_rate) * SCALE / exp_rate / SECONDS_PER_YEAR;
+            let integral = (last_rate - curr_rate) * NAD / exp_rate / SECONDS_PER_YEAR;
             (curr_rate, integral)
         }
     } else {
