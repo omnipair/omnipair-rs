@@ -3,57 +3,58 @@ use crate::{
     constants::*,
     errors::ErrorCode,
     events::AdjustDebtEvent,
-    utils::token::transfer_from_pool_vault_to_user,
+    utils::{token::transfer_from_pool_vault_to_user, math::{NormalizedTwoValues, normalize_two_values_to_nad}},
     generate_gamm_pair_seeds,
     instructions::lending::common::{CommonAdjustPosition, AdjustPositionArgs},
 };
 
 impl<'info> CommonAdjustPosition<'info> {
     pub fn validate_borrow(&self, args: &AdjustPositionArgs) -> Result<()> {
-        let AdjustPositionArgs { amount: amount_out } = args;
+        let AdjustPositionArgs { amount: borrow_amount } = args;
         
-        require!(*amount_out > 0, ErrorCode::AmountZero);
+        require!(*borrow_amount > 0, ErrorCode::AmountZero);
         
         // Check if vault has enough tokens
         require_gte!(
             self.token_vault.amount,
-            *amount_out,
+            *borrow_amount,
             ErrorCode::InsufficientAmount
         );
-        
-        // Check borrowing power
-        match self.user_token_account.mint == self.pair.token0 {
-            true => {
-                let borrowing_power1 = self.pair.total_collateral1
-                    .checked_mul(self.pair.price1_mantissa())
-                    .unwrap()
-                    .checked_div(SCALE)
-                    .unwrap()
-                    .checked_div(10000)
-                    .unwrap();
-                
-                let new_debt0 = self.pair.total_debt0.checked_add(*amount_out).unwrap();
-                require!(
-                    new_debt0 <= borrowing_power1,
-                    ErrorCode::BorrowingPowerExceeded
-                );
-            },
-            false => {
-                let borrowing_power0 = self.pair.total_collateral0
-                    .checked_mul(self.pair.price0_mantissa())
-                    .unwrap()
-                    .checked_div(SCALE)
-                    .unwrap()
-                    .checked_div(10000)
-                    .unwrap();
-                
-                let new_debt1 = self.pair.total_debt1.checked_add(*amount_out).unwrap();
-                require!(
-                    new_debt1 <= borrowing_power0,
-                    ErrorCode::BorrowingPowerExceeded
-                );
-            }
-        }
+
+        let (
+            user_collateral, 
+            collateral_token_decimals, 
+            user_debt
+        ) = match self.user_token_account.mint == self.pair.token0 {
+            true => (
+                self.user_position.collateral1,
+                self.pair.token1_decimals,
+                self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares)
+            ),
+            false => (
+                self.user_position.collateral0,
+                self.pair.token0_decimals,
+                self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares)
+            )
+        };       
+
+        let NormalizedTwoValues { scaled_a: user_collateral_scaled, scaled_b: price_scaled } = normalize_two_values_to_nad(
+            user_collateral,
+            collateral_token_decimals,
+            self.pair.price1_nad(),
+        );
+
+        let borrowing_power = user_collateral_scaled
+        .checked_mul(price_scaled).unwrap()
+        .checked_mul(CF_BPS).unwrap()
+        .checked_div(NAD).unwrap()
+        .checked_div(BPS_DENOMINATOR).unwrap();
+
+        let new_debt = user_debt.checked_add(*borrow_amount).unwrap();
+        require!(
+            new_debt <= borrowing_power,
+            ErrorCode::BorrowingPowerExceeded
+        );
         
         Ok(())
     }
@@ -64,6 +65,16 @@ impl<'info> CommonAdjustPosition<'info> {
         Ok(())
     }
 
+    /// Handles borrowing a specific token from the AMM vault.
+    ///
+    /// - `vault_token_mint`: Mint address of the token the user wants to borrow.
+    /// - `token_vault`: AMM liquidity vault holding the borrowable tokens (pair.token0 or pair.token1 vault).
+    /// - `user_token_account`: User's associated token account that will receive the borrowed tokens.
+    /// 
+    /// Notes:
+    /// Only the specified borrow amount of the `vault_token_mint` is transferred.
+    /// Tokens are sourced directly from the AMM's liquidity vault (`token_vault`).
+    /// Assumes that collateral checks have already passed via [`CommonAdjustPosition::validate_borrow`].
     pub fn handle_borrow(ctx: Context<Self>, args: AdjustPositionArgs) -> Result<()> {
         let CommonAdjustPosition {
             pair,
@@ -77,7 +88,8 @@ impl<'info> CommonAdjustPosition<'info> {
             ..
         } = ctx.accounts;
 
-        let amount_out: u64 = args.amount;
+        let borrow_amount: u64 = args.amount;
+        let is_token0 = user_token_account.mint == pair.token0;
 
         // Transfer tokens from vault to user
         transfer_from_pool_vault_to_user(
@@ -89,48 +101,48 @@ impl<'info> CommonAdjustPosition<'info> {
                 true => token_program.to_account_info(),
                 false => token_2022_program.to_account_info(),
             },
-            amount_out,
+            borrow_amount,
             vault_token_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
         
         // Update debt
-        match user_token_account.mint == pair.token0 {
-            true => {
-                if pair.total_debt0_shares == 0 {
-                    pair.total_debt0_shares = amount_out;
-                } else {
-                    let shares = amount_out
-                        .checked_mul(pair.total_debt0_shares)
-                        .unwrap()
-                        .checked_div(pair.total_debt0)
-                        .unwrap();
-                    pair.total_debt0_shares = pair.total_debt0_shares.checked_add(shares).unwrap();
-                }
-                pair.total_debt0 = pair.total_debt0.checked_add(amount_out).unwrap();
-                user_position.debt0_shares = user_position.debt0_shares.checked_add(amount_out).unwrap();
-            },
-            false => {
-                if pair.total_debt1_shares == 0 {
-                    pair.total_debt1_shares = amount_out;
-                } else {
-                    let shares = amount_out
-                        .checked_mul(pair.total_debt1_shares)
-                        .unwrap()
-                        .checked_div(pair.total_debt1)
-                        .unwrap();
-                    pair.total_debt1_shares = pair.total_debt1_shares.checked_add(shares).unwrap();
-                }
-                pair.total_debt1 = pair.total_debt1.checked_add(amount_out).unwrap();
-                user_position.debt1_shares = user_position.debt1_shares.checked_add(amount_out).unwrap();
-            }
-        }
-
-        // Emit event
-        let (amount0, amount1) = if user_token_account.mint == pair.token0 {
-            (amount_out as i64, 0)
+        let (
+            total_debt, 
+            total_debt_shares,
+            user_debt_shares
+        ) = if is_token0 {
+            (pair.total_debt0, &mut pair.total_debt0_shares, &mut user_position.debt0_shares)
         } else {
-            (0, amount_out as i64)
+            (pair.total_debt1, &mut pair.total_debt1_shares, &mut user_position.debt1_shares)
+        };
+
+        // update debt shares
+        *total_debt_shares = match *total_debt_shares {
+            0 => borrow_amount,
+            _ => {
+                let shares = borrow_amount
+                    .checked_mul(*total_debt_shares)
+                    .unwrap()
+                    .checked_div(total_debt)
+                    .unwrap();
+                total_debt_shares.checked_add(shares).unwrap()
+            }
+        };
+        *user_debt_shares = user_debt_shares.checked_add(borrow_amount).unwrap();
+        
+        // update pair actual debt
+        let new_total_debt = total_debt.checked_add(borrow_amount).unwrap();
+        match is_token0 {
+            true => pair.total_debt0 = new_total_debt,
+            false => pair.total_debt1 = new_total_debt,
+        }
+        
+        // Emit event
+        let (amount0, amount1) = if is_token0 {
+            (borrow_amount as i64, 0)
+        } else {
+            (0, borrow_amount as i64)
         };
         
         emit!(AdjustDebtEvent {

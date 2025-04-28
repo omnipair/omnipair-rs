@@ -130,17 +130,17 @@ impl<'info> Liquidate<'info> {
 
         // Check if position is undercollateralized
         let borrowing_power1 = pair.total_collateral1
-            .checked_mul(pair.price1_mantissa())
+            .checked_mul(pair.price1_nad())
             .unwrap()
-            .checked_div(SCALE)
+            .checked_div(NAD)
             .unwrap()
             .checked_div(10000)
             .unwrap();
         
         let borrowing_power0 = pair.total_collateral0
-            .checked_mul(pair.price0_mantissa())
+            .checked_mul(pair.price0_nad())
             .unwrap()
-            .checked_div(SCALE)
+            .checked_div(NAD)
             .unwrap()
             .checked_div(10000)
             .unwrap();

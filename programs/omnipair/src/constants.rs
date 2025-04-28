@@ -1,11 +1,21 @@
-pub const SCALE: u64 = 1_000_000_000; // 1e9
+// GLOBAL CONSTANTS
+/// NAD: Nine-decimal fixed point unit (1e9 scaling), similar to WAD (1e18) by Maker.
+pub const NAD: u64 = 1_000_000_000;
+pub const NAD_DECIMALS: u8 = 9;
+pub const BPS_DENOMINATOR: u64 = 10_000;
+
+// EMA constants
 pub const DEFAULT_HALF_LIFE: u64 = 24 * 60 * 60; // 24 hours
 pub const TAYLOR_TERMS: u64 = 5;
-pub const SCALED_NATURAL_LOG_OF_TWO: u64 = 693_147_180; // ln(2) scaled by 1e9
+pub const NATURAL_LOG_OF_TWO_NAD: u64 = 693_147_180; // ln(2) scaled by NAD
 
 // Pair constants
 pub const MIN_LIQUIDITY: u64 = 1_000; // 10^3
 pub const FEE_BPS: u64 = 30;
+// Hardcoded for this PoC, will be dynamic in production
+// TODO: Should be dynamic based on an internal liquidity oracle
+// to avoid profiting from utilizing fixed collateral factor when < swap slippage (for cheaper swaps)
+// see: https://docs.omnipair.fi/technical-breakdown/liquidity-oracle-and-dynamic-collateral-factor
 pub const CF_BPS: u64 = 8_500;
 pub const MIN_RATE: u64 = 1; // 0.0001%
 pub const MAX_RATE: u64 = 1000000; // 100%

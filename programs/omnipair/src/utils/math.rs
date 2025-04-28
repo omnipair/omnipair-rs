@@ -6,10 +6,10 @@ pub fn compute_ema(last_ema: u64, last_update: i64, input: u64, half_life: u64) 
     
     let dt = (current_time - last_update) as u64;
     if dt > 0 && half_life > 0 {
-        let exp_time = half_life * SCALE / SCALED_NATURAL_LOG_OF_TWO;
-        let x = dt * SCALE / exp_time;
-        let alpha = taylor_exp(-(x as i64), SCALE, TAYLOR_TERMS);
-        (input * (SCALE - alpha) + last_ema * alpha) / SCALE
+        let exp_time = half_life * NAD / NATURAL_LOG_OF_TWO_NAD;
+        let x = dt * NAD / exp_time;
+        let alpha = taylor_exp(-(x as i64), NAD, TAYLOR_TERMS);
+        (input * (NAD - alpha) + last_ema * alpha) / NAD
     } else {
         last_ema
     }
@@ -70,6 +70,76 @@ impl SqrtU128 for u128 {
             Some(0)
         }
     }
+}
+
+/// Represents two values normalized to NAD (Normalized Accurate Decimal) format (1e9 precision).
+pub struct NormalizedTwoValues {
+    pub scaled_a: u64,
+    pub scaled_b: u64,
+}
+
+/// Normalizes two amounts (a and b) to NAD scale (1e9 precision),
+/// adjusting based on each token's decimals relative to NAD.
+/// 
+/// - If the token has fewer decimals than NAD, the value is multiplied up.
+/// - If the token has more decimals than NAD, the value is divided down.
+/// - If the token already has NAD decimals, no adjustment is made.
+/// - If multiplication would overflow, division fallback is automatically applied.
+///
+/// This function should not return errors: it guarantees safe normalization even for very large inputs.
+///
+/// # Arguments
+/// - `a`: First value (e.g., collateral, debt, swap amount).
+/// - `a_decimals`: The number of decimals of the first value's token.
+/// - `b`: Second value (e.g., price, swap rate).
+/// - `b_decimals`: The number of decimals of the second value.
+///
+/// # Returns
+/// - `NormalizedTwoValues { scaled_a, scaled_b }` — both values normalized to NAD scale.
+///
+/// # Example
+/// ```
+/// let a = 1_000_000; // 1.0 token with 6 decimals
+/// let b = 2_000_000_000; // 2.0 price already scaled in 9 decimals (NAD)
+/// let normalized = normalize_two_values_to_nad(a, 6, b, 9);
+/// assert_eq!(normalized.scaled_a, 1_000_000_000); // scaled_a now in NAD scale
+/// assert_eq!(normalized.scaled_b, 2_000_000_000); // scaled_b unchanged
+/// ```
+pub fn normalize_two_values_to_scale(
+    a: u64,
+    a_decimals: u8,
+    b: u64,
+    b_decimals: u8,
+) -> NormalizedTwoValues {
+    fn scale(value: u64, diff: i32) -> Option<u64> {
+        match diff.cmp(&0) {
+            std::cmp::Ordering::Equal => Some(value),
+            std::cmp::Ordering::Greater => {
+                let factor = 10u64.checked_pow(diff as u32)?;
+                value
+                    .checked_mul(factor)
+                    .or_else(|| value.checked_div(factor))
+            }
+            std::cmp::Ordering::Less => {
+                let factor = 10u64.checked_pow((-diff) as u32)?;
+                value.checked_div(factor)
+            }
+        }
+    }
+
+    let scaled_a = scale(a, NAD_DECIMALS as i32 - a_decimals as i32).unwrap();
+    let scaled_b = scale(b, NAD_DECIMALS as i32 - b_decimals as i32).unwrap();
+
+    NormalizedTwoValues { scaled_a, scaled_b }
+}
+
+// Overloaded function for known b scale that is NAD
+pub fn normalize_two_values_to_nad(
+    a: u64,
+    a_decimals: u8,
+    b: u64,
+) -> NormalizedTwoValues {
+    normalize_two_values_to_scale(a, a_decimals, b, NAD_DECIMALS)
 }
 
         

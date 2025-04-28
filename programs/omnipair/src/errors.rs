@@ -18,6 +18,9 @@ pub enum AmmError {
 
 #[error_code]
 pub enum ErrorCode {
+    #[msg("Invalid argument")]
+    InvalidArgument,
+
     #[msg("Pair already initialized")]
     PairAlreadyInitialized,
 

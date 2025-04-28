@@ -21,7 +21,7 @@ pub struct CreateRateModel<'info> {
 impl<'info> CreateRateModel<'info> {
     pub fn handle_create(ctx: Context<Self>) -> Result<()> {
         let rate_model = &mut ctx.accounts.rate_model;
-        rate_model.exp_rate = SCALED_NATURAL_LOG_OF_TWO / SECONDS_PER_DAY;
+        rate_model.exp_rate = NATURAL_LOG_OF_TWO_NAD / SECONDS_PER_DAY;
         rate_model.target_util_start = TARGET_UTIL_START;
         rate_model.target_util_end = TARGET_UTIL_END;
         

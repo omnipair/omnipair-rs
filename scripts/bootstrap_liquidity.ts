@@ -13,7 +13,7 @@ import {
 } from '@solana/spl-token';
 import { Program, AnchorProvider, Wallet } from '@coral-xyz/anchor';
 import idl from '../target/idl/omnipair.json' with { type: "json" };
-import { Omnipair } from '../target/types/omnipair';
+import type { Omnipair } from '../target/types/omnipair';
 import BN from 'bn.js';
 import path from 'path';
 import fs from 'fs';
@@ -27,7 +27,7 @@ const __dirname = path.dirname(__filename);
 const RPC_URL = 'http://127.0.0.1:8899'; // or your preferred network
 const TOKEN0_MINT = new PublicKey('GhUR1uKdtVkTnDEBF3rfhBcARptEcGCQnyA7TaKgYeF3');
 const TOKEN1_MINT = new PublicKey('JCPvZK9gf6R8YmaDnMN5YUTwV8RyYiTFN4iFAnkvR1W3');
-const RATE_MODEL = new PublicKey('6kJcX5Bx8uhjpLE6C8vBqSv6eq9Zc3VLoY9T1PBktGgZ');
+const RATE_MODEL = new PublicKey('3F2T4JBCAzSm6VYHezoQJrKdRaa6kk125xrhaBccF1Jw');
 
 // Load deployer keypair from file
 const deployerKeypairPath = path.join(__dirname, '..', 'deployer-keypair.json');
