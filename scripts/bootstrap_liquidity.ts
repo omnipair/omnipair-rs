@@ -180,13 +180,22 @@ async function main() {
             amount1In: amount1,
             minLiquidityOut: minLiquidity
         })
-        .accounts({
+        .accountsStrict({
             user: DEPLOYER_KEYPAIR.publicKey,
+            pair: pairPda,
             rateModel: RATE_MODEL,
+            token0Vault: token0Vault,
+            token1Vault: token1Vault,
             userToken0Account: DEPLOYER_TOKEN0_ACCOUNT,
             userToken1Account: DEPLOYER_TOKEN1_ACCOUNT,
             token0VaultMint: TOKEN0_MINT,
             token1VaultMint: TOKEN1_MINT,
+            lpMint: lpMintPda,
+            userLpTokenAccount: deployerLpTokenAccount,
+            tokenProgram: lpTokenProgram,
+            token2022Program: TOKEN_2022_PROGRAM_ID,
+            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
         })
         .signers([DEPLOYER_KEYPAIR])
         .rpc();
