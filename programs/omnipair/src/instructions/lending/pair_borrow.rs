@@ -51,8 +51,9 @@ impl<'info> CommonAdjustPosition<'info> {
         .checked_div(BPS_DENOMINATOR).unwrap();
 
         let new_debt = user_debt.checked_add(*borrow_amount).unwrap();
-        require!(
-            new_debt <= borrowing_power,
+        require_gte!(
+            borrowing_power,
+            new_debt,
             ErrorCode::BorrowingPowerExceeded
         );
         

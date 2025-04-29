@@ -12,7 +12,7 @@ pub use instructions::*;
 pub use utils::account::*;
 pub use instructions::pair_initialize::InitializePair;
 
-declare_id!("HV2KpMCt6ePoCGiPTBBsZXot8VCxmvdMZM8aCrvLDAQw");
+declare_id!("cmjFNk74SsRK6c4njkV6BUsgk2cWQjYjMp7EMeQJ466");
 
 #[program]
 pub mod omnipair {

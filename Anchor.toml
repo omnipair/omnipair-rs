@@ -7,13 +7,13 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-omnipair = "HV2KpMCt6ePoCGiPTBBsZXot8VCxmvdMZM8aCrvLDAQw"
+omnipair = "cmjFNk74SsRK6c4njkV6BUsgk2cWQjYjMp7EMeQJ466"
 
 [programs.localnet]
-omnipair = "HV2KpMCt6ePoCGiPTBBsZXot8VCxmvdMZM8aCrvLDAQw"
+omnipair = "cmjFNk74SsRK6c4njkV6BUsgk2cWQjYjMp7EMeQJ466"
 
-# [registry]
-# url = "https://api.apr.dev"
+[registry]
+url = "https://api.apr.dev"
 
 [provider]
 cluster = "localnet"

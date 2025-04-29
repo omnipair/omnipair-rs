@@ -234,15 +234,3 @@ macro_rules! generate_gamm_pair_seeds {
     }};
 }
 
-#[macro_export]
-macro_rules! generate_gamm_token_vault_seeds {
-    ($pair:expr, $token:expr, $bump:expr) => {{
-        &[
-            TOKEN_VAULT_SEED_PREFIX, 
-            $pair.key().as_ref(),
-            $token.key().as_ref(), 
-            &[$bump]
-        ]
-    }};
-}
-
