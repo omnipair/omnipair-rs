@@ -1,72 +1,101 @@
 import { 
     Connection, 
     Keypair,
+    sendAndConfirmTransaction,
+    Transaction,
+    TransactionInstruction,
+    PublicKey
 } from '@solana/web3.js';
 import { 
     TOKEN_PROGRAM_ID, 
     createMint,
     createAssociatedTokenAccount,
-    mintTo
+    mintTo,
+    getMinimumBalanceForRentExemptMint
 } from '@solana/spl-token';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import * as anchor from '@coral-xyz/anchor';
+import * as dotenv from 'dotenv';
 
-// Get the directory name in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Load environment variables
+dotenv.config();
 
-// Replace these with your actual values
-const RPC_URL = 'http://127.0.0.1:8899'; // or your preferred network
-
-// Load deployer keypair from file
-const deployerKeypairPath = path.join(__dirname, '..', 'deployer-keypair.json');
-const deployerKeypairFile = fs.readFileSync(deployerKeypairPath, 'utf-8');
-const DEPLOYER_KEYPAIR = Keypair.fromSecretKey(
-    new Uint8Array(JSON.parse(deployerKeypairFile))
-);
+async function createMintWithRetry(
+    connection: Connection,
+    payer: Keypair,
+    mintAuthority: PublicKey,
+    freezeAuthority: PublicKey | null,
+    decimals: number,
+    programId = TOKEN_PROGRAM_ID,
+    maxRetries = 3
+) {
+    let lastError;
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            const mint = await createMint(
+                connection,
+                payer,
+                mintAuthority,
+                freezeAuthority,
+                decimals,
+                undefined,
+                undefined,
+                programId
+            );
+            return mint;
+        } catch (error) {
+            lastError = error;
+            console.log(`Attempt ${i + 1} failed, retrying...`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+        }
+    }
+    throw lastError;
+}
 
 async function main() {
     console.log('Starting token deployment...');
     
-    // Setup connection and provider
-    const connection = new Connection(RPC_URL, 'confirmed');
+    // Setup connection and provider using Anchor configuration
+    const provider = anchor.AnchorProvider.env();
+    const DEPLOYER_KEYPAIR = provider.wallet.payer;
+    
+    if(!DEPLOYER_KEYPAIR) {
+        throw new Error('Deployer keypair not found');
+    }
 
-    console.log('Connected to network:', RPC_URL);
-    console.log('Deployer address:', DEPLOYER_KEYPAIR.publicKey.toBase58());
+    // Set longer confirmation timeout
+    provider.opts.commitment = 'confirmed';
+    provider.opts.preflightCommitment = 'confirmed';
+    provider.opts.skipPreflight = false;
+
+    console.log('Connected to network:', provider.connection.rpcEndpoint);
+    console.log('Deployer address:', provider.wallet.publicKey.toBase58());
 
     // Create Token0
     console.log('\nCreating Token0...');
-    const token0Mint = await createMint(
-        connection,
+    const token0Mint = await createMintWithRetry(
+        provider.connection,
         DEPLOYER_KEYPAIR,
         DEPLOYER_KEYPAIR.publicKey,
         DEPLOYER_KEYPAIR.publicKey,
-        6, // Decimals
-        undefined,
-        undefined,
-        TOKEN_PROGRAM_ID
+        6
     );
     console.log('Token0 Mint:', token0Mint.toBase58());
 
     // Create Token1
     console.log('\nCreating Token1...');
-    const token1Mint = await createMint(
-        connection,
+    const token1Mint = await createMintWithRetry(
+        provider.connection,
         DEPLOYER_KEYPAIR,
         DEPLOYER_KEYPAIR.publicKey,
         DEPLOYER_KEYPAIR.publicKey,
-        6, // Decimals
-        undefined,
-        undefined,
-        TOKEN_PROGRAM_ID
+        6
     );
     console.log('Token1 Mint:', token1Mint.toBase58());
 
     // Create associated token accounts for deployer
     console.log('\nCreating token accounts for deployer...');
     const deployerToken0Account = await createAssociatedTokenAccount(
-        connection,
+        provider.connection,
         DEPLOYER_KEYPAIR,
         token0Mint,
         DEPLOYER_KEYPAIR.publicKey
@@ -74,7 +103,7 @@ async function main() {
     console.log('Deployer Token0 Account:', deployerToken0Account.toBase58());
 
     const deployerToken1Account = await createAssociatedTokenAccount(
-        connection,
+        provider.connection,
         DEPLOYER_KEYPAIR,
         token1Mint,
         DEPLOYER_KEYPAIR.publicKey
@@ -87,7 +116,7 @@ async function main() {
     const mint1Amount = 100_000 * Math.pow(10, 6); // 1000 tokens with 6 decimals
 
     await mintTo(
-        connection,
+        provider.connection,
         DEPLOYER_KEYPAIR,
         token0Mint,
         deployerToken0Account,
@@ -97,7 +126,7 @@ async function main() {
     console.log('Minted 1000 Token0 to deployer');
 
     await mintTo(
-        connection,
+        provider.connection,
         DEPLOYER_KEYPAIR,
         token1Mint,
         deployerToken1Account,
