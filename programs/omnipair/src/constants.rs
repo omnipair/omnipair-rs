@@ -34,5 +34,4 @@ pub const MAX_X_E12: u64 = 289_279_112_968_179;
 pub const PAIR_SEED_PREFIX: &[u8] = b"gamm_pair";
 pub const LP_MINT_SEED_PREFIX: &[u8] = b"gamm_lp_mint";
 pub const FACTORY_SEED_PREFIX: &[u8] = b"gamm_factory";
-pub const TOKEN_VAULT_SEED_PREFIX: &[u8] = b"gamm_token_vault";
 pub const POSITION_SEED_PREFIX: &[u8] = b"gamm_position";
