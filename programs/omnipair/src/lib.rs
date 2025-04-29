@@ -12,19 +12,14 @@ pub use instructions::*;
 pub use utils::account::*;
 pub use instructions::pair_initialize::InitializePair;
 
-declare_id!("GwXHfvDZBZYq8NdGxunFbHbTiUCnJ37fCbBhsLCFGoqf");
+declare_id!("HV2KpMCt6ePoCGiPTBBsZXot8VCxmvdMZM8aCrvLDAQw");
 
 #[program]
 pub mod omnipair {
     use super::*;
 
-    // Rate model instructions
-    pub fn create_rate_model(ctx: Context<CreateRateModel>) -> Result<()> {
-        CreateRateModel::handle_create(ctx)
-    }
-
     // Pair instructions
-    #[access_control(ctx.accounts.validate())]
+    #[access_control(ctx.accounts.validate_and_create_rate_model())]
     pub fn initialize_pair(ctx: Context<InitializePair>) -> Result<()> {
         InitializePair::handle_initialize(ctx)
     }
