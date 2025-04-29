@@ -9,3 +9,4 @@ test-ledger
 wallet-keypair.json
 deployer-keypair.json
 program-keypair.json
+docker-target

@@ -22,7 +22,6 @@ pub struct InitializePair<'info> {
 
     pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
     pub token1_mint: Box<InterfaceAccount<'info, Mint>>,
-    pub rate_model: Box<Account<'info, RateModel>>,
     
     #[account(
         init,
@@ -36,6 +35,13 @@ pub struct InitializePair<'info> {
         bump
     )]
     pub pair: Box<Account<'info, Pair>>,
+
+    #[account(
+        init,
+        payer = deployer,
+        space = get_size_with_discriminator::<RateModel>(),
+    )]
+    pub rate_model:Box<Account<'info, RateModel>>,
 
     #[account(
         init,
@@ -90,6 +96,21 @@ impl InitializePair<'_> {
             require_eq!("omni", last_4_chars, ErrorCode::InvalidTokenKey);
         }
         
+        Ok(())
+    }
+
+    pub fn handle_create(&mut self) -> Result<()> {
+        let rate_model = &mut self.rate_model;
+        rate_model.exp_rate = NATURAL_LOG_OF_TWO_NAD / SECONDS_PER_DAY;
+        rate_model.target_util_start = TARGET_UTIL_START;
+        rate_model.target_util_end = TARGET_UTIL_END;
+        
+        Ok(())
+    }
+
+    pub fn validate_and_create_rate_model(&mut self) -> Result<()> {
+        self.validate()?;
+        self.handle_create()?;
         Ok(())
     }
 

@@ -15,12 +15,14 @@
     "add-collateral": "ts-node --esm scripts/add_collateral.ts",
     "remove-collateral": "ts-node --esm scripts/remove_collateral.ts",
     "borrow": "ts-node --esm scripts/borrow.ts",
-    "repay": "ts-node --esm scripts/repay.ts"
+    "repay": "ts-node --esm scripts/repay.ts",
+    "address-vanity": "ts-node --esm scripts/address_vanity.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.31.0",
     "@solana/spl-token": "^0.4.0",
-    "@solana/web3.js": "^1.95.0"
+    "@solana/web3.js": "^1.95.0",
+    "dotenv": "^16.5.0"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.0",
@@ -30,7 +32,7 @@
     "chai": "^4.3.0",
     "mocha": "^10.0.0",
     "ts-mocha": "^10.0.0",
-    "typescript": "^5.0.0",
-    "ts-node": "^10.9.1"
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.0"
   }
 }
