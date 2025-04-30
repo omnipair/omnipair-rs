@@ -11,8 +11,9 @@ pub use utils::*;
 pub use instructions::*;
 pub use utils::account::*;
 pub use instructions::pair_initialize::InitializePair;
+pub use instructions::faucet_mint::FaucetMint;
 
-declare_id!("cmjFNk74SsRK6c4njkV6BUsgk2cWQjYjMp7EMeQJ466");
+declare_id!("6Lnz8FBCF4CXYzQHdesc2qnVGCZcgxnPt4DXutLLw7nh");
 
 #[program]
 pub mod omnipair {
@@ -73,5 +74,10 @@ pub mod omnipair {
     pub fn repay(ctx: Context<CommonAdjustPosition>, args: AdjustPositionArgs) -> Result<()> {
         CommonAdjustPosition::handle_repay(ctx, args)
     }
-    
+
+    // Faucet instruction
+    #[cfg(feature = "development")]
+    pub fn faucet_mint(ctx: Context<FaucetMint>) -> Result<()> {
+        FaucetMint::handle_faucet_mint(ctx)
+    }
 }

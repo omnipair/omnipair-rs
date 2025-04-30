@@ -1,10 +1,12 @@
 pub mod spot;
 pub mod liquidity;
 pub mod lending;
-pub mod pair_initialize; 
+pub mod pair_initialize;
+pub mod faucet_mint;
 
 pub use spot::*;
 pub use liquidity::*;
 pub use lending::common::*;
 pub use lending::pair_add_collateral::*;
 pub use pair_initialize::*;
+pub use faucet_mint::*;

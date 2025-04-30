@@ -7,7 +7,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-omnipair = "cmjFNk74SsRK6c4njkV6BUsgk2cWQjYjMp7EMeQJ466"
+omnipair = "6Lnz8FBCF4CXYzQHdesc2qnVGCZcgxnPt4DXutLLw7nh"
 
 [programs.localnet]
 omnipair = "cmjFNk74SsRK6c4njkV6BUsgk2cWQjYjMp7EMeQJ466"
@@ -16,7 +16,7 @@ omnipair = "cmjFNk74SsRK6c4njkV6BUsgk2cWQjYjMp7EMeQJ466"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "Devnet"
 wallet = "deployer-keypair.json"
 
 [scripts]
