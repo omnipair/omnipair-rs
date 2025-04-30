@@ -70,13 +70,17 @@ async function main() {
     console.log('Connected to network:', provider.connection.rpcEndpoint);
     console.log('Deployer address:', provider.wallet.publicKey.toBase58());
 
+    // Get program ID from environment
+    const PROGRAM_ID = new PublicKey(process.env.PROGRAM_ID!);
+    console.log('Program ID:', PROGRAM_ID.toBase58());
+
     // Create Token0
     console.log('\nCreating Token0...');
     const token0Mint = await createMintWithRetry(
         provider.connection,
         DEPLOYER_KEYPAIR,
-        DEPLOYER_KEYPAIR.publicKey,
-        DEPLOYER_KEYPAIR.publicKey,
+        PROGRAM_ID, // Use program as mint authority
+        null, // No freeze authority
         6
     );
     console.log('Token0 Mint:', token0Mint.toBase58());
@@ -86,8 +90,8 @@ async function main() {
     const token1Mint = await createMintWithRetry(
         provider.connection,
         DEPLOYER_KEYPAIR,
-        DEPLOYER_KEYPAIR.publicKey,
-        DEPLOYER_KEYPAIR.publicKey,
+        PROGRAM_ID, // Use program as mint authority
+        null, // No freeze authority
         6
     );
     console.log('Token1 Mint:', token1Mint.toBase58());
@@ -110,10 +114,10 @@ async function main() {
     );
     console.log('Deployer Token1 Account:', deployerToken1Account.toBase58());
 
-    // Mint 1000 tokens to deployer for each token
-    console.log('\nMinting tokens to deployer...');
-    const mint0Amount = 20_000 * Math.pow(10, 6); // 1000 tokens with 6 decimals
-    const mint1Amount = 100_000 * Math.pow(10, 6); // 1000 tokens with 6 decimals
+    // Mint initial tokens to deployer for each token
+    console.log('\nMinting initial tokens to deployer...');
+    const mint0Amount = 20_000 * Math.pow(10, 6); // 20,000 tokens with 6 decimals
+    const mint1Amount = 100_000 * Math.pow(10, 6); // 100,000 tokens with 6 decimals
 
     await mintTo(
         provider.connection,
@@ -123,7 +127,7 @@ async function main() {
         DEPLOYER_KEYPAIR,
         mint0Amount
     );
-    console.log('Minted 1000 Token0 to deployer');
+    console.log('Minted initial Token0 to deployer');
 
     await mintTo(
         provider.connection,
@@ -133,7 +137,7 @@ async function main() {
         DEPLOYER_KEYPAIR,
         mint1Amount
     );
-    console.log('Minted 1000 Token1 to deployer');
+    console.log('Minted initial Token1 to deployer');
 
     console.log('\nToken deployment completed successfully!');
     console.log('Token0 Mint:', token0Mint.toBase58());

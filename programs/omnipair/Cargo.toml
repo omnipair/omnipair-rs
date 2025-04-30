@@ -19,7 +19,7 @@ idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 anchor-debug = []
 custom-heap = []
 production = []
-
+development = []
 [dependencies]
 anchor-lang = { version = "0.31.0", features = ["init-if-needed", "event-cpi", "derive"] }
 anchor-spl = { version = "0.31.0", features = ["metadata"] }
