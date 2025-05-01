@@ -3,14 +3,11 @@ import {
     PublicKey, 
     sendAndConfirmTransaction,
     Keypair,
-    SystemProgram,
-    SYSVAR_RENT_PUBKEY,
     Transaction
 } from '@solana/web3.js';
 import { 
     TOKEN_PROGRAM_ID, 
     TOKEN_2022_PROGRAM_ID,
-    ASSOCIATED_TOKEN_PROGRAM_ID,
     getAssociatedTokenAddress
 } from '@solana/spl-token';
 import { Program } from '@coral-xyz/anchor';
@@ -27,7 +24,7 @@ const TOKEN0_MINT = new PublicKey(process.env.TOKEN0_MINT || '');
 const TOKEN1_MINT = new PublicKey(process.env.TOKEN1_MINT || '');
 
 async function main() {
-    console.log('Starting pair initialization...');
+    console.log('Starting faucet mint...');
     
     // Setup connection and provider using Anchor configuration
     const provider = anchor.AnchorProvider.env();
@@ -46,32 +43,27 @@ async function main() {
     console.log('Connected to network:', provider.connection.rpcEndpoint);
     console.log('Deployer address:', provider.wallet.publicKey.toBase58());
 
-    // Generate a new keypair for the rate model
-    const rateModelKeypair = Keypair.generate();
-    console.log('Rate Model address:', rateModelKeypair.publicKey.toBase58());
-
     // Find PDA for the pair
     const [pairPda] = PublicKey.findProgramAddressSync(
         [Buffer.from('gamm_pair'), TOKEN0_MINT.toBuffer(), TOKEN1_MINT.toBuffer()],
         program.programId
     );
 
-    // Find PDA for the LP mint
-    const [lpMintPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('gamm_lp_mint'), pairPda.toBuffer()],
-        program.programId
-    );
-
     console.log('Pair PDA:', pairPda.toBase58());
-    console.log('LP Mint PDA:', lpMintPda.toBase58());
 
-    // Get or create LP token account
-    const deployerLpTokenAccount = await getAssociatedTokenAddress(
-        lpMintPda,
+    // Get or create token accounts for the deployer
+    const deployerToken0Account = await getAssociatedTokenAddress(
+        TOKEN0_MINT,
         DEPLOYER_KEYPAIR.publicKey
     );
 
-    console.log('LP Token ATA:', deployerLpTokenAccount.toBase58());
+    const deployerToken1Account = await getAssociatedTokenAddress(
+        TOKEN1_MINT,
+        DEPLOYER_KEYPAIR.publicKey
+    );
+
+    console.log('Token0 ATA:', deployerToken0Account.toBase58());
+    console.log('Token1 ATA:', deployerToken1Account.toBase58());
 
     // Get token program for each mint
     const token0Program = (await provider.connection.getAccountInfo(TOKEN0_MINT))?.owner.equals(TOKEN_2022_PROGRAM_ID) 
@@ -86,12 +78,11 @@ async function main() {
 
     // Create transaction
     const tx = await program.methods
-        .initializePair()
+        .faucetMint()
         .accounts({
-            deployer: DEPLOYER_KEYPAIR.publicKey,
+            user: DEPLOYER_KEYPAIR.publicKey,
             token0Mint: TOKEN0_MINT,
             token1Mint: TOKEN1_MINT,
-            rateModel: rateModelKeypair.publicKey,
         })
         .transaction();
 
@@ -101,7 +92,7 @@ async function main() {
     const signature = await sendAndConfirmTransaction(
         provider.connection,
         tx,
-        [DEPLOYER_KEYPAIR, rateModelKeypair]
+        [DEPLOYER_KEYPAIR]
     );
 
     console.log('Signature:', signature);
@@ -110,4 +101,4 @@ async function main() {
 main().catch(error => {
     console.error('Error:', error);
     process.exit(1);
-}); 
+});
