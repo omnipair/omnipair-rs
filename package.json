@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "anchor test",
-    "deploy-tokens": "ts-node --esm scripts/deploy_tokens.ts",
+    "deploy-tokens": "ts-node --esm scripts/utils/deploy_tokens.ts",
     "initialize": "ts-node --esm scripts/initialize_pair.ts",
     "create-rm": "ts-node --esm scripts/create_rate_model.ts",
     "bootstrap": "ts-node --esm scripts/bootstrap_liquidity.ts",
@@ -16,7 +16,8 @@
     "remove-collateral": "ts-node --esm scripts/remove_collateral.ts",
     "borrow": "ts-node --esm scripts/borrow.ts",
     "repay": "ts-node --esm scripts/repay.ts",
-    "address-vanity": "ts-node --esm scripts/address_vanity.ts"
+    "address-vanity": "ts-node --esm scripts/address_vanity.ts",
+    "faucet-mint": "ts-node --esm scripts/mint_pair_tokens.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.31.0",
