@@ -146,13 +146,13 @@ impl Pair {
                 self.last_price0_ema = compute_ema(
                     self.last_price0_ema,
                     self.last_update,
-                    if self.reserve0 > 0 { self.reserve1 * NAD / self.reserve0 } else { 0 },
+                    if self.reserve0 > 0 { ((self.reserve1 as u128 * NAD as u128) / self.reserve0 as u128) as u64 } else { 0 },
                     DEFAULT_HALF_LIFE
                 );
                 self.last_price1_ema = compute_ema(
                     self.last_price1_ema,
                     self.last_update,
-                    if self.reserve1 > 0 { self.reserve0 * NAD / self.reserve1 } else { 0 },
+                    if self.reserve1 > 0 { ((self.reserve0 as u128 * NAD as u128) / self.reserve1 as u128) as u64 } else { 0 },
                     DEFAULT_HALF_LIFE
                 );
                 
@@ -211,14 +211,6 @@ impl Pair {
         }
         
         Ok(())
-    }
-
-    pub fn key(&self) -> Pubkey {
-        Pubkey::find_program_address(&[
-            PAIR_SEED_PREFIX, 
-            self.token0.as_ref(), 
-            self.token1.as_ref()
-        ], &crate::ID).0
     }
 }
 
