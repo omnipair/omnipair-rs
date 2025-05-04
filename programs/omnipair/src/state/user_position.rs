@@ -40,14 +40,6 @@ impl UserPosition {
         self.owner != Pubkey::default() && self.pair != Pubkey::default()
     }
 
-    pub fn key(&self) -> Pubkey {
-        Pubkey::find_program_address(&[
-            POSITION_SEED_PREFIX,
-            self.pair.as_ref(),
-            self.owner.as_ref(),
-        ], &crate::ID).0
-    }
-
     pub fn seeds<'a>(&'a self) -> [&'a [u8]; 3] {
         [
             POSITION_SEED_PREFIX,
