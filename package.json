@@ -17,7 +17,8 @@
     "borrow": "ts-node --esm scripts/borrow.ts",
     "repay": "ts-node --esm scripts/repay.ts",
     "address-vanity": "ts-node --esm scripts/address_vanity.ts",
-    "faucet-mint": "ts-node --esm scripts/mint_pair_tokens.ts"
+    "faucet-mint": "ts-node --esm scripts/mint_pair_tokens.ts",
+    "get-ema-prices": "ts-node --esm scripts/get_ema_prices.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.31.0",

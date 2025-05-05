@@ -107,7 +107,7 @@ impl Pair {
     }
 
     /// EMA prices scaled by 1e9
-    pub fn price0_nad(&self) -> u64 {
+    pub fn ema_price0_nad(&self) -> u64 {
         if self.reserve0 == 0 {
             0
         } else {
@@ -119,7 +119,7 @@ impl Pair {
         }
     }
 
-    pub fn price1_nad(&self) -> u64 {
+    pub fn ema_price1_nad(&self) -> u64 {
         if self.reserve1 == 0 {
             0
         } else {
