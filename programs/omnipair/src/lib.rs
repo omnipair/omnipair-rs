@@ -13,11 +13,16 @@ pub use utils::account::*;
 pub use instructions::pair_initialize::InitializePair;
 pub use instructions::faucet_mint::FaucetMint;
 
-declare_id!("DvyUsijU6jjwis4f9TrvpsEQv9weyEcQZKBiSyAp8wyQ");
+declare_id!("57rKL6U9JJhoVbKKEaZWNYXLJ8mJeo2gcgQUP8eyZC7o");
 
 #[program]
 pub mod omnipair {
     use super::*;
+
+    /// Emitters for front-end simulated getters (Emit + RPC simulation + Logs parsing)
+    pub fn emit_value(ctx: Context<EmitValue>, getter: GetterType) -> Result<()> {
+        EmitValue::handle_emit_value(ctx, getter)
+    }
 
     // Pair instructions
     #[access_control(ctx.accounts.validate_and_create_rate_model())]

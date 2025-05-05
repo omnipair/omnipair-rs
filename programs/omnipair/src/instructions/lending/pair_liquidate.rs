@@ -138,7 +138,7 @@ impl<'info> Liquidate<'info> {
             .unwrap();
         
         let borrowing_power0 = pair.total_collateral0
-            .checked_mul(pair.price0_nad())
+            .checked_mul(pair.ema_price0_nad())
             .unwrap()
             .checked_div(NAD)
             .unwrap()

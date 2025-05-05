@@ -41,7 +41,7 @@ impl<'info> CommonAdjustPosition<'info> {
         let NormalizedTwoValues { scaled_a: user_collateral_scaled, scaled_b: price_scaled } = normalize_two_values_to_nad(
             user_collateral,
             collateral_token_decimals,
-            self.pair.price1_nad(),
+            self.pair.ema_price1_nad(),
         );
 
         let borrowing_power = user_collateral_scaled
