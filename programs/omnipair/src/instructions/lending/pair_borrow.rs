@@ -3,7 +3,11 @@ use crate::{
     constants::*,
     errors::ErrorCode,
     events::AdjustDebtEvent,
-    utils::{token::transfer_from_pool_vault_to_user, math::{NormalizedTwoValues, normalize_two_values_to_nad}},
+    utils::{
+        token::transfer_from_pool_vault_to_user, 
+        math::{NormalizedTwoValues, normalize_two_values_to_nad},
+        gamm_math::max_borrowable_with_safety,
+    },
     generate_gamm_pair_seeds,
     instructions::lending::common::{CommonAdjustPosition, AdjustPositionArgs},
 };
@@ -23,32 +27,50 @@ impl<'info> CommonAdjustPosition<'info> {
 
         let (
             user_collateral, 
-            collateral_token_decimals, 
-            user_debt
+            collateral_decimals, 
+            collateral_spot_price,
+            collateral_ema_price,
+            // in token X (debt token)
+            user_debt,
+            pair_debt_reserve,
+            pair_total_debt,
         ) = match self.user_token_account.mint == self.pair.token0 {
             true => (
                 self.user_position.collateral1,
                 self.pair.token1_decimals,
-                self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares)
+                self.pair.spot_price1_nad(),
+                self.pair.ema_price1_nad(),
+                self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares),
+                self.pair.reserve0,
+                self.pair.total_debt0,
             ),
             false => (
                 self.user_position.collateral0,
                 self.pair.token0_decimals,
-                self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares)
+                self.pair.spot_price0_nad(),
+                self.pair.ema_price0_nad(),
+                self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares),
+                self.pair.reserve1,
+                self.pair.total_debt1,
             )
         };       
 
-        let NormalizedTwoValues { scaled_a: user_collateral_scaled, scaled_b: price_scaled } = normalize_two_values_to_nad(
+        let NormalizedTwoValues { 
+            scaled_a: user_collateral_scaled, 
+            scaled_b: collateral_spot_price_scaled 
+        } = normalize_two_values_to_nad(
             user_collateral,
-            collateral_token_decimals,
-            self.pair.ema_price1_nad(),
+            collateral_decimals,
+            collateral_spot_price,
         );
 
-        let borrowing_power = ((user_collateral_scaled as u128)
-            .checked_mul(price_scaled as u128).unwrap()
-            .checked_mul(CF_BPS.into()).unwrap()
-            .checked_div(NAD.into()).unwrap()
-            .checked_div(BPS_DENOMINATOR.into()).unwrap()) as u64;
+        let (borrowing_power, _) = max_borrowable_with_safety(
+            user_collateral_scaled,
+            collateral_ema_price,
+            collateral_spot_price_scaled,
+            pair_total_debt,
+            pair_debt_reserve
+        );
 
         let new_debt = user_debt.checked_add(*borrow_amount).unwrap();
         require_gte!(

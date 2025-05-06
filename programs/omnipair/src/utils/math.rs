@@ -75,8 +75,8 @@ pub fn taylor_exp(x: i64, scale: u64, precision: u64) -> u64 {
     final_result
 }
 
-// babylonian method (https://en.wikipedia.org/wiki/Methods_of_computing_square_roots#Babylonian_method)
-// Safe sqrt function that returns None if the input is negative
+// Babylonian (Newton's) method (https://en.wikipedia.org/wiki/Methods_of_computing_square_roots#Babylonian_method)
+// Safe sqrt function that returns None if the input is negative 
 pub trait SqrtU128 {
     fn sqrt(&self) -> Option<u128>;
 }
