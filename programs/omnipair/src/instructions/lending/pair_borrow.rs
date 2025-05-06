@@ -44,11 +44,11 @@ impl<'info> CommonAdjustPosition<'info> {
             self.pair.ema_price1_nad(),
         );
 
-        let borrowing_power = user_collateral_scaled
-        .checked_mul(price_scaled).unwrap()
-        .checked_mul(CF_BPS).unwrap()
-        .checked_div(NAD).unwrap()
-        .checked_div(BPS_DENOMINATOR).unwrap();
+        let borrowing_power = ((user_collateral_scaled as u128)
+            .checked_mul(price_scaled as u128).unwrap()
+            .checked_mul(CF_BPS.into()).unwrap()
+            .checked_div(NAD.into()).unwrap()
+            .checked_div(BPS_DENOMINATOR.into()).unwrap()) as u64;
 
         let new_debt = user_debt.checked_add(*borrow_amount).unwrap();
         require_gte!(
