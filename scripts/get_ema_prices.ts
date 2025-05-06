@@ -28,6 +28,7 @@ import {
       .simulate();
   
     const logs = sim.raw ?? [];
+    console.log(logs);
 
     const label = Object.keys(getter)[0]; // e.g. "price0Nad"
   
@@ -52,11 +53,14 @@ import {
       [Buffer.from('gamm_pair'), TOKEN0_MINT.toBuffer(), TOKEN1_MINT.toBuffer()],
       program.programId
     );
+
+    const pairAccount = await program.account.pair.fetch(pairPda);
+    console.log('Pair account:', pairAccount.reserve0.toString(), pairAccount.reserve1.toString());
   
     console.log('Simulating on-chain prices for pair:', pairPda.toBase58());
   
     // notice its written camelCase not PascalCase
-    // although PascalCase is used in the idl
+    // although PascalCase is used in the idl and the value returned in logs is PascalCase
     // it will through an error if you use PascalCase
     const enumVariants = [
       { emaPrice0Nad: {} },

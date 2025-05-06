@@ -73,6 +73,14 @@ async function main() {
         program.programId
     );
     console.log('User Position PDA:', userPositionPda.toBase58());
+    const userPositionAccount = await program.account.userPosition.fetch(userPositionPda);
+    console.log('User Position Account:', {
+        collateral0: userPositionAccount.collateral0.toString(),
+        collateral1: userPositionAccount.collateral1.toString(),
+        debt0Shares: userPositionAccount.debt0Shares.toString(),
+        debt1Shares: userPositionAccount.debt1Shares.toString(),
+        bump: userPositionAccount.bump.toString(),
+    });
 
     // Get token program for each mint
     const token0Info = await provider.connection.getAccountInfo(TOKEN0_MINT);
@@ -103,7 +111,7 @@ async function main() {
 
     // Borrow parameters
     const borrowAmount = new BN(1_000_000); // 1 tokens
-    const borrowToken0 = false; // Set to false to borrow token1
+    const borrowToken0 = true; // Set to false to borrow token1
 
     console.log('Borrowing with parameters:');
     console.log('Amount:', borrowAmount.toString());
