@@ -13,8 +13,8 @@ impl RateModel {
     pub fn new() -> Self {
         Self {
             exp_rate: NATURAL_LOG_OF_TWO_NAD / SECONDS_PER_DAY,
-            target_util_start: TARGET_UTIL_START,
-            target_util_end: TARGET_UTIL_END,
+            target_util_start: TARGET_UTIL_START_NAD,
+            target_util_end: TARGET_UTIL_END_NAD,
         }
     }
 
