@@ -81,7 +81,7 @@ async function main() {
     console.log('Token1 Vault:', token1Vault.toBase58());
 
     // Swap parameters
-    const amountIn = new BN(1_000_000); // Amount of token0 to swap
+    const amountIn = new BN(50_000_000); // Amount of token0 to swap
     const minAmountOut = new BN(0); // Minimum amount of token1 to receive
 
     console.log('Swap parameters:');

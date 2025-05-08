@@ -1,5 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
+use crate::utils::gamm_math::max_borrowable_with_safety;
+use super::Pair;
 
 #[account]
 pub struct UserPosition {
@@ -65,6 +67,61 @@ impl UserPosition {
                 .checked_div(total_debt1_shares).unwrap()
         }
     }
+
+    pub fn get_borrowing_power_and_effective_cf_bps(&self, pair: &Pair, token: &Pubkey) -> (u64, u16) {
+        let user_position = &self;
+
+        let (
+            user_collateral, 
+            collateral_spot_price,
+            collateral_ema_price,
+            // in token X (debt token)
+            pair_debt_reserve,
+            pair_total_debt,
+        ) = match *token == pair.token0 {
+            true => (
+                user_position.collateral1,
+                pair.spot_price1_nad(),
+                pair.ema_price1_nad(),
+                pair.reserve0,
+                pair.total_debt0,
+            ),
+            false => (
+                user_position.collateral0,
+                pair.spot_price0_nad(),
+                pair.ema_price0_nad(),
+                pair.reserve1,
+                pair.total_debt1,
+            )
+        };       
+
+        // TODO: normalize collateral token decimals to NAD if needed
+        // let NormalizedTwoValues { 
+        //     scaled_a: user_collateral_scaled, 
+        //     scaled_b: collateral_spot_price_scaled 
+        // } = normalize_two_values_to_nad(
+        //     user_collateral,
+        //     collateral_decimals,
+        //     collateral_spot_price,
+        // );
+
+        max_borrowable_with_safety(
+            user_collateral,
+            collateral_ema_price,
+            collateral_spot_price,
+            pair_total_debt,
+            pair_debt_reserve,
+        )
+    }
+
+    pub fn get_borrowing_power(&self, pair: &Pair, token: &Pubkey) -> u64 {
+        self.get_borrowing_power_and_effective_cf_bps(pair, token).0
+    }
+
+    pub fn get_effective_collateral_factor_bps(&self, pair: &Pair, token: &Pubkey) -> u64 {
+        self.get_borrowing_power_and_effective_cf_bps(pair, token).1 as u64
+    }
+    
 }
 
 #[macro_export]

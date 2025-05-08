@@ -13,15 +13,19 @@ pub use utils::account::*;
 pub use instructions::pair_initialize::InitializePair;
 pub use instructions::faucet_mint::FaucetMint;
 
-declare_id!("46DJAcVL4SsBktZvuMi7DxVoV5H8SLd8BddLxQzazdz6");
+declare_id!("FmSEiqY3RVgJp3Lyw7pbUFDHEbm8rZPqnrVc1TskBjBK");
 
 #[program]
 pub mod omnipair {
     use super::*;
 
     /// Emitters for front-end simulated getters (Emit + RPC simulation + Logs parsing)
-    pub fn emit_value(ctx: Context<EmitValue>, getter: GetterType) -> Result<()> {
-        EmitValue::handle_emit_value(ctx, getter)
+    pub fn emit_pair_getters(ctx: Context<EmitPairValue>, getter: PairGetterType) -> Result<()> {
+        EmitPairValue::handle_emit_value(ctx, getter)
+    }
+
+    pub fn emit_user_position_getters(ctx: Context<EmitUserPositionValue>, getter: UserPositionGetterType) -> Result<()> {
+        EmitUserPositionValue::handle_emit_value(ctx, getter)
     }
 
     // Pair instructions

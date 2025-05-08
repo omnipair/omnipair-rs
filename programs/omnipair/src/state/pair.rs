@@ -96,9 +96,7 @@ impl Pair {
         match self.reserve0 {
             0 => 0,
             _ => {
-                let price = ((self.reserve1 as u128 * NAD as u128) / self.reserve0 as u128) as u64;
-                msg!("spot_price0_nad: reserve0={}, reserve1={}, price={}", self.reserve0, self.reserve1, price);
-                price
+                ((self.reserve1 as u128 * NAD as u128) / self.reserve0 as u128) as u64
             }
         }
     }
@@ -107,9 +105,7 @@ impl Pair {
         match self.reserve1 {
             0 => 0,
             _ => {
-                let price = ((self.reserve0 as u128 * NAD as u128) / self.reserve1 as u128) as u64;
-                msg!("spot_price1_nad: reserve0={}, reserve1={}, price={}", self.reserve0, self.reserve1, price);
-                price
+                ((self.reserve0 as u128 * NAD as u128) / self.reserve1 as u128) as u64
             }
         }
     }
@@ -120,15 +116,12 @@ impl Pair {
             0
         } else {
             let spot_price = self.spot_price0_nad();
-            let ema = compute_ema(
+            compute_ema(
                 self.last_price0_ema, 
                 self.last_update, 
                 spot_price, 
                 DEFAULT_HALF_LIFE
-            );
-            msg!("ema_price0_nad: last_price0_ema={}, last_update={}, spot_price={}, ema={}", 
-                self.last_price0_ema, self.last_update, spot_price, ema);
-            ema
+            )
         }
     }
 
@@ -137,15 +130,12 @@ impl Pair {
             0
         } else {
             let spot_price = self.spot_price1_nad();
-            let ema = compute_ema(
+            compute_ema(
                 self.last_price1_ema, 
                 self.last_update, 
                 spot_price, 
                 DEFAULT_HALF_LIFE
-            );
-            msg!("ema_price1_nad: last_price1_ema={}, last_update={}, spot_price={}, ema={}", 
-                self.last_price1_ema, self.last_update, spot_price, ema);
-            ema
+            )
         }
     }
 

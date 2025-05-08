@@ -3,11 +3,7 @@ use crate::{
     constants::*,
     errors::ErrorCode,
     events::AdjustDebtEvent,
-    utils::{
-        token::transfer_from_pool_vault_to_user, 
-        math::{NormalizedTwoValues, normalize_two_values_to_nad},
-        gamm_math::max_borrowable_with_safety,
-    },
+    utils::token::transfer_from_pool_vault_to_user,
     generate_gamm_pair_seeds,
     instructions::lending::common::{CommonAdjustPosition, AdjustPositionArgs},
 };
@@ -25,52 +21,12 @@ impl<'info> CommonAdjustPosition<'info> {
             ErrorCode::InsufficientAmount
         );
 
-        let (
-            user_collateral, 
-            collateral_decimals, 
-            collateral_spot_price,
-            collateral_ema_price,
-            // in token X (debt token)
-            user_debt,
-            pair_debt_reserve,
-            pair_total_debt,
-        ) = match self.user_token_account.mint == self.pair.token0 {
-            true => (
-                self.user_position.collateral1,
-                self.pair.token1_decimals,
-                self.pair.spot_price1_nad(),
-                self.pair.ema_price1_nad(),
-                self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares),
-                self.pair.reserve0,
-                self.pair.total_debt0,
-            ),
-            false => (
-                self.user_position.collateral0,
-                self.pair.token0_decimals,
-                self.pair.spot_price0_nad(),
-                self.pair.ema_price0_nad(),
-                self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares),
-                self.pair.reserve1,
-                self.pair.total_debt1,
-            )
-        };       
+        let user_debt = match self.user_token_account.mint == self.pair.token0 {
+            true => self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares),
+            false => self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares),
+        }; 
 
-        let NormalizedTwoValues { 
-            scaled_a: user_collateral_scaled, 
-            scaled_b: collateral_spot_price_scaled 
-        } = normalize_two_values_to_nad(
-            user_collateral,
-            collateral_decimals,
-            collateral_spot_price,
-        );
-
-        let (borrowing_power, _) = max_borrowable_with_safety(
-            user_collateral_scaled,
-            collateral_ema_price,
-            collateral_spot_price_scaled,
-            pair_total_debt,
-            pair_debt_reserve
-        );
+        let (borrowing_power, effective_cf_bps) = self.user_position.get_borrowing_power_and_effective_cf_bps(&self.pair, &self.token_vault.mint);
 
         let new_debt = user_debt.checked_add(*borrow_amount).unwrap();
         require_gte!(
