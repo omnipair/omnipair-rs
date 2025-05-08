@@ -5,8 +5,6 @@ pub fn compute_ema(last_ema: u64, last_update: i64, input: u64, half_life: u64) 
     let current_time = Clock::get().unwrap().unix_timestamp;
     
     let dt = (current_time - last_update) as u64;
-    msg!("compute_ema: last_ema={}, last_update={}, input={}, half_life={}, current_time={}, dt={}", 
-        last_ema, last_update, input, half_life, current_time, dt);
     
     if dt > 0 && half_life > 0 {
         // Calculate exp_time in NAD scale
@@ -14,20 +12,15 @@ pub fn compute_ema(last_ema: u64, last_update: i64, input: u64, half_life: u64) 
         // Calculate x in NAD scale
         let x = (dt as u128 * NAD as u128) / exp_time;
         let alpha = taylor_exp(-(x as i64), NAD, TAYLOR_TERMS);
-        msg!("compute_ema: exp_time={}, x={}, alpha={}", exp_time, x, alpha);
         
         let result = ((input as u128 * (NAD - alpha) as u128 + last_ema as u128 * alpha as u128) / NAD as u128) as u64;
-        msg!("compute_ema: result={}", result);
         result
     } else {
-        msg!("compute_ema: returning last_ema={}", last_ema);
         last_ema
     }
 }
 
-pub fn taylor_exp(x: i64, scale: u64, precision: u64) -> u64 {
-    msg!("taylor_exp: x={}, scale={}, precision={}", x, scale, precision);
-    
+pub fn taylor_exp(x: i64, scale: u64, precision: u64) -> u64 {    
     // For negative x, we calculate exp(-x) and take reciprocal
     let is_negative = x < 0;
     let abs_x = if is_negative { -x } else { x };
@@ -36,13 +29,11 @@ pub fn taylor_exp(x: i64, scale: u64, precision: u64) -> u64 {
     let n = 10u64;
     // Reduce x by n
     let reduced_x = abs_x / (n as i64);
-    msg!("taylor_exp: n={}, reduced_x={}", n, reduced_x);
     
     // Start with 1 (scaled by `scale`)
     let mut term = scale as u128;
     // Initialize sum with 1 (scaled by `scale`)
     let mut sum = scale as u128;
-    msg!("taylor_exp: initial term={}, sum={}", term, sum);
 
     // Compute Taylor series terms
     for i in 1..=precision {
@@ -52,17 +43,15 @@ pub fn taylor_exp(x: i64, scale: u64, precision: u64) -> u64 {
             .unwrap_or(0);
         // Add the term to the sum with overflow protection
         sum = sum.checked_add(term).unwrap_or(u128::MAX);
-        msg!("taylor_exp: i={}, term={}, sum={}", i, term, sum);
     }
 
     // Start with 1 (scaled by `scale`)
     let mut result = scale as u128;
     // Raise the result to the power of n with overflow protection
-    for i in 0..n {
+    for _i in 0..n {
         result = result.checked_mul(sum)
             .and_then(|r| r.checked_div(scale as u128))
             .unwrap_or(u128::MAX);
-        msg!("taylor_exp: power iteration i={}, result={}", i, result);
     }
 
     // If x was negative, take reciprocal
@@ -70,9 +59,7 @@ pub fn taylor_exp(x: i64, scale: u64, precision: u64) -> u64 {
         result = (scale as u128 * scale as u128) / result;
     }
 
-    let final_result = result as u64;
-    msg!("taylor_exp: final result={}", final_result);
-    final_result
+    result as u64
 }
 
 // Babylonian (Newton's) method (https://en.wikipedia.org/wiki/Methods_of_computing_square_roots#Babylonian_method)
