@@ -5,6 +5,7 @@ use crate::utils::token::{transfer_from_user_to_pool_vault, token_mint_to};
 use crate::generate_gamm_pair_seeds;
 use crate::liquidity::common::{AdjustLiquidity, AddLiquidityArgs};
 use crate::utils::math::SqrtU128;
+use crate::events::MintEvent;
 
 impl<'info> AdjustLiquidity<'info> {
     fn validate_add(&self, args: &AddLiquidityArgs) -> Result<()> {
@@ -114,6 +115,15 @@ impl<'info> AdjustLiquidity<'info> {
         pair.reserve0 = pair.reserve0.checked_add(args.amount0_in).unwrap();
         pair.reserve1 = pair.reserve1.checked_add(args.amount1_in).unwrap();
         pair.total_supply = pair.total_supply.checked_add(liquidity as u64).unwrap();
+        
+        // Emit event
+        emit!(MintEvent {
+            user: user.key(),
+            amount0: args.amount0_in,
+            amount1: args.amount1_in,
+            liquidity: liquidity as u64,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
         
         Ok(())
     }

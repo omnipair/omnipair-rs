@@ -4,6 +4,7 @@ use crate::constants::*;
 use crate::utils::token::{transfer_from_pool_vault_to_user, token_burn};
 use crate::generate_gamm_pair_seeds;
 use crate::liquidity::common::AdjustLiquidity;
+use crate::events::BurnEvent;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct RemoveLiquidityArgs {
@@ -130,6 +131,15 @@ impl<'info> AdjustLiquidity<'info> {
         pair.reserve0 = pair.reserve0.checked_sub(amount0_out).unwrap();
         pair.reserve1 = pair.reserve1.checked_sub(amount1_out).unwrap();
         pair.total_supply = pair.total_supply.checked_sub(args.liquidity_in).unwrap();
+
+        // Emit event
+        emit!(BurnEvent {
+            user: ctx.accounts.user.key(),
+            amount0: amount0_out,
+            amount1: amount1_out,
+            liquidity: args.liquidity_in,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
 
         Ok(())
     }
