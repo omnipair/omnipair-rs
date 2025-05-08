@@ -8,9 +8,10 @@ use crate::{
     state::rate_model::RateModel,
     constants::*,
     errors::ErrorCode,
-    events::AdjustDebtEvent,
+    events::{AdjustCollateralEvent, AdjustDebtEvent, UserPositionLiquidatedEvent},
     utils::token::{transfer_from_user_to_pool_vault, transfer_from_pool_vault_to_user},
     generate_gamm_pair_seeds,
+    state::user_position::UserPosition,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -115,13 +116,14 @@ impl<'info> Liquidate<'info> {
             pair,
             token0_vault,
             token1_vault,
-            user_token0_account,
-            user_token1_account,
             token0_vault_mint,
             token1_vault_mint,
+            user_token0_account,
+            user_token1_account,
             token_program,
             token_2022_program,
             user,
+            user_position,
             ..
         } = ctx.accounts;
 
@@ -223,10 +225,38 @@ impl<'info> Liquidate<'info> {
         }
 
         // Emit event
+        // Reset user position
+        user_position.collateral0 = 0;
+        user_position.collateral1 = 0;
+        user_position.debt0_shares = 0;
+        user_position.debt1_shares = 0;
+
+        // Emit collateral adjustment event
+        emit!(AdjustCollateralEvent {
+            user: user.key(),
+            amount0: -(args.amount0 as i64),
+            amount1: -(args.amount1 as i64),
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        // Emit debt adjustment event
         emit!(AdjustDebtEvent {
             user: user.key(),
             amount0: -(args.amount0 as i64),
             amount1: -(args.amount1 as i64),
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        // Emit liquidation event
+        emit!(UserPositionLiquidatedEvent {
+            user: user.key(),
+            pair: pair.key(),
+            position: user_position.key(),
+            liquidator: user.key(),
+            collateral0_liquidated: args.amount0,
+            collateral1_liquidated: args.amount1,
+            debt0_liquidated: args.amount0,
+            debt1_liquidated: args.amount1,
             timestamp: Clock::get()?.unix_timestamp,
         });
 
