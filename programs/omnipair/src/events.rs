@@ -69,3 +69,36 @@ pub struct UpdatePairEvent {
     pub rate1: u64,
     pub timestamp: i64,
 }
+
+#[event]
+pub struct UserPositionCreatedEvent {
+    pub user: Pubkey,
+    pub pair: Pubkey,
+    pub position: Pubkey,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct UserPositionUpdatedEvent {
+    pub user: Pubkey,
+    pub pair: Pubkey,
+    pub position: Pubkey,
+    pub collateral0: u64,
+    pub collateral1: u64,
+    pub debt0_shares: u64,
+    pub debt1_shares: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct UserPositionLiquidatedEvent {
+    pub user: Pubkey,
+    pub pair: Pubkey,
+    pub position: Pubkey,
+    pub liquidator: Pubkey,
+    pub collateral0_liquidated: u64,
+    pub collateral1_liquidated: u64,
+    pub debt0_liquidated: u64,
+    pub debt1_liquidated: u64,
+    pub timestamp: i64,
+}
