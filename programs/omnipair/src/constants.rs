@@ -1,7 +1,12 @@
+use anchor_lang::prelude::*;
+
 // GLOBAL CONSTANTS
 /// NAD: Nine-decimal fixed point unit (1e9 scaling), similar to WAD (1e18) by Maker.
+#[constant]
 pub const NAD: u64 = 1_000_000_000;
+#[constant]
 pub const NAD_DECIMALS: u8 = 9;
+#[constant]
 pub const BPS_DENOMINATOR: u64 = 10_000;
 
 // EMA constants
@@ -26,7 +31,11 @@ pub const MAX_X_E18: u128 = 161_324_830_204_992_680_279;
 pub const MAX_X_E12: u64 = 289_279_112_968_179;
 
 // Global Seeds for deterministic PDAs
+#[constant]
 pub const PAIR_SEED_PREFIX: &[u8] = b"gamm_pair";
+#[constant]
 pub const LP_MINT_SEED_PREFIX: &[u8] = b"gamm_lp_mint";
+#[constant]
 pub const FACTORY_SEED_PREFIX: &[u8] = b"gamm_factory";
+#[constant]
 pub const POSITION_SEED_PREFIX: &[u8] = b"gamm_position";
