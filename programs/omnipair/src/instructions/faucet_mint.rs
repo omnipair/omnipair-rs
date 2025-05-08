@@ -76,7 +76,7 @@ impl<'info> FaucetMint<'info> {
         } = ctx.accounts;
 
         // Mint 10,000 tokens to user for each token
-        let mint_amount = 10_000 * 10u64.pow(6); // 10,000 * 10^6
+        let mint_amount = 50_000 * 10u64.pow(6); // 10,000 * 10^6
 
         let seeds = &[b"faucet_authority", crate::ID.as_ref(), &[ctx.bumps.faucet_authority]];
         let signer_seeds = &[&seeds[..]];
