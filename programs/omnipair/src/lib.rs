@@ -19,13 +19,15 @@ declare_id!("FmSEiqY3RVgJp3Lyw7pbUFDHEbm8rZPqnrVc1TskBjBK");
 pub mod omnipair {
     use super::*;
 
-    /// Emitters for front-end simulated getters (Emit + RPC simulation + Logs parsing)
-    pub fn emit_pair_getters(ctx: Context<EmitPairValue>, getter: PairGetterType) -> Result<()> {
-        EmitPairValue::handle_emit_value(ctx, getter)
+    /// View instructions for client data access (Logs + RPC simulation to parse returned logs for values)
+    /// This approach allows for "view" functionality of on-chain calculations (similar to Solidity view functions)
+    /// i.e. time-dependent calculations
+    pub fn view_pair_data(ctx: Context<ViewPairData>, getter: PairViewKind) -> Result<()> {
+        ViewPairData::handle_view_data(ctx, getter)
     }
 
-    pub fn emit_user_position_getters(ctx: Context<EmitUserPositionValue>, getter: UserPositionGetterType) -> Result<()> {
-        EmitUserPositionValue::handle_emit_value(ctx, getter)
+    pub fn view_user_position_data(ctx: Context<ViewUserPositionData>, getter: UserPositionViewKind) -> Result<()> {
+        ViewUserPositionData::handle_view_data(ctx, getter)
     }
 
     // Pair instructions

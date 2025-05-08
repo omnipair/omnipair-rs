@@ -26,7 +26,7 @@ impl<'info> CommonAdjustPosition<'info> {
             false => self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares),
         }; 
 
-        let (borrowing_power, effective_cf_bps) = self.user_position.get_borrowing_power_and_effective_cf_bps(&self.pair, &self.token_vault.mint);
+        let (borrowing_power, _) = self.user_position.get_borrowing_power_and_effective_cf_bps(&self.pair, &self.token_vault.mint);
 
         let new_debt = user_debt.checked_add(*borrow_amount).unwrap();
         require_gte!(
