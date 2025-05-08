@@ -35,14 +35,6 @@ pub struct PairCreatedEvent {
 }
 
 #[event]
-pub struct RateUpdateEvent {
-    pub pair: Pubkey,
-    pub rate0: u64,
-    pub rate1: u64,
-    pub timestamp: i64,
-}
-
-#[event]
 pub struct AdjustLiquidityEvent {
     pub user: Pubkey,
     pub amount0: u64,
@@ -66,13 +58,6 @@ pub struct MintEvent {
     pub amount0: u64,
     pub amount1: u64,
     pub liquidity: u64,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct SyncEvent {
-    pub reserve0: u64,
-    pub reserve1: u64,
     pub timestamp: i64,
 }
 

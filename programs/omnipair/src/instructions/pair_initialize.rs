@@ -14,6 +14,7 @@ use crate::state::{
 use crate::errors::ErrorCode;
 use crate::constants::*;
 use crate::utils::account::get_size_with_discriminator;
+use crate::events::PairCreatedEvent;
 
 #[derive(Accounts)]
 pub struct InitializePair<'info> {
@@ -144,6 +145,14 @@ impl InitializePair<'_> {
             current_time,
             ctx.bumps.pair,
         ));
+
+        // Emit event
+        emit!(PairCreatedEvent {
+            token0: ctx.accounts.token0_mint.key(),
+            token1: ctx.accounts.token1_mint.key(),
+            pair: pair.key(),
+            timestamp: current_time,
+        });
 
         Ok(())
     }   

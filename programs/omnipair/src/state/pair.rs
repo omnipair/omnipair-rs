@@ -208,7 +208,6 @@ impl Pair {
             
             self.last_update = current_time;
             
-            // Emit event
             emit!(UpdatePairEvent {
                 price0_ema: self.last_price0_ema,
                 price1_ema: self.last_price1_ema,
