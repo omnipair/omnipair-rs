@@ -41,7 +41,7 @@ pub mod omnipair {
         BootstrapPair::handle_bootstrap(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate_add_and_update(&args))]
+    #[access_control(ctx.accounts.update_and_validate_add(&args))]
     pub fn add_liquidity(
         ctx: Context<AdjustLiquidity>,
         args: AddLiquidityArgs,
@@ -49,7 +49,7 @@ pub mod omnipair {
         AdjustLiquidity::handle_add(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate_remove_and_update(&args))]
+    #[access_control(ctx.accounts.update_and_validate_remove(&args))]
     pub fn remove_liquidity(
         ctx: Context<AdjustLiquidity>,
         args: RemoveLiquidityArgs,
@@ -66,22 +66,22 @@ pub mod omnipair {
     }
 
     // Lending instructions
-    #[access_control(ctx.accounts.validate_add_and_update(&args))]
+    #[access_control(ctx.accounts.update_and_validate_add(&args))]
     pub fn add_collateral(ctx: Context<AddCollateral>, args: AdjustPositionArgs) -> Result<()> {
         AddCollateral::handle_add_collateral(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate_remove_and_update(&args))]
+    #[access_control(ctx.accounts.update_and_validate_remove(&args))]
     pub fn remove_collateral(ctx: Context<CommonAdjustPosition>, args: AdjustPositionArgs) -> Result<()> {
         CommonAdjustPosition::handle_remove_collateral(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate_borrow_and_update(&args))]
+    #[access_control(ctx.accounts.update_and_validate_borrow(&args))]
     pub fn borrow(ctx: Context<CommonAdjustPosition>, args: AdjustPositionArgs) -> Result<()> {
         CommonAdjustPosition::handle_borrow(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate_repay_and_update(&args))]
+    #[access_control(ctx.accounts.update_and_validate_repay(&args))]
     pub fn repay(ctx: Context<CommonAdjustPosition>, args: AdjustPositionArgs) -> Result<()> {
         CommonAdjustPosition::handle_repay(ctx, args)
     }

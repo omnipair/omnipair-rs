@@ -40,9 +40,9 @@ impl<'info> CommonAdjustPosition<'info> {
         Ok(())
     }
 
-    pub fn validate_repay_and_update(&mut self, args: &AdjustPositionArgs) -> Result<()> {
-        self.validate_repay(args)?;
+    pub fn update_and_validate_repay(&mut self, args: &AdjustPositionArgs) -> Result<()> {
         self.update()?;
+        self.validate_repay(args)?;
         Ok(())
     }
 
