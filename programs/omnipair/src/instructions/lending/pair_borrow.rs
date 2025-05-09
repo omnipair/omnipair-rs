@@ -38,9 +38,9 @@ impl<'info> CommonAdjustPosition<'info> {
         Ok(())
     }
 
-    pub fn validate_borrow_and_update(&mut self, args: &AdjustPositionArgs) -> Result<()> {
-        self.validate_borrow(args)?;
+    pub fn update_and_validate_borrow(&mut self, args: &AdjustPositionArgs) -> Result<()> {
         self.update()?;
+        self.validate_borrow(args)?;
         Ok(())
     }
 

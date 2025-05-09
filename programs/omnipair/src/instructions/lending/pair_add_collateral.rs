@@ -87,9 +87,9 @@ impl<'info> AddCollateral<'info> {
         Ok(())
     }
 
-    pub fn validate_add_and_update(&mut self, args: &AdjustPositionArgs) -> Result<()> {
-        self.validate_add(args)?;
+    pub fn update_and_validate_add(&mut self, args: &AdjustPositionArgs) -> Result<()> {
         self.update()?;
+        self.validate_add(args)?;
         Ok(())
     }
 

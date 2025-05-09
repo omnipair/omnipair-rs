@@ -35,9 +35,9 @@ impl<'info> CommonAdjustPosition<'info> {
         Ok(())
     }
 
-    pub fn validate_remove_and_update(&mut self, args: &AdjustPositionArgs) -> Result<()> {
-        self.validate_remove(args)?;
+    pub fn update_and_validate_remove(&mut self, args: &AdjustPositionArgs) -> Result<()> {
         self.update()?;
+        self.validate_remove(args)?;
         Ok(())
     }
 
