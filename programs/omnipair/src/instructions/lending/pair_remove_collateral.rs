@@ -54,6 +54,8 @@ impl<'info> CommonAdjustPosition<'info> {
             ..
         } = ctx.accounts;
 
+        // TODO: check if collateral is undercollateralized
+
         // Transfer tokens from vault to user
         match user_token_account.mint == pair.token0 {
             true => {

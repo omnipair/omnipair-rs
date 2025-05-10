@@ -22,15 +22,17 @@ impl<'info> CommonAdjustPosition<'info> {
         // Check if user has debt to repay
         match self.user_token_account.mint == self.pair.token0 {
             true => {
+                let debt = self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares)?;
                 require_gte!(
-                    self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares),
+                    debt,
                     *amount,
                     ErrorCode::InsufficientDebt
                 );
             },
             false => {
+                let debt = self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares)?;
                 require_gte!(
-                    self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares),
+                    debt,
                     *amount,
                     ErrorCode::InsufficientDebt
                 );

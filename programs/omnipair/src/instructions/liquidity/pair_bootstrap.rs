@@ -172,10 +172,15 @@ impl<'info> BootstrapPair<'info> {
         // 1000 units are burned permanently.
         // This burn (~1e-6 of supply) is larger than Uniswap V2's 1e-15 burn (with 18 decimals),
         // but still negligible for users and significantly raises the cost of share inflation attacks.
-        let liquidity: u64 = (args.amount0_in as u128).checked_mul(args.amount1_in as u128).unwrap() 
-            .sqrt().unwrap() 
-            .checked_sub(MIN_LIQUIDITY as u128).unwrap()
-            .try_into().unwrap();
+        let liquidity: u64 = (args.amount0_in as u128)
+            .checked_mul(args.amount1_in as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .sqrt()
+            .ok_or(ErrorCode::LiquiditySqrtOverflow)?
+            .checked_sub(MIN_LIQUIDITY as u128)
+            .ok_or(ErrorCode::LiquidityUnderflow)?
+            .try_into()
+            .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
 
         require!(
             liquidity >= args.min_liquidity_out,
@@ -193,9 +198,15 @@ impl<'info> BootstrapPair<'info> {
         )?;
         
         // Update reserves
-        pair.reserve0 = pair.reserve0.checked_add(args.amount0_in).unwrap();
-        pair.reserve1 = pair.reserve1.checked_add(args.amount1_in).unwrap();
-        pair.total_supply = pair.total_supply.checked_add(liquidity as u64).unwrap();
+        pair.reserve0 = pair.reserve0
+            .checked_add(args.amount0_in)
+            .ok_or(ErrorCode::ReserveOverflow)?;
+        pair.reserve1 = pair.reserve1
+            .checked_add(args.amount1_in)
+            .ok_or(ErrorCode::ReserveOverflow)?;
+        pair.total_supply = pair.total_supply
+            .checked_add(liquidity as u64)
+            .ok_or(ErrorCode::SupplyOverflow)?;
         
         Ok(())
     }

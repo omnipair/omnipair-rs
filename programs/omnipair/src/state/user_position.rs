@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::utils::gamm_math::max_borrowable_with_safety;
+use crate::errors::ErrorCode;
 use super::Pair;
 
 #[account]
@@ -50,25 +51,29 @@ impl UserPosition {
         ]
     }
 
-    pub fn calculate_debt0(&self, total_debt0: u64, total_debt0_shares: u64) -> u64 {
+    pub fn calculate_debt0(&self, total_debt0: u64, total_debt0_shares: u64) -> Result<u64> {
         match total_debt0_shares {
-            0 => 0,
-            _ => self.debt0_shares
-                .checked_mul(total_debt0).unwrap()
-                .checked_div(total_debt0_shares).unwrap()
+            0 => Ok(0),
+            _ => Ok(self.debt0_shares
+                .checked_mul(total_debt0)
+                .ok_or(ErrorCode::DebtMathOverflow)?
+                .checked_div(total_debt0_shares)
+                .ok_or(ErrorCode::DebtShareDivisionOverflow)?)
         }
     }
 
-    pub fn calculate_debt1(&self, total_debt1: u64, total_debt1_shares: u64) -> u64 {
+    pub fn calculate_debt1(&self, total_debt1: u64, total_debt1_shares: u64) -> Result<u64> {
         match total_debt1_shares {
-            0 => 0,
-            _ => self.debt1_shares
-                .checked_mul(total_debt1).unwrap()
-                .checked_div(total_debt1_shares).unwrap()
+            0 => Ok(0),
+            _ => Ok(self.debt1_shares
+                .checked_mul(total_debt1)
+                .ok_or(ErrorCode::DebtMathOverflow)?
+                .checked_div(total_debt1_shares)
+                .ok_or(ErrorCode::DebtShareDivisionOverflow)?)
         }
     }
 
-    pub fn get_borrowing_power_and_effective_cf_bps(&self, pair: &Pair, token: &Pubkey) -> (u64, u16) {
+    pub fn get_borrow_limit_and_effective_cf_bps(&self, pair: &Pair, token: &Pubkey) -> (u64, u16) {
         let user_position = &self;
 
         let (
@@ -104,59 +109,65 @@ impl UserPosition {
         )
     }
 
-    pub fn get_borrowing_power(&self, pair: &Pair, token: &Pubkey) -> u64 {
-        self.get_borrowing_power_and_effective_cf_bps(pair, token).0
+    pub fn get_borrow_limit(&self, pair: &Pair, token: &Pubkey) -> u64 {
+        self.get_borrow_limit_and_effective_cf_bps(pair, token).0
     }
 
     pub fn get_effective_collateral_factor_bps(&self, pair: &Pair, token: &Pubkey) -> u64 {
-        self.get_borrowing_power_and_effective_cf_bps(pair, token).1 as u64
+        self.get_borrow_limit_and_effective_cf_bps(pair, token).1 as u64
     }
 
     // debt utilization bps = debt / borrow power
     // borrow power = collateral value * effective collateral factor
     // 0 is safe, > 100% in BPS is unsafe
-    pub fn get_token0_debt_utilization_bps(&self, pair: &Pair) -> u64 {
-        let debt = self.calculate_debt0(pair.total_debt0, pair.total_debt0_shares);
+    pub fn get_token0_debt_utilization_bps(&self, pair: &Pair) -> Result<u64> {
+        let debt = self.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?;
         if debt == 0 {
-            return 0; // no debt = 0% usage = safe
+            return Ok(0); // no debt = 0% usage = safe
         }
     
         // NOTE: debt in token0 → collateral is token1
-        let borrow_power = self.get_borrowing_power(pair, &pair.token0);
-        if borrow_power == 0 {
-            return u64::MAX; // zero borrow power, user should be liquidated
+        let borrow_limit = self.get_borrow_limit(pair, &pair.token0);
+        if borrow_limit == 0 {
+            return Ok(u64::MAX); // zero borrow limit, user should be liquidated
         }
     
-        debt.saturating_mul(BPS_DENOMINATOR as u64)
-            .checked_div(borrow_power)
-            .unwrap_or(u64::MAX)
+        Ok(debt
+            .saturating_mul(BPS_DENOMINATOR as u64)
+            .checked_div(borrow_limit)
+            .ok_or(ErrorCode::DebtUtilizationOverflow)?)
     }
 
-    pub fn get_token1_debt_utilization_bps(&self, pair: &Pair) -> u64 {
-        let debt = self.calculate_debt1(pair.total_debt1, pair.total_debt1_shares);
+    pub fn get_token1_debt_utilization_bps(&self, pair: &Pair) -> Result<u64> {
+        let debt = self.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?;
         if debt == 0 {
-            return 0; // no debt = 0% usage = safe
+            return Ok(0); // no debt = 0% usage = safe
         }
     
         // NOTE: debt in token1 → collateral is token0
-        let borrow_power = self.get_borrowing_power(pair, &pair.token1);
-        if borrow_power == 0 {
-            return u64::MAX; // zero borrow power, user should be liquidated
+        let borrow_limit = self.get_borrow_limit(pair, &pair.token1);
+        if borrow_limit == 0 {
+            return Ok(u64::MAX);
         }
     
-        debt.saturating_mul(BPS_DENOMINATOR as u64)
-            .checked_div(borrow_power)
-            .unwrap_or(u64::MAX)
+        Ok(debt
+            .saturating_mul(BPS_DENOMINATOR as u64)
+            .checked_div(borrow_limit)
+            .ok_or(ErrorCode::DebtUtilizationOverflow)?)
     }
 
-    pub fn increase_debt(&mut self, pair: &mut Pair, token: &Pubkey, amount: u64) {
+    pub fn increase_debt(&mut self, pair: &mut Pair, token: &Pubkey, amount: u64) -> Result<()> {
         match *token == pair.token0 {
             true => {
                 if pair.total_debt0_shares == 0 {
                     pair.total_debt0_shares = amount;
                     self.debt0_shares = amount;
                 } else {
-                    let shares = amount.checked_mul(pair.total_debt0_shares).unwrap().checked_div(pair.total_debt0).unwrap();
+                    let shares = amount
+                        .checked_mul(pair.total_debt0_shares)
+                        .ok_or(ErrorCode::DebtShareMathOverflow)?
+                        .checked_div(pair.total_debt0)
+                        .ok_or(ErrorCode::DebtShareDivisionOverflow)?;
                     pair.total_debt0_shares = pair.total_debt0_shares.saturating_add(shares);
                     self.debt0_shares = self.debt0_shares.saturating_add(shares);
                 }
@@ -167,34 +178,45 @@ impl UserPosition {
                     pair.total_debt1_shares = amount;
                     self.debt1_shares = amount;
                 } else {
-                    let shares = amount.checked_mul(pair.total_debt1_shares).unwrap().checked_div(pair.total_debt1).unwrap();
+                    let shares = amount
+                        .checked_mul(pair.total_debt1_shares)
+                        .ok_or(ErrorCode::DebtShareMathOverflow)?
+                        .checked_div(pair.total_debt1)
+                        .ok_or(ErrorCode::DebtShareDivisionOverflow)?;
                     pair.total_debt1_shares = pair.total_debt1_shares.saturating_add(shares);
                     self.debt1_shares = self.debt1_shares.saturating_add(shares);
                 }
                 pair.total_debt1 = pair.total_debt1.saturating_add(amount);
             }
         }
+        Ok(())
     }
     
 
-    pub fn decrease_debt(&mut self, pair: &mut Pair, token: &Pubkey, amount: u64) {
-        // if all is true, set debt to total debt
+    pub fn decrease_debt(&mut self, pair: &mut Pair, token: &Pubkey, amount: u64) -> Result<()> {
         match *token == pair.token0 {
-            // token0 is debt token
             true => {
-                let shares = amount.checked_mul(pair.total_debt0_shares).unwrap().checked_div(pair.total_debt0).unwrap();
+                let shares = amount
+                    .checked_mul(pair.total_debt0_shares)
+                    .ok_or(ErrorCode::DebtShareMathOverflow)?
+                    .checked_div(pair.total_debt0)
+                    .ok_or(ErrorCode::DebtShareDivisionOverflow)?;
                 self.debt0_shares = self.debt0_shares.saturating_sub(shares);
                 pair.total_debt0_shares = pair.total_debt0_shares.saturating_sub(shares);
-                pair.total_debt0 = pair.total_debt0.saturating_sub(amount)
+                pair.total_debt0 = pair.total_debt0.saturating_sub(amount);
             }
-            // token1 is debt token
             false => {
-                let shares = amount.checked_mul(pair.total_debt1_shares).unwrap().checked_div(pair.total_debt1).unwrap();
+                let shares = amount
+                    .checked_mul(pair.total_debt1_shares)
+                    .ok_or(ErrorCode::DebtShareMathOverflow)?
+                    .checked_div(pair.total_debt1)
+                    .ok_or(ErrorCode::DebtShareDivisionOverflow)?;
                 self.debt1_shares = self.debt1_shares.saturating_sub(shares);
                 pair.total_debt1_shares = pair.total_debt1_shares.saturating_sub(shares);
-                pair.total_debt1 = pair.total_debt1.saturating_sub(amount)
+                pair.total_debt1 = pair.total_debt1.saturating_sub(amount);
             }
         }
+        Ok(())
     }
     
 }

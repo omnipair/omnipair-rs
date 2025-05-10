@@ -99,23 +99,23 @@ impl<'info> Liquidate<'info> {
 
         // Compute debt
         let user_debt = if is_token0 {
-            user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)
+            user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?
         } else {
-            user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)
+            user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?
         };
         // Compute borrowing power
-        let borrow_power = user_position.get_borrowing_power(&pair, &token_vault.mint);
+        let borrow_limit = user_position.get_borrow_limit(&pair, &token_vault.mint);
 
         // Compare debt to borrow power
         require_gte!(
             user_debt,
-            borrow_power,
+            borrow_limit,
             ErrorCode::NotUndercollateralized
         );
 
         let (debt_to_writeoff, collateral_to_seize, incentive_applied) = Self::calculate_partial_liquidation_amount(
             user_debt,
-            borrow_power,
+            borrow_limit,
             LIQUIDATION_LP_INCENTIVE_BPS,
         );
 
