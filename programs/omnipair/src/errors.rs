@@ -134,4 +134,22 @@ pub enum ErrorCode {
 
     #[msg("Not undercollateralized")]
     NotUndercollateralized,
+    
+    #[msg("Broken invariant")]
+    BrokenInvariant,
+
+    #[msg("Math overflow during invariant calculation")]
+    InvariantOverflow,
+
+    #[msg("Math overflow during fee calculation.")]
+    FeeMathOverflow,
+
+    #[msg("Math overflow during output amount calculation.")]
+    OutputAmountOverflow,
+
+    #[msg("Math overflow during reserve calculation.")]
+    ReserveOverflow,
+
+    #[msg("Math overflow during denominator calculation.")]
+    DenominatorOverflow,
 }
