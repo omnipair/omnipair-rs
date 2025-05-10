@@ -58,7 +58,6 @@ impl<'info> CommonAdjustPosition<'info> {
     /// Assumes that collateral checks have already passed via [`CommonAdjustPosition::validate_borrow`].
     pub fn handle_borrow(ctx: Context<Self>, args: AdjustPositionArgs) -> Result<()> {
         let CommonAdjustPosition {
-            pair,
             token_vault,
             user_token_account,
             vault_token_mint,
@@ -68,6 +67,7 @@ impl<'info> CommonAdjustPosition<'info> {
             user_position,
             ..
         } = ctx.accounts;
+        let pair = &mut ctx.accounts.pair;
 
         let borrow_amount: u64 = args.amount;
         let is_token0 = user_token_account.mint == pair.token0;
@@ -87,37 +87,8 @@ impl<'info> CommonAdjustPosition<'info> {
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
         
-        // Update debt
-        let (
-            total_debt, 
-            total_debt_shares,
-            user_debt_shares
-        ) = if is_token0 {
-            (pair.total_debt0, &mut pair.total_debt0_shares, &mut user_position.debt0_shares)
-        } else {
-            (pair.total_debt1, &mut pair.total_debt1_shares, &mut user_position.debt1_shares)
-        };
-
-        // update debt shares
-        *total_debt_shares = match *total_debt_shares {
-            0 => borrow_amount,
-            _ => {
-                let shares = borrow_amount
-                    .checked_mul(*total_debt_shares)
-                    .unwrap()
-                    .checked_div(total_debt)
-                    .unwrap();
-                total_debt_shares.checked_add(shares).unwrap()
-            }
-        };
-        *user_debt_shares = user_debt_shares.checked_add(borrow_amount).unwrap();
-        
-        // update pair actual debt
-        let new_total_debt = total_debt.checked_add(borrow_amount).unwrap();
-        match is_token0 {
-            true => pair.total_debt0 = new_total_debt,
-            false => pair.total_debt1 = new_total_debt,
-        }
+        // Update debt using the increase_debt method
+        user_position.increase_debt(pair, &vault_token_mint.key(), borrow_amount)?;
         
         // Emit debt adjustment event
         let (amount0, amount1) = if is_token0 {
