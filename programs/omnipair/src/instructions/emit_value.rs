@@ -29,6 +29,8 @@ pub enum UserPositionViewKind {
     UserToken1BorrowingPower,
     UserToken0EffectiveCollateralFactorBps,
     UserToken1EffectiveCollateralFactorBps,
+    UserToken0DebtUtilizationBps,
+    UserToken1DebtUtilizationBps,
 }
 impl fmt::Display for UserPositionViewKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -37,6 +39,8 @@ impl fmt::Display for UserPositionViewKind {
             UserPositionViewKind::UserToken1BorrowingPower => write!(f, "UserToken1BorrowingPower"),
             UserPositionViewKind::UserToken0EffectiveCollateralFactorBps => write!(f, "UserToken0EffectiveCollateralFactorBps"),
             UserPositionViewKind::UserToken1EffectiveCollateralFactorBps => write!(f, "UserToken1EffectiveCollateralFactorBps"),
+            UserPositionViewKind::UserToken0DebtUtilizationBps => write!(f, "UserToken0DebtUtilizationBps"),
+            UserPositionViewKind::UserToken1DebtUtilizationBps => write!(f, "UserToken1DebtUtilizationBps"),
         }
     }
 }
@@ -84,6 +88,8 @@ impl ViewUserPositionData<'_> {
             UserPositionViewKind::UserToken1BorrowingPower => user_position.get_borrow_limit(&pair, &pair.token1),
             UserPositionViewKind::UserToken0EffectiveCollateralFactorBps => user_position.get_effective_collateral_factor_bps(&pair, &pair.token0),
             UserPositionViewKind::UserToken1EffectiveCollateralFactorBps => user_position.get_effective_collateral_factor_bps(&pair, &pair.token1),
+            UserPositionViewKind::UserToken0DebtUtilizationBps => user_position.get_debt_utilization_bps(&pair, &pair.token0).unwrap(),
+            UserPositionViewKind::UserToken1DebtUtilizationBps => user_position.get_debt_utilization_bps(&pair, &pair.token1).unwrap(),
         };
 
         msg!("{}: {}", getter, value);
