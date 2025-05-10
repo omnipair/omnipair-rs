@@ -93,17 +93,7 @@ impl UserPosition {
                 pair.reserve1,
                 pair.total_debt1,
             )
-        };       
-
-        // TODO: normalize collateral token decimals to NAD if needed
-        // let NormalizedTwoValues { 
-        //     scaled_a: user_collateral_scaled, 
-        //     scaled_b: collateral_spot_price_scaled 
-        // } = normalize_two_values_to_nad(
-        //     user_collateral,
-        //     collateral_decimals,
-        //     collateral_spot_price,
-        // );
+        };
 
         max_borrowable_with_safety(
             user_collateral,
@@ -120,6 +110,91 @@ impl UserPosition {
 
     pub fn get_effective_collateral_factor_bps(&self, pair: &Pair, token: &Pubkey) -> u64 {
         self.get_borrowing_power_and_effective_cf_bps(pair, token).1 as u64
+    }
+
+    // debt utilization bps = debt / borrow power
+    // borrow power = collateral value * effective collateral factor
+    // 0 is safe, > 100% in BPS is unsafe
+    pub fn get_token0_debt_utilization_bps(&self, pair: &Pair) -> u64 {
+        let debt = self.calculate_debt0(pair.total_debt0, pair.total_debt0_shares);
+        if debt == 0 {
+            return 0; // no debt = 0% usage = safe
+        }
+    
+        // NOTE: debt in token0 → collateral is token1
+        let borrow_power = self.get_borrowing_power(pair, &pair.token0);
+        if borrow_power == 0 {
+            return u64::MAX; // zero borrow power, user should be liquidated
+        }
+    
+        debt.saturating_mul(BPS_DENOMINATOR as u64)
+            .checked_div(borrow_power)
+            .unwrap_or(u64::MAX)
+    }
+
+    pub fn get_token1_debt_utilization_bps(&self, pair: &Pair) -> u64 {
+        let debt = self.calculate_debt1(pair.total_debt1, pair.total_debt1_shares);
+        if debt == 0 {
+            return 0; // no debt = 0% usage = safe
+        }
+    
+        // NOTE: debt in token1 → collateral is token0
+        let borrow_power = self.get_borrowing_power(pair, &pair.token1);
+        if borrow_power == 0 {
+            return u64::MAX; // zero borrow power, user should be liquidated
+        }
+    
+        debt.saturating_mul(BPS_DENOMINATOR as u64)
+            .checked_div(borrow_power)
+            .unwrap_or(u64::MAX)
+    }
+
+    pub fn increase_debt(&mut self, pair: &mut Pair, token: &Pubkey, amount: u64) {
+        match *token == pair.token0 {
+            true => {
+                if pair.total_debt0_shares == 0 {
+                    pair.total_debt0_shares = amount;
+                    self.debt0_shares = amount;
+                } else {
+                    let shares = amount.checked_mul(pair.total_debt0_shares).unwrap().checked_div(pair.total_debt0).unwrap();
+                    pair.total_debt0_shares = pair.total_debt0_shares.saturating_add(shares);
+                    self.debt0_shares = self.debt0_shares.saturating_add(shares);
+                }
+                pair.total_debt0 = pair.total_debt0.saturating_add(amount);
+            }
+            false => {
+                if pair.total_debt1_shares == 0 {
+                    pair.total_debt1_shares = amount;
+                    self.debt1_shares = amount;
+                } else {
+                    let shares = amount.checked_mul(pair.total_debt1_shares).unwrap().checked_div(pair.total_debt1).unwrap();
+                    pair.total_debt1_shares = pair.total_debt1_shares.saturating_add(shares);
+                    self.debt1_shares = self.debt1_shares.saturating_add(shares);
+                }
+                pair.total_debt1 = pair.total_debt1.saturating_add(amount);
+            }
+        }
+    }
+    
+
+    pub fn decrease_debt(&mut self, pair: &mut Pair, token: &Pubkey, amount: u64) {
+        // if all is true, set debt to total debt
+        match *token == pair.token0 {
+            // token0 is debt token
+            true => {
+                let shares = amount.checked_mul(pair.total_debt0_shares).unwrap().checked_div(pair.total_debt0).unwrap();
+                self.debt0_shares = self.debt0_shares.saturating_sub(shares);
+                pair.total_debt0_shares = pair.total_debt0_shares.saturating_sub(shares);
+                pair.total_debt0 = pair.total_debt0.saturating_sub(amount)
+            }
+            // token1 is debt token
+            false => {
+                let shares = amount.checked_mul(pair.total_debt1_shares).unwrap().checked_div(pair.total_debt1).unwrap();
+                self.debt1_shares = self.debt1_shares.saturating_sub(shares);
+                pair.total_debt1_shares = pair.total_debt1_shares.saturating_sub(shares);
+                pair.total_debt1 = pair.total_debt1.saturating_sub(amount)
+            }
+        }
     }
     
 }

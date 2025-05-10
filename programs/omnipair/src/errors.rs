@@ -134,4 +134,13 @@ pub enum ErrorCode {
 
     #[msg("Insufficient debt")]
     InsufficientDebt,
+
+    #[msg("User position not initialized")]
+    UserPositionNotInitialized,
+
+    #[msg("Zero debt amount")]
+    ZeroDebtAmount,
+
+    #[msg("Not undercollateralized")]
+    NotUndercollateralized,
 }

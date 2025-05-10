@@ -14,252 +14,187 @@ use crate::{
     state::user_position::UserPosition,
 };
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct LiquidateArgs {
-    pub amount0: u64,
-    pub amount1: u64,
-}
-
 #[derive(Accounts)]
 pub struct Liquidate<'info> {
     #[account(
         mut,
         seeds = [
-            PAIR_SEED_PREFIX, 
+            PAIR_SEED_PREFIX,
             pair.token0.as_ref(),
             pair.token1.as_ref()
         ],
         bump
     )]
     pub pair: Account<'info, Pair>,
-    
+
+    #[account(
+        mut,
+        seeds = [
+            POSITION_SEED_PREFIX,
+            pair.key().as_ref(),
+            user.key().as_ref()
+        ],
+        bump
+    )]
+    pub user_position: Account<'info, UserPosition>,
+
     #[account(
         mut,
         address = pair.rate_model,
     )]
     pub rate_model: Account<'info, RateModel>,
-    
+
     #[account(
         mut,
-        seeds = [
-            TOKEN_VAULT_SEED_PREFIX,
-            pair.key().as_ref(),
-            pair.token0.as_ref()
-        ],
-        bump,
+        constraint = token_vault.mint == pair.token0 || token_vault.mint == pair.token1,
     )]
-    pub token0_vault: Account<'info, TokenAccount>,
-    
+    pub token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+
     #[account(
         mut,
-        seeds = [
-            TOKEN_VAULT_SEED_PREFIX,
-            pair.key().as_ref(),
-            pair.token1.as_ref()
-        ],
-        bump,
-    )]
-    pub token1_vault: Account<'info, TokenAccount>,
-    
-    #[account(
-        mut,
-        token::mint = pair.token0,
+        constraint = user_token_account.mint == pair.token0 || user_token_account.mint == pair.token1,
         token::authority = user,
     )]
-    pub user_token0_account: Account<'info, TokenAccount>,
-    
-    #[account(
-        mut,
-        token::mint = pair.token1,
-        token::authority = user,
-    )]
-    pub user_token1_account: Account<'info, TokenAccount>,
+    pub user_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    #[account(address = token0_vault.mint)]
-    pub token0_vault_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(address = token_vault.mint)]
+    pub vault_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    #[account(address = token1_vault.mint)]
-    pub token1_vault_mint: Box<InterfaceAccount<'info, Mint>>,
-    
+    #[account(mut)]
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
+    pub system_program: Program<'info, System>,
 }
 
 impl<'info> Liquidate<'info> {
-    pub fn validate(&self, args: &LiquidateArgs) -> Result<()> {
-        let LiquidateArgs { amount0, amount1 } = args;
+    pub fn validate(&self) -> Result<()> {
+        let user_position = &self.user_position;
+
+        require!(user_position.is_initialized(), ErrorCode::UserPositionNotInitialized);
         
-        require!(*amount0 > 0 || *amount1 > 0, ErrorCode::AmountZero);
-        
-        if *amount0 > 0 {
-            require_gte!(
-                self.user_token0_account.amount,
-                *amount0,
-                ErrorCode::InsufficientAmount0
-            );
-        }
-        
-        if *amount1 > 0 {
-            require_gte!(
-                self.user_token1_account.amount,
-                *amount1,
-                ErrorCode::InsufficientAmount1
-            );
+        // Check if user has enough debt
+        match self.token_vault.mint == self.pair.token0 {
+            true => require_gt!(
+                user_position.debt0_shares,
+                0,
+                ErrorCode::ZeroDebtAmount
+            ),
+            false => require_gt!(
+                user_position.debt1_shares,
+                0,
+                ErrorCode::ZeroDebtAmount
+            ),
         }
         
         Ok(())
     }
 
-    pub fn handle_liquidate(ctx: Context<Self>, args: LiquidateArgs) -> Result<()> {
+    pub fn update(&mut self) -> Result<()> {
+        self.pair.update(&self.rate_model)?;
+        Ok(())
+    }
+
+    pub fn update_and_validate(&mut self) -> Result<()> {
+        self.update()?;
+        self.validate()?;
+        Ok(())
+    }
+
+    pub fn handle_liquidate(ctx: Context<Self>) -> Result<()> {
         let Liquidate {
-            pair,
-            token0_vault,
-            token1_vault,
-            token0_vault_mint,
-            token1_vault_mint,
-            user_token0_account,
-            user_token1_account,
-            token_program,
-            token_2022_program,
+            user_token_account,
+            token_vault,
+            vault_token_mint,
             user,
             user_position,
+            token_program,
+            token_2022_program,
             ..
         } = ctx.accounts;
+        let pair = &mut ctx.accounts.pair;
 
-        // Update pair state
-        pair.update(&ctx.accounts.rate_model)?;
+        // Compute debt
+        let user_debt = if user_token_account.mint == pair.token0 {
+            user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)
+        } else {
+            user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)
+        };
+        // Compute borrowing power
+        let borrow_power = user_position.get_borrowing_power(&pair, &user_token_account.mint);
 
-        // Check if position is undercollateralized
-        let borrowing_power1 = pair.total_collateral1
-            .checked_mul(pair.price1_nad())
-            .unwrap()
-            .checked_div(NAD)
-            .unwrap()
-            .checked_div(10000)
-            .unwrap();
-        
-        let borrowing_power0 = pair.total_collateral0
-            .checked_mul(pair.ema_price0_nad())
-            .unwrap()
-            .checked_div(NAD)
-            .unwrap()
-            .checked_div(10000)
-            .unwrap();
-        
-        require!(
-            pair.total_debt0 > borrowing_power1 || pair.total_debt1 > borrowing_power0,
-            ErrorCode::InsufficientCollateral
+        // Compare debt to borrow power
+        require_gte!(
+            user_debt,
+            borrow_power,
+            ErrorCode::NotUndercollateralized
         );
 
-        // Transfer tokens from user to vault
-        if args.amount0 > 0 {
-            transfer_from_user_to_pool_vault(
-                user.to_account_info(),
-                user_token0_account.to_account_info(),
-                token0_vault.to_account_info(),
-                token0_vault_mint.to_account_info(),
-                match token0_vault_mint.to_account_info().owner == token_program.key {
-                    true => token_program.to_account_info(),
-                    false => token_2022_program.to_account_info(),
-                },
-                args.amount0,
-                token0_vault_mint.decimals,
-            )?;
-            
-            // Update debt
-            let shares = args.amount0
-                .checked_mul(pair.total_debt0_shares)
-                .unwrap()
-                .checked_div(pair.total_debt0)
-                .unwrap();
-            pair.total_debt0_shares = pair.total_debt0_shares.checked_sub(shares).unwrap();
-            pair.total_debt0 = pair.total_debt0.checked_sub(args.amount0).unwrap();
-        }
+        let (debt_to_writeoff, collateral_to_seize, incentive_applied) = Self::calculate_partial_liquidation_amount(
+            user_debt,
+            borrow_power,
+            LIQUIDATION_LP_INCENTIVE_BPS,
+        );
 
-        if args.amount1 > 0 {
-            transfer_from_user_to_pool_vault(
-                user.to_account_info(),
-                user_token1_account.to_account_info(),
-                token1_vault.to_account_info(),
-                token1_vault_mint.to_account_info(),
-                match token1_vault_mint.to_account_info().owner == token_program.key {
-                    true => token_program.to_account_info(),
-                    false => token_2022_program.to_account_info(),
-                },
-                args.amount1,
-                token1_vault_mint.decimals,
-            )?;
-            
-            // Update debt
-            let shares = args.amount1
-                .checked_mul(pair.total_debt1_shares)
-                .unwrap()
-                .checked_div(pair.total_debt1)
-                .unwrap();
-            pair.total_debt1_shares = pair.total_debt1_shares.checked_sub(shares).unwrap();
-            pair.total_debt1 = pair.total_debt1.checked_sub(args.amount1).unwrap();
-        }
+        // Skip if nothing needs to be repaid
+        require!(debt_to_writeoff > 0 && collateral_to_seize > 0, ErrorCode::NotUndercollateralized);
 
-        // Transfer collateral to liquidator
-        let liquidation_bonus = args.amount0
-            .checked_mul(LIQUIDATION_BONUS_BPS)
-            .unwrap()
-            .checked_div(10000)
-            .unwrap();
-        
-        if liquidation_bonus > 0 {
-            transfer_from_pool_vault_to_user(
-                pair.to_account_info(),
-                token1_vault.to_account_info(),
-                user_token1_account.to_account_info(),
-                token1_vault_mint.to_account_info(),
-                match token1_vault_mint.to_account_info().owner == token_program.key {
-                    true => token_program.to_account_info(),
-                    false => token_2022_program.to_account_info(),
-                },
-                liquidation_bonus,
-                token1_vault_mint.decimals,
-                &[&generate_gamm_pair_seeds!(pair)[..]],
-            )?;
-        }
+        // Transfer collateral to LP vault (seize collateral)
+        // Liquidation incentive is shared across LPs with no caller incentive
+        transfer_from_user_to_pool_vault(
+            user.to_account_info(),
+            user_token_account.to_account_info(),
+            token_vault.to_account_info(),
+            vault_token_mint.to_account_info(),
+            match vault_token_mint.to_account_info().owner == token_program.key {
+                true => token_program.to_account_info(),
+                false => token_2022_program.to_account_info(),
+            },
+            collateral_to_seize,
+            vault_token_mint.decimals,
+        )?;
 
-        // Emit event
-        // Reset user position
-        user_position.collateral0 = 0;
-        user_position.collateral1 = 0;
-        user_position.debt0_shares = 0;
-        user_position.debt1_shares = 0;
+        // Decrease debt
+        user_position.decrease_debt(pair, &user_token_account.mint, debt_to_writeoff);
 
-        // Emit collateral adjustment event
-        emit!(AdjustCollateralEvent {
-            user: user.key(),
-            amount0: -(args.amount0 as i64),
-            amount1: -(args.amount1 as i64),
-            timestamp: Clock::get()?.unix_timestamp,
-        });
-
-        // Emit debt adjustment event
-        emit!(AdjustDebtEvent {
-            user: user.key(),
-            amount0: -(args.amount0 as i64),
-            amount1: -(args.amount1 as i64),
-            timestamp: Clock::get()?.unix_timestamp,
-        });
-
-        // Emit liquidation event
         emit!(UserPositionLiquidatedEvent {
             user: user.key(),
             pair: pair.key(),
             position: user_position.key(),
             liquidator: user.key(),
-            collateral0_liquidated: args.amount0,
-            collateral1_liquidated: args.amount1,
-            debt0_liquidated: args.amount0,
-            debt1_liquidated: args.amount1,
+            collateral0_liquidated: if user_token_account.mint == pair.token0 { 0 } else { collateral_to_seize },
+            collateral1_liquidated: if user_token_account.mint == pair.token0 { collateral_to_seize } else { 0 },
+            debt0_liquidated: if user_token_account.mint == pair.token0 { debt_to_writeoff } else { 0 },
+            debt1_liquidated: if user_token_account.mint == pair.token0 { 0 } else { debt_to_writeoff },
+            collateral_price: if user_token_account.mint == pair.token0 { pair.ema_price0_nad() } else { pair.ema_price1_nad() },
+            liquidation_bonus_applied: incentive_applied,
             timestamp: Clock::get()?.unix_timestamp,
         });
 
         Ok(())
+    }
+
+    /// Calculates how much debt should be repaid (and how much collateral seized)
+    /// to bring a position back to health (HF ≥ 1).
+    /// Uses: debt, borrow_power, liquidation_lp_incentive_bps
+    pub fn calculate_partial_liquidation_amount(
+        debt: u64,
+        borrow_power: u64,
+        liquidation_lp_incentive_bps: u64,
+    ) -> (u64, u64, u64) {
+        if borrow_power >= debt {
+            return (0, 0, 0); // no need to liquidate
+        }
+        let overexposed = debt - borrow_power;
+
+        // amount of debt to write off = overexposed
+        // amount of collateral to seize = writeoff * (1 + bonus)
+        let collateral_seize_with_incentive = overexposed
+            .saturating_mul(BPS_DENOMINATOR + liquidation_lp_incentive_bps)
+            .checked_div(BPS_DENOMINATOR)
+            .unwrap_or(0);
+        let incentive_amount = collateral_seize_with_incentive.saturating_mul(liquidation_lp_incentive_bps).checked_div(BPS_DENOMINATOR).unwrap_or(0);
+
+        (overexposed, collateral_seize_with_incentive, incentive_amount)
     }
 }
