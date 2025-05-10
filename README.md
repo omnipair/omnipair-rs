@@ -48,3 +48,13 @@ After completing these steps, you can:
 - Add and remove liquidity
 - Add and remove collateral
 - Borrow and repay loans
+
+
+For production run: 
+   ```bash
+   anchor keys sync
+   anchor build --verifiable -- --features "production"
+   anchor deploy --verifiable
+   anchor idl init --filepath target/idl/omnipair.json <program-id> --provider.cluster mainnet
+   anchor verify -p omnipair <program-id>
+   ```
