@@ -1,3 +1,3 @@
-pub mod pair_swap;
+pub mod swap;
 
-pub use pair_swap::*;
+pub use swap::*;

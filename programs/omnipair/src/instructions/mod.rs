@@ -8,7 +8,7 @@ pub mod emit_value;
 pub use spot::*;
 pub use liquidity::*;
 pub use lending::common::*;
-pub use lending::pair_add_collateral::*;
+pub use lending::add_collateral::*;
 pub use pair_initialize::*;
 pub use faucet_mint::*;
 pub use emit_value::*;
