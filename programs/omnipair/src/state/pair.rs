@@ -202,6 +202,17 @@ impl Pair {
                 
                 self.total_debt0 += interest0 as u64;
                 self.total_debt1 += interest1 as u64;
+                // TODO: review this    
+                // this applies accrued interest as instant liquidity by appending it to the reserves
+                // it applies positive price impact to assets that may be borrowed
+                // this can lead to: 
+                // 1. virtually pumping up collateral prices without real buying pressure (assuming no arbitrage)
+                // 2. lower virtual utilization rates
+                // 3. these changes will affect spot & ema prices
+                // 4. affecting borrowing power and effective collateral factor
+                // 5. affecting liquidation thresholds
+                // 6. affecting the amount of debt that can be borrowed
+                // 7. affecting the amount of interest that is earned
                 self.reserve0 += interest0 as u64;
                 self.reserve1 += interest1 as u64;
             }
