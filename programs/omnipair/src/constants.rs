@@ -39,3 +39,7 @@ pub const LP_MINT_SEED_PREFIX: &[u8] = b"gamm_lp_mint";
 pub const FACTORY_SEED_PREFIX: &[u8] = b"gamm_factory";
 #[constant]
 pub const POSITION_SEED_PREFIX: &[u8] = b"gamm_position";
+
+// Liquidation constants
+#[constant]
+pub const LIQUIDATION_LP_INCENTIVE_BPS: u64 = 500; // 5% bonus for liquidators
