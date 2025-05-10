@@ -71,66 +71,50 @@ impl<'info> Swap<'info> {
             ..
         } = ctx.accounts;
 
-        // Update state 
-        let current_time = Clock::get()?.unix_timestamp;
-        if current_time > pair.last_update {
-            let time_elapsed = current_time - pair.last_update;
-            if time_elapsed > 0 {
-                pair.price0_cumulative_last = pair.price0_cumulative_last
-                    .checked_add((pair.price0_last as u128) * (time_elapsed as u128))
-                    .unwrap();
-                pair.price1_cumulative_last = pair.price1_cumulative_last
-                    .checked_add((pair.price1_last as u128) * (time_elapsed as u128))
-                    .unwrap();
-            }
-            pair.last_update = current_time;
-        }
-        
-        // Calculate output amount
-        let amount_out = match user_token_in_account.mint == pair.token0 {
+        let last_k = pair.reserve0.checked_mul(pair.reserve1).ok_or(ErrorCode::InvariantOverflow)?;
+        let is_token0_in = user_token_in_account.mint == pair.token0;
+
+        // amount_in_after_fee = amount_in * (10000 - 30) / 10000 (30bps fee)
+        let amount_in_after_fee = (amount_in as u128)
+            .checked_mul((BPS_DENOMINATOR - FEE_BPS) as u128)
+            .ok_or(ErrorCode::FeeMathOverflow)?
+            .checked_div(BPS_DENOMINATOR as u128)
+            .ok_or(ErrorCode::FeeMathOverflow)?
+            .try_into()
+            .map_err(|_| ErrorCode::FeeMathOverflow)?;
+
+        let reserve_in = if is_token0_in { pair.reserve0 } else { pair.reserve1 };
+        let reserve_out = if is_token0_in { pair.reserve1 } else { pair.reserve0 };
+
+        // Δy = (Δx * y) / (x + Δx)
+        let denominator = (reserve_in as u128)
+            .checked_add(amount_in_after_fee as u128)
+            .ok_or(ErrorCode::DenominatorOverflow)?;
+        let amount_out = (amount_in_after_fee as u128)
+            .checked_mul(reserve_out as u128)
+            .ok_or(ErrorCode::OutputAmountOverflow)?
+            .checked_div(denominator)
+            .ok_or(ErrorCode::OutputAmountOverflow)?
+            .try_into()
+            .map_err(|_| ErrorCode::OutputAmountOverflow)?;
+
+        let new_reserve_in = reserve_in.checked_add(amount_in_after_fee).ok_or(ErrorCode::Overflow)?;
+        let new_reserve_out = reserve_out.checked_sub(amount_out).ok_or(ErrorCode::Overflow)?;
+
+        require_gte!(amount_out, min_amount_out, ErrorCode::InsufficientOutputAmount);
+
+        match is_token0_in {
             true => {
-                // Swap token0 for token1
-                let amount_out = (amount_in as u128)
-                    .checked_mul(pair.reserve1 as u128)
-                    .unwrap()
-                    .checked_div((pair.reserve0 + amount_in) as u128)
-                    .unwrap()
-                    .try_into()
-                    .unwrap();
-                
-                require!(
-                    amount_out >= min_amount_out,
-                    ErrorCode::InsufficientOutputAmount
-                );
-                
-                // Update reserves
-                pair.reserve0 = pair.reserve0.checked_add(amount_in).unwrap();
-                pair.reserve1 = pair.reserve1.checked_sub(amount_out).unwrap();
-                
-                amount_out
+                pair.reserve0 = new_reserve_in;
+                pair.reserve1 = new_reserve_out;
             },
             false => {
-                // Swap token1 for token0
-                let amount_out = (amount_in as u128)
-                    .checked_mul(pair.reserve0 as u128)
-                    .unwrap()
-                    .checked_div((pair.reserve1 + amount_in) as u128)
-                    .unwrap()
-                    .try_into()
-                    .unwrap();
-                
-                require!(
-                    amount_out >= min_amount_out,
-                    ErrorCode::InsufficientOutputAmount
-                );
-                
-                // Update reserves
-                pair.reserve1 = pair.reserve1.checked_add(amount_in).unwrap();
-                pair.reserve0 = pair.reserve0.checked_sub(amount_out).unwrap();
-                
-                amount_out
+                pair.reserve1 = new_reserve_in;
+                pair.reserve0 = new_reserve_out;
             }
-        };
+        }
+
+        require_gte!(last_k, pair.reserve0.checked_mul(pair.reserve1).ok_or(ErrorCode::Overflow)?, ErrorCode::BrokenInvariant);
         
         // Transfer tokens
         transfer_from_user_to_pool_vault(
@@ -160,29 +144,14 @@ impl<'info> Swap<'info> {
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
         
-        // Update prices
-        pair.price0_last = (pair.reserve1 as u128)
-            .checked_mul(NAD as u128)
-            .unwrap()
-            .checked_div(pair.reserve0 as u128)
-            .unwrap()
-            .try_into()
-            .unwrap();
-        pair.price1_last = (pair.reserve0 as u128)
-            .checked_mul(NAD as u128)
-            .unwrap()
-            .checked_div(pair.reserve1 as u128)
-            .unwrap()
-            .try_into()
-            .unwrap();
-        
+        let current_time = Clock::get()?.unix_timestamp;
         // Emit event
         emit!(SwapEvent {
             user: user.key(),
-            amount0_in: if user_token_in_account.mint == pair.token0 { amount_in } else { 0 },
-            amount1_in: if user_token_in_account.mint == pair.token1 { amount_in } else { 0 },
-            amount0_out: if user_token_out_account.mint == pair.token0 { amount_out } else { 0 },
-            amount1_out: if user_token_out_account.mint == pair.token1 { amount_out } else { 0 },
+            amount0_in: if is_token0_in { amount_in } else { 0 },
+            amount1_in: if !is_token0_in { amount_in } else { 0 },
+            amount0_out: if is_token0_in { amount_out } else { 0 },
+            amount1_out: if !is_token0_in { amount_out } else { 0 },
             timestamp: current_time,
         });
         

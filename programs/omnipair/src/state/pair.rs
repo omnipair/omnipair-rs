@@ -17,13 +17,9 @@ pub struct Pair {
     pub reserve1: u64,
     
     // Price tracking
-    pub last_update: i64,
-    pub price0_cumulative_last: u128,
-    pub price1_cumulative_last: u128,
-    pub price0_last: u64,
-    pub price1_last: u64,
     pub last_price0_ema: u64,
     pub last_price1_ema: u64,
+    pub last_update: i64,
     
     // Rate model
     pub rate_model: Pubkey,
@@ -36,7 +32,7 @@ pub struct Pair {
     pub total_debt0_shares: u64,
     pub total_debt1_shares: u64,
     
-    // Liquidity tracking
+    // LP liquidity tracking
     pub total_supply: u64,
     
     // Collateral tracking
@@ -70,10 +66,6 @@ impl Pair {
             reserve1: 0,
             total_supply: 0,
 
-            price0_cumulative_last: 0,
-            price1_cumulative_last: 0,
-            price0_last: 0,
-            price1_last: 0,
             last_price0_ema: 0,
             last_price1_ema: 0,
             last_rate0: MIN_RATE,
@@ -163,10 +155,6 @@ impl Pair {
                     if self.reserve1 > 0 { ((self.reserve0 as u128 * NAD as u128) / self.reserve1 as u128) as u64 } else { 0 },
                     DEFAULT_HALF_LIFE
                 );
-                
-                // Update cumulative prices
-                self.price0_cumulative_last += (self.price0_last as u128) * (time_elapsed as u128);
-                self.price1_cumulative_last += (self.price1_last as u128) * (time_elapsed as u128);
                 
                 // Calculate utilization rates
                 let util0 = if self.reserve0 > 0 {
