@@ -16,7 +16,7 @@ use crate::{
 pub struct Swap<'info> {
     #[account(
         mut,
-        seeds = [PAIR_SEED_PREFIX, token_in_mint.key().as_ref(), token_out_mint.key().as_ref()],
+        seeds = [PAIR_SEED_PREFIX, pair.token0.key().as_ref(), pair.token1.key().as_ref()],
         bump
     )]
     pub pair: Account<'info, Pair>,
@@ -70,8 +70,7 @@ impl<'info> Swap<'info> {
             user,
             ..
         } = ctx.accounts;
-
-        let last_k = pair.reserve0.checked_mul(pair.reserve1).ok_or(ErrorCode::InvariantOverflow)?;
+        let last_k = (pair.reserve0 as u128).checked_mul(pair.reserve1 as u128).ok_or(ErrorCode::InvariantOverflow)?;
         let is_token0_in = user_token_in_account.mint == pair.token0;
 
         // amount_in_after_fee = amount_in * (10000 - 30) / 10000 (30bps fee)
@@ -114,7 +113,7 @@ impl<'info> Swap<'info> {
             }
         }
 
-        require_gte!(last_k, pair.reserve0.checked_mul(pair.reserve1).ok_or(ErrorCode::Overflow)?, ErrorCode::BrokenInvariant);
+        require_gte!((pair.reserve0 as u128).checked_mul(pair.reserve1 as u128).ok_or(ErrorCode::Overflow)?, last_k, ErrorCode::BrokenInvariant);
         
         // Transfer tokens
         transfer_from_user_to_pool_vault(
