@@ -1,8 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{
-    token::Token,
-    token_interface::{Mint, TokenAccount, Token2022},
-};
+use anchor_spl::token_interface::TokenAccount;
 use crate::{
     state::pair::Pair,
     state::rate_model::RateModel,
