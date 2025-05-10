@@ -39,6 +39,11 @@
    yarn bootstrap
    ```
 
+6. Pubish IDL
+```
+ anchor idl init --filepath target/idl/omnipair.json [program.id] --provider.cluster devnet
+ ```
+
 After completing these steps, you can:
 - Add and remove liquidity
 - Add and remove collateral

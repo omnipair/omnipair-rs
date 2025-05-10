@@ -13,7 +13,7 @@ import {
     getAssociatedTokenAddress,
     createAssociatedTokenAccount
 } from '@solana/spl-token';
-import { Program, AnchorProvider, Wallet } from '@coral-xyz/anchor';
+import { Program } from '@coral-xyz/anchor';
 import idl from '../target/idl/omnipair.json' with { type: "json" };
 import type { Omnipair } from '../target/types/omnipair';
 import BN from 'bn.js';

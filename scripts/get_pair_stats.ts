@@ -23,7 +23,7 @@ import {
     getter: any // Enum variant object
   ): Promise<{ label: string; value: string; formattedValue: number }> {
     const sim = await program.methods
-      .emitPairGetters(getter)
+      .viewPairData(getter)
       .accounts({ pair: pairPda })
       .simulate();
   
