@@ -8,9 +8,7 @@ use crate::{
     state::rate_model::RateModel,
     constants::*,
     errors::ErrorCode,
-    events::{AdjustCollateralEvent, AdjustDebtEvent, UserPositionLiquidatedEvent},
-    utils::token::{transfer_from_user_to_pool_vault, transfer_from_pool_vault_to_user},
-    generate_gamm_pair_seeds,
+    events::UserPositionLiquidatedEvent,
     state::user_position::UserPosition,
 };
 
@@ -139,23 +137,20 @@ impl<'info> Liquidate<'info> {
         // Skip if nothing needs to be repaid
         require!(debt_to_writeoff > 0 && collateral_to_seize > 0, ErrorCode::NotUndercollateralized);
 
-        // Transfer collateral to LP vault (seize collateral)
-        // Liquidation incentive is shared across LPs with no caller incentive
-        transfer_from_user_to_pool_vault(
-            user.to_account_info(),
-            user_token_account.to_account_info(),
-            token_vault.to_account_info(),
-            vault_token_mint.to_account_info(),
-            match vault_token_mint.to_account_info().owner == token_program.key {
-                true => token_program.to_account_info(),
-                false => token_2022_program.to_account_info(),
-            },
-            collateral_to_seize,
-            vault_token_mint.decimals,
-        )?;
-
         // Decrease debt
         user_position.decrease_debt(pair, &user_token_account.mint, debt_to_writeoff);
+
+        // LP seize collateral
+        // Liquidation incentive is shared across LPs with no caller incentive
+        // No actual transfer of collateral is done here, just increasing reserves
+        match user_token_account.mint == pair.token0 {
+            true => {
+                pair.reserve0 = pair.reserve0.checked_add(collateral_to_seize).unwrap();
+            }
+            false => {
+                pair.reserve1 = pair.reserve1.checked_add(collateral_to_seize).unwrap();
+            }
+        }
 
         emit!(UserPositionLiquidatedEvent {
             user: user.key(),
