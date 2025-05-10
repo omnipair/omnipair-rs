@@ -57,9 +57,6 @@ pub enum ErrorCode {
     #[msg("Invalid system program")]
     InvalidSystemProgram,
     
-    #[msg("Invalid rent")]
-    InvalidRent,
-    
     #[msg("Invalid signer")]
     InvalidSigner,
     
@@ -93,9 +90,6 @@ pub enum ErrorCode {
     #[msg("Invalid token order")]
     InvalidTokenOrder,
 
-    #[msg("Factory is full")]
-    FactoryFull,
-
     #[msg("Debt not zero")]
     DebtNotZero,
 
@@ -110,9 +104,6 @@ pub enum ErrorCode {
 
     #[msg("Insufficient liquidity")]
     InsufficientLiquidity,
-
-    #[msg("Flashloan not repaid")]
-    FlashloanNotRepaid,
 
     #[msg("Arithmetic overflow")]
     Overflow,
