@@ -175,34 +175,23 @@ impl UserPosition {
     // debt utilization bps = debt / borrow power
     // borrow power = collateral value * effective collateral factor
     // 0 is safe, > 100% in BPS is unsafe
-    pub fn get_token0_debt_utilization_bps(&self, pair: &Pair) -> Result<u64> {
-        let debt = self.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?;
+    pub fn get_debt_utilization_bps(&self, pair: &Pair, token: &Pubkey) -> Result<u64> {
+        let is_token0 = token == &pair.token0;
+        let debt = match is_token0 {
+            true => self.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
+            false => self.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
+        };
         if debt == 0 {
             return Ok(0); // no debt = 0% usage = safe
         }
     
         // NOTE: debt in token0 → collateral is token1
-        let borrow_limit = self.get_borrow_limit(pair, &pair.token0);
+        let borrow_limit = match is_token0 {
+            true => self.get_borrow_limit(pair, &pair.token0),
+            false => self.get_borrow_limit(pair, &pair.token1),
+        };
         if borrow_limit == 0 {
             return Ok(u64::MAX); // zero borrow limit, user should be liquidated
-        }
-    
-        Ok(debt
-            .saturating_mul(BPS_DENOMINATOR as u64)
-            .checked_div(borrow_limit)
-            .ok_or(ErrorCode::DebtUtilizationOverflow)?)
-    }
-
-    pub fn get_token1_debt_utilization_bps(&self, pair: &Pair) -> Result<u64> {
-        let debt = self.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?;
-        if debt == 0 {
-            return Ok(0); // no debt = 0% usage = safe
-        }
-    
-        // NOTE: debt in token1 → collateral is token0
-        let borrow_limit = self.get_borrow_limit(pair, &pair.token1);
-        if borrow_limit == 0 {
-            return Ok(u64::MAX);
         }
     
         Ok(debt
