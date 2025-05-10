@@ -22,15 +22,17 @@ impl<'info> CommonAdjustPosition<'info> {
         );
 
         let user_debt = match self.user_token_account.mint == self.pair.token0 {
-            true => self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares),
-            false => self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares),
+            true => self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares)?,
+            false => self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares)?,
         }; 
 
-        let (borrowing_power, _) = self.user_position.get_borrowing_power_and_effective_cf_bps(&self.pair, &self.token_vault.mint);
+        let (borrow_limit, _) = self.user_position.get_borrow_limit_and_effective_cf_bps(&self.pair, &self.token_vault.mint);
 
-        let new_debt = user_debt.checked_add(*borrow_amount).unwrap();
+        let new_debt = user_debt
+            .checked_add(*borrow_amount)
+            .ok_or(ErrorCode::DebtMathOverflow)?;
         require_gte!(
-            borrowing_power,
+            borrow_limit,
             new_debt,
             ErrorCode::BorrowingPowerExceeded
         );

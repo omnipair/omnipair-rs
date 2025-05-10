@@ -80,19 +80,19 @@ impl<'info> AdjustLiquidity<'info> {
         let total_supply = lp_mint.supply;
         let liquidity: u64 = match total_supply {
             0 => {
-                (args.amount0_in as u128).checked_mul(args.amount1_in as u128).unwrap()
-                    .sqrt().unwrap()
-                    .checked_sub(MIN_LIQUIDITY as u128).unwrap()
-                    .try_into().unwrap()
+                (args.amount0_in as u128).checked_mul(args.amount1_in as u128).ok_or(ErrorCode::LiquidityMathOverflow)?
+                    .sqrt().ok_or(ErrorCode::LiquiditySqrtOverflow)?
+                    .checked_sub(MIN_LIQUIDITY as u128).ok_or(ErrorCode::LiquidityUnderflow)?
+                    .try_into().map_err(|_| ErrorCode::LiquidityConversionOverflow)?
             },
             _ => {
                 let liquidity0 = (args.amount0_in as u128)
-                    .checked_mul(total_supply as u128).unwrap()
-                    .checked_div(pair.reserve0 as u128).unwrap();
+                    .checked_mul(total_supply as u128).ok_or(ErrorCode::LiquidityMathOverflow)?
+                    .checked_div(pair.reserve0 as u128).ok_or(ErrorCode::LiquidityMathOverflow)?;
                 let liquidity1 = (args.amount1_in as u128)
-                    .checked_mul(total_supply as u128).unwrap()
-                    .checked_div(pair.reserve1 as u128).unwrap();
-                liquidity0.min(liquidity1).try_into().unwrap()
+                    .checked_mul(total_supply as u128).ok_or(ErrorCode::LiquidityMathOverflow)?
+                    .checked_div(pair.reserve1 as u128).ok_or(ErrorCode::LiquidityMathOverflow)?;
+                liquidity0.min(liquidity1).try_into().map_err(|_| ErrorCode::LiquidityConversionOverflow)?
             }
         };
         // Check if liquidity is sufficient
@@ -112,9 +112,15 @@ impl<'info> AdjustLiquidity<'info> {
         )?;
         
         // Update reserves
-        pair.reserve0 = pair.reserve0.checked_add(args.amount0_in).unwrap();
-        pair.reserve1 = pair.reserve1.checked_add(args.amount1_in).unwrap();
-        pair.total_supply = pair.total_supply.checked_add(liquidity as u64).unwrap();
+        pair.reserve0 = pair.reserve0
+            .checked_add(args.amount0_in)
+            .ok_or(ErrorCode::ReserveOverflow)?;
+        pair.reserve1 = pair.reserve1
+            .checked_add(args.amount1_in)
+            .ok_or(ErrorCode::ReserveOverflow)?;
+        pair.total_supply = pair.total_supply
+            .checked_add(liquidity as u64)
+            .ok_or(ErrorCode::SupplyOverflow)?;
         
         // Emit event
         emit!(MintEvent {

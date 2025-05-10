@@ -80,8 +80,8 @@ impl ViewUserPositionData<'_> {
         let user_position = &ctx.accounts.user_position;
 
         let value = match getter {
-            UserPositionViewKind::UserToken0BorrowingPower => user_position.get_borrowing_power(&pair, &pair.token0),
-            UserPositionViewKind::UserToken1BorrowingPower => user_position.get_borrowing_power(&pair, &pair.token1),
+            UserPositionViewKind::UserToken0BorrowingPower => user_position.get_borrow_limit(&pair, &pair.token0),
+            UserPositionViewKind::UserToken1BorrowingPower => user_position.get_borrow_limit(&pair, &pair.token1),
             UserPositionViewKind::UserToken0EffectiveCollateralFactorBps => user_position.get_effective_collateral_factor_bps(&pair, &pair.token0),
             UserPositionViewKind::UserToken1EffectiveCollateralFactorBps => user_position.get_effective_collateral_factor_bps(&pair, &pair.token1),
         };

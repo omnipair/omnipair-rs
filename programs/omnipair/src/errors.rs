@@ -152,4 +152,34 @@ pub enum ErrorCode {
 
     #[msg("Math overflow during denominator calculation.")]
     DenominatorOverflow,
+
+    #[msg("Math overflow during liquidity calculation")]
+    LiquidityMathOverflow,
+
+    #[msg("Math overflow during liquidity square root calculation")]
+    LiquiditySqrtOverflow,
+
+    #[msg("Math underflow during liquidity calculation")]
+    LiquidityUnderflow,
+
+    #[msg("Math overflow during liquidity conversion")]
+    LiquidityConversionOverflow,
+
+    #[msg("Math overflow during liquidity division")]
+    LiquidityDivisionOverflow,
+
+    #[msg("Math overflow during supply calculation")]
+    SupplyOverflow,
+
+    #[msg("Math overflow during debt calculation")]
+    DebtMathOverflow,
+
+    #[msg("Math overflow during debt share calculation")]
+    DebtShareMathOverflow,
+
+    #[msg("Math overflow during debt share division")]
+    DebtShareDivisionOverflow,
+
+    #[msg("Math overflow during debt utilization calculation")]
+    DebtUtilizationOverflow,
 }
