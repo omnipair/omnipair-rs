@@ -123,7 +123,7 @@ impl<'info> Liquidate<'info> {
         require!(debt_to_writeoff > 0 && collateral_to_seize > 0, ErrorCode::NotUndercollateralized);
 
         // Decrease debt
-        user_position.decrease_debt(pair, &token_vault.mint, debt_to_writeoff);
+        user_position.decrease_debt(pair, &token_vault.mint, debt_to_writeoff)?;
 
         // LP seize collateral
         // Liquidation incentive is shared across LPs with no caller incentive

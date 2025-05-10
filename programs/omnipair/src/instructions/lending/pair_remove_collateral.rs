@@ -13,9 +13,11 @@ impl<'info> CommonAdjustPosition<'info> {
         let AdjustPositionArgs { amount } = args;
         
         require!(*amount > 0, ErrorCode::AmountZero);
+
+        let is_token0 = self.user_token_account.mint == self.pair.token0;
         
         // Check if user has enough collateral
-        match self.user_token_account.mint == self.pair.token0 {
+        match is_token0 {
             true => {
                 require_gte!(
                     self.user_position.collateral0,
@@ -31,6 +33,19 @@ impl<'info> CommonAdjustPosition<'info> {
                 );
             }
         }
+
+        // Check if collateral is undercollateralized
+        let borrow_limit = self.user_position.get_borrow_limit(&self.pair, &self.token_vault.mint);
+        let debt = match is_token0 {
+            true => self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares)?,
+            false => self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares)?,
+        };
+
+        require_gte!(
+            borrow_limit,
+            debt,
+            ErrorCode::NotUndercollateralized
+        );
         
         Ok(())
     }
@@ -53,8 +68,6 @@ impl<'info> CommonAdjustPosition<'info> {
             user_position,
             ..
         } = ctx.accounts;
-
-        // TODO: check if collateral is undercollateralized
 
         // Transfer tokens from vault to user
         match user_token_account.mint == pair.token0 {
