@@ -13,7 +13,7 @@ pub use utils::account::*;
 pub use instructions::pair_initialize::InitializePair;
 pub use instructions::faucet_mint::FaucetMint;
 
-declare_id!("FmSEiqY3RVgJp3Lyw7pbUFDHEbm8rZPqnrVc1TskBjBK");
+declare_id!("75xcvziAKHewc1Q3LfFXjAhRaVEkXwNr4y5SwEK6xteo");
 
 #[program]
 pub mod omnipair {

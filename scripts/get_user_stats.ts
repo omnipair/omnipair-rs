@@ -24,7 +24,7 @@ import {
     getter: any // Enum variant object
   ): Promise<{ label: string; value: string; formattedValue: number }> {
     const sim = await program.methods
-      .emitUserPositionGetters(getter)
+      .viewUserPositionData(getter)
       .accounts({ userPosition: userPositionPda, pair: pairPda })
       .simulate();
   
@@ -46,7 +46,10 @@ import {
       if (label === 'userToken0BorrowingPower' || label === 'userToken1BorrowingPower') {
         return Number(value) / 10 ** 6;
       }
-      if (label === 'userToken0EffectiveCollateralFactorBps' || label === 'userToken1EffectiveCollateralFactorBps') {
+      if (label === 'userToken0EffectiveCollateralFactorBps' || 
+          label === 'userToken1EffectiveCollateralFactorBps' ||
+          label === 'userToken0DebtUtilizationBps' ||
+          label === 'userToken1DebtUtilizationBps') {
         return Number(value) / 100; // Convert from BPS (10000 = 100%) to decimal
       }
       if (label === 'spotPrice0Nad' || label === 'spotPrice1Nad') {
@@ -105,6 +108,8 @@ import {
       { userToken1BorrowingPower: {} },
       { userToken0EffectiveCollateralFactorBps: {} },
       { userToken1EffectiveCollateralFactorBps: {} },
+      { userToken0DebtUtilizationBps: {} },
+      { userToken1DebtUtilizationBps: {} },
     ];
   
     for (const getter of enumVariants) {
