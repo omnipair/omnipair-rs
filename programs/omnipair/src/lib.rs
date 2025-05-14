@@ -13,7 +13,7 @@ pub use utils::account::*;
 pub use instructions::pair_initialize::InitializePair;
 pub use instructions::faucet_mint::FaucetMint;
 
-declare_id!("9s98XJW4Cm2ELftENQA44eWtg2HNYLgCa3B5gyL9dHw9");
+declare_id!("GcH7bbqJY1Y97HwM475GyzQDXPemGAW2JMf2egrh7bYM");
 
 #[program]
 pub mod omnipair {
@@ -57,12 +57,12 @@ pub mod omnipair {
         AdjustLiquidity::handle_remove(ctx, args)
     }
 
+    #[access_control(ctx.accounts.update_and_validate_swap(&args))]
     pub fn swap(
         ctx: Context<Swap>,
-        amount_in: u64,
-        min_amount_out: u64,
+        args: SwapArgs,
     ) -> Result<()> {
-        Swap::handle_swap(ctx, amount_in, min_amount_out)
+        Swap::handle_swap(ctx, args)
     }
 
     // Lending instructions

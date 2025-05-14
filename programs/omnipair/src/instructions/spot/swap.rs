@@ -12,6 +12,12 @@ use crate::{
     generate_gamm_pair_seeds,
 };
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct SwapArgs {
+    pub amount_in: u64,
+    pub min_amount_out: u64,
+}
+
 #[derive(Accounts)]
 pub struct Swap<'info> {
     #[account(
@@ -20,6 +26,12 @@ pub struct Swap<'info> {
         bump
     )]
     pub pair: Account<'info, Pair>,
+
+    #[account(
+        mut,
+        address = pair.rate_model,
+    )]
+    pub rate_model: Account<'info, RateModel>,
     
     #[account(
         mut,
@@ -49,14 +61,28 @@ pub struct Swap<'info> {
 }
 
 impl<'info> Swap<'info> {
-    pub fn validate(&self, amount_in: u64, min_amount_out: u64) -> Result<()> {
-        require!(amount_in > 0, ErrorCode::AmountZero);
-        require!(min_amount_out > 0, ErrorCode::AmountZero);
-        require_gte!(self.user_token_in_account.amount, amount_in, ErrorCode::InsufficientAmount0In);
+    pub fn validate(&self, args: &SwapArgs) -> Result<()> {
+        let SwapArgs { amount_in, min_amount_out } = args;
+
+        require!(*amount_in > 0, ErrorCode::AmountZero);
+        require!(*min_amount_out > 0, ErrorCode::AmountZero);
+        require_gte!(self.user_token_in_account.amount, *amount_in, ErrorCode::InsufficientAmount0In);
         Ok(())
     }
 
-    pub fn handle_swap(ctx: Context<Self>, amount_in: u64, min_amount_out: u64) -> Result<()> {
+    pub fn update(&mut self) -> Result<()> {
+        self.pair.update(&self.rate_model)?;
+        Ok(())
+    }
+
+    pub fn update_and_validate_swap(&mut self, args: &SwapArgs) -> Result<()> {
+        self.update()?;
+        self.validate(args)?;
+        Ok(())
+    }
+
+    pub fn handle_swap(ctx: Context<Self>, args: SwapArgs) -> Result<()> {
+        let SwapArgs { amount_in, min_amount_out } = args;
         let Swap {
             pair,
             token_in_vault,
@@ -68,8 +94,7 @@ impl<'info> Swap<'info> {
             token_program,
             token_2022_program,
             user,
-            ..
-        } = ctx.accounts;
+            ..        } = ctx.accounts;
         let last_k = (pair.reserve0 as u128).checked_mul(pair.reserve1 as u128).ok_or(ErrorCode::InvariantOverflow)?;
         let is_token0_in = user_token_in_account.mint == pair.token0;
 
@@ -144,6 +169,7 @@ impl<'info> Swap<'info> {
         )?;
         
         let current_time = Clock::get()?.unix_timestamp;
+
         // Emit event
         emit!(SwapEvent {
             user: user.key(),
