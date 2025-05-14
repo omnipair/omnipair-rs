@@ -52,6 +52,7 @@ async function main() {
         program.programId
     );
     console.log('Pair PDA:', pairPda.toBase58());
+    const pairAccount = await program.account.pair.fetch(pairPda);
 
     // Get token program for each mint
     const token0Info = await provider.connection.getAccountInfo(TOKEN0_MINT);
@@ -81,7 +82,7 @@ async function main() {
     console.log('Token1 Vault:', token1Vault.toBase58());
 
     // Swap parameters
-    const amountIn = new BN(1_000_000); // Amount of token0 to swap
+    const amountIn = new BN(1000_000_000); // Amount of token0 to swap
     const minAmountOut = new BN(0); // Minimum amount of token1 to receive
 
     console.log('Swap parameters:');
@@ -90,10 +91,14 @@ async function main() {
 
     // Create transaction
     const tx = await program.methods
-        .swap(amountIn, minAmountOut)
+        .swap({
+            amountIn: amountIn,
+            minAmountOut: minAmountOut,
+        })
         .accountsPartial({
             user: DEPLOYER_KEYPAIR.publicKey,
             pair: pairPda,
+            rateModel: pairAccount.rateModel,
             tokenInVault: token0Vault,
             tokenOutVault: token1Vault,
             userTokenInAccount: DEPLOYER_TOKEN0_ACCOUNT,

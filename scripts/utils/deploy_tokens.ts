@@ -1,24 +1,19 @@
 import { 
     Connection, 
     Keypair,
-    sendAndConfirmTransaction,
     Transaction,
-    TransactionInstruction,
     PublicKey
 } from '@solana/web3.js';
 import { 
     TOKEN_PROGRAM_ID, 
     createMint,
-    createAssociatedTokenAccount,
-    mintTo,
-    getMinimumBalanceForRentExemptMint,
+
     setAuthority,
     AuthorityType
 } from '@solana/spl-token';
 import {
     PROGRAM_ID as TOKEN_METADATA_PROGRAM_ID,
     createCreateMetadataAccountV3Instruction,
-    createUpdateMetadataAccountV2Instruction,
 } from '@metaplex-foundation/mpl-token-metadata';
 import idl from '../../target/idl/omnipair.json' with { type: "json" };
 import type { Omnipair } from '../../target/types/omnipair';
