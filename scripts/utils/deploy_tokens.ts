@@ -11,8 +11,15 @@ import {
     createMint,
     createAssociatedTokenAccount,
     mintTo,
-    getMinimumBalanceForRentExemptMint
+    getMinimumBalanceForRentExemptMint,
+    setAuthority,
+    AuthorityType
 } from '@solana/spl-token';
+import {
+    PROGRAM_ID as TOKEN_METADATA_PROGRAM_ID,
+    createCreateMetadataAccountV3Instruction,
+    createUpdateMetadataAccountV2Instruction,
+} from '@metaplex-foundation/mpl-token-metadata';
 import idl from '../../target/idl/omnipair.json' with { type: "json" };
 import type { Omnipair } from '../../target/types/omnipair';
 import * as anchor from '@coral-xyz/anchor';
@@ -54,6 +61,66 @@ async function createMintWithRetry(
     throw lastError;
 }
 
+async function createMetadata(
+    connection: Connection,
+    payer: Keypair,
+    mint: PublicKey,
+    mintAuthority: PublicKey,
+    name: string,
+    symbol: string,
+    uri: string
+) {
+    const [metadataAddress] = PublicKey.findProgramAddressSync(
+        [
+            Buffer.from('metadata'),
+            TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+            mint.toBuffer(),
+        ],
+        TOKEN_METADATA_PROGRAM_ID
+    );
+
+    const createMetadataInstruction = createCreateMetadataAccountV3Instruction(
+        {
+            metadata: metadataAddress,
+            mint: mint,
+            mintAuthority: payer.publicKey,
+            payer: payer.publicKey,
+            updateAuthority: payer.publicKey,
+        },
+        {
+            createMetadataAccountArgsV3: {
+                data: {
+                    name: name,
+                    symbol: symbol,
+                    uri: uri,
+                    sellerFeeBasisPoints: 0,
+                    creators: null,
+                    collection: null,
+                    uses: null,
+                },
+                isMutable: true,
+                collectionDetails: null,
+            },
+        }
+    );
+
+    const transaction = new Transaction().add(createMetadataInstruction);
+    
+    // Get the latest blockhash
+    const { blockhash } = await connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = payer.publicKey;
+
+    // Sign the transaction
+    transaction.sign(payer);
+
+    // Send and confirm the transaction
+    const signature = await connection.sendRawTransaction(transaction.serialize());
+    await connection.confirmTransaction(signature);
+    
+    return metadataAddress;
+}
+
 async function main() {
     console.log('Starting token deployment...');
     
@@ -82,77 +149,83 @@ async function main() {
         program.programId
     );
 
-
-    // Create Token0
+    // Create Token0 with deployer as mint authority
     console.log('\nCreating Token0...');
     const token0Mint = await createMintWithRetry(
         provider.connection,
         DEPLOYER_KEYPAIR,
-        mintAuthorityPda,
+        DEPLOYER_KEYPAIR.publicKey, // Use deployer as mint authority initially
         null, // No freeze authority
         6
     );
     console.log('Token0 Mint:', token0Mint.toBase58());
 
-    // Create Token1
+    // Create Token1 with deployer as mint authority
     console.log('\nCreating Token1...');
     const token1Mint = await createMintWithRetry(
         provider.connection,
         DEPLOYER_KEYPAIR,
-        mintAuthorityPda,
+        DEPLOYER_KEYPAIR.publicKey, // Use deployer as mint authority initially
         null, // No freeze authority
         6
     );
     console.log('Token1 Mint:', token1Mint.toBase58());
 
-    // Create associated token accounts for deployer
-    // console.log('\nCreating token accounts for deployer...');
-    // const deployerToken0Account = await createAssociatedTokenAccount(
-    //     provider.connection,
-    //     DEPLOYER_KEYPAIR,
-    //     token0Mint,
-    //     DEPLOYER_KEYPAIR.publicKey
-    // );
-    // console.log('Deployer Token0 Account:', deployerToken0Account.toBase58());
+    // Create metadata for Token0
+    console.log('\nCreating metadata for Token0...');
+    const token0Metadata = await createMetadata(
+        provider.connection,
+        DEPLOYER_KEYPAIR,
+        token0Mint,
+        DEPLOYER_KEYPAIR.publicKey,
+        'MetaDAO',
+        'META',
+        'https://bafybeighnmau6rofxubsg3hroby3cclodur53zr25araufrgorzkwljdxy.ipfs.w3s.link/metadao_metadata.json'
+    );
+    console.log('Token0 Metadata:', token0Metadata.toBase58());
 
-    // const deployerToken1Account = await createAssociatedTokenAccount(
-    //     provider.connection,
-    //     DEPLOYER_KEYPAIR,
-    //     token1Mint,
-    //     DEPLOYER_KEYPAIR.publicKey
-    // );
-    // console.log('Deployer Token1 Account:', deployerToken1Account.toBase58());
+    // Create metadata for Token1
+    console.log('\nCreating metadata for Token1...');
+    const token1Metadata = await createMetadata(
+        provider.connection,
+        DEPLOYER_KEYPAIR,
+        token1Mint,
+        DEPLOYER_KEYPAIR.publicKey,
+        'USD Coin',
+        'USDC',
+        'https://bafybeiaycwfghj7ap7i2g5jfhtxihdulegikgq45dzcau3zhqkvg2zrnvm.ipfs.w3s.link/usdc_metadata.json'
+    );
+    console.log('Token1 Metadata:', token1Metadata.toBase58());
 
-    // Mint initial tokens to deployer for each token
-    // console.log('\nMinting initial tokens to deployer...');
-    // const mint0Amount = 20_000 * Math.pow(10, 6); // 20,000 tokens with 6 decimals
-    // const mint1Amount = 100_000 * Math.pow(10, 6); // 100,000 tokens with 6 decimals
+    // Transfer mint authority to PDA for Token0
+    console.log('\nTransferring Token0 mint authority to PDA...');
+    await setAuthority(
+        provider.connection,
+        DEPLOYER_KEYPAIR,
+        token0Mint,
+        DEPLOYER_KEYPAIR.publicKey,
+        AuthorityType.MintTokens,
+        mintAuthorityPda
+    );
+    console.log('Token0 mint authority transferred to PDA');
 
-    // await mintTo(
-    //     provider.connection,
-    //     DEPLOYER_KEYPAIR,
-    //     token0Mint,
-    //     deployerToken0Account,
-    //     DEPLOYER_KEYPAIR,
-    //     mint0Amount
-    // );
-    // console.log('Minted initial Token0 to deployer');
-
-    // await mintTo(
-    //     provider.connection,
-    //     DEPLOYER_KEYPAIR,
-    //     token1Mint,
-    //     deployerToken1Account,
-    //     DEPLOYER_KEYPAIR,
-    //     mint1Amount
-    // );
-    // console.log('Minted initial Token1 to deployer');
+    // Transfer mint authority to PDA for Token1
+    console.log('\nTransferring Token1 mint authority to PDA...');
+    await setAuthority(
+        provider.connection,
+        DEPLOYER_KEYPAIR,
+        token1Mint,
+        DEPLOYER_KEYPAIR.publicKey,
+        AuthorityType.MintTokens,
+        mintAuthorityPda
+    );
+    console.log('Token1 mint authority transferred to PDA');
 
     console.log('\nToken deployment completed successfully!');
     console.log('Token0 Mint:', token0Mint.toBase58());
     console.log('Token1 Mint:', token1Mint.toBase58());
-    // console.log('Deployer Token0 Account:', deployerToken0Account.toBase58());
-    // console.log('Deployer Token1 Account:', deployerToken1Account.toBase58());
+    console.log('Token0 Metadata:', token0Metadata.toBase58());
+    console.log('Token1 Metadata:', token1Metadata.toBase58());
 }
 
 main().catch(error => {

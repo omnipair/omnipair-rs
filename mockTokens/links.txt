@@ -1,2 +1,3 @@
 https://bafybeiaycwfghj7ap7i2g5jfhtxihdulegikgq45dzcau3zhqkvg2zrnvm.ipfs.w3s.link/usdc_metadata.json
 https://bafybeignhzvlohhzp6sem2ijlckidvtkbjq3nzsgwnuxjvqkrkisk5li2a.ipfs.w3s.link/sol_metadata.json
+https://bafybeighnmau6rofxubsg3hroby3cclodur53zr25araufrgorzkwljdxy.ipfs.w3s.link/metadao_metadata.json
