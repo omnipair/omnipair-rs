@@ -33,6 +33,8 @@ pub struct CommonAdjustPosition<'info> {
 
     #[account(
         mut,
+        constraint = user_position.owner == user.key(),
+        constraint = user_position.pair == pair.key(),
         seeds = [
             POSITION_SEED_PREFIX,
             pair.key().as_ref(),
