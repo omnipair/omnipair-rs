@@ -87,6 +87,13 @@ import {
         program.programId
     );
 
+    // Get and log account sizes
+    const pairAccountInfo = await provider.connection.getAccountInfo(pairPda);
+    const userPositionAccountInfo = await provider.connection.getAccountInfo(userPositionPda);
+    
+    console.log('Pair Account Size:', pairAccountInfo?.data.length ?? 0, 'bytes');
+    console.log('User Position Account Size:', userPositionAccountInfo?.data.length ?? 0, 'bytes');
+
     console.log('User Position PDA:', userPositionPda.toBase58());
     const userPositionAccount = await program.account.userPosition.fetch(userPositionPda);
     console.log('User Collateral 0:', userPositionAccount.collateral0.toString(), Number(userPositionAccount.collateral0.toString()) / 10 ** 6);
