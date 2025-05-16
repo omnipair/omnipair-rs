@@ -29,6 +29,8 @@ pub struct AddCollateral<'info> {
         init_if_needed,
         payer = user,
         space = get_size_with_discriminator::<UserPosition>(),
+        constraint = user_position.owner == Pubkey::default() || user_position.owner == user.key(),
+        constraint = user_position.pair == Pubkey::default() || user_position.pair == pair.key(),
         seeds = [
             POSITION_SEED_PREFIX,
             pair.key().as_ref(),
@@ -106,8 +108,13 @@ impl<'info> AddCollateral<'info> {
             ..
         } = ctx.accounts;
 
-        // Emit position created event if this is a new position
         if !user_position.is_initialized() {
+            user_position.set_inner(UserPosition::initialize(
+                user.key(),
+                pair.key(),
+                ctx.bumps.user_position,
+            ));
+
             emit!(UserPositionCreatedEvent {
                 user: user.key(),
                 pair: pair.key(),
