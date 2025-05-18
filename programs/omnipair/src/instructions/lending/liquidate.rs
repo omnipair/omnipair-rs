@@ -27,7 +27,7 @@ pub struct Liquidate<'info> {
         seeds = [
             POSITION_SEED_PREFIX,
             pair.key().as_ref(),
-            user.key().as_ref()
+            position_owner.key().as_ref()
         ],
         bump
     )]
@@ -45,8 +45,11 @@ pub struct Liquidate<'info> {
     )]
     pub token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
+    /// CHECK: This is the owner of the position being liquidated.
     #[account(mut)]
-    pub user: Signer<'info>,
+    pub position_owner: AccountInfo<'info>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -87,7 +90,8 @@ impl<'info> Liquidate<'info> {
     pub fn handle_liquidate(ctx: Context<Self>) -> Result<()> {
         let Liquidate {
             token_vault,
-            user,
+            position_owner,
+            payer,
             user_position,
             ..
         } = ctx.accounts;
@@ -135,10 +139,10 @@ impl<'info> Liquidate<'info> {
         }
 
         emit!(UserPositionLiquidatedEvent {
-            user: user.key(),
+            user: position_owner.key(),
             pair: pair.key(),
             position: user_position.key(),
-            liquidator: user.key(),
+            liquidator: payer.key(),
             collateral0_liquidated: if is_token0 { 0 } else { collateral_to_seize },
             collateral1_liquidated: if is_token0 { collateral_to_seize } else { 0 },
             debt0_liquidated: if is_token0 { debt_to_writeoff } else { 0 },
