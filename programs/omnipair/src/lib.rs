@@ -86,6 +86,11 @@ pub mod omnipair {
         CommonAdjustPosition::handle_repay(ctx, args)
     }
 
+    #[access_control(ctx.accounts.update_and_validate_liquidate())]
+    pub fn liquidate(ctx: Context<Liquidate>) -> Result<()> {
+        Liquidate::handle_liquidate(ctx)
+    }
+
     // Faucet instruction
     #[cfg(feature = "development")]
     pub fn faucet_mint(ctx: Context<FaucetMint>) -> Result<()> {

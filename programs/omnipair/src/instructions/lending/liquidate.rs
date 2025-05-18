@@ -78,7 +78,7 @@ impl<'info> Liquidate<'info> {
         Ok(())
     }
 
-    pub fn update_and_validate(&mut self) -> Result<()> {
+    pub fn update_and_validate_liquidate(&mut self) -> Result<()> {
         self.update()?;
         self.validate()?;
         Ok(())
