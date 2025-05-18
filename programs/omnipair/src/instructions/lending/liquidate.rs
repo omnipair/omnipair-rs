@@ -62,12 +62,12 @@ impl<'info> Liquidate<'info> {
         // Check if user has enough debt
         match self.token_vault.mint == self.pair.token0 {
             true => require_gt!(
-                user_position.debt0_shares,
+                user_position.debt1_shares,
                 0,
                 ErrorCode::ZeroDebtAmount
             ),
             false => require_gt!(
-                user_position.debt1_shares,
+                user_position.debt0_shares,
                 0,
                 ErrorCode::ZeroDebtAmount
             ),
