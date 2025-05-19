@@ -11,7 +11,7 @@ pub const BPS_DENOMINATOR: u64 = 10_000;
 
 // EMA constants
 #[constant]
-pub const DEFAULT_HALF_LIFE: u64 = 5 * 60; // 5 minutes
+pub const DEFAULT_HALF_LIFE: u64 = 10 * 60; // 10 minutes
 pub const TAYLOR_TERMS: u64 = 5;
 pub const NATURAL_LOG_OF_TWO_NAD: u64 = 693_147_180; // ln(2) scaled by NAD
 
