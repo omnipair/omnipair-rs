@@ -110,7 +110,7 @@ async function main() {
     );
 
     // Borrow parameters
-    const borrowAmount = new BN(1_000_000); // 1 tokens
+    const borrowAmount = new BN(100_000_000); // 1 tokens
     const borrowToken0 = true; // Set to false to borrow token1
 
     console.log('Borrowing with parameters:');

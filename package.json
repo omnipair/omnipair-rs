@@ -16,6 +16,7 @@
     "remove-collateral": "ts-node --esm scripts/remove_collateral.ts",
     "borrow": "ts-node --esm scripts/borrow.ts",
     "repay": "ts-node --esm scripts/repay.ts",
+    "liquidate": "ts-node --esm scripts/liquidate.ts",
     "address-vanity": "ts-node --esm scripts/address_vanity.ts",
     "faucet-mint": "ts-node --esm scripts/mint_pair_tokens.ts",
     "get-pair-stats": "ts-node --esm scripts/get_pair_stats.ts",

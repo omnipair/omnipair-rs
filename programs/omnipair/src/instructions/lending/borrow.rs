@@ -25,9 +25,9 @@ impl<'info> CommonAdjustPosition<'info> {
             true => self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares)?,
             false => self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares)?,
         }; 
-
-        let (borrow_limit, _) = self.user_position.get_borrow_limit_and_effective_cf_bps(&self.pair, &self.token_vault.mint);
-
+        
+        let borrow_limit = self.user_position.get_borrow_limit(&self.pair, &self.token_vault.mint);
+        
         let new_debt = user_debt
             .checked_add(*borrow_amount)
             .ok_or(ErrorCode::DebtMathOverflow)?;

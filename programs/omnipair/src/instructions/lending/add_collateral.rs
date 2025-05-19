@@ -109,11 +109,11 @@ impl<'info> AddCollateral<'info> {
         } = ctx.accounts;
 
         if !user_position.is_initialized() {
-            user_position.set_inner(UserPosition::initialize(
+            user_position.initialize(
                 user.key(),
                 pair.key(),
                 ctx.bumps.user_position,
-            ));
+            )?;
 
             emit!(UserPositionCreatedEvent {
                 user: user.key(),

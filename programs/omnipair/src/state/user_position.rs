@@ -24,27 +24,23 @@ pub struct UserPosition {
 
 impl UserPosition {
     pub fn initialize(
+        &mut self,
         owner: Pubkey,
         pair: Pubkey,
         bump: u8,
-    ) -> Self {
-        Self {
-            owner,
-            pair,
-            bump,
-            collateral0: 0,
-            collateral1: 0,
-            debt0_shares: 0,
-            debt1_shares: 0,
-        }
+    ) -> Result<()> {
+        self.owner = owner;
+        self.pair = pair;
+        self.bump = bump;
+        Ok(())
     }
 
     pub fn is_initialized(&self) -> bool {
         self.owner != Pubkey::default() && self.pair != Pubkey::default()
     }
 
-    pub fn increase_debt(&mut self, pair: &mut Pair, token: &Pubkey, amount: u64) -> Result<()> {
-        match *token == pair.token0 {
+    pub fn increase_debt(&mut self, pair: &mut Pair, debt_token: &Pubkey, amount: u64) -> Result<()> {
+        match *debt_token == pair.token0 {
             true => {
                 if pair.total_debt0_shares == 0 {
                     pair.total_debt0_shares = amount;
@@ -80,8 +76,9 @@ impl UserPosition {
     }
     
 
-    pub fn decrease_debt(&mut self, pair: &mut Pair, token: &Pubkey, amount: u64) -> Result<()> {
-        match *token == pair.token0 {
+    pub fn decrease_debt(&mut self, pair: &mut Pair, debt_token: &Pubkey, amount: u64) -> Result<()> {
+        msg!("decrease_debt: {}", amount);
+        match *debt_token == pair.token0 {
             true => {
                 let shares = amount
                     .checked_mul(pair.total_debt0_shares)
@@ -107,28 +104,43 @@ impl UserPosition {
     }
 
     pub fn calculate_debt0(&self, total_debt0: u64, total_debt0_shares: u64) -> Result<u64> {
+        msg!("total_debt0: {}, total_debt0_shares: {}", total_debt0, total_debt0_shares);
+        msg!("debt0_shares: {}", self.debt0_shares.to_string());
         match total_debt0_shares {
             0 => Ok(0),
-            _ => Ok(self.debt0_shares
-                .checked_mul(total_debt0)
+            _ => Ok((self.debt0_shares as u128)
+                .checked_mul(total_debt0 as u128)
                 .ok_or(ErrorCode::DebtMathOverflow)?
-                .checked_div(total_debt0_shares)
-                .ok_or(ErrorCode::DebtShareDivisionOverflow)?)
+                .checked_div(total_debt0_shares as u128)
+                .ok_or(ErrorCode::DebtShareDivisionOverflow)?
+                .try_into()
+                .map_err(|_| ErrorCode::DebtShareDivisionOverflow)?)
         }
     }
 
     pub fn calculate_debt1(&self, total_debt1: u64, total_debt1_shares: u64) -> Result<u64> {
+        msg!("total_debt0: {}, total_debt0_shares: {}", total_debt1, total_debt1_shares);
+        msg!("debt0_shares: {}", self.debt1_shares.to_string());
         match total_debt1_shares {
             0 => Ok(0),
-            _ => Ok(self.debt1_shares
-                .checked_mul(total_debt1)
+            _ => Ok((self.debt1_shares as u128)
+                .checked_mul(total_debt1 as u128)
                 .ok_or(ErrorCode::DebtMathOverflow)?
-                .checked_div(total_debt1_shares)
-                .ok_or(ErrorCode::DebtShareDivisionOverflow)?)
+                .checked_div(total_debt1_shares as u128)
+                .ok_or(ErrorCode::DebtShareDivisionOverflow)?
+                .try_into()
+                .map_err(|_| ErrorCode::DebtShareDivisionOverflow)?)
         }
     }
 
-    pub fn get_borrow_limit_and_effective_cf_bps(&self, pair: &Pair, token: &Pubkey) -> (u64, u16) {
+    /// Get the borrow limit and effective collateral factor in BPS
+    /// 
+    /// - `pair`: The pair the user position belongs to
+    /// - `debt_token`: The token the user is borrowing
+    /// 
+    /// Returns a tuple containing:
+    /// - The borrow limit in the debt token
+    pub fn get_borrow_limit_and_effective_cf_bps(&self, pair: &Pair, debt_token: &Pubkey) -> (u64, u16) {
         let user_position = &self;
 
         let (
@@ -138,7 +150,7 @@ impl UserPosition {
             // in token X (debt token)
             pair_debt_reserve,
             pair_total_debt,
-        ) = match *token == pair.token0 {
+        ) = match *debt_token == pair.token0 {
             true => (
                 user_position.collateral1,
                 pair.spot_price1_nad(),
@@ -164,12 +176,24 @@ impl UserPosition {
         )
     }
 
-    pub fn get_borrow_limit(&self, pair: &Pair, token: &Pubkey) -> u64 {
-        self.get_borrow_limit_and_effective_cf_bps(pair, token).0
+    /// Get the borrow limit in the debt token
+    /// 
+    /// - `pair`: The pair the user position belongs to
+    /// - `debt_token`: The token the user is borrowing
+    /// 
+    /// Returns the borrow limit in the debt token
+    pub fn get_borrow_limit(&self, pair: &Pair, debt_token: &Pubkey) -> u64 {
+        self.get_borrow_limit_and_effective_cf_bps(pair, debt_token).0
     }
 
-    pub fn get_effective_collateral_factor_bps(&self, pair: &Pair, token: &Pubkey) -> u64 {
-        self.get_borrow_limit_and_effective_cf_bps(pair, token).1 as u64
+    /// Get the effective collateral factor in BPS
+    /// 
+    /// - `pair`: The pair the user position belongs to
+    /// - `debt_token`: The token the user is borrowing
+    /// 
+    /// Returns the effective collateral factor in BPS
+    pub fn get_effective_collateral_factor_bps(&self, pair: &Pair, debt_token: &Pubkey) -> u64 {
+        self.get_borrow_limit_and_effective_cf_bps(pair, debt_token).1 as u64
     }
 
     // debt utilization bps = debt / borrow power
