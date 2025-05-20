@@ -57,16 +57,20 @@ impl<'info> AdjustLiquidity<'info> {
 
         // Calculate amounts to remove
         let total_supply = lp_mint.supply;
-        let amount0_out = args.liquidity_in
-            .checked_mul(pair.reserve0)
-            .unwrap()
-            .checked_div(total_supply)
-            .unwrap();
-        let amount1_out = args.liquidity_in
-            .checked_mul(pair.reserve1)
-            .unwrap()
-            .checked_div(total_supply)
-            .unwrap();
+        let amount0_out = (args.liquidity_in as u128)
+            .checked_mul(pair.reserve0 as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .checked_div(total_supply as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .try_into()
+            .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
+        let amount1_out = (args.liquidity_in as u128)
+            .checked_mul(pair.reserve1 as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .checked_div(total_supply as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .try_into()
+            .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
 
         // Check if amounts are sufficient
         require!(
@@ -119,7 +123,7 @@ impl<'info> AdjustLiquidity<'info> {
 
         // Burn LP tokens from user
         token_burn(
-            pair.to_account_info(),
+            ctx.accounts.user.to_account_info(),
             token_program.to_account_info(),
             lp_mint.to_account_info(),
             user_lp_token_account.to_account_info(),
@@ -128,9 +132,9 @@ impl<'info> AdjustLiquidity<'info> {
         )?;
 
         // Update reserves
-        pair.reserve0 = pair.reserve0.checked_sub(amount0_out).unwrap();
-        pair.reserve1 = pair.reserve1.checked_sub(amount1_out).unwrap();
-        pair.total_supply = pair.total_supply.checked_sub(args.liquidity_in).unwrap();
+        pair.reserve0 = pair.reserve0.checked_sub(amount0_out).ok_or(ErrorCode::ReserveOverflow)?;
+        pair.reserve1 = pair.reserve1.checked_sub(amount1_out).ok_or(ErrorCode::ReserveOverflow)?;
+        pair.total_supply = pair.total_supply.checked_sub(args.liquidity_in).ok_or(ErrorCode::SupplyOverflow)?;
 
         // Emit event
         emit!(BurnEvent {
