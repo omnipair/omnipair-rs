@@ -46,11 +46,13 @@ impl UserPosition {
                     pair.total_debt0_shares = amount;
                     self.debt0_shares = amount;
                 } else {
-                    let shares = amount
-                        .checked_mul(pair.total_debt0_shares)
+                    let shares = (amount as u128)
+                        .checked_mul(pair.total_debt0_shares as u128)
                         .ok_or(ErrorCode::DebtShareMathOverflow)?
-                        .checked_div(pair.total_debt0)
-                        .ok_or(ErrorCode::DebtShareDivisionOverflow)?;
+                        .checked_div(pair.total_debt0 as u128)
+                        .ok_or(ErrorCode::DebtShareDivisionOverflow)?
+                        .try_into()
+                        .map_err(|_| ErrorCode::DebtShareDivisionOverflow)?;
                     pair.total_debt0_shares = pair.total_debt0_shares.saturating_add(shares);
                     self.debt0_shares = self.debt0_shares.saturating_add(shares);
                 }
@@ -61,11 +63,13 @@ impl UserPosition {
                     pair.total_debt1_shares = amount;
                     self.debt1_shares = amount;
                 } else {
-                    let shares = amount
-                        .checked_mul(pair.total_debt1_shares)
+                    let shares = (amount as u128)
+                        .checked_mul(pair.total_debt1_shares as u128)
                         .ok_or(ErrorCode::DebtShareMathOverflow)?
-                        .checked_div(pair.total_debt1)
-                        .ok_or(ErrorCode::DebtShareDivisionOverflow)?;
+                        .checked_div(pair.total_debt1 as u128)
+                        .ok_or(ErrorCode::DebtShareDivisionOverflow)?
+                        .try_into()
+                        .map_err(|_| ErrorCode::DebtShareDivisionOverflow)?;
                     pair.total_debt1_shares = pair.total_debt1_shares.saturating_add(shares);
                     self.debt1_shares = self.debt1_shares.saturating_add(shares);
                 }
@@ -80,21 +84,25 @@ impl UserPosition {
         msg!("decrease_debt: {}", amount);
         match *debt_token == pair.token0 {
             true => {
-                let shares = amount
-                    .checked_mul(pair.total_debt0_shares)
+                let shares = (amount as u128)
+                    .checked_mul(pair.total_debt0_shares as u128)
                     .ok_or(ErrorCode::DebtShareMathOverflow)?
-                    .checked_div(pair.total_debt0)
-                    .ok_or(ErrorCode::DebtShareDivisionOverflow)?;
+                    .checked_div(pair.total_debt0 as u128)
+                    .ok_or(ErrorCode::DebtShareDivisionOverflow)?
+                    .try_into()
+                    .map_err(|_| ErrorCode::DebtShareDivisionOverflow)?;
                 self.debt0_shares = self.debt0_shares.saturating_sub(shares);
                 pair.total_debt0_shares = pair.total_debt0_shares.saturating_sub(shares);
                 pair.total_debt0 = pair.total_debt0.saturating_sub(amount);
             }
             false => {
-                let shares = amount
-                    .checked_mul(pair.total_debt1_shares)
+                let shares = (amount as u128)
+                    .checked_mul(pair.total_debt1_shares as u128)
                     .ok_or(ErrorCode::DebtShareMathOverflow)?
-                    .checked_div(pair.total_debt1)
-                    .ok_or(ErrorCode::DebtShareDivisionOverflow)?;
+                    .checked_div(pair.total_debt1 as u128)
+                    .ok_or(ErrorCode::DebtShareDivisionOverflow)?
+                    .try_into()
+                    .map_err(|_| ErrorCode::DebtShareDivisionOverflow)?;
                 self.debt1_shares = self.debt1_shares.saturating_sub(shares);
                 pair.total_debt1_shares = pair.total_debt1_shares.saturating_sub(shares);
                 pair.total_debt1 = pair.total_debt1.saturating_sub(amount);
