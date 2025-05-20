@@ -14,10 +14,11 @@ impl<'info> CommonAdjustPosition<'info> {
         
         require!(*amount > 0, ErrorCode::AmountZero);
 
-        let is_token0 = self.user_token_account.mint == self.pair.token0;
+        let collateral_token = self.user_token_account.mint;
+        let is_collateral_token0 = collateral_token == self.pair.token0;
         
         // Check if user has enough collateral
-        match is_token0 {
+        match is_collateral_token0 {
             true => {
                 require_gte!(
                     self.user_position.collateral0,
@@ -34,17 +35,58 @@ impl<'info> CommonAdjustPosition<'info> {
             }
         }
 
-        // Check if collateral is undercollateralized
-        let borrow_limit = self.user_position.get_borrow_limit(&self.pair, &self.token_vault.mint);
-        let debt = match is_token0 {
-            true => self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares)?,
-            false => self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares)?,
+        // Calculate current debt
+        let debt = match is_collateral_token0 {
+            true => self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares)?,
+            false => self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares)?,
         };
 
+        // If no debt, can withdraw all collateral
+        if debt == 0 {
+            return Ok(());
+        }
+
+        // Calculate required collateral for current debt
+        let debt_token = if is_collateral_token0 { self.pair.token1 } else { self.pair.token0 };
+        let effective_cf_bps = self.user_position.get_effective_collateral_factor_bps(&self.pair, &debt_token);
+        
+        // Calculate minimum required collateral value in debt token
+        let min_collateral_value = (debt as u128)
+            .checked_mul(BPS_DENOMINATOR as u128)
+            .ok_or(ErrorCode::DebtMathOverflow)?
+            .checked_div(effective_cf_bps as u128)
+            .ok_or(ErrorCode::DebtMathOverflow)?;
+
+        // Convert collateral value back to collateral token amount
+        let collateral_price = if is_collateral_token0 {
+            self.pair.ema_price0_nad()
+        } else {
+            self.pair.ema_price1_nad()
+        };
+
+        let min_collateral = (min_collateral_value as u128)
+            .checked_mul(NAD as u128)
+            .ok_or(ErrorCode::DebtMathOverflow)?
+            .checked_div(collateral_price as u128)
+            .ok_or(ErrorCode::DebtMathOverflow)?;
+
+        // Calculate current collateral
+        let current_collateral = if is_collateral_token0 {
+            self.user_position.collateral0
+        } else {
+            self.user_position.collateral1
+        };
+
+        // Calculate maximum withdrawable amount
+        let max_withdrawable = current_collateral
+            .checked_sub(min_collateral as u64)
+            .ok_or(ErrorCode::DebtMathOverflow)?;
+
+        // Ensure withdrawal amount doesn't exceed maximum withdrawable
         require_gte!(
-            borrow_limit,
-            debt,
-            ErrorCode::NotUndercollateralized
+            max_withdrawable,
+            *amount,
+            ErrorCode::BorrowingPowerExceeded
         );
         
         Ok(())
