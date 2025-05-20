@@ -84,6 +84,10 @@ async function main() {
         ? TOKEN_2022_PROGRAM_ID
         : TOKEN_PROGRAM_ID;
 
+    console.log('Token0 Program:', token0Program.toBase58());
+    console.log('Token1 Program:', token1Program.toBase58());
+    console.log('LP Token Program:', lpTokenProgram.toBase58());
+
     // Get associated token addresses for vaults
     const token0Vault = await getAssociatedTokenAddress(
         TOKEN0_MINT,
@@ -109,6 +113,10 @@ async function main() {
         ASSOCIATED_TOKEN_PROGRAM_ID
     );
 
+    const lpTokenAccountInfo = await getAccount(provider.connection, deployerLpTokenAccount);
+    console.log('LP Token Account Owner:', lpTokenAccountInfo.owner.toBase58());
+    console.log('Expected Owner (Deployer):', DEPLOYER_KEYPAIR.publicKey.toBase58());
+
     // Get current LP token balance
     const lpBalance = (await getAccount(provider.connection, deployerLpTokenAccount)).amount;
     const removeAmount = new BN(lpBalance.toString()).divn(2); // Remove half of LP tokens
@@ -119,6 +127,10 @@ async function main() {
     console.log('LP Amount:', removeAmount.toString());
     console.log('Min Token0:', minAmount0.toString());
     console.log('Min Token1:', minAmount1.toString());
+    console.log('LP Token Account:', deployerLpTokenAccount.toBase58());
+    console.log('Balance:', lpBalance.toString());
+    console.log('userToken0Account:', DEPLOYER_TOKEN0_ACCOUNT.toBase58());
+    console.log('userToken1Account:', DEPLOYER_TOKEN1_ACCOUNT.toBase58());
 
     // Create transaction
     const tx = await program.methods
