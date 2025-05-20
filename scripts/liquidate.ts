@@ -106,7 +106,7 @@ async function main() {
     );
 
     // Liquidation parameters
-    const liquidateToken0 = false; // Set to false to liquidate token1 position
+    const liquidateToken0 = true; // Set to false to liquidate token1 position
 
     console.log('Liquidating with parameters:');
     console.log('Token:', liquidateToken0 ? 'Token0' : 'Token1');
