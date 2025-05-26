@@ -14,29 +14,6 @@ impl<'info> CommonAdjustPosition<'info> {
         
         require!(*borrow_amount > 0, ErrorCode::AmountZero);
         
-        // Check if vault has enough tokens
-        require_gte!(
-            self.token_vault.amount,
-            *borrow_amount,
-            ErrorCode::InsufficientAmount
-        );
-
-        let user_debt = match self.user_token_account.mint == self.pair.token0 {
-            true => self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares)?,
-            false => self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares)?,
-        }; 
-        
-        let borrow_limit = self.user_position.get_borrow_limit(&self.pair, &self.token_vault.mint);
-        
-        let new_debt = user_debt
-            .checked_add(*borrow_amount)
-            .ok_or(ErrorCode::DebtMathOverflow)?;
-        require_gte!(
-            borrow_limit,
-            new_debt,
-            ErrorCode::BorrowingPowerExceeded
-        );
-        
         Ok(())
     }
 
@@ -69,7 +46,25 @@ impl<'info> CommonAdjustPosition<'info> {
         } = ctx.accounts;
         let pair = &mut ctx.accounts.pair;
 
-        let borrow_amount: u64 = args.amount;
+        let user_debt = match user_token_account.mint == pair.token0 {
+            true => user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
+            false => user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
+        }; 
+        
+        let borrow_limit = user_position.get_borrow_limit(&pair, &token_vault.mint);
+        let is_max_borrow = args.amount == u64::MAX;
+        let remaining_borrow_limit = borrow_limit.checked_sub(user_debt).ok_or(ErrorCode::DebtMathOverflow)?;
+        let borrow_amount = if is_max_borrow { remaining_borrow_limit } else { args.amount };
+        
+        let new_debt = user_debt
+            .checked_add( borrow_amount )
+            .ok_or(ErrorCode::DebtMathOverflow)?;
+
+        require_gte!(
+            borrow_limit,
+            new_debt,
+            ErrorCode::BorrowingPowerExceeded
+        );
         let is_token0 = user_token_account.mint == pair.token0;
 
         // Transfer tokens from vault to user
