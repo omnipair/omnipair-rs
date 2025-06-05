@@ -12,9 +12,9 @@ import {
     AuthorityType
 } from '@solana/spl-token';
 import {
-    PROGRAM_ID as TOKEN_METADATA_PROGRAM_ID,
     createCreateMetadataAccountV3Instruction,
 } from '@metaplex-foundation/mpl-token-metadata';
+import { PROGRAM_ID as TOKEN_METADATA_PROGRAM_ID } from '@metaplex-foundation/mpl-token-metadata/dist/src/generated/index.js';
 import idl from '../../target/idl/omnipair.json' with { type: "json" };
 import type { Omnipair } from '../../target/types/omnipair';
 import * as anchor from '@coral-xyz/anchor';
@@ -78,7 +78,7 @@ async function createMetadata(
         {
             metadata: metadataAddress,
             mint: mint,
-            mintAuthority: payer.publicKey,
+            mintAuthority: mintAuthority,
             payer: payer.publicKey,
             updateAuthority: payer.publicKey,
         },

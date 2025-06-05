@@ -24,6 +24,8 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.31.0",
+    "@metaplex-foundation/mpl-token-metadata": "2.13.0",
+    "@metaplex-foundation/umi": "0.8.2",
     "@solana/spl-token": "^0.4.0",
     "@solana/web3.js": "^1.95.0",
     "dotenv": "^16.5.0"
