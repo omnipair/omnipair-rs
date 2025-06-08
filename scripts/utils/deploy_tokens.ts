@@ -7,7 +7,6 @@ import {
 import { 
     TOKEN_PROGRAM_ID, 
     createMint,
-
     setAuthority,
     AuthorityType
 } from '@solana/spl-token';
@@ -78,7 +77,7 @@ async function createMetadata(
         {
             metadata: metadataAddress,
             mint: mint,
-            mintAuthority: mintAuthority,
+            mintAuthority: payer.publicKey,
             payer: payer.publicKey,
             updateAuthority: payer.publicKey,
         },
