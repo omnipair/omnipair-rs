@@ -17,7 +17,6 @@ pub const NATURAL_LOG_OF_TWO_NAD: u64 = 693_147_180; // ln(2) scaled by NAD
 
 // Pair constants
 pub const MIN_LIQUIDITY: u64 = 1_000; // 10^3
-pub const FEE_BPS: u64 = 30;
 pub const MIN_RATE: u64 = 1; // 0.0001%
 pub const MAX_RATE: u64 = 1000000; // 100%
 

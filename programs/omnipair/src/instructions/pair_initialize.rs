@@ -16,6 +16,11 @@ use crate::constants::*;
 use crate::utils::account::get_size_with_discriminator;
 use crate::events::PairCreatedEvent;
 
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct InitializePairArgs {
+    pub swap_fee_bps: u16,
+}
+
 #[derive(Accounts)]
 pub struct InitializePair<'info> {
     #[account(mut)]
@@ -74,7 +79,7 @@ pub struct InitializePair<'info> {
 }
 
 /// TODO: add swap fee logic
-impl InitializePair<'_> {
+impl<'info> InitializePair<'info> {
     pub fn validate(&self) -> Result<()> {
         let InitializePair { 
             token0_mint, 
@@ -116,9 +121,10 @@ impl InitializePair<'_> {
     }
 
     // TODO: create rate model in the same instruction
-    pub fn handle_initialize(ctx: Context<Self>) -> Result<()> {
+    pub fn handle_initialize(ctx: Context<Self>, args: InitializePairArgs) -> Result<()> {
         let current_time = Clock::get()?.unix_timestamp;
         let pair = &mut ctx.accounts.pair;
+        let InitializePairArgs { swap_fee_bps } = args;
         
         let (
             token0, 
@@ -142,6 +148,7 @@ impl InitializePair<'_> {
             // maybe precompute `token0_scale_to_nad` and `token1_scale_to_nad` for cheaper calculations later
             // only if token0_decimals and token1_decimals are < 9
             rate_model,
+            swap_fee_bps,
             current_time,
             ctx.bumps.pair,
         ));

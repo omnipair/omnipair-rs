@@ -13,7 +13,7 @@ pub use utils::account::*;
 pub use instructions::pair_initialize::InitializePair;
 pub use instructions::faucet_mint::FaucetMint;
 
-declare_id!("FaAt1g93kZWVZbEqLe7McjtHu5Ev4i2mWRJb85fKyEpZ");
+declare_id!("HnCkcyYUXUpo65Z75PyrbVUNFV62vm7z8HaaXdVmkFmi");
 
 #[program]
 pub mod omnipair {
@@ -32,8 +32,8 @@ pub mod omnipair {
 
     // Pair instructions
     #[access_control(ctx.accounts.validate_and_create_rate_model())]
-    pub fn initialize_pair(ctx: Context<InitializePair>) -> Result<()> {
-        InitializePair::handle_initialize(ctx)
+    pub fn initialize_pair(ctx: Context<InitializePair>, args: InitializePairArgs) -> Result<()> {
+        InitializePair::handle_initialize(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
