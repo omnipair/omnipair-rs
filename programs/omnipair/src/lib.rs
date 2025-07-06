@@ -15,6 +15,12 @@ pub use instructions::faucet_mint::FaucetMint;
 
 declare_id!("HnCkcyYUXUpo65Z75PyrbVUNFV62vm7z8HaaXdVmkFmi");
 
+
+pub mod deployer {
+    use super::{pubkey, Pubkey};
+    pub const ID: Pubkey = pubkey!("C7GKpfqQyBoFR6S13DECwBjdi7aCQKbbeKjXm4Jt5Hds");
+}
+
 #[program]
 pub mod omnipair {
     use super::*;
@@ -28,6 +34,11 @@ pub mod omnipair {
 
     pub fn view_user_position_data(ctx: Context<ViewUserPositionData>, getter: UserPositionViewKind) -> Result<()> {
         ViewUserPositionData::handle_view_data(ctx, getter)
+    }
+
+    // Futarchy authority instructions
+    pub fn init_futarchy_authority(ctx: Context<InitFutarchyAuthority>, args: InitFutarchyAuthorityArgs) -> Result<()> {
+        InitFutarchyAuthority::handle_init(ctx, args)
     }
 
     // Pair instructions
