@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::state::futarchy_authority::FutarchyAuthority;
 use crate::constants::FUTARCHY_AUTHORITY_SEED_PREFIX;
-use crate::utils::account::get_size_with_discriminator;
 use crate::errors::ErrorCode;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
