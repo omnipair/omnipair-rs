@@ -10,6 +10,7 @@ use anchor_spl::{
 use crate::state::{
     pair::Pair,
     rate_model::RateModel,
+    pair_config::PairConfig,
 };
 use crate::errors::ErrorCode;
 use crate::constants::*;
@@ -41,6 +42,13 @@ pub struct InitializePair<'info> {
         bump
     )]
     pub pair: Box<Account<'info, Pair>>,
+
+    #[account(
+        init,
+        payer = deployer,
+        space = get_size_with_discriminator::<PairConfig>(),
+    )]
+    pub pair_config: Box<Account<'info, PairConfig>>,
 
     #[account(
         init,

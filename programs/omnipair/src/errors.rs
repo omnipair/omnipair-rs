@@ -2,6 +2,12 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum ErrorCode {
+    #[msg("Invalid deployer")]
+    InvalidDeployer,
+
+    #[msg("Invalid futarchy authority")]
+    InvalidFutarchyAuthority,
+
     #[msg("Invalid argument")]
     InvalidArgument,
 

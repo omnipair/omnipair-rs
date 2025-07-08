@@ -39,6 +39,10 @@ pub const LP_MINT_SEED_PREFIX: &[u8] = b"gamm_lp_mint";
 pub const FACTORY_SEED_PREFIX: &[u8] = b"gamm_factory";
 #[constant]
 pub const POSITION_SEED_PREFIX: &[u8] = b"gamm_position";
+#[constant]
+pub const PAIR_CONFIG_SEED_PREFIX: &[u8] = b"gamm_pair_config";
+#[constant]
+pub const FUTARCHY_AUTHORITY_SEED_PREFIX: &[u8] = b"futarchy_authority";
 
 // Liquidation constants
 #[constant]
