@@ -8,7 +8,7 @@ use crate::{
     events::{AdjustCollateralEvent, UserPositionCreatedEvent, UserPositionUpdatedEvent},
     utils::{token::transfer_from_user_to_pool_vault, account::get_size_with_discriminator},
     instructions::lending::common::AdjustPositionArgs,
-    state::{user_position::UserPosition, pair::Pair, rate_model::RateModel},
+    state::{user_position::UserPosition, pair::Pair, rate_model::RateModel, pair_config::PairConfig},
     constants::*,
 };
 
@@ -26,6 +26,19 @@ pub struct AddCollateral<'info> {
     pub pair: Account<'info, Pair>,
 
     #[account(
+        mut,
+        seeds = [PAIR_CONFIG_SEED_PREFIX, pair.token0.key().as_ref(), pair.token1.key().as_ref()],
+        bump
+    )]
+    pub pair_config: Account<'info, PairConfig>,
+
+    #[account(
+        mut,
+        address = pair_config.rate_model,
+    )]
+    pub rate_model: Account<'info, RateModel>,
+
+    #[account(
         init_if_needed,
         payer = user,
         space = get_size_with_discriminator::<UserPosition>(),
@@ -39,12 +52,6 @@ pub struct AddCollateral<'info> {
         bump
     )]
     pub user_position: Account<'info, UserPosition>,
-
-    #[account(
-        mut,
-        address = pair.rate_model,
-    )]
-    pub rate_model: Account<'info, RateModel>,
 
     #[account(
         mut,

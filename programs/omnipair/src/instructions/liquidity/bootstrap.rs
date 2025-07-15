@@ -8,7 +8,7 @@ use anchor_spl::{
     associated_token::AssociatedToken,
 };
 use crate::{
-    constants::*, generate_gamm_pair_seeds, state::{pair::Pair, rate_model::RateModel}
+    constants::*, generate_gamm_pair_seeds, state::{pair::Pair, rate_model::RateModel, pair_config::PairConfig}
 };
 use crate::errors::ErrorCode;
 use crate::utils::token::{
@@ -33,9 +33,17 @@ pub struct BootstrapPair<'info> {
         bump
     )]
     pub pair: Account<'info, Pair>,
+
     #[account(
         mut,
-        address = pair.rate_model,
+        seeds = [PAIR_CONFIG_SEED_PREFIX, pair.token0.key().as_ref(), pair.token1.key().as_ref()],
+        bump
+    )]
+    pub pair_config: Account<'info, PairConfig>,
+
+    #[account(
+        mut,
+        address = pair_config.rate_model,
     )]
     pub rate_model: Account<'info, RateModel>,
     

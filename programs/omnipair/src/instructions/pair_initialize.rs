@@ -132,6 +132,7 @@ impl<'info> InitializePair<'info> {
     pub fn handle_initialize(ctx: Context<Self>, args: InitializePairArgs) -> Result<()> {
         let current_time = Clock::get()?.unix_timestamp;
         let pair = &mut ctx.accounts.pair;
+        let pair_config = &mut ctx.accounts.pair_config;
         let InitializePairArgs { swap_fee_bps } = args;
         
         let (
@@ -153,10 +154,9 @@ impl<'info> InitializePair<'info> {
             token1,
             token0_decimals,
             token1_decimals,
+            pair_config.key(),
             // maybe precompute `token0_scale_to_nad` and `token1_scale_to_nad` for cheaper calculations later
             // only if token0_decimals and token1_decimals are < 9
-            rate_model,
-            swap_fee_bps,
             current_time,
             ctx.bumps.pair,
         ));

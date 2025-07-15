@@ -11,6 +11,7 @@ pub struct Pair {
     pub token1: Pubkey,
     pub token0_decimals: u8,
     pub token1_decimals: u8,
+    pub config: Pubkey,
     
     // Reserves
     pub reserve0: u64,
@@ -21,11 +22,9 @@ pub struct Pair {
     pub last_price1_ema: u64,
     pub last_update: i64,
     
-    // Rate model
-    pub rate_model: Pubkey,
+    // Rates
     pub last_rate0: u64,
     pub last_rate1: u64,
-    pub swap_fee_bps: u16,
     
     // Debt tracking
     pub total_debt0: u64,
@@ -50,8 +49,7 @@ impl Pair {
         token1: Pubkey,
         token0_decimals: u8,
         token1_decimals: u8,
-        rate_model: Pubkey,
-        swap_fee_bps: u16,
+        config: Pubkey,
         current_time: i64,
         bump: u8,
     ) -> Self {
@@ -60,7 +58,8 @@ impl Pair {
             token1,
             token0_decimals,
             token1_decimals,
-            rate_model,
+            config,
+
             last_update: current_time,
             bump,
 
@@ -72,8 +71,6 @@ impl Pair {
             last_price1_ema: 0,
             last_rate0: MIN_RATE,
             last_rate1: MIN_RATE,
-
-            swap_fee_bps,
 
             total_debt0: 0,
             total_debt1: 0,
