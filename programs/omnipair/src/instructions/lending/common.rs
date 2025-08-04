@@ -12,7 +12,6 @@ use crate::{
     state::user_position::UserPosition,
     state::pair_config::PairConfig,
     constants::*,
-    errors::ErrorCode,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]

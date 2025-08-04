@@ -12,6 +12,7 @@ pub use instructions::*;
 pub use utils::account::*;
 pub use instructions::pair_initialize::InitializePair;
 pub use instructions::faucet_mint::FaucetMint;
+pub use instructions::emit_value::{EmitValueArgs, PairViewKind, UserPositionViewKind, ViewPairData, ViewUserPositionData};
 
 declare_id!("HnCkcyYUXUpo65Z75PyrbVUNFV62vm7z8HaaXdVmkFmi");
 
@@ -32,8 +33,8 @@ pub mod omnipair {
         ViewPairData::handle_view_data(ctx, getter)
     }
 
-    pub fn view_user_position_data(ctx: Context<ViewUserPositionData>, getter: UserPositionViewKind) -> Result<()> {
-        ViewUserPositionData::handle_view_data(ctx, getter)
+    pub fn view_user_position_data(ctx: Context<ViewUserPositionData>, getter: UserPositionViewKind, args: EmitValueArgs) -> Result<()> {
+        ViewUserPositionData::handle_view_data(ctx, getter, args)
     }
 
     // Futarchy authority instructions

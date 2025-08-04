@@ -1,6 +1,13 @@
 use anchor_lang::prelude::*;
 use crate::state::{Pair, UserPosition};
 use std::fmt;
+use crate::constants::*;
+use crate::errors::ErrorCode;
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct EmitValueArgs {
+    pub debt_amount: Option<u64>,
+}
 
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -29,6 +36,8 @@ pub enum UserPositionViewKind {
     UserToken1BorrowingPower,
     UserToken0EffectiveCollateralFactorBps,
     UserToken1EffectiveCollateralFactorBps,
+    UserToken0MinCollateralForDebt,
+    UserToken1MinCollateralForDebt,
     UserToken0DebtUtilizationBps,
     UserToken1DebtUtilizationBps,
 }
@@ -39,6 +48,8 @@ impl fmt::Display for UserPositionViewKind {
             UserPositionViewKind::UserToken1BorrowingPower => write!(f, "UserToken1BorrowingPower"),
             UserPositionViewKind::UserToken0EffectiveCollateralFactorBps => write!(f, "UserToken0EffectiveCollateralFactorBps"),
             UserPositionViewKind::UserToken1EffectiveCollateralFactorBps => write!(f, "UserToken1EffectiveCollateralFactorBps"),
+            UserPositionViewKind::UserToken0MinCollateralForDebt => write!(f, "UserToken0MinCollateralForDebt"),
+            UserPositionViewKind::UserToken1MinCollateralForDebt => write!(f, "UserToken1MinCollateralForDebt"),
             UserPositionViewKind::UserToken0DebtUtilizationBps => write!(f, "UserToken0DebtUtilizationBps"),
             UserPositionViewKind::UserToken1DebtUtilizationBps => write!(f, "UserToken1DebtUtilizationBps"),
         }
@@ -79,15 +90,41 @@ impl ViewPairData<'_> {
 }
 
 impl ViewUserPositionData<'_> {
-    pub fn handle_view_data(ctx: Context<Self>, getter: UserPositionViewKind) -> Result<()> {
+    pub fn handle_view_data(ctx: Context<Self>, getter: UserPositionViewKind, args: EmitValueArgs) -> Result<()> {
         let pair = &ctx.accounts.pair;
         let user_position = &ctx.accounts.user_position;
+        let token0_pessimistic_cf_bps = user_position.get_pessimistic_collateral_factor_bps(&pair, &pair.token0);
+        let token1_pessimistic_cf_bps = user_position.get_pessimistic_collateral_factor_bps(&pair, &pair.token1);
 
         let value = match getter {
-            UserPositionViewKind::UserToken0BorrowingPower => user_position.get_borrow_limit(&pair, &pair.token0),
-            UserPositionViewKind::UserToken1BorrowingPower => user_position.get_borrow_limit(&pair, &pair.token1),
-            UserPositionViewKind::UserToken0EffectiveCollateralFactorBps => user_position.get_effective_collateral_factor_bps(&pair, &pair.token0),
-            UserPositionViewKind::UserToken1EffectiveCollateralFactorBps => user_position.get_effective_collateral_factor_bps(&pair, &pair.token1),
+            UserPositionViewKind::UserToken0BorrowingPower => {
+                token0_pessimistic_cf_bps
+                    .checked_mul(user_position.collateral1)
+                    .ok_or(ErrorCode::Overflow)?
+                    .checked_div(BPS_DENOMINATOR)
+                    .ok_or(ErrorCode::DenominatorOverflow)?
+            },
+            UserPositionViewKind::UserToken1BorrowingPower => {
+                token1_pessimistic_cf_bps
+                    .checked_mul(user_position.collateral0)
+                    .ok_or(ErrorCode::Overflow)?
+                    .checked_div(BPS_DENOMINATOR)
+                    .ok_or(ErrorCode::DenominatorOverflow)?
+            },
+            UserPositionViewKind::UserToken0EffectiveCollateralFactorBps => {
+                token0_pessimistic_cf_bps
+            },
+            UserPositionViewKind::UserToken1EffectiveCollateralFactorBps => {
+                token1_pessimistic_cf_bps
+            },
+            UserPositionViewKind::UserToken0MinCollateralForDebt => {
+                let debt_amount = args.debt_amount.ok_or(ErrorCode::ArgumentMissing)?;
+                user_position.get_min_collateral_and_cf_bps_for_debt(&pair, debt_amount).unwrap().0
+            },
+            UserPositionViewKind::UserToken1MinCollateralForDebt => {
+                let debt_amount = args.debt_amount.ok_or(ErrorCode::ArgumentMissing)?;
+                user_position.get_min_collateral_and_cf_bps_for_debt(&pair, debt_amount).unwrap().0
+            },
             UserPositionViewKind::UserToken0DebtUtilizationBps => user_position.get_debt_utilization_bps(&pair, &pair.token0).unwrap(),
             UserPositionViewKind::UserToken1DebtUtilizationBps => user_position.get_debt_utilization_bps(&pair, &pair.token1).unwrap(),
         };

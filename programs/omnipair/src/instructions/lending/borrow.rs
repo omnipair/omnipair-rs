@@ -4,6 +4,7 @@ use crate::{
     errors::ErrorCode,
     events::{AdjustDebtEvent, UserPositionUpdatedEvent},
     utils::token::transfer_from_pool_vault_to_user,
+    utils::gamm_math::pessimistic_max_debt,
     generate_gamm_pair_seeds,
     instructions::lending::common::{CommonAdjustPosition, AdjustPositionArgs},
 };
@@ -35,7 +36,6 @@ impl<'info> CommonAdjustPosition<'info> {
     /// Assumes that collateral checks have already passed via [`CommonAdjustPosition::validate_borrow`].
     pub fn handle_borrow(ctx: Context<Self>, args: AdjustPositionArgs) -> Result<()> {
         let CommonAdjustPosition {
-            token_vault,
             user_token_account,
             vault_token_mint,
             token_program,
@@ -45,13 +45,27 @@ impl<'info> CommonAdjustPosition<'info> {
             ..
         } = ctx.accounts;
         let pair = &mut ctx.accounts.pair;
+        let debt_token_vault = &ctx.accounts.token_vault;
+        let user_collateral = if debt_token_vault.mint == pair.token0 { user_position.collateral1 } else { user_position.collateral0 };
 
         let user_debt = match user_token_account.mint == pair.token0 {
             true => user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
             false => user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
-        }; 
+        };
+
+
+        let (collateral_spot_price, collateral_ema_price) = if debt_token_vault.mint == pair.token0 {
+            (pair.spot_price0_nad(), pair.ema_price0_nad())
+        } else {
+            (pair.spot_price1_nad(), pair.ema_price1_nad())
+        };
         
-        let borrow_limit = user_position.get_borrow_limit(&pair, &token_vault.mint);
+        // If EMA lags behind a falling spot price, there will be a window where the collateral value may be artificially inflated.
+        // To prevent bad debt, we compute a pessimistic collateral factor:
+        // CF_pessimistic = min(CF_base, P_spot / P_EMA * CF_base)
+        // This ensures the solvency invariant: P_spot >= P_EMA * CF
+        // TODO: Δprice needs an EMA, because spot price can be manipulated to match EMA to bypass this check
+        let (borrow_limit, _) = pessimistic_max_debt(user_collateral, collateral_ema_price, collateral_spot_price, pair.total_debt0)?;
         let is_max_borrow = args.amount == u64::MAX;
         let remaining_borrow_limit = borrow_limit.checked_sub(user_debt).ok_or(ErrorCode::DebtMathOverflow)?;
         let borrow_amount = if is_max_borrow { remaining_borrow_limit } else { args.amount };
@@ -70,7 +84,7 @@ impl<'info> CommonAdjustPosition<'info> {
         // Transfer tokens from vault to user
         transfer_from_pool_vault_to_user(
             pair.to_account_info(),
-            token_vault.to_account_info(),
+            debt_token_vault.to_account_info(),
             user_token_account.to_account_info(),
             vault_token_mint.to_account_info(),
             match vault_token_mint.to_account_info().owner == token_program.key {
@@ -82,7 +96,6 @@ impl<'info> CommonAdjustPosition<'info> {
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
         
-        // Update debt using the increase_debt method
         user_position.increase_debt(pair, &vault_token_mint.key(), borrow_amount)?;
         
         // Emit debt adjustment event

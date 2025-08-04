@@ -7,7 +7,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-omnipair = "FaAt1g93kZWVZbEqLe7McjtHu5Ev4i2mWRJb85fKyEpZ"
+omnipair = "HnCkcyYUXUpo65Z75PyrbVUNFV62vm7z8HaaXdVmkFmi"
 
 [programs.localnet]
 omnipair = "FaAt1g93kZWVZbEqLe7McjtHu5Ev4i2mWRJb85fKyEpZ"

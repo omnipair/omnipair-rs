@@ -5,6 +5,9 @@ pub enum ErrorCode {
     #[msg("Invalid deployer")]
     InvalidDeployer,
 
+    #[msg("Argument missing")]
+    ArgumentMissing,
+
     #[msg("Invalid futarchy authority")]
     InvalidFutarchyAuthority,
 
