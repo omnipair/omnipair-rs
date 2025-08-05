@@ -97,6 +97,8 @@ impl<'info> CommonAdjustPosition<'info> {
         )?;
         
         user_position.increase_debt(pair, &vault_token_mint.key(), borrow_amount)?;
+        // update user position fixed CF
+        user_position.update_fixed_cf(&pair, &pair.get_debt_token(&vault_token_mint.key()));
         
         // Emit debt adjustment event
         let (amount0, amount1) = if is_token0 {

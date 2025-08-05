@@ -85,6 +85,21 @@ impl Pair {
         self.reserve0 as u128 * self.reserve1 as u128
     }
 
+    pub fn get_collateral_token(&self, collateral_token_mint: &Pubkey) -> Pubkey {
+       self.get_token_y(collateral_token_mint)
+    }
+
+    pub fn get_debt_token(&self, debt_token_mint: &Pubkey) -> Pubkey {
+        self.get_token_y(debt_token_mint)
+    }
+
+    pub fn get_token_y(&self, token_y: &Pubkey) -> Pubkey {
+        match *token_y == self.token0 {
+            true => self.token1,
+            false => self.token0,
+        }
+    }
+
     pub fn spot_price0_nad(&self) -> u64 {
         match self.reserve0 {
             0 => 0,

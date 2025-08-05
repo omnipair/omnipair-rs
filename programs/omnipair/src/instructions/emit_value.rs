@@ -93,8 +93,8 @@ impl ViewUserPositionData<'_> {
     pub fn handle_view_data(ctx: Context<Self>, getter: UserPositionViewKind, args: EmitValueArgs) -> Result<()> {
         let pair = &ctx.accounts.pair;
         let user_position = &ctx.accounts.user_position;
-        let token0_pessimistic_cf_bps = user_position.get_pessimistic_collateral_factor_bps(&pair, &pair.token0);
-        let token1_pessimistic_cf_bps = user_position.get_pessimistic_collateral_factor_bps(&pair, &pair.token1);
+        let token0_pessimistic_cf_bps = user_position.collateral1_applied_min_cf_bps as u64;
+        let token1_pessimistic_cf_bps = user_position.collateral0_applied_min_cf_bps as u64;
 
         let value = match getter {
             UserPositionViewKind::UserToken0BorrowingPower => {
