@@ -10,7 +10,6 @@ use crate::{
     state::pair::Pair,
     state::rate_model::RateModel,
     state::user_position::UserPosition,
-    state::pair_config::PairConfig,
     constants::*,
 };
 
@@ -47,14 +46,7 @@ pub struct CommonAdjustPosition<'info> {
 
     #[account(
         mut,
-        seeds = [PAIR_CONFIG_SEED_PREFIX, pair.token0.key().as_ref(), pair.token1.key().as_ref()],
-        bump
-    )]
-    pub pair_config: Account<'info, PairConfig>,
-
-    #[account(
-        mut,
-        address = pair_config.rate_model,
+        address = pair.rate_model,
     )]
     pub rate_model: Account<'info, RateModel>,
 

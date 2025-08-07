@@ -29,14 +29,7 @@ pub struct Swap<'info> {
 
     #[account(
         mut,
-        seeds = [PAIR_CONFIG_SEED_PREFIX, pair.token0.key().as_ref(), pair.token1.key().as_ref()],
-        bump
-    )]
-    pub pair_config: Account<'info, PairConfig>,
-
-    #[account(
-        mut,
-        address = pair_config.rate_model,
+        address = pair.rate_model,
     )]
     pub rate_model: Account<'info, RateModel>,
     
@@ -92,7 +85,6 @@ impl<'info> Swap<'info> {
         let SwapArgs { amount_in, min_amount_out } = args;
         let Swap {
             pair,
-            pair_config,
             token_in_vault,
             token_out_vault,
             user_token_in_account,
@@ -108,7 +100,7 @@ impl<'info> Swap<'info> {
 
         // amount_in_after_fee = amount_in * (10000 - 30) / 10000 (30bps fee)
         let amount_in_after_fee = (amount_in as u128)
-            .checked_mul(BPS_DENOMINATOR.checked_sub(pair_config.swap_fee_bps as u64).ok_or(ErrorCode::FeeMathOverflow)? as u128)
+            .checked_mul(BPS_DENOMINATOR.checked_sub(pair.swap_fee_bps as u64).ok_or(ErrorCode::FeeMathOverflow)? as u128)
             .ok_or(ErrorCode::FeeMathOverflow)?
             .checked_div(BPS_DENOMINATOR as u128)
             .ok_or(ErrorCode::FeeMathOverflow)?

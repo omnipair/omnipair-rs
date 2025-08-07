@@ -11,7 +11,11 @@ pub const BPS_DENOMINATOR: u64 = 10_000;
 
 // EMA constants
 #[constant]
-pub const DEFAULT_HALF_LIFE: u64 = 7 * 60; // 7 minutes
+pub const DEFAULT_HALF_LIFE: u64 = 7 * 60; // 7 minutes (recommended)
+#[constant]
+pub const MIN_HALF_LIFE: u64 = 1 * 60; // 1 minute
+#[constant]
+pub const MAX_HALF_LIFE: u64 = 12 * 60 * 60; // 12 hours
 pub const TAYLOR_TERMS: u64 = 5;
 pub const NATURAL_LOG_OF_TWO_NAD: u64 = 693_147_180; // ln(2) scaled by NAD
 
@@ -20,7 +24,7 @@ pub const MIN_LIQUIDITY: u64 = 1_000; // 10^3
 pub const MIN_RATE: u64 = 1; // 0.0001%
 pub const MAX_RATE: u64 = 1000000; // 100%
 
-// Rate Model constants
+// Default IRM constants
 pub const TARGET_UTIL_START_NAD: u64 = 330_000_000; // 33% (0.33e9)
 pub const TARGET_UTIL_END_NAD: u64 = 660_000_000; // 66% (0.66e9)
 pub const SECONDS_PER_DAY: u64 = 86_400;

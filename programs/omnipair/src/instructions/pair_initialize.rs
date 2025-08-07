@@ -20,6 +20,8 @@ use crate::events::PairCreatedEvent;
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct InitializePairArgs {
     pub swap_fee_bps: u16,
+    pub half_life: u64,
+    pub pool_deployer_fee_bps: u16,
 }
 
 #[derive(Accounts)]
@@ -133,7 +135,7 @@ impl<'info> InitializePair<'info> {
         let current_time = Clock::get()?.unix_timestamp;
         let pair = &mut ctx.accounts.pair;
         let pair_config = &mut ctx.accounts.pair_config;
-        let InitializePairArgs { swap_fee_bps } = args;
+        let InitializePairArgs { swap_fee_bps, half_life, pool_deployer_fee_bps } = args;
         
         let (
             token0, 
@@ -155,6 +157,10 @@ impl<'info> InitializePair<'info> {
             token0_decimals,
             token1_decimals,
             pair_config.key(),
+            rate_model,
+            swap_fee_bps,
+            half_life,
+            pool_deployer_fee_bps,
             // maybe precompute `token0_scale_to_nad` and `token1_scale_to_nad` for cheaper calculations later
             // only if token0_decimals and token1_decimals are < 9
             current_time,

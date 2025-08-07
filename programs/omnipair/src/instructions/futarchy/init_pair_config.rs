@@ -6,8 +6,6 @@ use crate::errors::ErrorCode;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InitPairConfigArgs {
-    pub rate_model: Pubkey,
-    pub swap_fee_bps: u16,
     pub futarchy_fee_bps: u16,
     pub founder_fee_bps: u16,
     pub nonce: u64,
@@ -45,8 +43,6 @@ impl<'info> InitPairConfig<'info> {
         let pair_config = &mut ctx.accounts.pair_config;
         
         pair_config.set_inner(PairConfig::initialize(
-            args.rate_model,
-            args.swap_fee_bps,
             args.futarchy_fee_bps,
             args.founder_fee_bps,
             args.nonce,

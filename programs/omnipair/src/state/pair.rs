@@ -12,6 +12,11 @@ pub struct Pair {
     pub token0_decimals: u8,
     pub token1_decimals: u8,
     pub config: Pubkey,
+    // pair parameters
+    pub rate_model: Pubkey,
+    pub swap_fee_bps: u16,
+    pub half_life: u64,
+    pub pool_deployer_fee_bps: u16,
     
     // Reserves
     pub reserve0: u64,
@@ -50,6 +55,10 @@ impl Pair {
         token0_decimals: u8,
         token1_decimals: u8,
         config: Pubkey,
+        rate_model: Pubkey,
+        swap_fee_bps: u16,
+        half_life: u64,
+        pool_deployer_fee_bps: u16,
         current_time: i64,
         bump: u8,
     ) -> Self {
@@ -59,6 +68,11 @@ impl Pair {
             token0_decimals,
             token1_decimals,
             config,
+            // pair parameters
+            rate_model,
+            swap_fee_bps,
+            half_life,
+            pool_deployer_fee_bps,
 
             last_update: current_time,
             bump,
@@ -128,7 +142,7 @@ impl Pair {
                 self.last_price0_ema, 
                 self.last_update, 
                 spot_price, 
-                DEFAULT_HALF_LIFE
+                self.half_life
             )
         }
     }
@@ -142,7 +156,7 @@ impl Pair {
                 self.last_price1_ema, 
                 self.last_update, 
                 spot_price, 
-                DEFAULT_HALF_LIFE
+                self.half_life
             )
         }
     }
@@ -163,13 +177,13 @@ impl Pair {
                     self.last_price0_ema,
                     self.last_update,
                     if self.reserve0 > 0 { ((self.reserve1 as u128 * NAD as u128) / self.reserve0 as u128) as u64 } else { 0 },
-                    DEFAULT_HALF_LIFE
+                    self.half_life
                 );
                 self.last_price1_ema = compute_ema(
                     self.last_price1_ema,
                     self.last_update,
                     if self.reserve1 > 0 { ((self.reserve0 as u128 * NAD as u128) / self.reserve1 as u128) as u64 } else { 0 },
-                    DEFAULT_HALF_LIFE
+                    self.half_life
                 );
                 
                 // Calculate utilization rates
