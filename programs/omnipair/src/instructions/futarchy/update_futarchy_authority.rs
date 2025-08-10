@@ -18,10 +18,11 @@ pub struct UpdateFutarchyAuthority<'info> {
     pub authority_signer: Signer<'info>,
 
     #[account(
+        mut,
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
         bump
     )]
-    pub futarchy_authority: Box<Account<'info, FutarchyAuthority>>,
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
 
     pub system_program: Program<'info, System>,
 }

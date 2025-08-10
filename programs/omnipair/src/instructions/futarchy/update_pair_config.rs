@@ -30,7 +30,7 @@ pub struct UpdatePairConfig<'info> {
         seeds = [PAIR_CONFIG_SEED_PREFIX, &args.nonce.to_le_bytes()],
         bump
     )]
-    pub pair_config: Box<Account<'info, PairConfig>>,
+    pub pair_config: Account<'info, PairConfig>,
 
     pub system_program: Program<'info, System>,
 }
@@ -38,6 +38,8 @@ pub struct UpdatePairConfig<'info> {
 impl<'info> UpdatePairConfig<'info> {
     pub fn handle_update(ctx: Context<Self>, args: UpdatePairConfigArgs) -> Result<()> {
         let pair_config = &mut ctx.accounts.pair_config;
+
+        // TODO: do validation on the new args and nonce
         
         PairConfig::update_if_some(&mut pair_config.futarchy_fee_bps, args.futarchy_fee_bps);
         PairConfig::update_if_some(&mut pair_config.founder_fee_bps, args.founder_fee_bps);

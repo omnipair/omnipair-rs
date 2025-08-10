@@ -5,8 +5,26 @@ pub enum ErrorCode {
     #[msg("Invalid deployer")]
     InvalidDeployer,
 
+    #[msg("Invalid nonce")]
+    InvalidNonce,
+
+    #[msg("Invalid futarchy fee bps")]
+    InvalidFutarchyFeeBps,
+
+    #[msg("Invalid founder fee bps")]
+    InvalidFounderFeeBps,
+
     #[msg("Argument missing")]
     ArgumentMissing,
+
+    #[msg("Invalid swap fee bps")]
+    InvalidSwapFeeBps,
+
+    #[msg("Invalid pool deployer fee bps")]
+    InvalidPoolDeployerFeeBps,
+
+    #[msg("Invalid half life")]
+    InvalidHalfLife,
 
     #[msg("Invalid futarchy authority")]
     InvalidFutarchyAuthority,

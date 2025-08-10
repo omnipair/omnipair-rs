@@ -14,7 +14,7 @@ pub use instructions::pair_initialize::InitializePair;
 pub use instructions::faucet_mint::FaucetMint;
 pub use instructions::emit_value::{EmitValueArgs, PairViewKind, UserPositionViewKind, ViewPairData, ViewUserPositionData};
 
-declare_id!("HnCkcyYUXUpo65Z75PyrbVUNFV62vm7z8HaaXdVmkFmi");
+declare_id!("DNRgznrqiUcWrELrvQwCcXLXFCtutVkWZJx23KLN4zLP");
 
 
 pub mod deployer {
@@ -42,8 +42,12 @@ pub mod omnipair {
         InitFutarchyAuthority::handle_init(ctx, args)
     }
 
+    pub fn init_pair_config(ctx: Context<InitPairConfig>, args: InitPairConfigArgs) -> Result<()> {
+        InitPairConfig::handle_init(ctx, args)
+    }
+
     // Pair instructions
-    #[access_control(ctx.accounts.validate_and_create_rate_model())]
+    #[access_control(ctx.accounts.validate_and_create_rate_model(&args))]
     pub fn initialize_pair(ctx: Context<InitializePair>, args: InitializePairArgs) -> Result<()> {
         InitializePair::handle_initialize(ctx, args)
     }

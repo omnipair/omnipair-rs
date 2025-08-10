@@ -13,11 +13,13 @@ import {
     ASSOCIATED_TOKEN_PROGRAM_ID,
     getAssociatedTokenAddress
 } from '@solana/spl-token';
+import BN from 'bn.js';
 import { Program } from '@coral-xyz/anchor';
 import idl from '../target/idl/omnipair.json' with { type: "json" };
 import type { Omnipair } from '../target/types/omnipair';
 import * as anchor from '@coral-xyz/anchor';
 import * as dotenv from 'dotenv';
+import { leU64 } from './utils/index.ts';
 
 // Load environment variables
 dotenv.config();
@@ -50,13 +52,13 @@ async function main() {
     const rateModelKeypair = Keypair.generate();
     console.log('Rate Model address:', rateModelKeypair.publicKey.toBase58());
 
-    // Find PDA for the pair
+    // Find PDA for the pair using correct seed prefix
     const [pairPda] = PublicKey.findProgramAddressSync(
         [Buffer.from('gamm_pair'), TOKEN0_MINT.toBuffer(), TOKEN1_MINT.toBuffer()],
         program.programId
     );
 
-    // Find PDA for the LP mint
+    // Find PDA for the LP mint using correct seed prefix
     const [lpMintPda] = PublicKey.findProgramAddressSync(
         [Buffer.from('gamm_lp_mint'), pairPda.toBuffer()],
         program.programId
@@ -72,6 +74,13 @@ async function main() {
     );
 
     console.log('LP Token ATA:', deployerLpTokenAccount.toBase58());
+    
+    const pairConfigNonce = 1;
+    const [pairConfigPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('gamm_pair_config'), leU64(pairConfigNonce)],
+        program.programId
+    );
+    console.log('Pair Config PDA:', pairConfigPda.toBase58());
 
     // Get token program for each mint
     const token0Program = (await provider.connection.getAccountInfo(TOKEN0_MINT))?.owner.equals(TOKEN_2022_PROGRAM_ID) 
@@ -84,27 +93,26 @@ async function main() {
     console.log('Token0 Program:', token0Program.toBase58());
     console.log('Token1 Program:', token1Program.toBase58());
 
-    // Create transaction
-    const tx = await program.methods
-        .initializePair()
-        .accounts({
+    // Initialize the pair with all required accounts
+    console.log('Initializing pair...');
+    const pairTx = await program.methods
+        .initializePair({
+            swapFeeBps: 30, // 0.3% swap fee
+            halfLife: new BN(60),  // 1 minute in seconds
+            poolDeployerFeeBps: 10, // 0.1% pool deployer fee
+        })
+        .accountsPartial({
             deployer: DEPLOYER_KEYPAIR.publicKey,
+            pairConfig: pairConfigPda,
             token0Mint: TOKEN0_MINT,
             token1Mint: TOKEN1_MINT,
             rateModel: rateModelKeypair.publicKey,
         })
-        .transaction();
+        .signers([DEPLOYER_KEYPAIR, rateModelKeypair])
+        .rpc();
 
-    console.log('Transaction created. Sending...');
-
-    // Send transaction
-    const signature = await sendAndConfirmTransaction(
-        provider.connection,
-        tx,
-        [DEPLOYER_KEYPAIR, rateModelKeypair]
-    );
-
-    console.log('Signature:', signature);
+    console.log('Pair initialization successful!');
+    console.log('Pair Signature:', pairTx);
 }
 
 main().catch(error => {

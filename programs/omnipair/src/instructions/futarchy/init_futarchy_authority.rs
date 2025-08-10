@@ -25,7 +25,7 @@ pub struct InitFutarchyAuthority<'info> {
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
         bump
     )]
-    pub futarchy_authority: Box<Account<'info, FutarchyAuthority>>,
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
 
     pub system_program: Program<'info, System>,
 }
@@ -36,6 +36,7 @@ impl<'info> InitFutarchyAuthority<'info> {
         
         futarchy_authority.set_inner(FutarchyAuthority::initialize(
             args.authority,
+            0,
             ctx.bumps.futarchy_authority,
         ));
 

@@ -56,8 +56,11 @@ async function main() {
         program.programId
     );
 
-    // Get pair account to get rate model
+    // Get pair account to get pair config and rate model
     const pairAccount = await program.account.pair.fetch(pairPda);
+    console.log('Pair config address:', pairAccount.config.toBase58());
+    console.log('Rate model address:', pairAccount.rateModel.toBase58());
+    
     const RATE_MODEL = pairAccount.rateModel;
 
     console.log('Rate Model address:', RATE_MODEL.toBase58());
@@ -125,7 +128,7 @@ async function main() {
             amount1In: amount1,
             minLiquidityOut: minLiquidity
         })
-        .accountsStrict({
+        .accountsPartial({
             user: DEPLOYER_KEYPAIR.publicKey,
             pair: pairPda,
             rateModel: RATE_MODEL,

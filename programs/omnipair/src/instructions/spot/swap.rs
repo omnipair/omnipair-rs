@@ -100,7 +100,7 @@ impl<'info> Swap<'info> {
 
         // amount_in_after_fee = amount_in * (10000 - 30) / 10000 (30bps fee)
         let amount_in_after_fee = (amount_in as u128)
-            .checked_mul(BPS_DENOMINATOR.checked_sub(pair.swap_fee_bps as u64).ok_or(ErrorCode::FeeMathOverflow)? as u128)
+            .checked_mul((BPS_DENOMINATOR as u128).checked_sub(pair.swap_fee_bps as u128).ok_or(ErrorCode::FeeMathOverflow)?)
             .ok_or(ErrorCode::FeeMathOverflow)?
             .checked_div(BPS_DENOMINATOR as u128)
             .ok_or(ErrorCode::FeeMathOverflow)?

@@ -1,3 +1,4 @@
+use anchor_lang::prelude::*;
 use crate::utils::math::SqrtU128;
 use crate::constants::*;
 use std::cmp::min;
@@ -28,7 +29,7 @@ pub fn pessimistic_max_debt(
     collateral_ema_price_scaled: u64,
     collateral_spot_price_scaled: u64,
     debt_reserve: u64,
-) -> Result<(u64, u16), ErrorCode> {
+) -> Result<(u64, u16)> {
     let sqrt_nad: u128 = NAD_U128.sqrt().expect("NAD sqrt must succeed");
 
     // sanity checks
@@ -79,14 +80,18 @@ pub fn pessimistic_max_debt(
     };
 
     // Apply pessimistic CF cap: CF_final = min(CF_curve, spot/ema * CF_curve)
+    msg!("derived_cf_bps: {}", derived_cf_bps);
     let pessimistic_cf_bps = get_pessimistic_cf_bps(
         derived_cf_bps as u64, 
         collateral_spot_price_scaled,
         collateral_ema_price_scaled)?;
+    msg!("pessimistic_cf_bps: {}", pessimistic_cf_bps);
 
     // Final Y = V * CF_final (pessimistically capped)
     let max_allowed_y = (v * pessimistic_cf_bps as u128) / BPS_DENOMINATOR_U128;
+    msg!("max_allowed_y: {}", max_allowed_y);
     let final_borrow_limit = max_allowed_y.try_into().unwrap_or(u64::MAX);
+    msg!("final_borrow_limit: {}", final_borrow_limit);
 
     Ok((final_borrow_limit, pessimistic_cf_bps))
 }
@@ -114,7 +119,7 @@ pub fn pessimistic_min_collateral(
     collateral_ema_price_scaled: u64,
     collateral_spot_price_scaled: u64,
     debt_reserve: u64,
-) -> Result<(u64, u16), ErrorCode> {
+) -> Result<(u64, u16)> {
     const NAD_U128: u128 = NAD as u128;
     const BPS_DENOMINATOR_U128: u128 = BPS_DENOMINATOR as u128;
 
@@ -160,7 +165,7 @@ pub fn pessimistic_min_collateral(
 
 /// Returns a pessimistic collateral factor bps
 /// Returns min(CF, SpotPrice / EmaPrice * CF)
-pub fn get_pessimistic_cf_bps(base_cf_bps: u64, collateral_spot_price_nad: u64, collateral_ema_price_nad: u64) -> Result<u16, ErrorCode> {
+pub fn get_pessimistic_cf_bps(base_cf_bps: u64, collateral_spot_price_nad: u64, collateral_ema_price_nad: u64) -> Result<u16> {
     Ok(min(
         base_cf_bps,
         collateral_spot_price_nad

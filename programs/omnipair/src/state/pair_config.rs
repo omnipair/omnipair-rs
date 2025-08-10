@@ -5,6 +5,7 @@ pub struct PairConfig {
     pub futarchy_fee_bps: u16,
     pub founder_fee_bps: u16,
     pub nonce: u64,
+    pub bump: u8,
 }
 
 impl PairConfig {
@@ -12,11 +13,13 @@ impl PairConfig {
         futarchy_fee_bps: u16, 
         founder_fee_bps: u16, 
         nonce: u64,
+        bump: u8,
     ) -> Self {
         Self {
             futarchy_fee_bps,
             founder_fee_bps,
             nonce,
+            bump,
         }
     }
 

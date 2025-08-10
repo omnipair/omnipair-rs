@@ -7,7 +7,7 @@ pub const NAD: u64 = 1_000_000_000;
 #[constant]
 pub const NAD_DECIMALS: u8 = 9;
 #[constant]
-pub const BPS_DENOMINATOR: u64 = 10_000;
+pub const BPS_DENOMINATOR: u16 = 10_000;
 
 // EMA constants
 #[constant]
@@ -16,6 +16,8 @@ pub const DEFAULT_HALF_LIFE: u64 = 7 * 60; // 7 minutes (recommended)
 pub const MIN_HALF_LIFE: u64 = 1 * 60; // 1 minute
 #[constant]
 pub const MAX_HALF_LIFE: u64 = 12 * 60 * 60; // 12 hours
+#[constant]
+pub const DEPLOYER_MAX_FEE_BPS: u16 = 1000; // 10%
 pub const TAYLOR_TERMS: u64 = 5;
 pub const NATURAL_LOG_OF_TWO_NAD: u64 = 693_147_180; // ln(2) scaled by NAD
 
