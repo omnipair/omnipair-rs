@@ -28,12 +28,12 @@ pub fn pessimistic_max_debt(
     collateral_amount_scaled: u64,
     collateral_ema_price_scaled: u64,
     collateral_spot_price_scaled: u64,
-    debt_reserve: u64,
+    debt_amm_reserve: u64,
 ) -> Result<(u64, u16)> {
     let sqrt_nad: u128 = NAD_U128.sqrt().expect("NAD sqrt must succeed");
 
     // sanity checks
-    if debt_reserve == 0 || collateral_amount_scaled == 0 || collateral_ema_price_scaled == 0 || collateral_spot_price_scaled == 0 {
+    if debt_amm_reserve == 0 || collateral_amount_scaled == 0 || collateral_ema_price_scaled == 0 || collateral_spot_price_scaled == 0 {
         return Ok((0, 0));
     }
 
@@ -43,7 +43,7 @@ pub fn pessimistic_max_debt(
         / NAD_U128;
 
     // Compute sqrt(V / R1) using fixed-point scale
-    let v_over_r1 = (v * NAD_U128) / debt_reserve as u128;
+    let v_over_r1 = (v * NAD_U128) / debt_amm_reserve as u128;
 
     // sqrt(x_scaled) = sqrt(x) * sqrt(1e9) not = sqrt(x) * 1e9
     let sqrt_of_v_ofer_r_and_scale = v_over_r1.sqrt().unwrap_or(0); // result is scaled by 1e9
@@ -59,10 +59,11 @@ pub fn pessimistic_max_debt(
     // Newton-Raphson refinement
     let y = approx_y;
 
-    let one_minus_y_r1 = NAD_U128.saturating_sub((y * NAD_U128) / debt_reserve as u128); // (1 - Y / R1)
+    let one_minus_y_r1 = NAD_U128.saturating_sub((y * NAD_U128) / debt_amm_reserve as u128); // (1 - Y / R1)
+
     let f_y = (v * one_minus_y_r1.saturating_mul(one_minus_y_r1)) / (NAD_U128 * NAD_U128).saturating_sub(y);
     let f_prime = 0u128
-        .saturating_sub(2 * v * one_minus_y_r1 / (debt_reserve as u128 * NAD_U128))
+        .saturating_sub(2 * v * one_minus_y_r1 / (debt_amm_reserve as u128 * NAD_U128))
         .saturating_sub(1);
 
     let refined_y = if f_prime != 0 {
@@ -80,18 +81,14 @@ pub fn pessimistic_max_debt(
     };
 
     // Apply pessimistic CF cap: CF_final = min(CF_curve, spot/ema * CF_curve)
-    msg!("derived_cf_bps: {}", derived_cf_bps);
     let pessimistic_cf_bps = get_pessimistic_cf_bps(
         derived_cf_bps as u64, 
         collateral_spot_price_scaled,
         collateral_ema_price_scaled)?;
-    msg!("pessimistic_cf_bps: {}", pessimistic_cf_bps);
 
     // Final Y = V * CF_final (pessimistically capped)
     let max_allowed_y = (v * pessimistic_cf_bps as u128) / BPS_DENOMINATOR_U128;
-    msg!("max_allowed_y: {}", max_allowed_y);
     let final_borrow_limit = max_allowed_y.try_into().unwrap_or(u64::MAX);
-    msg!("final_borrow_limit: {}", final_borrow_limit);
 
     Ok((final_borrow_limit, pessimistic_cf_bps))
 }
@@ -118,17 +115,17 @@ pub fn pessimistic_min_collateral(
     desired_borrow_y: u64,
     collateral_ema_price_scaled: u64,
     collateral_spot_price_scaled: u64,
-    debt_reserve: u64,
+    debt_amm_reserve: u64,
 ) -> Result<(u64, u16)> {
     const NAD_U128: u128 = NAD as u128;
     const BPS_DENOMINATOR_U128: u128 = BPS_DENOMINATOR as u128;
 
-    if desired_borrow_y == 0 || collateral_ema_price_scaled == 0 || collateral_spot_price_scaled == 0 || debt_reserve == 0 {
+    if desired_borrow_y == 0 || collateral_ema_price_scaled == 0 || collateral_spot_price_scaled == 0 || debt_amm_reserve == 0 {
         return Ok((0, 0));
     }
 
     let y = desired_borrow_y as u128;
-    let r1 = debt_reserve as u128;
+    let r1 = debt_amm_reserve as u128;
 
     // Base symbolic approximation: V ≈ Y + sqrt(Y * R1)
     let sqrt_term = (y.saturating_mul(r1)).sqrt().unwrap_or(0);

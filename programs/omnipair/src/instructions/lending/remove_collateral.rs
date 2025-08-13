@@ -153,9 +153,6 @@ impl<'info> CommonAdjustPosition<'info> {
             }
         }
 
-        // update user position fixed CF
-        user_position.update_fixed_cf(pair, &pair.get_debt_token(&user_token_account.mint));
-
         // Emit collateral adjustment event
         let (amount0, amount1) = if user_token_account.mint == pair.token0 {
             (-(args.amount as i64), 0)

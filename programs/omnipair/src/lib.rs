@@ -14,7 +14,7 @@ pub use instructions::pair_initialize::InitializePair;
 pub use instructions::faucet_mint::FaucetMint;
 pub use instructions::emit_value::{EmitValueArgs, PairViewKind, UserPositionViewKind, ViewPairData, ViewUserPositionData};
 
-declare_id!("DNRgznrqiUcWrELrvQwCcXLXFCtutVkWZJx23KLN4zLP");
+declare_id!("9P4r6aanvvBfZmUdb3pR4saX77HLaYzjk12qqvwpy7zr");
 
 
 pub mod deployer {

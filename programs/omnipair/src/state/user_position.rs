@@ -3,6 +3,7 @@ use crate::constants::*;
 use crate::utils::gamm_math::{pessimistic_max_debt, pessimistic_min_collateral};
 use crate::errors::ErrorCode;
 use super::Pair;
+use std::cmp::max;
 
 #[account]
 pub struct UserPosition {
@@ -43,10 +44,24 @@ impl UserPosition {
         self.owner != Pubkey::default() && self.pair != Pubkey::default()
     }
 
+    /// Get the liquidation collateral factor in BPS for a given debt token
+    /// 
+    /// - `pair`: The pair the user position belongs to
+    /// - `debt_token`: The token the user is borrowing
+    /// 
+    /// Returns the max of the pessimistic collateral factor in BPS and the applied min. cf in BPS
     pub fn get_liquidation_cf_bps(&self, pair: &Pair, debt_token: &Pubkey) -> u16 {
         match debt_token == &pair.token1 {
-            true => self.collateral0_applied_min_cf_bps,
-            false => self.collateral1_applied_min_cf_bps,
+            true => {
+                let cf_bps = self.get_pessimistic_collateral_factor_bps(pair, debt_token);
+                let min_cf_bps = self.collateral1_applied_min_cf_bps;
+                max(cf_bps, min_cf_bps)
+            },
+            false => {
+                let cf_bps = self.get_pessimistic_collateral_factor_bps(pair, debt_token);
+                let min_cf_bps = self.collateral0_applied_min_cf_bps;
+                max(cf_bps, min_cf_bps)
+            }
         }        
     }
 
@@ -56,17 +71,6 @@ impl UserPosition {
             self.collateral0_applied_min_cf_bps = cf_bps;
         } else {
             self.collateral1_applied_min_cf_bps = cf_bps;
-        }
-    }
-
-    pub fn update_fixed_cf(&mut self, pair: &Pair, debt_token: &Pubkey) {
-        match *debt_token == pair.token0 {
-            true => {
-                self.collateral1_applied_min_cf_bps = self.get_pessimistic_collateral_factor_bps(pair, debt_token);
-            }
-            false => {
-                self.collateral0_applied_min_cf_bps = self.get_pessimistic_collateral_factor_bps(pair, debt_token);
-            }
         }
     }
 
@@ -187,7 +191,7 @@ impl UserPosition {
             collateral_ema_price,
             collateral_spot_price,
             // in token X (debt token)
-            pair_debt_reserve,
+            debt_amm_reserve,
         ) = match *debt_token == pair.token0 {
             true => (
                 user_position.collateral1,
@@ -207,7 +211,7 @@ impl UserPosition {
             user_collateral,
             collateral_ema_price,
             collateral_spot_price,
-            pair_debt_reserve,
+            debt_amm_reserve,
         ).unwrap()
     }
 
