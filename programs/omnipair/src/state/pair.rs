@@ -79,7 +79,7 @@ impl Pair {
 
             reserve0: 0,
             reserve1: 0,
-            total_supply: 0,
+            total_supply: MIN_LIQUIDITY,
 
             last_price0_ema: 0,
             last_price1_ema: 0,

@@ -194,7 +194,7 @@ impl<'info> BootstrapPair<'info> {
             token_program.to_account_info(),
             lp_mint.to_account_info(),
             user_lp_token_account.to_account_info(),
-            liquidity as u64,
+            liquidity,
             &[&generate_gamm_pair_seeds!(pair)[..]]
         )?;
         
@@ -206,7 +206,7 @@ impl<'info> BootstrapPair<'info> {
             .checked_add(args.amount1_in)
             .ok_or(ErrorCode::ReserveOverflow)?;
         pair.total_supply = pair.total_supply
-            .checked_add(liquidity as u64)
+            .checked_add(liquidity)
             .ok_or(ErrorCode::SupplyOverflow)?;
         
         Ok(())

@@ -77,15 +77,8 @@ impl<'info> AdjustLiquidity<'info> {
         )?;
 
         // Calculate liquidity
-        let total_supply = lp_mint.supply;
-        let liquidity: u64 = match total_supply {
-            0 => {
-                (args.amount0_in as u128).checked_mul(args.amount1_in as u128).ok_or(ErrorCode::LiquidityMathOverflow)?
-                    .sqrt().ok_or(ErrorCode::LiquiditySqrtOverflow)?
-                    .checked_sub(MIN_LIQUIDITY as u128).ok_or(ErrorCode::LiquidityUnderflow)?
-                    .try_into().map_err(|_| ErrorCode::LiquidityConversionOverflow)?
-            },
-            _ => {
+        let total_supply = pair.total_supply; // total supply is set to MIN_LIQUIDITY in initialize
+        let liquidity: u64 = {
                 let liquidity0 = (args.amount0_in as u128)
                     .checked_mul(total_supply as u128).ok_or(ErrorCode::LiquidityMathOverflow)?
                     .checked_div(pair.reserve0 as u128).ok_or(ErrorCode::LiquidityMathOverflow)?;
@@ -93,8 +86,8 @@ impl<'info> AdjustLiquidity<'info> {
                     .checked_mul(total_supply as u128).ok_or(ErrorCode::LiquidityMathOverflow)?
                     .checked_div(pair.reserve1 as u128).ok_or(ErrorCode::LiquidityMathOverflow)?;
                 liquidity0.min(liquidity1).try_into().map_err(|_| ErrorCode::LiquidityConversionOverflow)?
-            }
-        };
+            };
+        
         // Check if liquidity is sufficient
         require!(
             liquidity >= args.min_liquidity_out,
@@ -119,7 +112,7 @@ impl<'info> AdjustLiquidity<'info> {
             .checked_add(args.amount1_in)
             .ok_or(ErrorCode::ReserveOverflow)?;
         pair.total_supply = pair.total_supply
-            .checked_add(liquidity as u64)
+            .checked_add(liquidity)
             .ok_or(ErrorCode::SupplyOverflow)?;
         
         // Emit event
