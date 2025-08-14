@@ -24,8 +24,11 @@ import {
     getter: any // Enum variant object
   ): Promise<{ label: string; value: string; formattedValue: number }> {
     const sim = await program.methods
-      .viewUserPositionData(getter)
-      .accounts({ userPosition: userPositionPda, pair: pairPda })
+      .viewUserPositionData(getter, { debtAmount: null }) // Add EmitValueArgs parameter
+      .accounts({ 
+        userPosition: userPositionPda, 
+        pair: pairPda
+      })
       .simulate();
   
     const logs = sim.raw ?? [];

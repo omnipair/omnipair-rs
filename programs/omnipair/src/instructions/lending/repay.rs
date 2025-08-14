@@ -20,6 +20,7 @@ impl<'info> CommonAdjustPosition<'info> {
         );
         
         // Check if user has debt to repay
+        // Note: No CF validation needed for repay since we're only reducing debt
         match self.user_token_account.mint == self.pair.token0 {
             true => {
                 let debt = self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares)?;

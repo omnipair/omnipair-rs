@@ -26,6 +26,12 @@ pub struct AddCollateral<'info> {
     pub pair: Account<'info, Pair>,
 
     #[account(
+        mut,
+        address = pair.rate_model,
+    )]
+    pub rate_model: Account<'info, RateModel>,
+
+    #[account(
         init_if_needed,
         payer = user,
         space = get_size_with_discriminator::<UserPosition>(),
@@ -39,12 +45,6 @@ pub struct AddCollateral<'info> {
         bump
     )]
     pub user_position: Account<'info, UserPosition>,
-
-    #[account(
-        mut,
-        address = pair.rate_model,
-    )]
-    pub rate_model: Account<'info, RateModel>,
 
     #[account(
         mut,

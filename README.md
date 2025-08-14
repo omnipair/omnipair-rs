@@ -19,12 +19,17 @@
    TOKEN1_MINT=<new_token1_mint_address>
    ```
 
-3. Initialize the Pair:
+3. Initialize Futarchy Authority and Pair Config:
+   ```bash
+   yarn init-futarchy
+   ```
+
+4. Initialize the Pair:
    ```bash
    yarn initialize
    ```
 
-4. Mint Test Tokens:
+5. Mint Test Tokens:
    ```bash
    yarn faucet-mint
    ```
@@ -34,12 +39,12 @@
    DEPLOYER_TOKEN1_ACCOUNT=<your_token1_account>
    ```
 
-5. Bootstrap Liquidity:
+6. Bootstrap Liquidity:
    ```bash
    yarn bootstrap
    ```
 
-6. Pubish IDL
+7. Pubish IDL
 ```
  anchor idl init --filepath target/idl/omnipair.json [program.id] --provider.cluster devnet
  ```

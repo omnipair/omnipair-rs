@@ -35,7 +35,6 @@ impl<'info> CommonAdjustPosition<'info> {
     /// Assumes that collateral checks have already passed via [`CommonAdjustPosition::validate_borrow`].
     pub fn handle_borrow(ctx: Context<Self>, args: AdjustPositionArgs) -> Result<()> {
         let CommonAdjustPosition {
-            token_vault,
             user_token_account,
             vault_token_mint,
             token_program,
@@ -45,13 +44,20 @@ impl<'info> CommonAdjustPosition<'info> {
             ..
         } = ctx.accounts;
         let pair = &mut ctx.accounts.pair;
+        let debt_token_vault = &ctx.accounts.token_vault;
 
         let user_debt = match user_token_account.mint == pair.token0 {
             true => user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
             false => user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
-        }; 
+        };
+
         
-        let borrow_limit = user_position.get_borrow_limit(&pair, &token_vault.mint);
+        // If EMA lags behind a falling spot price, there will be a window where the collateral value may be artificially inflated.
+        // To prevent bad debt, we compute a pessimistic collateral factor:
+        // CF_pessimistic = min(CF_base, P_spot / P_EMA * CF_base)
+        // This ensures the solvency invariant: P_spot >= P_EMA * CF
+        // TODO: Δprice needs an EMA, because spot price can be manipulated to match EMA to bypass this check
+        let (borrow_limit, applied_min_cf_bps) = user_position.get_borrow_limit_and_cf_bps_for_collateral(&pair, &debt_token_vault.mint);
         let is_max_borrow = args.amount == u64::MAX;
         let remaining_borrow_limit = borrow_limit.checked_sub(user_debt).ok_or(ErrorCode::DebtMathOverflow)?;
         let borrow_amount = if is_max_borrow { remaining_borrow_limit } else { args.amount };
@@ -70,7 +76,7 @@ impl<'info> CommonAdjustPosition<'info> {
         // Transfer tokens from vault to user
         transfer_from_pool_vault_to_user(
             pair.to_account_info(),
-            token_vault.to_account_info(),
+            debt_token_vault.to_account_info(),
             user_token_account.to_account_info(),
             vault_token_mint.to_account_info(),
             match vault_token_mint.to_account_info().owner == token_program.key {
@@ -82,8 +88,9 @@ impl<'info> CommonAdjustPosition<'info> {
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
         
-        // Update debt using the increase_debt method
         user_position.increase_debt(pair, &vault_token_mint.key(), borrow_amount)?;
+        // update user position fixed CF
+        user_position.set_applied_min_cf_for_debt_token(&vault_token_mint.key(), &pair, applied_min_cf_bps);
         
         // Emit debt adjustment event
         let (amount0, amount1) = if is_token0 {

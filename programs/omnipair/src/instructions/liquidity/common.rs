@@ -5,6 +5,7 @@ use anchor_lang::{
 use anchor_spl::{
     token::Token,
     token_interface::{Mint, TokenAccount, Token2022},
+    associated_token::AssociatedToken,
 };
 use crate::{
     state::pair::Pair,
@@ -31,6 +32,7 @@ pub struct AdjustLiquidity<'info> {
         bump
     )]
     pub pair: Account<'info, Pair>,
+
     #[account(
         mut,
         address = pair.rate_model,
@@ -86,16 +88,19 @@ pub struct AdjustLiquidity<'info> {
     pub lp_mint: Box<InterfaceAccount<'info, Mint>>,
     
     #[account(
-        mut,
+        init_if_needed,
         associated_token::mint = lp_mint,
         associated_token::authority = user,
+        payer = user,
         token::token_program = token_program,
     )]
     pub user_lp_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
     
+    #[account(mut)]
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 

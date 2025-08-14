@@ -39,6 +39,7 @@ pub struct Liquidate<'info> {
     )]
     pub rate_model: Account<'info, RateModel>,
 
+
     #[account(
         mut,
         constraint = collateral_vault.mint == pair.token0 || collateral_vault.mint == pair.token1,
@@ -106,8 +107,29 @@ impl<'info> Liquidate<'info> {
             false => user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
         }; 
 
-        // Compute borrowing power
-        let borrow_limit = user_position.get_borrow_limit(&pair, &debt_token);
+        // Compute borrowing power using fixed CF
+        let fixed_cf_bps = user_position.get_liquidation_cf_bps(pair, &debt_token);
+        
+        // Calculate borrow limit using fixed CF
+        let collateral_value = match is_collateral_token0 {
+            true => (user_position.collateral0 as u128)
+                .checked_mul(pair.ema_price0_nad() as u128)
+                .ok_or(ErrorCode::DebtMathOverflow)?
+                .checked_div(NAD as u128)
+                .ok_or(ErrorCode::DebtMathOverflow)?,
+            false => (user_position.collateral1 as u128)
+                .checked_mul(pair.ema_price1_nad() as u128)
+                .ok_or(ErrorCode::DebtMathOverflow)?
+                .checked_div(NAD as u128)
+                .ok_or(ErrorCode::DebtMathOverflow)?,
+        };
+        let borrow_limit = (collateral_value as u128)
+            .checked_mul(fixed_cf_bps as u128)
+            .ok_or(ErrorCode::DebtMathOverflow)?
+            .checked_div(BPS_DENOMINATOR as u128)
+            .ok_or(ErrorCode::DebtMathOverflow)?
+            .try_into()
+            .map_err(|_| ErrorCode::DebtMathOverflow)?;
 
         // Compare debt to borrow power
         require_gte!(
@@ -125,6 +147,13 @@ impl<'info> Liquidate<'info> {
         // a fixed amount of liquidation bond on the other hand will be consumed on the first liquidation, and will not be available for subsequent liquidations
         // with no way of dividing it for arbitrary number of liquidations
         user_position.decrease_debt(pair, &debt_token, user_debt)?;
+
+        // Reset fixed CF after full liquidation
+        if is_collateral_token0 {
+            user_position.collateral1_applied_min_cf_bps = 0;
+        } else {
+            user_position.collateral0_applied_min_cf_bps = 0;
+        }
 
         // LP seize collateral
         // Liquidation incentive is shared across LPs with no caller incentive

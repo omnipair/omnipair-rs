@@ -33,6 +33,7 @@ pub struct BootstrapPair<'info> {
         bump
     )]
     pub pair: Account<'info, Pair>,
+
     #[account(
         mut,
         address = pair.rate_model,

@@ -1,0 +1,32 @@
+name: anchor-build
+on:
+  push:
+    branches:
+      - develop
+      - production
+  pull_request:
+
+jobs:
+  run-anchor-build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.18.0'
+          cache: 'yarn'
+          
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+        
+      - name: Setup Anchor
+        uses: metadaoproject/setup-anchor@v3
+        with:
+          anchor-version: '0.31.0'
+          solana-cli-version: '1.18.18'
+          
+      - name: Build project
+        run: anchor build

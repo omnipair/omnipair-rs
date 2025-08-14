@@ -7,21 +7,26 @@ pub const NAD: u64 = 1_000_000_000;
 #[constant]
 pub const NAD_DECIMALS: u8 = 9;
 #[constant]
-pub const BPS_DENOMINATOR: u64 = 10_000;
+pub const BPS_DENOMINATOR: u16 = 10_000;
 
 // EMA constants
 #[constant]
-pub const DEFAULT_HALF_LIFE: u64 = 7 * 60; // 7 minutes
+pub const DEFAULT_HALF_LIFE: u64 = 7 * 60; // 7 minutes (recommended)
+#[constant]
+pub const MIN_HALF_LIFE: u64 = 1 * 60; // 1 minute
+#[constant]
+pub const MAX_HALF_LIFE: u64 = 12 * 60 * 60; // 12 hours
+#[constant]
+pub const DEPLOYER_MAX_FEE_BPS: u16 = 1000; // 10%
 pub const TAYLOR_TERMS: u64 = 5;
 pub const NATURAL_LOG_OF_TWO_NAD: u64 = 693_147_180; // ln(2) scaled by NAD
 
 // Pair constants
 pub const MIN_LIQUIDITY: u64 = 1_000; // 10^3
-pub const FEE_BPS: u64 = 30;
 pub const MIN_RATE: u64 = 1; // 0.0001%
 pub const MAX_RATE: u64 = 1000000; // 100%
 
-// Rate Model constants
+// Default IRM constants
 pub const TARGET_UTIL_START_NAD: u64 = 330_000_000; // 33% (0.33e9)
 pub const TARGET_UTIL_END_NAD: u64 = 660_000_000; // 66% (0.66e9)
 pub const SECONDS_PER_DAY: u64 = 86_400;
@@ -40,6 +45,10 @@ pub const LP_MINT_SEED_PREFIX: &[u8] = b"gamm_lp_mint";
 pub const FACTORY_SEED_PREFIX: &[u8] = b"gamm_factory";
 #[constant]
 pub const POSITION_SEED_PREFIX: &[u8] = b"gamm_position";
+#[constant]
+pub const PAIR_CONFIG_SEED_PREFIX: &[u8] = b"gamm_pair_config";
+#[constant]
+pub const FUTARCHY_AUTHORITY_SEED_PREFIX: &[u8] = b"futarchy_authority";
 
 // Liquidation constants
 #[constant]

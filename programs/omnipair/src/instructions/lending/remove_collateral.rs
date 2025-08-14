@@ -48,13 +48,13 @@ impl<'info> CommonAdjustPosition<'info> {
 
         // Calculate required collateral for current debt
         let debt_token = if is_collateral_token0 { self.pair.token1 } else { self.pair.token0 };
-        let effective_cf_bps = self.user_position.get_effective_collateral_factor_bps(&self.pair, &debt_token);
+        let pessimistic_cf_bps = self.user_position.get_pessimistic_collateral_factor_bps(&self.pair, &debt_token);
         
         // Calculate minimum required collateral value in debt token
         let min_collateral_value = (debt as u128)
             .checked_mul(BPS_DENOMINATOR as u128)
             .ok_or(ErrorCode::DebtMathOverflow)?
-            .checked_div(effective_cf_bps as u128)
+            .checked_div(pessimistic_cf_bps as u128)
             .ok_or(ErrorCode::DebtMathOverflow)?;
 
         // Convert collateral value back to collateral token amount
@@ -153,7 +153,7 @@ impl<'info> CommonAdjustPosition<'info> {
             }
         }
 
-        // Emit event
+        // Emit collateral adjustment event
         let (amount0, amount1) = if user_token_account.mint == pair.token0 {
             (-(args.amount as i64), 0)
         } else {

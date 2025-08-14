@@ -1,3 +1,4 @@
+
 import { 
     Connection, 
     PublicKey, 
@@ -61,8 +62,11 @@ async function main() {
         program.programId
     );
 
-    // Get pair account to get rate model
+    // Get pair account to get pair config and rate model
     const pairAccount = await program.account.pair.fetch(pairPda);
+    console.log('Pair config address:', pairAccount.config.toBase58());
+    console.log('Rate model address:', pairAccount.rateModel.toBase58());
+    
     const RATE_MODEL = pairAccount.rateModel;
 
     console.log('Rate Model address:', RATE_MODEL.toBase58());
@@ -117,28 +121,66 @@ async function main() {
     console.log('Amount:', borrowAmount.toString());
     console.log('Token:', borrowToken0 ? 'Token0' : 'Token1');
 
-    // Create transaction
-    const tx = await program.methods
-        .borrow({
-            amount: borrowAmount
-        })
-        .accountsStrict({
-            user: DEPLOYER_KEYPAIR.publicKey,
-            pair: pairPda,
-            rateModel: RATE_MODEL,
-            userPosition: userPositionPda,
-            tokenVault: borrowToken0 ? token0Vault : token1Vault,
-            userTokenAccount: borrowToken0 ? DEPLOYER_TOKEN0_ACCOUNT : DEPLOYER_TOKEN1_ACCOUNT,
-            vaultTokenMint: borrowToken0 ? TOKEN0_MINT : TOKEN1_MINT,
-            tokenProgram: borrowToken0 ? token0Program : token1Program,
-            token2022Program: TOKEN_2022_PROGRAM_ID,
-            systemProgram: SystemProgram.programId,
-        })
-        .signers([DEPLOYER_KEYPAIR])
-        .rpc();
+    // Create transaction with logs
+    console.log('Sending transaction...');
+    try {
+        const tx = await program.methods
+            .borrow({
+                amount: borrowAmount
+            })
+            .accountsStrict({
+                user: DEPLOYER_KEYPAIR.publicKey,
+                pair: pairPda,
+                rateModel: RATE_MODEL,
+                userPosition: userPositionPda,
+                tokenVault: borrowToken0 ? token0Vault : token1Vault,
+                userTokenAccount: borrowToken0 ? DEPLOYER_TOKEN0_ACCOUNT : DEPLOYER_TOKEN1_ACCOUNT,
+                vaultTokenMint: borrowToken0 ? TOKEN0_MINT : TOKEN1_MINT,
+                tokenProgram: borrowToken0 ? token0Program : token1Program,
+                token2022Program: TOKEN_2022_PROGRAM_ID,
+                systemProgram: SystemProgram.programId,
+            })
+            .signers([DEPLOYER_KEYPAIR])
+            .rpc({ commitment: 'confirmed' });
 
-    console.log('Transaction successful!');
-    console.log('Signature:', tx);
+        console.log('Transaction successful!');
+        console.log('Signature:', tx);
+
+        // Fetch and display transaction logs
+        console.log('\n=== Transaction Logs ===');
+        const txInfo = await provider.connection.getTransaction(tx, {
+            commitment: 'confirmed',
+            maxSupportedTransactionVersion: 0
+        });
+        
+        if (txInfo?.meta?.logMessages) {
+            txInfo.meta.logMessages.forEach((log, index) => {
+                console.log(`${index}: ${log}`);
+            });
+        } else {
+            console.log('No logs found in transaction');
+        }
+    } catch (error: any) {
+        console.log('Transaction failed, but showing logs...');
+        console.log('Error:', error.message);
+        
+        // Display logs from the error object
+        if (error.logs) {
+            console.log('\n=== Program Logs ===');
+            error.logs.forEach((log: string, index: number) => {
+                console.log(`${index}: ${log}`);
+            });
+        }
+        
+        if (error.errorLogs) {
+            console.log('\n=== Error Logs ===');
+            error.errorLogs.forEach((log: string, index: number) => {
+                console.log(`${index}: ${log}`);
+            });
+        }
+        
+        throw error; // Re-throw to maintain original behavior
+    }
 }
 
 main().catch(console.error); 

@@ -10,11 +10,19 @@ use anchor_spl::{
 use crate::state::{
     pair::Pair,
     rate_model::RateModel,
+    pair_config::PairConfig,
 };
 use crate::errors::ErrorCode;
 use crate::constants::*;
 use crate::utils::account::get_size_with_discriminator;
 use crate::events::PairCreatedEvent;
+
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct InitializePairArgs {
+    pub swap_fee_bps: u16,
+    pub half_life: u64,
+    pub pool_deployer_fee_bps: u16,
+}
 
 #[derive(Accounts)]
 pub struct InitializePair<'info> {
@@ -37,12 +45,20 @@ pub struct InitializePair<'info> {
     )]
     pub pair: Box<Account<'info, Pair>>,
 
+    // Use an existing PairConfig initialized via init_pair_config
+    #[account(
+        mut,
+        seeds = [PAIR_CONFIG_SEED_PREFIX, &pair_config.nonce.to_le_bytes()],
+        bump
+    )]
+    pub pair_config: Account<'info, PairConfig>,
+
     #[account(
         init,
         payer = deployer,
         space = get_size_with_discriminator::<RateModel>(),
     )]
-    pub rate_model:Box<Account<'info, RateModel>>,
+    pub rate_model: Box<Account<'info, RateModel>>,
 
     #[account(
         init,
@@ -74,16 +90,24 @@ pub struct InitializePair<'info> {
 }
 
 /// TODO: add swap fee logic
-impl InitializePair<'_> {
-    pub fn validate(&self) -> Result<()> {
+impl<'info> InitializePair<'info> {
+    pub fn validate(&self, args: &InitializePairArgs) -> Result<()> {
         let InitializePair { 
             token0_mint, 
             token1_mint,
             .. 
         } = self;
+        let InitializePairArgs { swap_fee_bps, half_life, pool_deployer_fee_bps } = args;
+
+        // validate pool parameters
+        require_gte!(BPS_DENOMINATOR, *swap_fee_bps, ErrorCode::InvalidSwapFeeBps); // 0 <= swap_fee_bps <= 100%
+        require_gte!(DEPLOYER_MAX_FEE_BPS, *pool_deployer_fee_bps, ErrorCode::InvalidPoolDeployerFeeBps); // 0 <= pool_deployer_fee_bps <= 10%
+        require_gte!(*half_life, MIN_HALF_LIFE, ErrorCode::InvalidHalfLife); // half_life >= 1 minute
+        require_gte!(MAX_HALF_LIFE, *half_life, ErrorCode::InvalidHalfLife); // half_life <= 12 hours
 
         // Enforce token0 < token1 to ensure unique pair addresses.
         // This prevents the same token pair from having two valid addresses (A,B) and (B,A).
+        // TODO: remove this check and allow duplicate pairs
         require!(
             token0_mint.key() < token1_mint.key(),
             ErrorCode::InvalidTokenOrder
@@ -109,16 +133,18 @@ impl InitializePair<'_> {
         Ok(())
     }
 
-    pub fn validate_and_create_rate_model(&mut self) -> Result<()> {
-        self.validate()?;
+    pub fn validate_and_create_rate_model(&mut self, args: &InitializePairArgs) -> Result<()> {
+        self.validate(args)?;
         self.handle_create()?;
         Ok(())
     }
 
     // TODO: create rate model in the same instruction
-    pub fn handle_initialize(ctx: Context<Self>) -> Result<()> {
+    pub fn handle_initialize(ctx: Context<Self>, args: InitializePairArgs) -> Result<()> {
         let current_time = Clock::get()?.unix_timestamp;
         let pair = &mut ctx.accounts.pair;
+        let pair_config = &mut ctx.accounts.pair_config;
+        let InitializePairArgs { swap_fee_bps, half_life, pool_deployer_fee_bps } = args;
         
         let (
             token0, 
@@ -139,9 +165,13 @@ impl InitializePair<'_> {
             token1,
             token0_decimals,
             token1_decimals,
+            pair_config.key(),
+            rate_model,
+            swap_fee_bps,
+            half_life,
+            pool_deployer_fee_bps,
             // maybe precompute `token0_scale_to_nad` and `token1_scale_to_nad` for cheaper calculations later
             // only if token0_decimals and token1_decimals are < 9
-            rate_model,
             current_time,
             ctx.bumps.pair,
         ));

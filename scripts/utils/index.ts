@@ -1,4 +1,8 @@
 import { Connection, Transaction, Keypair, sendAndConfirmTransaction } from '@solana/web3.js';
+import BN from 'bn.js';
+
+const leU64 = (n: number | BN) =>
+    Buffer.from(new BN(n).toArray('le', 8));
 
 async function sendTransactionWithRetry(
     connection: Connection,
@@ -30,4 +34,4 @@ async function sendTransactionWithRetry(
     throw lastError;
 }
 
-export { sendTransactionWithRetry };
+export { sendTransactionWithRetry, leU64 };

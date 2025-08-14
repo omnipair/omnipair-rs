@@ -52,7 +52,17 @@ async function main() {
         program.programId
     );
     console.log('Pair PDA:', pairPda.toBase58());
+    
+    // Get pair account to get pair config and rate model
     const pairAccount = await program.account.pair.fetch(pairPda);
+    console.log('Pair config address:', pairAccount.config.toBase58());
+    console.log('Rate model address:', pairAccount.rateModel.toBase58());
+    
+    const RATE_MODEL = pairAccount.rateModel;
+    const SWAP_FEE_BPS = pairAccount.swapFeeBps;
+    
+    console.log('Rate Model address:', RATE_MODEL.toBase58());
+    console.log('Swap fee (bps):', SWAP_FEE_BPS);
 
     // Get token program for each mint
     const token0Info = await provider.connection.getAccountInfo(TOKEN0_MINT);
@@ -98,7 +108,7 @@ async function main() {
         .accountsPartial({
             user: DEPLOYER_KEYPAIR.publicKey,
             pair: pairPda,
-            rateModel: pairAccount.rateModel,
+            rateModel: RATE_MODEL,
             tokenInVault: token0Vault,
             tokenOutVault: token1Vault,
             userTokenInAccount: DEPLOYER_TOKEN0_ACCOUNT,
