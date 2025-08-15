@@ -21,6 +21,7 @@ use crate::events::PairCreatedEvent;
 pub struct InitializePairArgs {
     pub swap_fee_bps: u16,
     pub half_life: u64,
+    pub collateral_factor_bps: u16,
     pub pool_deployer_fee_bps: u16,
 }
 
@@ -97,13 +98,14 @@ impl<'info> InitializePair<'info> {
             token1_mint,
             .. 
         } = self;
-        let InitializePairArgs { swap_fee_bps, half_life, pool_deployer_fee_bps } = args;
+        let InitializePairArgs { swap_fee_bps, half_life, collateral_factor_bps, pool_deployer_fee_bps } = args;
 
         // validate pool parameters
         require_gte!(BPS_DENOMINATOR, *swap_fee_bps, ErrorCode::InvalidSwapFeeBps); // 0 <= swap_fee_bps <= 100%
         require_gte!(DEPLOYER_MAX_FEE_BPS, *pool_deployer_fee_bps, ErrorCode::InvalidPoolDeployerFeeBps); // 0 <= pool_deployer_fee_bps <= 10%
         require_gte!(*half_life, MIN_HALF_LIFE, ErrorCode::InvalidHalfLife); // half_life >= 1 minute
         require_gte!(MAX_HALF_LIFE, *half_life, ErrorCode::InvalidHalfLife); // half_life <= 12 hours
+        require_gte!(BPS_DENOMINATOR, *collateral_factor_bps, ErrorCode::InvalidCollateralFactorBps); // 0 <= collateral_factor_bps <= 100%
 
         // Enforce token0 < token1 to ensure unique pair addresses.
         // This prevents the same token pair from having two valid addresses (A,B) and (B,A).
@@ -144,7 +146,7 @@ impl<'info> InitializePair<'info> {
         let current_time = Clock::get()?.unix_timestamp;
         let pair = &mut ctx.accounts.pair;
         let pair_config = &mut ctx.accounts.pair_config;
-        let InitializePairArgs { swap_fee_bps, half_life, pool_deployer_fee_bps } = args;
+        let InitializePairArgs { swap_fee_bps, half_life, collateral_factor_bps, pool_deployer_fee_bps } = args;
         
         let (
             token0, 
@@ -169,6 +171,7 @@ impl<'info> InitializePair<'info> {
             rate_model,
             swap_fee_bps,
             half_life,
+            collateral_factor_bps,
             pool_deployer_fee_bps,
             // maybe precompute `token0_scale_to_nad` and `token1_scale_to_nad` for cheaper calculations later
             // only if token0_decimals and token1_decimals are < 9

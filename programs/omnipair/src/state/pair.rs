@@ -16,6 +16,7 @@ pub struct Pair {
     pub rate_model: Pubkey,
     pub swap_fee_bps: u16,
     pub half_life: u64,
+    pub collateral_factor_bps: u16,
     pub pool_deployer_fee_bps: u16,
     
     // Reserves
@@ -58,6 +59,7 @@ impl Pair {
         rate_model: Pubkey,
         swap_fee_bps: u16,
         half_life: u64,
+        collateral_factor_bps: u16,
         pool_deployer_fee_bps: u16,
         current_time: i64,
         bump: u8,
@@ -72,6 +74,7 @@ impl Pair {
             rate_model,
             swap_fee_bps,
             half_life,
+            collateral_factor_bps,
             pool_deployer_fee_bps,
 
             last_update: current_time,

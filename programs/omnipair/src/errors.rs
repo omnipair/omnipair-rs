@@ -20,6 +20,9 @@ pub enum ErrorCode {
     #[msg("Invalid swap fee bps")]
     InvalidSwapFeeBps,
 
+    #[msg("Invalid collateral factor bps")]
+    InvalidCollateralFactorBps,
+
     #[msg("Invalid pool deployer fee bps")]
     InvalidPoolDeployerFeeBps,
 
