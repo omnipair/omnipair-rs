@@ -149,11 +149,7 @@ impl<'info> Liquidate<'info> {
         user_position.decrease_debt(pair, &debt_token, user_debt)?;
 
         // Reset fixed CF after full liquidation
-        if is_collateral_token0 {
-            user_position.collateral1_applied_min_cf_bps = 0;
-        } else {
-            user_position.collateral0_applied_min_cf_bps = 0;
-        }
+        user_position.set_applied_min_cf_for_debt_token(&debt_token, &pair, 0);
 
         // LP seize collateral
         // Liquidation incentive is shared across LPs with no caller incentive
