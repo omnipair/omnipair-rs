@@ -54,12 +54,12 @@ impl UserPosition {
         match debt_token == &pair.token1 {
             true => {
                 let cf_bps = self.get_pessimistic_collateral_factor_bps(pair, debt_token);
-                let min_cf_bps = self.collateral1_applied_min_cf_bps;
+                let min_cf_bps = self.collateral0_applied_min_cf_bps;
                 max(cf_bps, min_cf_bps)
             },
             false => {
                 let cf_bps = self.get_pessimistic_collateral_factor_bps(pair, debt_token);
-                let min_cf_bps = self.collateral0_applied_min_cf_bps;
+                let min_cf_bps = self.collateral1_applied_min_cf_bps;
                 max(cf_bps, min_cf_bps)
             }
         }        
