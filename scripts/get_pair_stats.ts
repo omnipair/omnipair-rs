@@ -54,6 +54,9 @@ import {
       if (label === 'emaPrice0Nad' || label === 'emaPrice1Nad') {
         return Number(value) / 10 ** 9;
       }
+      if (label === 'k') {
+        return Number(value) / 10 ** 12;
+      }
       return Number(value) / 10 ** 6;
     };
 
@@ -93,7 +96,8 @@ import {
       { emaPrice0Nad: {} },
       { emaPrice1Nad: {} },
       { spotPrice0Nad: {} },
-      { spotPrice1Nad: {} }
+      { spotPrice1Nad: {} },
+      { k: {} }
     ];
   
     for (const getter of enumVariants) {

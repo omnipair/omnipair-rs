@@ -167,8 +167,8 @@ async function main() {
     }
 
     // Bootstrap liquidity
-    const amount0 = new BN(50_000_000_000); // 50_000 tokens
-    const amount1 = new BN(20_000_000_000); // 20_000 tokens
+    const amount0 = new BN(40_000_000_000); // 40_000 tokens
+    const amount1 = new BN(40_000_000_000); // 40_000 tokens
     const minLiquidity = new BN(1000); // Minimum liquidity
 
     console.log('Bootstrapping with amounts:');
