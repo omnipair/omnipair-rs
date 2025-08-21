@@ -4,7 +4,6 @@ use crate::constants::*;
 use crate::utils::token::{transfer_from_user_to_pool_vault, token_mint_to};
 use crate::generate_gamm_pair_seeds;
 use crate::liquidity::common::{AdjustLiquidity, AddLiquidityArgs};
-use crate::utils::math::SqrtU128;
 use crate::events::MintEvent;
 
 impl<'info> AdjustLiquidity<'info> {
