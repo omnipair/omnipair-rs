@@ -17,6 +17,7 @@ pub enum PairViewKind {
     EmaPrice1Nad,
     SpotPrice0Nad,
     SpotPrice1Nad,
+    K,
 }
 impl fmt::Display for PairViewKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -25,6 +26,7 @@ impl fmt::Display for PairViewKind {
             PairViewKind::EmaPrice1Nad => write!(f, "EmaPrice1Nad"),
             PairViewKind::SpotPrice0Nad => write!(f, "SpotPrice0Nad"),
             PairViewKind::SpotPrice1Nad => write!(f, "SpotPrice1Nad"),
+            PairViewKind::K => write!(f, "K"),
         }
     }
 }
@@ -84,6 +86,7 @@ impl ViewPairData<'_> {
             PairViewKind::EmaPrice1Nad => pair.ema_price1_nad(),
             PairViewKind::SpotPrice0Nad => pair.spot_price0_nad(),
             PairViewKind::SpotPrice1Nad => pair.spot_price1_nad(),
+            PairViewKind::K => pair.k() as u64,
         };
 
         msg!("{}: {}", getter, value);
