@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
-use crate::utils::gamm_math::{pessimistic_max_debt, pessimistic_min_collateral};
+use crate::utils::gamm_math::pessimistic_max_debt;
 use crate::errors::ErrorCode;
 use super::Pair;
 use std::cmp::max;
@@ -53,12 +53,12 @@ impl UserPosition {
     pub fn get_liquidation_cf_bps(&self, pair: &Pair, debt_token: &Pubkey) -> u16 {
         match debt_token == &pair.token1 {
             true => {
-                let cf_bps = self.get_pessimistic_collateral_factor_bps(pair, debt_token);
+                let cf_bps = self.get_user_pessimistic_collateral_factor_bps(pair, debt_token);
                 let min_cf_bps = self.collateral0_applied_min_cf_bps;
                 max(cf_bps, min_cf_bps)
             },
             false => {
-                let cf_bps = self.get_pessimistic_collateral_factor_bps(pair, debt_token);
+                let cf_bps = self.get_user_pessimistic_collateral_factor_bps(pair, debt_token);
                 let min_cf_bps = self.collateral1_applied_min_cf_bps;
                 max(cf_bps, min_cf_bps)
             }
@@ -183,7 +183,7 @@ impl UserPosition {
     /// 
     /// Returns a tuple containing:
     /// - The borrow limit in the debt token
-    pub fn get_borrow_limit_and_cf_bps_for_collateral(&self, pair: &Pair, debt_token: &Pubkey) -> (u64, u16) {
+    pub fn get_user_borrow_limit_and_cf_bps(&self, pair: &Pair, debt_token: &Pubkey) -> (u64, u16) {
         let user_position = &self;
 
         let (
@@ -221,8 +221,8 @@ impl UserPosition {
     /// - `debt_token`: The token the user is borrowing
     /// 
     /// Returns the borrow limit in the debt token
-    pub fn get_borrow_limit(&self, pair: &Pair, debt_token: &Pubkey) -> u64 {
-        self.get_borrow_limit_and_cf_bps_for_collateral(pair, debt_token).0
+    pub fn get_user_borrow_limit(&self, pair: &Pair, debt_token: &Pubkey) -> u64 {
+        self.get_user_borrow_limit_and_cf_bps(pair, debt_token).0
     }
 
     /// Get the pessimistic collateral factor in BPS for user deposited collateral
@@ -231,24 +231,8 @@ impl UserPosition {
     /// - `debt_token`: The token the user is borrowing
     /// 
     /// Returns the pessimistic collateral factor in BPS
-    pub fn get_pessimistic_collateral_factor_bps(&self, pair: &Pair, debt_token: &Pubkey) -> u16 {
-        self.get_borrow_limit_and_cf_bps_for_collateral(pair, debt_token).1
-    }
-
-    /// Get the minimum collateral and pessimistic collateral factor in BPS for a given debt amount
-    /// 
-    /// - `pair`: The pair the user position belongs to
-    /// - `debt_amount`: The amount of debt the user is borrowing
-    /// 
-    /// Returns a tuple containing:
-    /// - The minimum collateral required to avoid liquidation
-    pub fn get_min_collateral_and_cf_bps_for_debt(&self, pair: &Pair, debt_amount: u64) -> Result<(u64, u16)> {
-        pessimistic_min_collateral(
-            debt_amount,
-            pair.ema_price0_nad(),
-            pair.spot_price0_nad(),
-            pair.reserve0,
-        ).map_err(|error| error.into())
+    pub fn get_user_pessimistic_collateral_factor_bps(&self, pair: &Pair, debt_token: &Pubkey) -> u16 {
+        self.get_user_borrow_limit_and_cf_bps(pair, debt_token).1
     }
 
     pub fn get_remaining_borrow_limit(&self, pair: &Pair, debt_token: &Pubkey, applied_min_cf_bps: u16) -> Result<u64> {

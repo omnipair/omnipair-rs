@@ -57,7 +57,7 @@ impl<'info> CommonAdjustPosition<'info> {
         // CF_pessimistic = min(CF_base, P_spot / P_EMA * CF_base)
         // This ensures the solvency invariant: P_spot >= P_EMA * CF
         // TODO: Δprice needs an EMA, because spot price can be manipulated to match EMA to bypass this check
-        let (borrow_limit, applied_min_cf_bps) = user_position.get_borrow_limit_and_cf_bps_for_collateral(&pair, &debt_token_vault.mint);
+        let (borrow_limit, applied_min_cf_bps) = user_position.get_user_borrow_limit_and_cf_bps(&pair, &debt_token_vault.mint);
         let is_max_borrow = args.amount == u64::MAX;
         let remaining_borrow_limit = borrow_limit.checked_sub(user_debt).ok_or(ErrorCode::DebtMathOverflow)?;
         let borrow_amount = if is_max_borrow { remaining_borrow_limit } else { args.amount };

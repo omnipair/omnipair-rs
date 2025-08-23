@@ -22,9 +22,9 @@ import {
     pairPda: PublicKey,
     userPositionPda: PublicKey,
     getter: any // Enum variant object
-  ): Promise<{ label: string; value: string; formattedValue: number }> {
+  ): Promise<{ label: string; value0: string; value1: string; formattedValue0: number; formattedValue1: number }> {
     const sim = await program.methods
-      .viewUserPositionData(getter, { debtAmount: null }) // Add EmitValueArgs parameter
+      .viewUserPositionData(getter)
       .accounts({ 
         userPosition: userPositionPda, 
         pair: pairPda
@@ -34,40 +34,46 @@ import {
     const logs = sim.raw ?? [];
     console.log(logs);
 
-    const label = Object.keys(getter)[0]; // e.g. "price0Nad"
+    const label = Object.keys(getter)[0]; // e.g. "userBorrowingPower"
   
+    // Updated regex to match tuple format: "UserBorrowingPower: (U64(123), U64(456))"
     const match = logs
-      .map((log) => log.match(new RegExp(`${label}:\\s*(\\d+)`, 'i')))
+      .map((log) => log.match(new RegExp(`${label}:\\s*\\(([^,]+),\\s*([^)]+)\\)`, 'i')))
       .find(Boolean);
 
     console.log(match);
   
-    if (!match || !match[1]) {
-      throw new Error(`Value for ${label} not found in logs`);
+    if (!match || !match[1] || !match[2]) {
+      throw new Error(`Tuple values for ${label} not found in logs`);
     }
+
+    // Extract numeric values from OptionalUint format
+    const extractValue = (optionalUintStr: string): string => {
+      const valueMatch = optionalUintStr.match(/U\d+\((\d+)\)/);
+      return valueMatch ? valueMatch[1] : '0';
+    };
+
+    const value0 = extractValue(match[1]);
+    const value1 = extractValue(match[2]);
+
     const getFormattedValue = (label: string, value: string) => {
-      if (label === 'userToken0BorrowingPower' || label === 'userToken1BorrowingPower') {
+      if (label === 'userBorrowingPower') {
         return Number(value) / 10 ** 6;
       }
-      if (label === 'userToken0EffectiveCollateralFactorBps' || 
-          label === 'userToken1EffectiveCollateralFactorBps' ||
-          label === 'userToken0DebtUtilizationBps' ||
-          label === 'userToken1DebtUtilizationBps') {
+      if (label === 'userAppliedCollateralFactorBps' || 
+          label === 'userLiquidationCollateralFactorBps' ||
+          label === 'userDebtUtilizationBps') {
         return Number(value) / 100; // Convert from BPS (10000 = 100%) to decimal
-      }
-      if (label === 'spotPrice0Nad' || label === 'spotPrice1Nad') {
-        return Number(value) / 10 ** 9;
-      }
-      if (label === 'emaPrice0Nad' || label === 'emaPrice1Nad') {
-        return Number(value) / 10 ** 9;
       }
       return Number(value) / 10 ** 6;
     };
 
     return { 
       label, 
-      value: match[1], 
-      formattedValue: getFormattedValue(label, match[1])
+      value0, 
+      value1,
+      formattedValue0: getFormattedValue(label, value0),
+      formattedValue1: getFormattedValue(label, value1)
     };
   }
   
@@ -108,23 +114,20 @@ import {
     console.log('Total Debt 0:', pairAccount.totalDebt0.toString(), Number(pairAccount.totalDebt0.toString()) / 10 ** 6);
     console.log('Total Debt 1:', pairAccount.totalDebt1.toString(), Number(pairAccount.totalDebt1.toString()) / 10 ** 6);
   
-    console.log('Simulating on-chain prices for pair:', pairPda.toBase58());
+    console.log('Simulating on-chain values for user position:', userPositionPda.toBase58());
   
-    // notice its written camelCase not PascalCase
-    // although PascalCase is used in the idl and the value returned in logs is PascalCase
-    // it will through an error if you use PascalCase
+    // Updated enum variants to match the new UserPositionViewKind (removed functions that moved to PairViewKind)
     const enumVariants = [
-      { userToken0BorrowingPower: {} },
-      { userToken1BorrowingPower: {} },
-      { userToken0EffectiveCollateralFactorBps: {} },
-      { userToken1EffectiveCollateralFactorBps: {} },
-      { userToken0DebtUtilizationBps: {} },
-      { userToken1DebtUtilizationBps: {} },
+      { userBorrowingPower: {} },
+      { userAppliedCollateralFactorBps: {} },
+      { userLiquidationCollateralFactorBps: {} },
+      { userDebtUtilizationBps: {} },
     ];
   
     for (const getter of enumVariants) {
-      const { label, value, formattedValue } = await simulateGetter(program, pairPda, userPositionPda, getter);
-      console.log(`${label}: ${value} (${formattedValue})`);
+      const { label, value0, value1, formattedValue0, formattedValue1 } = await simulateGetter(program, pairPda, userPositionPda, getter);
+      console.log(`${label} Token0: ${value0} (${formattedValue0})`);
+      console.log(`${label} Token1: ${value1} (${formattedValue1})`);
     }
   }
   

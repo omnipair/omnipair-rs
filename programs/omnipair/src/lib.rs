@@ -14,7 +14,7 @@ pub use instructions::pair_initialize::InitializePair;
 pub use instructions::faucet_mint::FaucetMint;
 pub use instructions::emit_value::{EmitValueArgs, PairViewKind, UserPositionViewKind, ViewPairData, ViewUserPositionData};
 
-declare_id!("9P4r6aanvvBfZmUdb3pR4saX77HLaYzjk12qqvwpy7zr");
+declare_id!("AgSwKob7NPKxa3SNPytUcktCzhbPf2z1cQY1QZd6USmq");
 
 
 pub mod deployer {
@@ -29,12 +29,12 @@ pub mod omnipair {
     /// View instructions for client data access (Logs + RPC simulation to parse returned logs for values)
     /// This approach allows for "view" functionality of on-chain calculations (similar to Solidity view functions)
     /// i.e. time-dependent calculations
-    pub fn view_pair_data(ctx: Context<ViewPairData>, getter: PairViewKind) -> Result<()> {
-        ViewPairData::handle_view_data(ctx, getter)
+    pub fn view_pair_data(ctx: Context<ViewPairData>, getter: PairViewKind, args: EmitValueArgs) -> Result<()> {
+        ViewPairData::handle_view_data(ctx, getter, args)
     }
 
-    pub fn view_user_position_data(ctx: Context<ViewUserPositionData>, getter: UserPositionViewKind, args: EmitValueArgs) -> Result<()> {
-        ViewUserPositionData::handle_view_data(ctx, getter, args)
+    pub fn view_user_position_data(ctx: Context<ViewUserPositionData>, getter: UserPositionViewKind) -> Result<()> {
+        ViewUserPositionData::handle_view_data(ctx, getter)
     }
 
     // Futarchy authority instructions

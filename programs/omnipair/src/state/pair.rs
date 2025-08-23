@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
+use crate::utils::gamm_math::{pessimistic_max_debt, pessimistic_min_collateral};
 use crate::utils::math::compute_ema;
 use crate::state::RateModel;
 use crate::events::UpdatePairEvent;
@@ -165,6 +166,61 @@ impl Pair {
         self.reserve0 > 0 && self.reserve1 > 0 && self.total_supply > 0
     }
 
+    /// Get the maximum debt and pessimistic collateral factor in BPS for a given collateral amount
+    /// 
+    /// - `pair`: The pair the user position belongs to
+    /// - `collateral_token`: The token the user is depositing
+    /// - `collateral_amount`: The amount of collateral the user is depositing
+    /// 
+    /// Returns a tuple containing:
+    /// - The maximum debt possible for the given collateral amount
+    /// - The pessimistic collateral factor in BPS
+    pub fn get_max_debt_and_cf_bps_for_collateral(&self, pair: &Pair, collateral_token: &Pubkey, collateral_amount: u64) -> Result<(u64, u16)> {
+        let (
+            collateral_ema_price,
+            collateral_spot_price,
+            debt_amm_reserve,
+        ) = match collateral_token == &pair.token0 {
+            true => (pair.ema_price0_nad(), pair.spot_price0_nad(), pair.reserve1),
+            false => (pair.ema_price1_nad(), pair.spot_price1_nad(), pair.reserve0),
+        };
+
+        pessimistic_max_debt(
+            collateral_amount,
+            collateral_ema_price,
+            collateral_spot_price,
+            debt_amm_reserve,
+        ).map_err(|error| error.into())
+    }
+
+
+        /// Get the minimum collateral and pessimistic collateral factor in BPS for a given debt amount
+    /// 
+    /// - `pair`: The pair the user position belongs to
+    /// - `debt_token`: The token the user is borrowing
+    /// - `debt_amount`: The amount of debt the user is borrowing
+    /// 
+    /// Returns a tuple containing:
+    /// - The minimum collateral required to avoid liquidation
+    /// - The pessimistic collateral factor in BPS
+    pub fn get_min_collateral_and_cf_bps_for_debt(&self, pair: &Pair, debt_token: &Pubkey, debt_amount: u64) -> Result<(u64, u16)> {
+        let (
+            collateral_ema_price,
+            collateral_spot_price,
+            debt_amm_reserve,
+        ) = match debt_token == &pair.token0 {
+            true => (pair.ema_price1_nad(), pair.spot_price1_nad(), pair.reserve0),
+            false => (pair.ema_price0_nad(), pair.spot_price0_nad(), pair.reserve1),
+        };
+
+        pessimistic_min_collateral(
+            debt_amount,
+            collateral_ema_price,
+            collateral_spot_price,
+            debt_amm_reserve,
+        ).map_err(|error| error.into())
+    }
+
     pub fn update(&mut self, rate_model: &Account<RateModel>) -> Result<()> {
         let current_time = Clock::get()?.unix_timestamp;
         
@@ -231,6 +287,8 @@ impl Pair {
                 // 5. affecting liquidation thresholds
                 // 6. affecting the amount of debt that can be borrowed
                 // 7. affecting the amount of interest that is earned
+                // Remark: collateral reserve inflation due to price accruel will decrease utilization rates and borrow rates
+                // effectively rendering as negative interest applied for this side borrows, incentivising more borrows to it and more interest paid
                 self.reserve0 += interest0 as u64;
                 self.reserve1 += interest1 as u64;
             }

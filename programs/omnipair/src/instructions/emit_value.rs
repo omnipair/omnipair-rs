@@ -3,9 +3,52 @@ use crate::state::{Pair, UserPosition};
 use std::fmt;
 use crate::errors::ErrorCode;
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
+pub enum OptionalUint {
+    U64(u64),
+    U128(u128),
+    U16(u16),
+    OptionalU64(Option<u64>),
+    OptionalU128(Option<u128>),
+    OptionalU16(Option<u16>),
+}
+
+impl fmt::Display for OptionalUint {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            OptionalUint::U64(val) => write!(f, "{}", val),
+            OptionalUint::U128(val) => write!(f, "{}", val),
+            OptionalUint::U16(val) => write!(f, "{}", val),
+            OptionalUint::OptionalU64(val) => match val {
+                Some(v) => write!(f, "Some({})", v),
+                None => write!(f, "None"),
+            },
+            OptionalUint::OptionalU128(val) => match val {
+                Some(v) => write!(f, "Some({})", v),
+                None => write!(f, "None"),
+            },
+            OptionalUint::OptionalU16(val) => match val {
+                Some(v) => write!(f, "Some({})", v),
+                None => write!(f, "None"),
+            },
+        }
+    }
+}
+
+impl OptionalUint {
+    pub fn from_u64(val: u64) -> Self { OptionalUint::U64(val) }
+    pub fn from_u128(val: u128) -> Self { OptionalUint::U128(val) }
+    pub fn from_u16(val: u16) -> Self { OptionalUint::U16(val) }
+    pub fn from_optional_u64(val: Option<u64>) -> Self { OptionalUint::OptionalU64(val) }
+    pub fn from_optional_u128(val: Option<u128>) -> Self { OptionalUint::OptionalU128(val) }
+    pub fn from_optional_u16(val: Option<u16>) -> Self { OptionalUint::OptionalU16(val) }
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct EmitValueArgs {
     pub debt_amount: Option<u64>,
+    pub collateral_amount: Option<u64>,
+    pub collateral_token: Option<Pubkey>,
 }
 
 
@@ -18,6 +61,9 @@ pub enum PairViewKind {
     SpotPrice0Nad,
     SpotPrice1Nad,
     K,
+    GetMinCollateralForDebt,
+    GetBorrowLimitAndCfBpsForCollateral,
+
 }
 impl fmt::Display for PairViewKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -27,36 +73,26 @@ impl fmt::Display for PairViewKind {
             PairViewKind::SpotPrice0Nad => write!(f, "SpotPrice0Nad"),
             PairViewKind::SpotPrice1Nad => write!(f, "SpotPrice1Nad"),
             PairViewKind::K => write!(f, "K"),
+            PairViewKind::GetMinCollateralForDebt => write!(f, "GetMinCollateralForDebt"),
+            PairViewKind::GetBorrowLimitAndCfBpsForCollateral => write!(f, "GetBorrowLimitAndCfBpsForCollateral"),
         }
     }
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub enum UserPositionViewKind {
-    UserToken0BorrowingPower,
-    UserToken1BorrowingPower,
-    UserToken0EffectiveCollateralFactorBps,
-    UserToken1EffectiveCollateralFactorBps,
-    UserToken0LiquidationCollateralFactorBps,
-    UserToken1LiquidationCollateralFactorBps,
-    UserToken0MinCollateralForDebt,
-    UserToken1MinCollateralForDebt,
-    UserToken0DebtUtilizationBps,
-    UserToken1DebtUtilizationBps,
+    UserBorrowingPower,
+    UserAppliedCollateralFactorBps,
+    UserLiquidationCollateralFactorBps,
+    UserDebtUtilizationBps,
 }
 impl fmt::Display for UserPositionViewKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            UserPositionViewKind::UserToken0BorrowingPower => write!(f, "UserToken0BorrowingPower"),
-            UserPositionViewKind::UserToken1BorrowingPower => write!(f, "UserToken1BorrowingPower"),
-            UserPositionViewKind::UserToken0EffectiveCollateralFactorBps => write!(f, "UserToken0EffectiveCollateralFactorBps"),
-            UserPositionViewKind::UserToken1EffectiveCollateralFactorBps => write!(f, "UserToken1EffectiveCollateralFactorBps"),
-            UserPositionViewKind::UserToken0LiquidationCollateralFactorBps => write!(f, "UserToken0LiquidationCollateralFactorBps"),
-            UserPositionViewKind::UserToken1LiquidationCollateralFactorBps => write!(f, "UserToken1LiquidationCollateralFactorBps"),
-            UserPositionViewKind::UserToken0MinCollateralForDebt => write!(f, "UserToken0MinCollateralForDebt"),
-            UserPositionViewKind::UserToken1MinCollateralForDebt => write!(f, "UserToken1MinCollateralForDebt"),
-            UserPositionViewKind::UserToken0DebtUtilizationBps => write!(f, "UserToken0DebtUtilizationBps"),
-            UserPositionViewKind::UserToken1DebtUtilizationBps => write!(f, "UserToken1DebtUtilizationBps"),
+            UserPositionViewKind::UserBorrowingPower => write!(f, "UserBorrowingPower"),
+            UserPositionViewKind::UserAppliedCollateralFactorBps => write!(f, "UserAppliedCollateralFactorBps"),
+            UserPositionViewKind::UserLiquidationCollateralFactorBps => write!(f, "UserLiquidationCollateralFactorBps"),
+            UserPositionViewKind::UserDebtUtilizationBps => write!(f, "UserDebtUtilizationBps"),
         }
     }
 }
@@ -78,48 +114,63 @@ pub struct ViewUserPositionData<'info> {
 }
 
 impl ViewPairData<'_> {
-    pub fn handle_view_data(ctx: Context<Self>, getter: PairViewKind) -> Result<()> {
+    pub fn handle_view_data(ctx: Context<Self>, getter: PairViewKind, args: EmitValueArgs) -> Result<()> {
         let pair = &ctx.accounts.pair;
 
-        let value = match getter {
-            PairViewKind::EmaPrice0Nad => pair.ema_price0_nad(),
-            PairViewKind::EmaPrice1Nad => pair.ema_price1_nad(),
-            PairViewKind::SpotPrice0Nad => pair.spot_price0_nad(),
-            PairViewKind::SpotPrice1Nad => pair.spot_price1_nad(),
-            PairViewKind::K => pair.k() as u64,
+        let value: (OptionalUint, OptionalUint) = match getter {
+            PairViewKind::EmaPrice0Nad => (OptionalUint::from_u64(pair.ema_price0_nad()), OptionalUint::OptionalU64(None)),
+            PairViewKind::EmaPrice1Nad => (OptionalUint::from_u64(pair.ema_price1_nad()), OptionalUint::OptionalU64(None)),
+            PairViewKind::SpotPrice0Nad => (OptionalUint::from_u64(pair.spot_price0_nad()), OptionalUint::OptionalU64(None)),
+            PairViewKind::SpotPrice1Nad => (OptionalUint::from_u64(pair.spot_price1_nad()), OptionalUint::OptionalU64(None)),
+            PairViewKind::K => (OptionalUint::from_u64(pair.k() as u64), OptionalUint::OptionalU64(None)),
+            PairViewKind::GetMinCollateralForDebt => {
+                let debt_amount = args.debt_amount.ok_or(ErrorCode::ArgumentMissing)?;
+                (
+                    OptionalUint::from_u64(pair.get_min_collateral_and_cf_bps_for_debt(&pair, &pair.token0, debt_amount).unwrap().0),
+                    OptionalUint::from_u16(pair.get_min_collateral_and_cf_bps_for_debt(&pair, &pair.token1, debt_amount).unwrap().1)
+                )
+            },
+            PairViewKind::GetBorrowLimitAndCfBpsForCollateral => {
+                let collateral_amount = args.collateral_amount.ok_or(ErrorCode::ArgumentMissing)?;
+                let collateral_token = args.collateral_token.ok_or(ErrorCode::ArgumentMissing)?;
+                (
+                    OptionalUint::from_u64(pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount).unwrap().0),
+                    OptionalUint::from_u16(pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount).unwrap().1)
+                )
+            },
         };
 
-        msg!("{}: {}", getter, value);
+        msg!("{}: {:?}", getter, value);
 
         Ok(())
     }
 }
 
 impl ViewUserPositionData<'_> {
-    pub fn handle_view_data(ctx: Context<Self>, getter: UserPositionViewKind, args: EmitValueArgs) -> Result<()> {
+    pub fn handle_view_data(ctx: Context<Self>, getter: UserPositionViewKind) -> Result<()> {
         let pair = &ctx.accounts.pair;
         let user_position = &ctx.accounts.user_position;
 
-        let value = match getter {
-            UserPositionViewKind::UserToken0BorrowingPower => user_position.get_borrow_limit(&pair, &pair.token0),
-            UserPositionViewKind::UserToken1BorrowingPower => user_position.get_borrow_limit(&pair, &pair.token1),
-            UserPositionViewKind::UserToken0EffectiveCollateralFactorBps => user_position.get_pessimistic_collateral_factor_bps(&pair, &pair.token0) as u64,
-            UserPositionViewKind::UserToken1EffectiveCollateralFactorBps => user_position.get_pessimistic_collateral_factor_bps(&pair, &pair.token1) as u64,
-            UserPositionViewKind::UserToken0LiquidationCollateralFactorBps => user_position.get_liquidation_cf_bps(&pair, &pair.token0) as u64,
-            UserPositionViewKind::UserToken1LiquidationCollateralFactorBps => user_position.get_liquidation_cf_bps(&pair, &pair.token1) as u64,
-            UserPositionViewKind::UserToken0MinCollateralForDebt => {
-                let debt_amount = args.debt_amount.ok_or(ErrorCode::ArgumentMissing)?;
-                user_position.get_min_collateral_and_cf_bps_for_debt(&pair, debt_amount).unwrap().0
-            },
-            UserPositionViewKind::UserToken1MinCollateralForDebt => {
-                let debt_amount = args.debt_amount.ok_or(ErrorCode::ArgumentMissing)?;
-                user_position.get_min_collateral_and_cf_bps_for_debt(&pair, debt_amount).unwrap().0
-            },
-            UserPositionViewKind::UserToken0DebtUtilizationBps => user_position.get_debt_utilization_bps(&pair, &pair.token0).unwrap(),
-            UserPositionViewKind::UserToken1DebtUtilizationBps => user_position.get_debt_utilization_bps(&pair, &pair.token1).unwrap(),
+        let value: (OptionalUint, OptionalUint) = match getter {
+            UserPositionViewKind::UserBorrowingPower => (
+                OptionalUint::from_u64(user_position.get_user_borrow_limit(&pair, &pair.token0)),
+                OptionalUint::from_u64(user_position.get_user_borrow_limit(&pair, &pair.token1)),
+            ),
+            UserPositionViewKind::UserAppliedCollateralFactorBps => (
+                OptionalUint::from_u16(user_position.get_user_pessimistic_collateral_factor_bps(&pair, &pair.token0)),
+                OptionalUint::from_u16(user_position.get_user_pessimistic_collateral_factor_bps(&pair, &pair.token1))
+            ),
+            UserPositionViewKind::UserLiquidationCollateralFactorBps => (
+                OptionalUint::from_u16(user_position.get_liquidation_cf_bps(&pair, &pair.token0)),
+                OptionalUint::from_u16(user_position.get_liquidation_cf_bps(&pair, &pair.token1))
+            ),
+            UserPositionViewKind::UserDebtUtilizationBps => (
+                OptionalUint::from_u64(user_position.get_debt_utilization_bps(&pair, &pair.token0).unwrap()),
+                OptionalUint::from_u64(user_position.get_debt_utilization_bps(&pair, &pair.token1).unwrap())
+            ),
         };
 
-        msg!("{}: {}", getter, value);
+        msg!("{}: {:?}", getter, value);
 
         Ok(())
     }
