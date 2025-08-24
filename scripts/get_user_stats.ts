@@ -41,6 +41,17 @@ import {
       .map((log) => log.match(new RegExp(`${label}:\\s*\\(([^,]+),\\s*([^)]+)\\)`, 'i')))
       .find(Boolean);
 
+    // If the second value is incomplete (missing closing parenthesis), try to fix it
+    if (match && match[2] && !match[2].includes(')')) {
+      // Look for the complete U16/U64 pattern in the original log
+      const completeMatch = logs
+        .map((log) => log.match(new RegExp(`${label}:\\s*\\([^,]+,\\s*(U\\d+\\(\\d+\\))\\)`, 'i')))
+        .find(Boolean);
+      if (completeMatch && completeMatch[1]) {
+        match[2] = completeMatch[1];
+      }
+    }
+
     console.log(match);
   
     if (!match || !match[1] || !match[2]) {
