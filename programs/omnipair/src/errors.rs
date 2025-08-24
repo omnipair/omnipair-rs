@@ -97,6 +97,9 @@ pub enum ErrorCode {
     
     #[msg("Invalid utilization")]
     InvalidUtilization,
+    
+    #[msg("Borrow exceeds reserve")]
+    BorrowExceedsReserve,
 
     #[msg("Invalid token order")]
     InvalidTokenOrder,

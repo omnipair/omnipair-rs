@@ -126,9 +126,7 @@ impl<'info> InitializePair<'info> {
 
     pub fn handle_create(&mut self) -> Result<()> {
         let rate_model = &mut self.rate_model;
-        rate_model.exp_rate = NATURAL_LOG_OF_TWO_NAD / SECONDS_PER_DAY;
-        rate_model.target_util_start = TARGET_UTIL_START_NAD;
-        rate_model.target_util_end = TARGET_UTIL_END_NAD;
+        rate_model.set_inner(RateModel::new());
         
         Ok(())
     }

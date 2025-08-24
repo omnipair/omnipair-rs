@@ -12,23 +12,20 @@ pub const BPS_DENOMINATOR: u16 = 10_000;
 // EMA constants
 #[constant]
 pub const DEFAULT_HALF_LIFE: u64 = 7 * 60; // 7 minutes (recommended)
-#[constant]
 pub const MIN_HALF_LIFE: u64 = 1 * 60; // 1 minute
-#[constant]
 pub const MAX_HALF_LIFE: u64 = 12 * 60 * 60; // 12 hours
-#[constant]
 pub const DEPLOYER_MAX_FEE_BPS: u16 = 1000; // 10%
 pub const TAYLOR_TERMS: u64 = 5;
 pub const NATURAL_LOG_OF_TWO_NAD: u64 = 693_147_180; // ln(2) scaled by NAD
 
 // Pair constants
 pub const MIN_LIQUIDITY: u64 = 1_000; // 10^3
-pub const MIN_RATE: u64 = 1; // 0.0001%
-pub const MAX_RATE: u64 = 1000000; // 100%
+pub const MIN_RATE_BPS: u64 = 1;      // 0.01%
+pub const MAX_RATE_BPS: u64 = 10_000; // 100%
 
 // Default IRM constants
-pub const TARGET_UTIL_START_NAD: u64 = 330_000_000; // 33% (0.33e9)
-pub const TARGET_UTIL_END_NAD: u64 = 660_000_000; // 66% (0.66e9)
+pub const TARGET_UTIL_START_BPS: u64 = 3_300; // 33%
+pub const TARGET_UTIL_END_BPS: u64 = 6_600; // 66%
 pub const SECONDS_PER_DAY: u64 = 86_400;
 pub const SECONDS_PER_YEAR: u64 = 31_536_000;
 
@@ -49,7 +46,3 @@ pub const POSITION_SEED_PREFIX: &[u8] = b"gamm_position";
 pub const PAIR_CONFIG_SEED_PREFIX: &[u8] = b"gamm_pair_config";
 #[constant]
 pub const FUTARCHY_AUTHORITY_SEED_PREFIX: &[u8] = b"futarchy_authority";
-
-// Liquidation constants
-#[constant]
-pub const LIQUIDATION_LP_INCENTIVE_BPS: u64 = 500; // 5% bonus for liquidators

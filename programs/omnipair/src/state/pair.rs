@@ -84,8 +84,8 @@ impl Pair {
 
             last_price0_ema: 0,
             last_price1_ema: 0,
-            last_rate0: MIN_RATE,
-            last_rate1: MIN_RATE,
+            last_rate0: RateModel::bps_to_nad(MIN_RATE_BPS),
+            last_rate1: RateModel::bps_to_nad(MIN_RATE_BPS),
 
             total_debt0: 0,
             total_debt1: 0,
@@ -146,6 +146,26 @@ impl Pair {
                 self.half_life
             )
         }
+    }
+
+    pub fn get_rates(&self, rate_model: &Account<RateModel>) -> Result<(u64, u64)> {
+        let current_time = Clock::get()?.unix_timestamp;
+        let time_elapsed = current_time - self.last_update;
+
+        let (util0, util1) = if self.reserve0 > 0 {
+            (
+                (self.total_debt0 * NAD) / self.reserve0, 
+                (self.total_debt1 * NAD) / self.reserve1
+            )
+        } else {
+            (0, 0)
+        };
+
+        
+        Ok((
+            rate_model.calculate_rate(self.last_rate0, time_elapsed as u64, util0).0, 
+            rate_model.calculate_rate(self.last_rate1, time_elapsed as u64, util1).0
+        ))
     }
 
     pub fn ema_price1_nad(&self) -> u64 {
