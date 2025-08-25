@@ -20,8 +20,8 @@ pub const NATURAL_LOG_OF_TWO_NAD: u64 = 693_147_180; // ln(2) scaled by NAD
 
 // Pair constants
 pub const MIN_LIQUIDITY: u64 = 1_000; // 10^3
-pub const MIN_RATE_BPS: u64 = 1;      // 0.01%
-pub const MAX_RATE_BPS: u64 = 10_000; // 100%
+pub const INITIAL_RATE_BPS: u64 = 200; // 2%
+pub const MIN_RATE_BPS: u64 = 100;      // 1%
 
 // Default IRM constants
 pub const TARGET_UTIL_START_BPS: u64 = 3_300; // 33%

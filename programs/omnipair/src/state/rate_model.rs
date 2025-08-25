@@ -15,8 +15,9 @@ impl RateModel {
     pub fn new() -> Self {
         const SECONDS_PER_HOUR: u64 = 3_600;
         Self {
-            // half-life = 1 day  => exp_rate = ln(2)/day  (NAD/sec)
-            exp_rate: NATURAL_LOG_OF_TWO_NAD / SECONDS_PER_DAY,
+            // For production you likely want ln(2)/day; for testing we use 1 hour.
+            // exp_rate: NATURAL_LOG_OF_TWO_NAD / SECONDS_PER_DAY,
+            exp_rate: NATURAL_LOG_OF_TWO_NAD / SECONDS_PER_HOUR,
             target_util_start: Self::bps_to_nad(TARGET_UTIL_START_BPS),
             target_util_end:   Self::bps_to_nad(TARGET_UTIL_END_BPS),
         }
@@ -37,39 +38,26 @@ impl RateModel {
         let gd       = taylor_exp(-(x as i64), NAD, TAYLOR_TERMS) as u128; // NAD ≈ e^{-(x/NAD)}
 
         let min_nad  = Self::bps_to_nad(MIN_RATE_BPS) as u128;
-        let max_nad  = Self::bps_to_nad(MAX_RATE_BPS) as u128;
 
-        // Clamp last inside bounds
-        let last = (last_rate as u128).clamp(min_nad, max_nad);
+        // Enforce only the MIN floor; no MAX ceiling.
+        let last = (last_rate as u128).max(min_nad);
 
-        // High util: exponential growth
+        // High util: exponential growth (no cap)
         if (last_util as u128) > (self.target_util_end as u128) {
-            // unconstrained r1 = r0 * e^{+k dt} = r0 * NAD / gd
-            let r1_unclamped = last.saturating_mul(NAD as u128) / gd.max(1);
+            // r1 = r0 * e^{+k dt} = r0 * NAD / gd
+            let curr = last
+                .saturating_mul(NAD as u128)
+                / gd.max(1);
 
-            if r1_unclamped <= max_nad {
-                let curr = r1_unclamped;
-                // ∫ = (r1 - r0) / k_real = (r1 - r0) * NAD / exp_rate, then / YEAR
-                let numer    = curr.saturating_sub(last).saturating_mul(NAD as u128);
-                let integral = numer / exp_rate / (SECONDS_PER_YEAR as u128);
-                return (curr as u64, integral as u64);
-            } else {
-                // Hit MAX during window → split: exponential to MAX, then flat at MAX
-                let t_to_max = Self::time_to_reach_closed_form(last, max_nad, exp_rate, /*up=*/true);
-                let t_to_max = t_to_max.min(dt);
-
-                // exp part (to cap): (MAX - last) * NAD / exp_rate
-                let exp_part  = max_nad.saturating_sub(last).saturating_mul(NAD as u128) / exp_rate;
-                // flat tail: MAX * (dt - t*)
-                let flat_part = max_nad.saturating_mul(dt.saturating_sub(t_to_max));
-                let integral  = (exp_part + flat_part) / (SECONDS_PER_YEAR as u128);
-                return (max_nad as u64, integral as u64);
-            }
+            // ∫ r dt = (r1 - r0) / k_real = (r1 - r0) * NAD / exp_rate, then / YEAR
+            let numer    = curr.saturating_sub(last).saturating_mul(NAD as u128);
+            let integral = numer / exp_rate / (SECONDS_PER_YEAR as u128);
+            return (curr as u64, integral as u64);
         }
 
-        // Low util: exponential decay
+        // Low util: exponential decay with MIN floor
         if (last_util as u128) < (self.target_util_start as u128) {
-            // unconstrained r1 = r0 * e^{-k dt} = r0 * gd / NAD
+            // r1 = r0 * e^{-k dt} = r0 * gd / NAD
             let r1_unclamped = last.saturating_mul(gd) / (NAD as u128);
 
             if r1_unclamped >= min_nad {
@@ -84,8 +72,8 @@ impl RateModel {
                     let integral = min_nad.saturating_mul(dt) / (SECONDS_PER_YEAR as u128);
                     return (min_nad as u64, integral as u64);
                 }
-                let t_to_min = Self::time_to_reach_closed_form(last, min_nad, exp_rate, /*up=*/false);
-                let t_to_min = t_to_min.min(dt);
+                let t_to_min = Self::time_to_reach_closed_form(last, min_nad, exp_rate, /*up=*/false)
+                    .min(dt);
 
                 // exp part (to floor): (last - MIN) * NAD / exp_rate
                 let exp_part  = last.saturating_sub(min_nad).saturating_mul(NAD as u128) / exp_rate;
@@ -101,22 +89,19 @@ impl RateModel {
         (last as u64, integral as u64)
     }
 
-    /// Closed-form time to reach target using ln, matching wadMath approach.
-    /// up=true  : r(t) = r0 * e^{+k t} >= target  ⇒  t = ln(target/r0)   * NAD / exp_rate
-    /// up=false : r(t) = r0 * e^{-k t} <= target  ⇒  t = ln(r0/target)   * NAD / exp_rate
+    /// Closed-form time to reach target using ln.
+    /// up=false : r(t) = r0 * e^{-k t} <= target  ⇒  t = ln(r0/target) * NAD / exp_rate
     #[inline]
     fn time_to_reach_closed_form(r0: u128, target: u128, exp_rate_nad_per_s: u128, up: bool) -> u128 {
         if up {
+            // Not used now (no max cap), but kept for parity.
             if target <= r0 { return 0; }
-            // ratio = target / r0  (NAD)
             let ratio_nad = (target.saturating_mul(NAD as u128)) / r0.max(1);
             let ln_ratio  = Self::ln_nad(ratio_nad as u64);  // NAD (signed)
-            // seconds = (ln*NAD)/exp_rate
             let t = ((NAD as i128) * ln_ratio) / (exp_rate_nad_per_s as i128);
             if t <= 0 { 0 } else { t as u128 }
         } else {
             if r0 <= target { return 0; }
-            // ratio = r0 / target  (NAD)
             let ratio_nad = (r0.saturating_mul(NAD as u128)) / target.max(1);
             let ln_ratio  = Self::ln_nad(ratio_nad as u64);  // NAD (signed)
             let t = ((NAD as i128) * ln_ratio) / (exp_rate_nad_per_s as i128);
@@ -143,28 +128,22 @@ impl RateModel {
         }
 
         // v = (z - NAD) / (z + NAD) in NAD (can be negative)
-        // compute as i128 to preserve sign
         let z_i = z as i128;
-        let num = (z_i - NAD as i128) * NAD as i128;       // (z-NAD)*NAD
-        let den = (z_i + NAD as i128).max(1);              // (z+NAD)
-        let v   = num / den;                               // NAD
+        let num = (z_i - NAD as i128) * NAD as i128; // (z-NAD)*NAD
+        let den = (z_i + NAD as i128).max(1);        // (z+NAD)
+        let v   = num / den;                         // NAD
 
-        // ln(m) ≈ 2 * ( v + v^3/3 + v^5/5 + v^7/7 + v^9/9 )  on m in [0.5,2)
-        // Keep intermediates in NAD each step to avoid overflow.
-        let v2  = (v * v) / (NAD as i128);                 // NAD
-        let v3  = (v2 * v) / (NAD as i128);                // NAD
-        let v5  = (v3 * v2) / (NAD as i128);               // NAD
-        let v7  = (v5 * v2) / (NAD as i128);               // NAD
-        let v9  = (v7 * v2) / (NAD as i128);               // NAD
+        // ln(m) ≈ 2 * ( v + v^3/3 + v^5/5 + v^7/7 + v^9/9 )
+        let v2  = (v * v) / (NAD as i128);
+        let v3  = (v2 * v) / (NAD as i128);
+        let v5  = (v3 * v2) / (NAD as i128);
+        let v7  = (v5 * v2) / (NAD as i128);
+        let v9  = (v7 * v2) / (NAD as i128);
 
-        let series = v
-            +  v3 / 3
-            +  v5 / 5
-            +  v7 / 7
-            +  v9 / 9;
+        let series = v + v3 / 3 + v5 / 5 + v7 / 7 + v9 / 9;
 
         // ln(z) = 2*series + k*ln(2)
-        let ln2 = NATURAL_LOG_OF_TWO_NAD as i128;          // NAD
+        let ln2 = NATURAL_LOG_OF_TWO_NAD as i128; // NAD
         2 * series + k * ln2
     }
 

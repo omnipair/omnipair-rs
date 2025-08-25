@@ -84,8 +84,8 @@ impl Pair {
 
             last_price0_ema: 0,
             last_price1_ema: 0,
-            last_rate0: RateModel::bps_to_nad(MIN_RATE_BPS),
-            last_rate1: RateModel::bps_to_nad(MIN_RATE_BPS),
+            last_rate0: RateModel::bps_to_nad(INITIAL_RATE_BPS),
+            last_rate1: RateModel::bps_to_nad(INITIAL_RATE_BPS),
 
             total_debt0: 0,
             total_debt1: 0,
