@@ -22,11 +22,19 @@ import {
     program: Program<Omnipair>,
     pairPda: PublicKey,
     getter: any, // Enum variant object
-    args?: any // EmitValueArgs for functions that need additional parameters
+    args?: any, // EmitValueArgs for functions that need additional parameters
+    rateModelPda?: PublicKey // Rate model PDA for getRates function
   ): Promise<{ label: string; value0: string; value1: string; formattedValue0: number; formattedValue1: number }> {
+    const accounts: any = { pair: pairPda };
+    
+    // Add rate model account - required for all ViewPairData functions
+    if (rateModelPda) {
+      accounts.rateModel = rateModelPda;
+    }
+    
     const sim = await program.methods
       .viewPairData(getter, args || { debtAmount: null, collateralAmount: null, collateralToken: null })
-      .accounts({ pair: pairPda })
+      .accounts(accounts)
       .simulate();
   
     const logs = sim.raw ?? [];
@@ -73,6 +81,9 @@ import {
       if (label === 'k') {
         return Number(value) / 10 ** 12;
       }
+      if (label === 'getRates') {
+        return Number(value) / 10 ** 9; // Rates are in NAD format (1e9)
+      }
       if (label === 'getMinCollateralForDebt') {
         return Number(value) / 10 ** 6;
       }
@@ -114,6 +125,7 @@ import {
     console.log('Reserve 1:', pairAccount.reserve1.toString(), Number(pairAccount.reserve1.toString()) / 10 ** 6);
     console.log('Total Debt 0:', pairAccount.totalDebt0.toString(), Number(pairAccount.totalDebt0.toString()) / 10 ** 6);
     console.log('Total Debt 1:', pairAccount.totalDebt1.toString(), Number(pairAccount.totalDebt1.toString()) / 10 ** 6);
+    console.log('Rate Model:', pairAccount.rateModel.toBase58());
   
     console.log('Simulating on-chain values for pair:', pairPda.toBase58());
   
@@ -123,12 +135,13 @@ import {
       { emaPrice1Nad: {} },
       { spotPrice0Nad: {} },
       { spotPrice1Nad: {} },
-      { k: {} }
+      { k: {} },
+      { getRates: {} }
     ];
   
     for (const getter of enumVariants) {
-      const { label, value0, value1, formattedValue0, formattedValue1 } = await simulateGetter(program, pairPda, getter);
-      console.log(`${label}: ${value0} (${formattedValue0})`);
+      const { label, value0, value1, formattedValue0, formattedValue1 } = await simulateGetter(program, pairPda, getter, undefined, pairAccount.rateModel);
+      console.log(`${label}: ${value0} (${formattedValue0})${label === 'getRates' ? `, ${value1} (${formattedValue1})` : ''}`);
       // Note: value1 is OptionalU64(None) for single-value functions, so we don't display it
     }
 
@@ -139,7 +152,8 @@ import {
       program, 
       pairPda, 
       { getMinCollateralForDebt: {} },
-      { debtAmount: debtAmount, collateralAmount: null, collateralToken: null }
+      { debtAmount: debtAmount, collateralAmount: null, collateralToken: null },
+      pairAccount.rateModel
     );
     console.log(`${minCollateralResult.label} Token0: ${minCollateralResult.value0} (${minCollateralResult.formattedValue0})`);
     console.log(`${minCollateralResult.label} Token1: ${minCollateralResult.value1} (${minCollateralResult.formattedValue1})`);
@@ -159,7 +173,8 @@ import {
       program, 
       pairPda, 
       { getBorrowLimitAndCfBpsForCollateral: {} },
-      { debtAmount: null, collateralAmount: testCollateralAmount0, collateralToken: TOKEN0_MINT }
+      { debtAmount: null, collateralAmount: testCollateralAmount0, collateralToken: TOKEN0_MINT },
+      pairAccount.rateModel
     );
     console.log(borrowLimitResult0);
     console.log(`${borrowLimitResult0.label} with Token0 collateral - Max Debt: ${borrowLimitResult0.value0} (${borrowLimitResult0.formattedValue0}), CF BPS: ${borrowLimitResult0.value1} (${borrowLimitResult0.formattedValue1 / 100}%)`);
@@ -169,7 +184,8 @@ import {
       program, 
       pairPda, 
       { getBorrowLimitAndCfBpsForCollateral: {} },
-      { debtAmount: null, collateralAmount: testCollateralAmount1, collateralToken: TOKEN1_MINT }
+      { debtAmount: null, collateralAmount: testCollateralAmount1, collateralToken: TOKEN1_MINT },
+      pairAccount.rateModel
     );
     console.log(`${borrowLimitResult1.label} with Token1 collateral - Max Debt: ${borrowLimitResult1.value0} (${borrowLimitResult1.formattedValue0}), CF BPS: ${borrowLimitResult1.value1} (${borrowLimitResult1.formattedValue1 / 100}%)`);
   }

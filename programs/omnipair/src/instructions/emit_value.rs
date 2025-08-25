@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::state::{Pair, UserPosition};
+use crate::state::{Pair, UserPosition, RateModel};
 use std::fmt;
 use crate::errors::ErrorCode;
 
@@ -61,6 +61,7 @@ pub enum PairViewKind {
     SpotPrice0Nad,
     SpotPrice1Nad,
     K,
+    GetRates,
     GetMinCollateralForDebt,
     GetBorrowLimitAndCfBpsForCollateral,
 
@@ -73,6 +74,7 @@ impl fmt::Display for PairViewKind {
             PairViewKind::SpotPrice0Nad => write!(f, "SpotPrice0Nad"),
             PairViewKind::SpotPrice1Nad => write!(f, "SpotPrice1Nad"),
             PairViewKind::K => write!(f, "K"),
+            PairViewKind::GetRates => write!(f, "GetRates"),
             PairViewKind::GetMinCollateralForDebt => write!(f, "GetMinCollateralForDebt"),
             PairViewKind::GetBorrowLimitAndCfBpsForCollateral => write!(f, "GetBorrowLimitAndCfBpsForCollateral"),
         }
@@ -103,6 +105,7 @@ impl fmt::Display for UserPositionViewKind {
 pub struct ViewPairData<'info> {
     #[account(mut)]
     pub pair: Account<'info, Pair>,
+    pub rate_model: Account<'info, RateModel>,
 }
 
 #[derive(Accounts)]
@@ -123,6 +126,10 @@ impl ViewPairData<'_> {
             PairViewKind::SpotPrice0Nad => (OptionalUint::from_u64(pair.spot_price0_nad()), OptionalUint::OptionalU64(None)),
             PairViewKind::SpotPrice1Nad => (OptionalUint::from_u64(pair.spot_price1_nad()), OptionalUint::OptionalU64(None)),
             PairViewKind::K => (OptionalUint::from_u64(pair.k() as u64), OptionalUint::OptionalU64(None)),
+            PairViewKind::GetRates => {
+                let (rate0, rate1) = pair.get_rates(&ctx.accounts.rate_model).unwrap();
+                (OptionalUint::from_u64(rate0), OptionalUint::from_u64(rate1))
+            },
             PairViewKind::GetMinCollateralForDebt => {
                 let debt_amount = args.debt_amount.ok_or(ErrorCode::ArgumentMissing)?;
                 (
