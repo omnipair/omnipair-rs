@@ -157,12 +157,12 @@ impl<'info> Liquidate<'info> {
         match is_collateral_token0 {
             true => {
                 pair.reserve0 = pair.reserve0.checked_add(user_position.collateral0).unwrap();
-                pair.reserve0 = pair.reserve1.checked_sub(user_debt).unwrap();
+                pair.reserve1 = pair.reserve1.checked_sub(user_debt).unwrap();
                 user_position.collateral0 = 0;
             }
             false => {
                 pair.reserve1 = pair.reserve1.checked_add(user_position.collateral1).unwrap();
-                pair.reserve1 = pair.reserve0.checked_sub(user_debt).unwrap();
+                pair.reserve0 = pair.reserve0.checked_sub(user_debt).unwrap();
                 user_position.collateral1 = 0;
             }
         }
