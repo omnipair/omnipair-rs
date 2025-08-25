@@ -33,11 +33,6 @@
    ```bash
    yarn faucet-mint
    ```
-   Update `.env` with your token account addresses:
-   ```
-   DEPLOYER_TOKEN0_ACCOUNT=<your_token0_account>
-   DEPLOYER_TOKEN1_ACCOUNT=<your_token1_account>
-   ```
 
 6. Bootstrap Liquidity:
    ```bash

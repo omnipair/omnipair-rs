@@ -23,10 +23,6 @@ dotenv.config();
 const TOKEN0_MINT = new PublicKey(process.env.TOKEN0_MINT || '');
 const TOKEN1_MINT = new PublicKey(process.env.TOKEN1_MINT || '');
 
-// Token accounts that already exist
-const DEPLOYER_TOKEN0_ACCOUNT = new PublicKey(process.env.DEPLOYER_TOKEN0_ACCOUNT || '');
-const DEPLOYER_TOKEN1_ACCOUNT = new PublicKey(process.env.DEPLOYER_TOKEN1_ACCOUNT || '');
-
 async function main() {
     console.log('Starting liquidity removal...');
     
@@ -43,6 +39,16 @@ async function main() {
     provider.opts.commitment = 'confirmed';
     provider.opts.preflightCommitment = 'confirmed';
     provider.opts.skipPreflight = false;
+
+    const DEPLOYER_TOKEN0_ACCOUNT = await getAssociatedTokenAddress(
+        TOKEN0_MINT,
+        DEPLOYER_KEYPAIR.publicKey
+    );
+
+    const DEPLOYER_TOKEN1_ACCOUNT = await getAssociatedTokenAddress(
+        TOKEN1_MINT,
+        DEPLOYER_KEYPAIR.publicKey
+    );
 
     // Log all addresses
     console.log('Network:', provider.connection.rpcEndpoint);
