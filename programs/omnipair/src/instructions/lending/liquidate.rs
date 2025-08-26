@@ -100,55 +100,55 @@ impl<'info> Liquidate<'info> {
         let collateral_token = collateral_vault.mint;
         let debt_token = if collateral_token == pair.token0 { pair.token1 } else { pair.token0 };
         let is_collateral_token0 = collateral_token == pair.token0;
+        let fixed_cf_bps = user_position.get_liquidation_cf_bps(pair, &debt_token);
+        let k0 = pair.k(); // k before liquidation
 
         // Compute debt
-        let user_debt = match is_collateral_token0 {
-            true => user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
-            false => user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
-        }; 
 
-        // Compute borrowing power using fixed CF
-        let fixed_cf_bps = user_position.get_liquidation_cf_bps(pair, &debt_token);
-        
-        // Calculate borrow limit using fixed CF
-        let collateral_value = match is_collateral_token0 {
-            true => (user_position.collateral0 as u128)
-                .checked_mul(pair.ema_price0_nad() as u128)
-                .ok_or(ErrorCode::DebtMathOverflow)?
-                .checked_div(NAD as u128)
-                .ok_or(ErrorCode::DebtMathOverflow)?,
-            false => (user_position.collateral1 as u128)
-                .checked_mul(pair.ema_price1_nad() as u128)
-                .ok_or(ErrorCode::DebtMathOverflow)?
-                .checked_div(NAD as u128)
-                .ok_or(ErrorCode::DebtMathOverflow)?,
+        let (user_debt, collateral_amount, collateral_price_nad) = match is_collateral_token0 {
+            true => (
+                // collateral is token0, debt is token1
+                user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
+                user_position.collateral0 as u128, 
+                pair.ema_price0_nad() as u128
+            ),
+            false => (
+                // collateral is token1, debt is token0
+                user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?, 
+                user_position.collateral1 as u128, 
+                pair.ema_price1_nad() as u128
+            ),
         };
-        let borrow_limit = (collateral_value as u128)
-            .checked_mul(fixed_cf_bps as u128)
-            .ok_or(ErrorCode::DebtMathOverflow)?
-            .checked_div(BPS_DENOMINATOR as u128)
-            .ok_or(ErrorCode::DebtMathOverflow)?
+
+        let collateral_value = collateral_amount
+        .checked_mul(collateral_price_nad).ok_or(ErrorCode::DebtMathOverflow)?
+        .checked_div(NAD as u128).ok_or(ErrorCode::DebtMathOverflow)?;
+
+        // Compute borrow limit using fixed liquidation CF
+        let borrow_limit = collateral_value
+        .checked_mul(fixed_cf_bps as u128).ok_or(ErrorCode::DebtMathOverflow)?
+        .checked_div(BPS_DENOMINATOR as u128).ok_or(ErrorCode::DebtMathOverflow)?;
+
+        // Check if position is undercollateralized
+        require_gte!(user_debt as u128, borrow_limit, ErrorCode::NotUndercollateralized);
+
+
+        let debt_to_repay = user_debt;
+        // collateral_amount_to_seize = debt_to_repay * NAD / collateral_price
+        let collateral_amount_to_seize = (debt_to_repay as u128)
+        .checked_mul(NAD as u128).ok_or(ErrorCode::DebtMathOverflow)?
+        .checked_div(collateral_price_nad).ok_or(ErrorCode::DebtMathOverflow)?;
+
+        let collateral_amount_to_seize_u64: u64 = collateral_amount_to_seize
             .try_into()
             .map_err(|_| ErrorCode::DebtMathOverflow)?;
 
-        // Compare debt to borrow power
-        require_gte!(
-            user_debt,
-            borrow_limit,
-            ErrorCode::NotUndercollateralized
+        // Clamp to what user actually has
+        let collateral_final = core::cmp::min(collateral_amount_to_seize_u64,
+            if is_collateral_token0 { user_position.collateral0 } else { user_position.collateral1 }
         );
 
-        // TODO: Implement partial liquidation
-        // Full liquidation causes two unnecessary problems:
-        // 1. Increases damage/loss to borrowers through enforced liquidation
-        // 2. Increases the price impact on the liquidated token reserve
-        // Need to think about how to incentivize partial liquidation, as the same position may be liquidated multiple times if necessary
-        // a fixed percentage of debt can sometimes be insufficient as a liquidation incentive (i.e < gas)
-        // a fixed amount of liquidation bond on the other hand will be consumed on the first liquidation, and will not be available for subsequent liquidations
-        // with no way of dividing it for arbitrary number of liquidations
-        user_position.decrease_debt(pair, &debt_token, user_debt)?;
-
-        // Reset fixed CF after full liquidation
+        user_position.decrease_debt(pair, &debt_token, debt_to_repay)?;
         user_position.set_applied_min_cf_for_debt_token(&debt_token, &pair, 0);
 
         // LP seize collateral
@@ -156,16 +156,20 @@ impl<'info> Liquidate<'info> {
         // No actual transfer of collateral is done here, just increasing reserves
         match is_collateral_token0 {
             true => {
-                pair.reserve0 = pair.reserve0.checked_add(user_position.collateral0).unwrap();
-                pair.reserve1 = pair.reserve1.checked_sub(user_debt).unwrap();
-                user_position.collateral0 = 0;
+                user_position.collateral0 = user_position.collateral0.checked_sub(collateral_final).unwrap();
+                pair.reserve0 = pair.reserve0.checked_add(collateral_final).unwrap();
+                pair.reserve1 = pair.reserve1.checked_sub(debt_to_repay).unwrap();
             }
             false => {
-                pair.reserve1 = pair.reserve1.checked_add(user_position.collateral1).unwrap();
-                pair.reserve0 = pair.reserve0.checked_sub(user_debt).unwrap();
-                user_position.collateral1 = 0;
+                user_position.collateral1 = user_position.collateral1.checked_sub(collateral_final).unwrap();
+                pair.reserve1 = pair.reserve1.checked_add(collateral_final).unwrap();
+                pair.reserve0 = pair.reserve0.checked_sub(debt_to_repay).unwrap();
             }
         }
+
+        // make sure k is constant
+        let k1 = pair.k();
+        require_eq!(k0, k1, ErrorCode::InvalidK);
 
         emit!(UserPositionLiquidatedEvent {
             user: position_owner.key(),
