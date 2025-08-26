@@ -65,6 +65,80 @@ impl UserPosition {
         }        
     }
 
+    /// Returns the NAD-scaled liquidation price of the *collateral* (in debt token units per 1 collateral token).
+    /// If borrowing token0, collateral is token1 and we return price(token1 in token0) in NAD units.
+    /// If borrowing token1, collateral is token0 and we return price(token0 in token1) in NAD units.
+    /// 
+    /// Edge cases:
+    /// - If debt == 0: returns 0 (not liquidatable).
+    /// - If no collateral or CF == 0: returns u64::MAX (immediately unsafe).
+    /// 
+    /// - `pair`: The pair the user position belongs to
+    /// - `debt_token`: The token the user is borrowing
+    /// 
+    /// Returns the NAD-scaled liquidation price of the collateral in debt token units per 1 collateral token
+    /// Possible outputs:
+    /// - u64::MAX: position is immediately unsafe (no collateral or CF == 0)
+    /// - u64: NAD-scaled liquidation price
+    /// - 0: no liquidation price (no debt)
+    /// 
+    /// Note:
+    /// - Finite(u64): NAD-scaled liquidation price
+    /// - Infinite: den == 0 && debt > 0
+    /// - NotApplicable: debt == 0 → return current EMA (no liquidation price)
+
+    pub fn get_liquidation_price(&self, pair: &Pair, debt_token: &Pubkey) -> Result<u64> {
+        let is_token0_debt = debt_token == &pair.token0;
+    
+        // raw on-chain amounts (smallest units)
+        let (collateral_amount, debt_amount, collateral_decimals, debt_decimals) = if is_token0_debt {
+            // borrowing token0 → collateral is token1
+            (self.collateral1,
+             self.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
+             pair.token1_decimals as i32,
+             pair.token0_decimals as i32)
+        } else {
+            // borrowing token1 → collateral is token0
+            (self.collateral0,
+             self.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
+             pair.token0_decimals as i32,
+             pair.token1_decimals as i32)
+        };
+    
+        // Not applicable: no debt
+        if debt_amount == 0 { return Ok(0); }
+    
+        let cf_bps = self.get_liquidation_cf_bps(pair, debt_token) as u128;
+        if collateral_amount == 0 || cf_bps == 0 { return Ok(u64::MAX); }
+    
+        // Adjust for different decimals so price is "per 1 collateral token"
+        // P* (NAD) = ceil( debt * 10^{collateral_decimals} * NAD * BPS / (collateral_amount * 10^{debt_decimals} * CF_BPS) )
+        let dec_diff = collateral_decimals - debt_decimals; // can be negative
+        let (num_dec_mul, den_dec_mul): (u128, u128) = if dec_diff >= 0 {
+            (10u128.pow(dec_diff as u32), 1)
+        } else {
+            (1, 10u128.pow((-dec_diff) as u32))
+        };
+    
+        let num = (debt_amount as u128)
+            .saturating_mul(num_dec_mul)
+            .saturating_mul(NAD as u128)
+            .saturating_mul(BPS_DENOMINATOR as u128);
+    
+        let den = (collateral_amount as u128)
+            .saturating_mul(den_dec_mul)
+            .saturating_mul(cf_bps);
+    
+        if den == 0 { return Ok(u64::MAX); }
+    
+        let p_star_nad = num
+            .saturating_add(den.saturating_sub(1))
+            .checked_div(den)
+            .unwrap_or(u128::MAX);
+    
+        Ok(p_star_nad.min(u64::MAX as u128) as u64)
+    }
+
     /// Set applied min. cf for a specific debt token
     pub fn set_applied_min_cf_for_debt_token(&mut self, debt_token: &Pubkey, pair: &Pair, cf_bps: u16) {
         if *debt_token == pair.token1 {

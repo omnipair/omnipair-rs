@@ -87,6 +87,7 @@ pub enum UserPositionViewKind {
     UserAppliedCollateralFactorBps,
     UserLiquidationCollateralFactorBps,
     UserDebtUtilizationBps,
+    UserLiquidationPrice,
 }
 impl fmt::Display for UserPositionViewKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -95,6 +96,7 @@ impl fmt::Display for UserPositionViewKind {
             UserPositionViewKind::UserAppliedCollateralFactorBps => write!(f, "UserAppliedCollateralFactorBps"),
             UserPositionViewKind::UserLiquidationCollateralFactorBps => write!(f, "UserLiquidationCollateralFactorBps"),
             UserPositionViewKind::UserDebtUtilizationBps => write!(f, "UserDebtUtilizationBps"),
+            UserPositionViewKind::UserLiquidationPrice => write!(f, "UserLiquidationPrice"),
         }
     }
 }
@@ -174,6 +176,10 @@ impl ViewUserPositionData<'_> {
             UserPositionViewKind::UserDebtUtilizationBps => (
                 OptionalUint::from_u64(user_position.get_debt_utilization_bps(&pair, &pair.token0).unwrap()),
                 OptionalUint::from_u64(user_position.get_debt_utilization_bps(&pair, &pair.token1).unwrap())
+            ),
+            UserPositionViewKind::UserLiquidationPrice => (
+                OptionalUint::from_u64(user_position.get_liquidation_price(&pair, &pair.token0).unwrap()),
+                OptionalUint::from_u64(user_position.get_liquidation_price(&pair, &pair.token1).unwrap())
             ),
         };
 

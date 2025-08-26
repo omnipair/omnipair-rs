@@ -22,7 +22,7 @@ import {
     pairPda: PublicKey,
     userPositionPda: PublicKey,
     getter: any // Enum variant object
-  ): Promise<{ label: string; value0: string; value1: string; formattedValue0: number; formattedValue1: number }> {
+  ): Promise<{ label: string; value0: string; value1: string; formattedValue0: number | string; formattedValue1: number | string }> {
     const sim = await program.methods
       .viewUserPositionData(getter)
       .accounts({ 
@@ -75,6 +75,16 @@ import {
           label === 'userLiquidationCollateralFactorBps' ||
           label === 'userDebtUtilizationBps') {
         return Number(value) / 100; // Convert from BPS (10000 = 100%) to decimal
+      }
+      if (label === 'userLiquidationPrice') {
+        const numValue = Number(value);
+        if (numValue === 0) {
+          return 'Not applicable'; // No debt = no liquidation price
+        }
+        if (numValue === Number.MAX_SAFE_INTEGER || numValue >= 2**53) {
+          return 'Immediately unsafe'; // u64::MAX or very large values indicate unsafe position
+        }
+        return Number(value) / 10 ** 6; // Liquidation price in NAD units
       }
       return Number(value) / 10 ** 6;
     };
@@ -133,6 +143,7 @@ import {
       { userAppliedCollateralFactorBps: {} },
       { userLiquidationCollateralFactorBps: {} },
       { userDebtUtilizationBps: {} },
+      { userLiquidationPrice: {} },
     ];
   
     for (const getter of enumVariants) {

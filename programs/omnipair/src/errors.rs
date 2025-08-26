@@ -41,6 +41,9 @@ pub enum ErrorCode {
     #[msg("Insufficient collateral")]
     InsufficientCollateral,
 
+    #[msg("Zero collateral amount")]
+    ZeroCollateralAmount,
+
     #[msg("Amount cannot be zero")]
     AmountZero,
 
