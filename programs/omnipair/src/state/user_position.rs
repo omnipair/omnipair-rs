@@ -221,8 +221,6 @@ impl UserPosition {
     }
 
     pub fn calculate_debt0(&self, total_debt0: u64, total_debt0_shares: u64) -> Result<u64> {
-        msg!("total_debt0: {}, total_debt0_shares: {}", total_debt0, total_debt0_shares);
-        msg!("debt0_shares: {}", self.debt0_shares.to_string());
         match total_debt0_shares {
             0 => Ok(0),
             _ => Ok((self.debt0_shares as u128)
@@ -236,8 +234,6 @@ impl UserPosition {
     }
 
     pub fn calculate_debt1(&self, total_debt1: u64, total_debt1_shares: u64) -> Result<u64> {
-        msg!("total_debt0: {}, total_debt0_shares: {}", total_debt1, total_debt1_shares);
-        msg!("debt0_shares: {}", self.debt1_shares.to_string());
         match total_debt1_shares {
             0 => Ok(0),
             _ => Ok((self.debt1_shares as u128)
