@@ -102,5 +102,7 @@ pub struct UserPositionLiquidatedEvent {
     pub debt1_liquidated: u64,
     pub collateral_price: u64,
     pub liquidation_bonus_applied: u64,
+    pub k0: u128,
+    pub k1: u128,
     pub timestamp: i64,
 }

@@ -8,6 +8,8 @@ pub const NAD: u64 = 1_000_000_000;
 pub const NAD_DECIMALS: u8 = 9;
 #[constant]
 pub const BPS_DENOMINATOR: u16 = 10_000;
+#[constant]
+pub const CLOSE_FACTOR_BPS: u16 = 5_000; // 50%
 
 // EMA constants
 #[constant]
