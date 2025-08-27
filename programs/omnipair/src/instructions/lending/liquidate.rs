@@ -133,7 +133,12 @@ impl<'info> Liquidate<'info> {
         require_gte!(user_debt as u128, borrow_limit, ErrorCode::NotUndercollateralized);
 
 
-        let debt_to_repay = user_debt;
+        // apply close factor 
+        let debt_to_repay = (user_debt as u128)
+        .checked_mul(CLOSE_FACTOR_BPS as u128).ok_or(ErrorCode::DebtMathOverflow)?
+        .checked_div(BPS_DENOMINATOR as u128).ok_or(ErrorCode::DebtMathOverflow)?;
+        let debt_to_repay: u64 = core::cmp::min(user_debt, debt_to_repay as u64);
+
         // collateral_amount_to_seize = debt_to_repay * NAD / collateral_price
         let collateral_amount_to_seize = (debt_to_repay as u128)
         .checked_mul(NAD as u128).ok_or(ErrorCode::DebtMathOverflow)?
@@ -143,13 +148,15 @@ impl<'info> Liquidate<'info> {
             .try_into()
             .map_err(|_| ErrorCode::DebtMathOverflow)?;
 
+        let applied_min_cf_bps = user_position.get_user_pessimistic_collateral_factor_bps(&pair, &debt_token);
+
         // Clamp to what user actually has
         let collateral_final = core::cmp::min(collateral_amount_to_seize_u64,
             if is_collateral_token0 { user_position.collateral0 } else { user_position.collateral1 }
         );
 
         user_position.decrease_debt(pair, &debt_token, debt_to_repay)?;
-        user_position.set_applied_min_cf_for_debt_token(&debt_token, &pair, 0);
+        user_position.set_applied_min_cf_for_debt_token(&debt_token, &pair, applied_min_cf_bps);
 
         // LP seize collateral
         // Liquidation incentive is shared across LPs with no caller incentive
@@ -167,10 +174,6 @@ impl<'info> Liquidate<'info> {
             }
         }
 
-        // make sure k is constant
-        let k1 = pair.k();
-        require_eq!(k0, k1, ErrorCode::InvalidK);
-
         emit!(UserPositionLiquidatedEvent {
             user: position_owner.key(),
             pair: pair.key(),
@@ -182,6 +185,8 @@ impl<'info> Liquidate<'info> {
             debt1_liquidated: if is_collateral_token0 { 0 } else { user_debt },
             collateral_price: if is_collateral_token0 { pair.ema_price0_nad() } else { pair.ema_price1_nad() },
             liquidation_bonus_applied: 0,
+            k0: k0,
+            k1: pair.k(),
             timestamp: Clock::get()?.unix_timestamp,
         });
 
