@@ -111,7 +111,9 @@ async function main() {
     );
 
     // Remove collateral parameters
-    const removeAmount = new BN(5_000_000); // 5 tokens
+    const removeAll = true;
+    const U64_MAX = new BN("18446744073709551615"); // u64::MAX to remove all collateral
+    const removeAmount = removeAll ? U64_MAX : new BN(5_000_000); // 5 tokens
     const removeToken0 = true; // Set to false to remove token1 collateral
 
     console.log('Removing collateral with parameters:');

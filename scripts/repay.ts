@@ -114,7 +114,7 @@ async function main() {
     const repayAll = true;
     const U64_MAX = new BN("18446744073709551615"); // u64::MAX to repay all debt
     const repayAmount = repayAll ? U64_MAX : new BN(10_000_000); // 10 tokens
-    const repayToken0 = true; // Set to false to repay token1
+    const repayToken0 = false; // Set to false to repay token1
 
     console.log('Repaying with parameters:');
     console.log('Amount:', repayAmount.toString(), '(repaying all debt)');
