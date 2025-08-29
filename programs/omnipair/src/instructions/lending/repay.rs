@@ -11,34 +11,28 @@ impl<'info> CommonAdjustPosition<'info> {
         let AdjustPositionArgs { amount } = args;
         
         require!(*amount > 0, ErrorCode::AmountZero);
+
+        let is_repay_all = *amount == u64::MAX;
+        let is_token0 = self.user_token_account.mint == self.pair.token0;
+        let user_total_debt = match is_token0 {
+            true => self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares)?,
+            false => self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares)?,
+        };
+        let debt_to_repay = if is_repay_all { user_total_debt } else { *amount };
         
-        // Check if user has enough tokens to repay
+        // Check user token balance >= debt to repay
         require_gte!(
             self.user_token_account.amount,
-            *amount,
+            debt_to_repay,
             ErrorCode::InsufficientAmount
         );
-        
-        // Check if user has debt to repay
-        // Note: No CF validation needed for repay since we're only reducing debt
-        match self.user_token_account.mint == self.pair.token0 {
-            true => {
-                let debt = self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares)?;
-                require_gte!(
-                    debt,
-                    *amount,
-                    ErrorCode::InsufficientDebt
-                );
-            },
-            false => {
-                let debt = self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares)?;
-                require_gte!(
-                    debt,
-                    *amount,
-                    ErrorCode::InsufficientDebt
-                );
-            }
-        }
+
+        // Check user debt >= debt to repay
+        require_gte!(
+            user_total_debt,
+            debt_to_repay,
+            ErrorCode::InsufficientDebt
+        );
         
         Ok(())
     }
@@ -62,6 +56,17 @@ impl<'info> CommonAdjustPosition<'info> {
             ..
         } = ctx.accounts;
 
+        let is_repay_all = args.amount == u64::MAX;
+        let is_token0 = user_token_account.mint == pair.token0;
+        let debt_to_repay = if is_repay_all { 
+            match is_token0 {
+                true => user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
+                false => user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
+            }
+        } else {
+            args.amount
+        };
+
         // Transfer tokens from user to vault
         transfer_from_user_to_pool_vault(
             user.to_account_info(),
@@ -72,24 +77,25 @@ impl<'info> CommonAdjustPosition<'info> {
                 true => token_program.to_account_info(),
                 false => token_2022_program.to_account_info(),
             },
-            args.amount,
+            debt_to_repay,
             vault_token_mint.decimals,
         )?;
+
+        let shares = debt_to_repay
+        .checked_mul(pair.total_debt0_shares)
+        .unwrap()
+        .checked_div(pair.total_debt0)
+        .unwrap();
         
         // Update debt
-        match user_token_account.mint == pair.token0 {
+        match is_token0 {
             true => {
-                let shares = args.amount
-                    .checked_mul(pair.total_debt0_shares)
-                    .unwrap()
-                    .checked_div(pair.total_debt0)
-                    .unwrap();
                 pair.total_debt0_shares = pair.total_debt0_shares.checked_sub(shares).unwrap();
                 pair.total_debt0 = pair.total_debt0.checked_sub(args.amount).unwrap();
                 user_position.debt0_shares = user_position.debt0_shares.checked_sub(shares).unwrap();
             },
             false => {
-                let shares = args.amount
+                let shares = debt_to_repay
                     .checked_mul(pair.total_debt1_shares)
                     .unwrap()
                     .checked_div(pair.total_debt1)
@@ -102,9 +108,9 @@ impl<'info> CommonAdjustPosition<'info> {
 
         // Emit event
         let (amount0, amount1) = if user_token_account.mint == pair.token0 {
-            (-(args.amount as i64), 0)
+            (-(debt_to_repay as i64), 0)
         } else {
-            (0, -(args.amount as i64))
+            (0, -(debt_to_repay as i64))
         };
         
         emit!(AdjustDebtEvent {

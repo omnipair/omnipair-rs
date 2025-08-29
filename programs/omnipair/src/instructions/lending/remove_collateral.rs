@@ -16,24 +16,11 @@ impl<'info> CommonAdjustPosition<'info> {
 
         let collateral_token = self.user_token_account.mint;
         let is_collateral_token0 = collateral_token == self.pair.token0;
-        
-        // Check if user has enough collateral
-        match is_collateral_token0 {
-            true => {
-                require_gte!(
-                    self.user_position.collateral0,
-                    *amount,
-                    ErrorCode::InsufficientCollateral
-                );
-            },
-            false => {
-                require_gte!(
-                    self.user_position.collateral1,
-                    *amount,
-                    ErrorCode::InsufficientCollateral
-                );
-            }
-        }
+        let is_withdraw_all = args.amount == u64::MAX;
+        let user_collateral = match is_collateral_token0 {
+            true => self.user_position.collateral0,
+            false => self.user_position.collateral1,
+        };
 
         // Calculate current debt
         let debt = match is_collateral_token0 {
@@ -64,28 +51,42 @@ impl<'info> CommonAdjustPosition<'info> {
             self.pair.ema_price1_nad()
         };
 
+        // minimum collateral to cover outstanding debt
         let min_collateral = (min_collateral_value as u128)
             .checked_mul(NAD as u128)
             .ok_or(ErrorCode::DebtMathOverflow)?
             .checked_div(collateral_price as u128)
             .ok_or(ErrorCode::DebtMathOverflow)?;
 
-        // Calculate current collateral
-        let current_collateral = if is_collateral_token0 {
-            self.user_position.collateral0
-        } else {
-            self.user_position.collateral1
-        };
-
         // Calculate maximum withdrawable amount
-        let max_withdrawable = current_collateral
+        let max_withdrawable = user_collateral
             .checked_sub(min_collateral as u64)
             .ok_or(ErrorCode::DebtMathOverflow)?;
+
+        let withdraw_amount = if is_withdraw_all { max_withdrawable } else { *amount };
+        
+        // Check if user has enough collateral
+        match is_collateral_token0 {
+            true => {
+                require_gte!(
+                    user_collateral,
+                    withdraw_amount,
+                    ErrorCode::InsufficientCollateral
+                );
+            },
+            false => {
+                require_gte!(
+                    user_collateral,
+                    withdraw_amount,
+                    ErrorCode::InsufficientCollateral
+                );
+            }
+        }
 
         // Ensure withdrawal amount doesn't exceed maximum withdrawable
         require_gte!(
             max_withdrawable,
-            *amount,
+            withdraw_amount,
             ErrorCode::BorrowingPowerExceeded
         );
         
@@ -111,53 +112,47 @@ impl<'info> CommonAdjustPosition<'info> {
             ..
         } = ctx.accounts;
 
+        let is_withdraw_all = args.amount == u64::MAX;
+        let is_token0 = user_token_account.mint == pair.token0;
+        let withdraw_amount = if is_withdraw_all {
+            match is_token0 {
+                true => user_position.collateral0,
+                false => user_position.collateral1,
+            }
+        } else {
+            args.amount
+        };
+
+        transfer_from_pool_vault_to_user(
+            pair.to_account_info(),
+            token_vault.to_account_info(),
+            user_token_account.to_account_info(),
+            vault_token_mint.to_account_info(),
+            match vault_token_mint.to_account_info().owner == token_program.key {
+                true => token_program.to_account_info(),
+                false => token_2022_program.to_account_info(),
+            },
+            withdraw_amount,
+            vault_token_mint.decimals,
+            &[&generate_gamm_pair_seeds!(pair)[..]],
+        )?;
+
         // Transfer tokens from vault to user
-        match user_token_account.mint == pair.token0 {
+        match is_token0 {
             true => {
-                transfer_from_pool_vault_to_user(
-                    pair.to_account_info(),
-                    token_vault.to_account_info(),
-                    user_token_account.to_account_info(),
-                    vault_token_mint.to_account_info(),
-                    match vault_token_mint.to_account_info().owner == token_program.key {
-                        true => token_program.to_account_info(),
-                        false => token_2022_program.to_account_info(),
-                    },
-                    args.amount,
-                    vault_token_mint.decimals,
-                    &[&generate_gamm_pair_seeds!(pair)[..]],
-                )?;
-                
-                // Update collateral
-                pair.total_collateral0 = pair.total_collateral0.checked_sub(args.amount).unwrap();
-                user_position.collateral0 = user_position.collateral0.checked_sub(args.amount).unwrap();
+                pair.total_collateral0 = pair.total_collateral0.checked_sub(withdraw_amount).unwrap();
+                user_position.collateral0 = user_position.collateral0.checked_sub(withdraw_amount).unwrap();
             },
             false => {
-                transfer_from_pool_vault_to_user(
-                    pair.to_account_info(),
-                    token_vault.to_account_info(),
-                    user_token_account.to_account_info(),
-                    vault_token_mint.to_account_info(),
-                    match vault_token_mint.to_account_info().owner == token_program.key {
-                        true => token_program.to_account_info(),
-                        false => token_2022_program.to_account_info(),
-                    },
-                    args.amount,
-                    vault_token_mint.decimals,
-                    &[&generate_gamm_pair_seeds!(pair)[..]],
-                )?;
-                
-                // Update collateral
-                pair.total_collateral1 = pair.total_collateral1.checked_sub(args.amount).unwrap();
-                user_position.collateral1 = user_position.collateral1.checked_sub(args.amount).unwrap();
+                pair.total_collateral1 = pair.total_collateral1.checked_sub(withdraw_amount).unwrap();
+                user_position.collateral1 = user_position.collateral1.checked_sub(withdraw_amount).unwrap();
             }
         }
 
         // Emit collateral adjustment event
-        let (amount0, amount1) = if user_token_account.mint == pair.token0 {
-            (-(args.amount as i64), 0)
-        } else {
-            (0, -(args.amount as i64))
+        let (amount0, amount1) = match is_token0 {
+            true => (-(withdraw_amount as i64), 0),
+            false => (0, -(withdraw_amount as i64)),
         };
         
         emit!(AdjustCollateralEvent {
