@@ -111,11 +111,13 @@ async function main() {
     );
 
     // Repay parameters
-    const repayAmount = new BN(10_000_000); // 10 tokens
+    const repayAll = true;
+    const U64_MAX = new BN("18446744073709551615"); // u64::MAX to repay all debt
+    const repayAmount = repayAll ? U64_MAX : new BN(10_000_000); // 10 tokens
     const repayToken0 = true; // Set to false to repay token1
 
     console.log('Repaying with parameters:');
-    console.log('Amount:', repayAmount.toString());
+    console.log('Amount:', repayAmount.toString(), '(repaying all debt)');
     console.log('Token:', repayToken0 ? 'Token0' : 'Token1');
 
     // Create transaction

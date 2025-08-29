@@ -34,6 +34,13 @@ impl<'info> CommonAdjustPosition<'info> {
             ErrorCode::InsufficientDebt
         );
         
+        // debt cannot be zero
+        require_gt!(
+            user_total_debt,
+            0,
+            ErrorCode::ZeroDebtAmount
+        );
+        
         Ok(())
     }
 
@@ -81,17 +88,17 @@ impl<'info> CommonAdjustPosition<'info> {
             vault_token_mint.decimals,
         )?;
 
-        let shares = debt_to_repay
-        .checked_mul(pair.total_debt0_shares)
-        .unwrap()
-        .checked_div(pair.total_debt0)
-        .unwrap();
         
         // Update debt
         match is_token0 {
             true => {
+                let shares = debt_to_repay
+                    .checked_mul(pair.total_debt0_shares)
+                    .unwrap()
+                    .checked_div(pair.total_debt0)
+                    .unwrap();
                 pair.total_debt0_shares = pair.total_debt0_shares.checked_sub(shares).unwrap();
-                pair.total_debt0 = pair.total_debt0.checked_sub(args.amount).unwrap();
+                pair.total_debt0 = pair.total_debt0.checked_sub(debt_to_repay).unwrap();
                 user_position.debt0_shares = user_position.debt0_shares.checked_sub(shares).unwrap();
             },
             false => {
@@ -101,7 +108,7 @@ impl<'info> CommonAdjustPosition<'info> {
                     .checked_div(pair.total_debt1)
                     .unwrap();
                 pair.total_debt1_shares = pair.total_debt1_shares.checked_sub(shares).unwrap();
-                pair.total_debt1 = pair.total_debt1.checked_sub(args.amount).unwrap();
+                pair.total_debt1 = pair.total_debt1.checked_sub(debt_to_repay).unwrap();
                 user_position.debt1_shares = user_position.debt1_shares.checked_sub(shares).unwrap();
             }
         }
