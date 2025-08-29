@@ -124,40 +124,27 @@ impl<'info> AddCollateral<'info> {
         }
 
         // Transfer tokens from user to collateral vault
-        match user_collateral_token_account.mint == pair.token0 {
+        let is_collateral_token0 = user_collateral_token_account.mint == pair.token0;
+
+        transfer_from_user_to_pool_vault(
+            user.to_account_info(),
+            user_collateral_token_account.to_account_info(),
+            collateral_vault.to_account_info(),
+            collateral_token_mint.to_account_info(),
+            match collateral_token_mint.to_account_info().owner == token_program.key {
+                true => token_program.to_account_info(),
+                false => token_2022_program.to_account_info(),
+            },
+            args.amount,
+            collateral_token_mint.decimals,
+        )?;
+
+        match is_collateral_token0 {
             true => {
-                transfer_from_user_to_pool_vault(
-                    user.to_account_info(),
-                    user_collateral_token_account.to_account_info(),
-                    collateral_vault.to_account_info(),
-                    collateral_token_mint.to_account_info(),
-                    match collateral_token_mint.to_account_info().owner == token_program.key {
-                        true => token_program.to_account_info(),
-                        false => token_2022_program.to_account_info(),
-                    },
-                    args.amount,
-                    collateral_token_mint.decimals,
-                )?;
-                
-                // Update collateral
                 pair.total_collateral0 = pair.total_collateral0.checked_add(args.amount).unwrap();
                 user_position.collateral0 = user_position.collateral0.checked_add(args.amount).unwrap();
             },
             false => {
-                transfer_from_user_to_pool_vault(
-                    user.to_account_info(),
-                    user_collateral_token_account.to_account_info(),
-                    collateral_vault.to_account_info(),
-                    collateral_token_mint.to_account_info(),
-                    match collateral_token_mint.to_account_info().owner == token_program.key {
-                        true => token_program.to_account_info(),
-                        false => token_2022_program.to_account_info(),
-                    },
-                    args.amount,
-                    collateral_token_mint.decimals,
-                )?;
-                
-                // Update collateral
                 pair.total_collateral1 = pair.total_collateral1.checked_add(args.amount).unwrap();
                 user_position.collateral1 = user_position.collateral1.checked_add(args.amount).unwrap();
             }

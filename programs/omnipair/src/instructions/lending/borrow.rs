@@ -71,6 +71,7 @@ impl<'info> CommonAdjustPosition<'info> {
             new_debt,
             ErrorCode::BorrowingPowerExceeded
         );
+        
         let is_token0 = user_token_account.mint == pair.token0;
 
         // Transfer tokens from vault to user

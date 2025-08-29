@@ -14,7 +14,7 @@ pub use instructions::pair_initialize::InitializePair;
 pub use instructions::faucet_mint::FaucetMint;
 pub use instructions::emit_value::{EmitValueArgs, PairViewKind, UserPositionViewKind, ViewPairData, ViewUserPositionData};
 
-declare_id!("AgSwKob7NPKxa3SNPytUcktCzhbPf2z1cQY1QZd6USmq");
+declare_id!("FeryrHQYSGiYi227dieziT3XmaYZ5tYQD7rL3vatwtFB");
 
 
 pub mod deployer {
@@ -95,6 +95,11 @@ pub mod omnipair {
     #[access_control(ctx.accounts.update_and_validate_borrow(&args))]
     pub fn borrow(ctx: Context<CommonAdjustPosition>, args: AdjustPositionArgs) -> Result<()> {
         CommonAdjustPosition::handle_borrow(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.update_and_validate_borrow(&args))]
+    pub fn add_collateral_and_borrow(ctx: Context<AddCollateralAndBorrow>, args: AddCollateralAndBorrowArgs) -> Result<()> {
+        AddCollateralAndBorrow::handle_add_collateral_and_borrow(ctx, args)
     }
 
     #[access_control(ctx.accounts.update_and_validate_repay(&args))]
