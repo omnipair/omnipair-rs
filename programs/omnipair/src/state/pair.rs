@@ -305,8 +305,6 @@ impl Pair {
                 // 5. affecting liquidation thresholds
                 // 6. affecting the amount of debt that can be borrowed
                 // 7. affecting the amount of interest that is earned
-                // Remark: collateral reserve inflation due to price accruel will decrease utilization rates and borrow rates
-                // effectively rendering as negative interest applied for this side borrows, incentivising more borrows to it and more interest paid
                 self.reserve0 += interest0 as u64;
                 self.reserve1 += interest1 as u64;
             }

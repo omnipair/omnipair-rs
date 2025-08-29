@@ -88,6 +88,7 @@ pub enum UserPositionViewKind {
     UserLiquidationCollateralFactorBps,
     UserDebtUtilizationBps,
     UserLiquidationPrice,
+    UserDebtWithInterest,
 }
 impl fmt::Display for UserPositionViewKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -97,6 +98,7 @@ impl fmt::Display for UserPositionViewKind {
             UserPositionViewKind::UserLiquidationCollateralFactorBps => write!(f, "UserLiquidationCollateralFactorBps"),
             UserPositionViewKind::UserDebtUtilizationBps => write!(f, "UserDebtUtilizationBps"),
             UserPositionViewKind::UserLiquidationPrice => write!(f, "UserLiquidationPrice"),
+            UserPositionViewKind::UserDebtWithInterest => write!(f, "UserDebtWithInterest"),
         }
     }
 }
@@ -116,11 +118,15 @@ pub struct ViewUserPositionData<'info> {
     pub pair: Account<'info, Pair>,
     #[account(mut)]
     pub user_position: Account<'info, UserPosition>,
+    pub rate_model: Account<'info, RateModel>,
 }
 
 impl ViewPairData<'_> {
     pub fn handle_view_data(ctx: Context<Self>, getter: PairViewKind, args: EmitValueArgs) -> Result<()> {
-        let pair = &ctx.accounts.pair;
+        let pair = &mut ctx.accounts.pair;
+
+        // update pair to get updated rates, interest, debt, etc.
+        pair.update(&ctx.accounts.rate_model)?;
 
         let value: (OptionalUint, OptionalUint) = match getter {
             PairViewKind::EmaPrice0Nad => (OptionalUint::from_u64(pair.ema_price0_nad()), OptionalUint::OptionalU64(None)),
@@ -157,8 +163,11 @@ impl ViewPairData<'_> {
 
 impl ViewUserPositionData<'_> {
     pub fn handle_view_data(ctx: Context<Self>, getter: UserPositionViewKind) -> Result<()> {
-        let pair = &ctx.accounts.pair;
+        let pair = &mut ctx.accounts.pair;
         let user_position = &ctx.accounts.user_position;
+
+        // update pair to get updated rates, interest, debt, etc.
+        pair.update(&ctx.accounts.rate_model)?;
 
         let value: (OptionalUint, OptionalUint) = match getter {
             UserPositionViewKind::UserBorrowingPower => (
@@ -180,6 +189,10 @@ impl ViewUserPositionData<'_> {
             UserPositionViewKind::UserLiquidationPrice => (
                 OptionalUint::from_u64(user_position.get_liquidation_price(&pair, &pair.token0).unwrap()),
                 OptionalUint::from_u64(user_position.get_liquidation_price(&pair, &pair.token1).unwrap())
+            ),
+            UserPositionViewKind::UserDebtWithInterest => (
+                OptionalUint::from_u64(user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares).unwrap()),
+                OptionalUint::from_u64(user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares).unwrap())
             ),
         };
 

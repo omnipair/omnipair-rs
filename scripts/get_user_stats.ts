@@ -21,14 +21,16 @@ import {
     program: Program<Omnipair>,
     pairPda: PublicKey,
     userPositionPda: PublicKey,
+    rateModel: PublicKey,
     getter: any // Enum variant object
   ): Promise<{ label: string; value0: string; value1: string; formattedValue0: number | string; formattedValue1: number | string }> {
     const sim = await program.methods
       .viewUserPositionData(getter)
       .accounts({ 
         userPosition: userPositionPda, 
-        pair: pairPda
-      })
+        pair: pairPda,
+        rateModel: rateModel
+      } as any)
       .simulate();
   
     const logs = sim.raw ?? [];
@@ -134,6 +136,7 @@ import {
     console.log('Reserve 1:', pairAccount.reserve1.toString(), Number(pairAccount.reserve1.toString()) / 10 ** 6);
     console.log('Total Debt 0:', pairAccount.totalDebt0.toString(), Number(pairAccount.totalDebt0.toString()) / 10 ** 6);
     console.log('Total Debt 1:', pairAccount.totalDebt1.toString(), Number(pairAccount.totalDebt1.toString()) / 10 ** 6);
+    console.log('Rate Model:', pairAccount.rateModel.toBase58());
   
     console.log('Simulating on-chain values for user position:', userPositionPda.toBase58());
   
@@ -147,7 +150,7 @@ import {
     ];
   
     for (const getter of enumVariants) {
-      const { label, value0, value1, formattedValue0, formattedValue1 } = await simulateGetter(program, pairPda, userPositionPda, getter);
+      const { label, value0, value1, formattedValue0, formattedValue1 } = await simulateGetter(program, pairPda, userPositionPda, pairAccount.rateModel, getter);
       console.log(`${label} Token0: ${value0} (${formattedValue0})`);
       console.log(`${label} Token1: ${value1} (${formattedValue1})`);
     }
