@@ -24,8 +24,8 @@ production = []
 development = []
 
 [dependencies]
-anchor-lang = { version = "0.31.0", features = ["init-if-needed", "event-cpi", "derive"] }
-anchor-spl = { version = "0.31.0", features = ["metadata"] }
+anchor-lang = { version = "0.31.1", features = ["init-if-needed", "event-cpi", "derive", "event-cpi"] }
+anchor-spl = { version = "0.31.1", features = ["metadata"] }
 spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
 spl-token-2022 = { version = "6.0.0", features = ["no-entrypoint"] }
 spl-math = { version = "0.3.0", features = ["no-entrypoint"] }

@@ -9,6 +9,7 @@ use crate::{
     state::user_position::UserPosition,
 };
 
+#[event_cpi]
 #[derive(Accounts)]
 pub struct Liquidate<'info> {
     #[account(
@@ -174,7 +175,7 @@ impl<'info> Liquidate<'info> {
             }
         }
 
-        emit!(UserPositionLiquidatedEvent {
+        emit_cpi!(UserPositionLiquidatedEvent {
             user: position_owner.key(),
             pair: pair.key(),
             position: user_position.key(),

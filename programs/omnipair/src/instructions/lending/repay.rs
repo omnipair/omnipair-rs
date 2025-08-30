@@ -130,7 +130,7 @@ impl<'info> CommonAdjustPosition<'info> {
             (0, -(debt_to_repay as i64))
         };
         
-        emit!(AdjustDebtEvent {
+        emit_cpi!(AdjustDebtEvent {
             user: user.key(),
             amount0,
             amount1,
@@ -138,7 +138,7 @@ impl<'info> CommonAdjustPosition<'info> {
         });
 
         // Emit position updated event
-        emit!(UserPositionUpdatedEvent {
+        emit_cpi!(UserPositionUpdatedEvent {
             user: user.key(),
             pair: pair.key(),
             position: user_position.key(),

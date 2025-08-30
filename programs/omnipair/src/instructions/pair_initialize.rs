@@ -24,6 +24,7 @@ pub struct InitializePairArgs {
     pub pool_deployer_fee_bps: u16,
 }
 
+#[event_cpi]
 #[derive(Accounts)]
 pub struct InitializePair<'info> {
     #[account(mut)]
@@ -175,7 +176,7 @@ impl<'info> InitializePair<'info> {
         ));
 
         // Emit event
-        emit!(PairCreatedEvent {
+        emit_cpi!(PairCreatedEvent {
             token0: ctx.accounts.token0_mint.key(),
             token1: ctx.accounts.token1_mint.key(),
             pair: pair.key(),

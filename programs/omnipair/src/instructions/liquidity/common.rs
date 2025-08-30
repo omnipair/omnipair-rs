@@ -20,6 +20,7 @@ pub struct AddLiquidityArgs {
     pub min_liquidity_out: u64,
 }
 
+#[event_cpi]
 #[derive(Accounts)]
 pub struct AdjustLiquidity<'info> {
     #[account(

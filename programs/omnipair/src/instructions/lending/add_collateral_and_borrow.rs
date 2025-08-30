@@ -18,6 +18,7 @@ pub struct AddCollateralAndBorrowArgs {
     pub borrow_amount: u64,
 }
 
+#[event_cpi]
 #[derive(Accounts)]
 pub struct AddCollateralAndBorrow<'info> {
     #[account(
@@ -167,7 +168,7 @@ impl<'info> AddCollateralAndBorrow<'info> {
                 ctx.bumps.user_position,
             )?;
 
-            emit!(UserPositionCreatedEvent {
+            emit_cpi!(UserPositionCreatedEvent {
                 user: user.key(),
                 pair: pair.key(),
                 position: user_position.key(),
@@ -254,7 +255,7 @@ impl<'info> AddCollateralAndBorrow<'info> {
             (0, args.collateral_amount as i64)
         };
         
-        emit!(AdjustCollateralEvent {
+        emit_cpi!(AdjustCollateralEvent {
             user: user.key(),
             amount0: collateral_amount0,
             amount1: collateral_amount1,
@@ -268,7 +269,7 @@ impl<'info> AddCollateralAndBorrow<'info> {
             (0, borrow_amount as i64)
         };
         
-        emit!(AdjustDebtEvent {
+        emit_cpi!(AdjustDebtEvent {
             user: user.key(),
             amount0: borrow_amount0,
             amount1: borrow_amount1,
@@ -276,7 +277,7 @@ impl<'info> AddCollateralAndBorrow<'info> {
         });
 
         // Emit position updated event
-        emit!(UserPositionUpdatedEvent {
+        emit_cpi!(UserPositionUpdatedEvent {
             user: user.key(),
             pair: pair.key(),
             position: user_position.key(),

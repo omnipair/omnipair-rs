@@ -12,6 +12,7 @@ use crate::{
     constants::*,
 };
 
+#[event_cpi]
 #[derive(Accounts)]
 pub struct AddCollateral<'info> {
     #[account(
@@ -115,7 +116,7 @@ impl<'info> AddCollateral<'info> {
                 ctx.bumps.user_position,
             )?;
 
-            emit!(UserPositionCreatedEvent {
+            emit_cpi!(UserPositionCreatedEvent {
                 user: user.key(),
                 pair: pair.key(),
                 position: user_position.key(),
@@ -157,7 +158,7 @@ impl<'info> AddCollateral<'info> {
             (0, args.amount as i64)
         };
         
-        emit!(AdjustCollateralEvent {
+        emit_cpi!(AdjustCollateralEvent {
             user: user.key(),
             amount0,
             amount1,
@@ -165,7 +166,7 @@ impl<'info> AddCollateral<'info> {
         });
 
         // Emit position updated event
-        emit!(UserPositionUpdatedEvent {
+        emit_cpi!(UserPositionUpdatedEvent {
             user: user.key(),
             pair: pair.key(),
             position: user_position.key(),

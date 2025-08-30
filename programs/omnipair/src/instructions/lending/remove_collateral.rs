@@ -155,7 +155,7 @@ impl<'info> CommonAdjustPosition<'info> {
             false => (0, -(withdraw_amount as i64)),
         };
         
-        emit!(AdjustCollateralEvent {
+        emit_cpi!(AdjustCollateralEvent {
             user: user.key(),
             amount0,
             amount1,

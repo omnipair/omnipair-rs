@@ -115,7 +115,7 @@ impl<'info> AdjustLiquidity<'info> {
             .ok_or(ErrorCode::SupplyOverflow)?;
         
         // Emit event
-        emit!(MintEvent {
+        emit_cpi!(MintEvent {
             user: user.key(),
             amount0: args.amount0_in,
             amount1: args.amount1_in,

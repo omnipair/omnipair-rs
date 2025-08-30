@@ -137,7 +137,7 @@ impl<'info> AdjustLiquidity<'info> {
         pair.total_supply = pair.total_supply.checked_sub(args.liquidity_in).ok_or(ErrorCode::SupplyOverflow)?;
 
         // Emit event
-        emit!(BurnEvent {
+        emit_cpi!(BurnEvent {
             user: ctx.accounts.user.key(),
             amount0: amount0_out,
             amount1: amount1_out,

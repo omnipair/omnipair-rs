@@ -18,6 +18,7 @@ pub struct AdjustPositionArgs {
     pub amount: u64,
 }
 
+#[event_cpi]
 #[derive(Accounts)]
 pub struct CommonAdjustPosition<'info> {
     #[account(

@@ -18,6 +18,7 @@ pub struct SwapArgs {
     pub min_amount_out: u64,
 }
 
+#[event_cpi]
 #[derive(Accounts)]
 pub struct Swap<'info> { 
     #[account(
@@ -171,7 +172,7 @@ impl<'info> Swap<'info> {
         let current_time = Clock::get()?.unix_timestamp;
 
         // Emit event
-        emit!(SwapEvent {
+        emit_cpi!(SwapEvent {
             user: user.key(),
             amount0_in: if is_token0_in { amount_in } else { 0 },
             amount1_in: if !is_token0_in { amount_in } else { 0 },
