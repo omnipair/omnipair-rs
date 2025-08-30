@@ -92,26 +92,36 @@ impl<'info> CommonAdjustPosition<'info> {
         // Update debt
         match is_token0 {
             true => {
-                let shares = debt_to_repay
+                let shares = if is_repay_all {
+                    user_position.debt0_shares
+                } else {
+                    debt_to_repay
                     .checked_mul(pair.total_debt0_shares)
                     .unwrap()
                     .checked_div(pair.total_debt0)
-                    .unwrap();
+                    .unwrap()
+                };
+                    
                 pair.total_debt0_shares = pair.total_debt0_shares.checked_sub(shares).unwrap();
                 pair.total_debt0 = pair.total_debt0.checked_sub(debt_to_repay).unwrap();
                 user_position.debt0_shares = user_position.debt0_shares.checked_sub(shares).unwrap();
             },
             false => {
-                let shares = debt_to_repay
+                let shares = if is_repay_all {
+                    user_position.debt1_shares
+                } else {
+                    debt_to_repay
                     .checked_mul(pair.total_debt1_shares)
                     .unwrap()
                     .checked_div(pair.total_debt1)
-                    .unwrap();
+                    .unwrap()
+                };
                 pair.total_debt1_shares = pair.total_debt1_shares.checked_sub(shares).unwrap();
                 pair.total_debt1 = pair.total_debt1.checked_sub(debt_to_repay).unwrap();
                 user_position.debt1_shares = user_position.debt1_shares.checked_sub(shares).unwrap();
             }
         }
+        
 
         // Emit event
         let (amount0, amount1) = if user_token_account.mint == pair.token0 {
