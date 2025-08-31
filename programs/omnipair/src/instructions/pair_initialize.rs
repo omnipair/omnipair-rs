@@ -93,11 +93,11 @@ pub struct InitializePair<'info> {
 /// TODO: add swap fee logic
 impl<'info> InitializePair<'info> {
     pub fn validate(&self, args: &InitializePairArgs) -> Result<()> {
-        let InitializePair { 
-            token0_mint, 
-            token1_mint,
-            .. 
-        } = self;
+        // let InitializePair { 
+        //     token0_mint, 
+        //     token1_mint,
+        //     .. 
+        // } = self;
         let InitializePairArgs { swap_fee_bps, half_life, pool_deployer_fee_bps } = args;
 
         // validate pool parameters
@@ -109,10 +109,10 @@ impl<'info> InitializePair<'info> {
         // Enforce token0 < token1 to ensure unique pair addresses.
         // This prevents the same token pair from having two valid addresses (A,B) and (B,A).
         // TODO: remove this check and allow duplicate pairs
-        require!(
-            token0_mint.key() < token1_mint.key(),
-            ErrorCode::InvalidTokenOrder
-        );
+        // require!(
+        //     token0_mint.key() < token1_mint.key(),
+        //     ErrorCode::InvalidTokenOrder
+        // );
 
         // Enforce address of lp mint is postfixed with "omni"
         #[cfg(feature = "production")]

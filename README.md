@@ -9,6 +9,11 @@
    anchor deploy
    ```
 
+   or on prod
+   ```
+   anchor build
+   ```
+
 2. Create Development Token Pair (with the new deployed program id as the mint authority):
    ```bash
    yarn deploy-tokens

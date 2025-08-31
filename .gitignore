@@ -8,5 +8,6 @@ test-ledger
 .env
 wallet-keypair.json
 deployer-keypair.json
+testnet-keypair.json
 program-keypair.json
 docker-target

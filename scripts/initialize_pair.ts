@@ -97,8 +97,8 @@ async function main() {
     console.log('Initializing pair...');
     const pairTx = await program.methods
         .initializePair({
-            swapFeeBps: 100, // 1% swap fee
-            halfLife: new BN(60),  // 1 minute in seconds
+            swapFeeBps: 50, // 0.5% swap fee
+            halfLife: new BN(60 * 10),  // 10 minutes in seconds
             poolDeployerFeeBps: 10, // 0.1% pool deployer fee
         })
         .accountsPartial({

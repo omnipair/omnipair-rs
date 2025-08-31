@@ -172,9 +172,9 @@ async function main() {
         DEPLOYER_KEYPAIR,
         token0Mint,
         DEPLOYER_KEYPAIR.publicKey,
-        'MetaDAO',
-        'META',
-        'https://bafybeighnmau6rofxubsg3hroby3cclodur53zr25araufrgorzkwljdxy.ipfs.w3s.link/metadao_metadata.json'
+        'Omnipair',
+        'OMFG',
+        'https://bafybeigtzwcx7t44qa3i73a2ogvejdcn2lwptrnd2xsxy7vqwvkn46gkui.ipfs.w3s.link/omfg_metadata.json'
     );
     console.log('Token0 Metadata:', token0Metadata.toBase58());
 
@@ -187,7 +187,7 @@ async function main() {
         DEPLOYER_KEYPAIR.publicKey,
         'USD Coin',
         'USDC',
-        'https://bafybeiaycwfghj7ap7i2g5jfhtxihdulegikgq45dzcau3zhqkvg2zrnvm.ipfs.w3s.link/usdc_metadata.json'
+        'https://bafybeibcwxfhpphsxmnetrr33dzttjz7mye2ucvs5m3sn54pxuliym55ha.ipfs.w3s.link/usdc_metadata.json'
     );
     console.log('Token1 Metadata:', token1Metadata.toBase58());
 

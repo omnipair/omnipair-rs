@@ -7,16 +7,19 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-omnipair = "FeryrHQYSGiYi227dieziT3XmaYZ5tYQD7rL3vatwtFB"
+omnipair = "3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd"
 
 [programs.localnet]
-omnipair = "FeryrHQYSGiYi227dieziT3XmaYZ5tYQD7rL3vatwtFB"
+omnipair = "3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd"
+
+[programs.mainnet]
+omnipair = "3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd"
 
 [registry]
-url = "https://api.apr.dev"
+url = "https://mainnet.helius-rpc.com/?api-key=66a4060b-2453-49cd-bf7a-fa03546c97ec"
 
 [provider]
-cluster = "devnet"
+cluster = "mainnet"
 wallet = "deployer-keypair.json"
 
 [scripts]

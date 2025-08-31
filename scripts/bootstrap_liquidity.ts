@@ -173,8 +173,10 @@ async function main() {
     }
 
     // Bootstrap liquidity
-    const amount0 = new BN(40_000_000_000); // 40_000 tokens
-    const amount1 = new BN(40_000_000_000); // 40_000 tokens
+    // TODO: merge pair initialize and pair boostrap and remove the atomic liquidity addition
+    // make it supplied through add_liquidity
+    const amount0 = new BN(9_000_000); // 90 tokens (6 decimals)
+    const amount1 = new BN(20_000_000); // 200 tokens (6 decimals)
     const minLiquidity = new BN(1000); // Minimum liquidity
 
     console.log('Bootstrapping with amounts:');
