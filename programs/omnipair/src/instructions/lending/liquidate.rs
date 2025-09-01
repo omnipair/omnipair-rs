@@ -173,12 +173,12 @@ impl<'info> Liquidate<'info> {
             true => {
                 user_position.collateral0 = user_position.collateral0.checked_sub(collateral_final).unwrap();
                 pair.reserve0 = pair.reserve0.checked_add(collateral_final).unwrap();
-                pair.reserve1 = pair.reserve1.checked_sub(debt_to_repay).unwrap();
+                pair.reserve1 = pair.reserve1.saturating_sub(debt_to_repay).unwrap();
             }
             false => {
                 user_position.collateral1 = user_position.collateral1.checked_sub(collateral_final).unwrap();
                 pair.reserve1 = pair.reserve1.checked_add(collateral_final).unwrap();
-                pair.reserve0 = pair.reserve0.checked_sub(debt_to_repay).unwrap();
+                pair.reserve0 = pair.reserve0.saturating_sub(debt_to_repay).unwrap();
             }
         }
 
