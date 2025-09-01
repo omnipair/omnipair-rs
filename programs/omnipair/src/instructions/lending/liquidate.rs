@@ -133,12 +133,19 @@ impl<'info> Liquidate<'info> {
         // Check if position is undercollateralized
         require_gte!(user_debt as u128, borrow_limit, ErrorCode::NotUndercollateralized);
 
-
-        // apply close factor 
-        let debt_to_repay = (user_debt as u128)
-        .checked_mul(CLOSE_FACTOR_BPS as u128).ok_or(ErrorCode::DebtMathOverflow)?
-        .checked_div(BPS_DENOMINATOR as u128).ok_or(ErrorCode::DebtMathOverflow)?;
-        let debt_to_repay: u64 = core::cmp::min(user_debt, debt_to_repay as u64);
+        // Health Factor (HF) < 1: undercollateralized (liquidatable)
+        // collateral_value > user_debt > borrow_limit: position can be liquidated partially
+        // user_debt > collateral_value: insolvent (bad debt, collateral can't cover principal)
+        // If insolvent, repay all debt; else, repay a portion using close factor (partial liquidation)
+        let is_insolvent = user_debt as u128 > collateral_value;
+        let debt_to_repay: u64 = if is_insolvent {
+            user_debt
+        } else {
+            let partial = (user_debt as u128)
+                .checked_mul(CLOSE_FACTOR_BPS as u128).ok_or(ErrorCode::DebtMathOverflow)?
+                .checked_div(BPS_DENOMINATOR as u128).ok_or(ErrorCode::DebtMathOverflow)?;
+            core::cmp::min(user_debt, partial as u64)
+        };
 
         // collateral_amount_to_seize = debt_to_repay * NAD / collateral_price
         let collateral_amount_to_seize = (debt_to_repay as u128)
@@ -180,11 +187,12 @@ impl<'info> Liquidate<'info> {
             pair: pair.key(),
             position: user_position.key(),
             liquidator: payer.key(),
-            collateral0_liquidated: if is_collateral_token0 { 0 } else { user_position.collateral1 },
-            collateral1_liquidated: if is_collateral_token0 { user_position.collateral0 } else { 0 },
-            debt0_liquidated: if is_collateral_token0 { user_debt } else { 0 },
-            debt1_liquidated: if is_collateral_token0 { 0 } else { user_debt },
+            collateral0_liquidated: if is_collateral_token0 { 0 } else { collateral_final },
+            collateral1_liquidated: if is_collateral_token0 { collateral_final } else { 0 },
+            debt0_liquidated: if is_collateral_token0 { 0 } else { debt_to_repay },
+            debt1_liquidated: if is_collateral_token0 { debt_to_repay } else { 0 },
             collateral_price: if is_collateral_token0 { pair.ema_price0_nad() } else { pair.ema_price1_nad() },
+            shortfall: if is_insolvent { (user_debt as u128).checked_sub(collateral_value).unwrap() } else { 0 },
             liquidation_bonus_applied: 0,
             k0: k0,
             k1: pair.k(),
@@ -193,16 +201,4 @@ impl<'info> Liquidate<'info> {
 
         Ok(())
     }
-
-    // Calculates how much debt should be repaid (and how much collateral seized)
-    // to bring a position back to health (HF ≥ 1).
-    // Uses: debt, borrow_power, liquidation_lp_incentive_bps
-    // pub fn calculate_partial_liquidation_amount(
-    //     debt: u64,
-    //     borrow_power: u64,
-    //     liquidation_lp_incentive_bps: u64,
-    // ) -> (u64, u64, u64) {
-
-    //     (overexposed, collateral_seize_with_incentive, incentive_amount)
-    // }
 }
