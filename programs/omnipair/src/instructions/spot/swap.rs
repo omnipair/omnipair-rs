@@ -174,10 +174,9 @@ impl<'info> Swap<'info> {
         // Emit event
         emit_cpi!(SwapEvent {
             user: user.key(),
-            amount0_in: if is_token0_in { amount_in } else { 0 },
-            amount1_in: if !is_token0_in { amount_in } else { 0 },
-            amount0_out: if is_token0_in { amount_out } else { 0 },
-            amount1_out: if !is_token0_in { amount_out } else { 0 },
+            is_token0_in,
+            amount_in: amount_in,
+            amount_out: amount_out,
             timestamp: current_time,
         });
         

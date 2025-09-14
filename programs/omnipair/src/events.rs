@@ -3,10 +3,9 @@ use anchor_lang::prelude::*;
 #[event]
 pub struct SwapEvent {
     pub user: Pubkey,
-    pub amount0_in: u64,
-    pub amount1_in: u64,
-    pub amount0_out: u64,
-    pub amount1_out: u64,
+    pub is_token0_in: bool,
+    pub amount_in: u64,
+    pub amount_out: u64,
     pub timestamp: i64,
 }
 
