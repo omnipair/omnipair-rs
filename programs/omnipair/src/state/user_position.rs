@@ -220,6 +220,28 @@ impl UserPosition {
         Ok(())
     }
 
+    pub fn writeoff_debt(&mut self, pair: &mut Pair, debt_token: &Pubkey) -> Result<()> {
+        let debt_amount = match *debt_token == pair.token0 {
+            true => self.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
+            false => self.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
+        };
+
+        match *debt_token == pair.token0 {
+            true => {
+                self.debt0_shares = 0;
+                pair.total_debt0_shares = pair.total_debt0_shares.saturating_sub(self.debt0_shares);
+                pair.total_debt0 = pair.total_debt0.saturating_sub(debt_amount);
+            },
+            false => {
+                self.debt1_shares = 0;
+                pair.total_debt1_shares = pair.total_debt1_shares.saturating_sub(self.debt1_shares);
+                pair.total_debt1 = pair.total_debt1.saturating_sub(debt_amount);
+            },
+        };
+        
+        Ok(())
+    }
+
     pub fn calculate_debt0(&self, total_debt0: u64, total_debt0_shares: u64) -> Result<u64> {
         match total_debt0_shares {
             0 => Ok(0),

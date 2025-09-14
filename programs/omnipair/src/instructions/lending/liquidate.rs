@@ -163,7 +163,11 @@ impl<'info> Liquidate<'info> {
             if is_collateral_token0 { user_position.collateral0 } else { user_position.collateral1 }
         );
 
-        user_position.decrease_debt(pair, &debt_token, debt_to_repay)?;
+        if is_insolvent {
+            user_position.writeoff_debt(pair, &debt_token)?;
+        } else {
+            user_position.decrease_debt(pair, &debt_token, debt_to_repay)?;
+        }
         user_position.set_applied_min_cf_for_debt_token(&debt_token, &pair, applied_min_cf_bps);
 
         // LP seize collateral
