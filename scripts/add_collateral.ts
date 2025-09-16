@@ -122,7 +122,7 @@ async function main() {
         .addCollateral({
             amount: collateralAmount
         })
-        .accountsStrict({
+        .accountsPartial({
             user: DEPLOYER_KEYPAIR.publicKey,
             pair: pairPda,
             rateModel: RATE_MODEL,
@@ -131,8 +131,6 @@ async function main() {
             userCollateralTokenAccount: collateralToken0 ? DEPLOYER_TOKEN0_ACCOUNT : DEPLOYER_TOKEN1_ACCOUNT,
             collateralTokenMint: collateralToken0 ? TOKEN0_MINT : TOKEN1_MINT,
             tokenProgram: collateralToken0 ? token0Program : token1Program,
-            token2022Program: TOKEN_2022_PROGRAM_ID,
-            systemProgram: SystemProgram.programId,
         })
         .signers([DEPLOYER_KEYPAIR])
         .rpc();
