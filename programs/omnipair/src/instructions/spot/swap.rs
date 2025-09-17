@@ -174,6 +174,9 @@ impl<'info> Swap<'info> {
         // Emit event
         emit_cpi!(SwapEvent {
             user: user.key(),
+            pair: pair.key(),
+            reserve0: pair.reserve0,
+            reserve1: pair.reserve1,
             is_token0_in,
             amount_in: amount_in,
             amount_out: amount_out,
