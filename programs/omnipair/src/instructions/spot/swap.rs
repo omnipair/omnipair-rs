@@ -180,6 +180,7 @@ impl<'info> Swap<'info> {
             is_token0_in,
             amount_in: amount_in,
             amount_out: amount_out,
+            amount_in_after_fee: amount_in_after_fee,
             timestamp: current_time,
         });
         

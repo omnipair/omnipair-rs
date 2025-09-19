@@ -214,7 +214,7 @@ impl Pair {
     }
 
 
-        /// Get the minimum collateral and pessimistic collateral factor in BPS for a given debt amount
+    /// Get the minimum collateral and pessimistic collateral factor in BPS for a given debt amount
     /// 
     /// - `pair`: The pair the user position belongs to
     /// - `debt_token`: The token the user is borrowing

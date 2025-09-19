@@ -13,7 +13,7 @@
    ```
    anchor build
    anchor upgrade --provider.cluster https://mainnet.helius-rpc.com/?api-key={YOUR_API_KEY} 
-   --program-id 3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd /target/deploy/omnipair.so
+   --program-id 3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd ./target/deploy/omnipair.so
    ```
 
 2. Create Development Token Pair (with the new deployed program id as the mint authority):

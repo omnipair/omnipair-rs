@@ -53,7 +53,7 @@ fn curve_y_from_v(v: u128, r1: u64) -> u128 {
         / NAD_U128
 }
 
-/// Maximum borrowable amount of tokenY using a slippage-aware CF derived
+/// Maximum borrowable amount of tokenY using a impact-aware CF derived
 /// from constant product AMM pricing mechanics, with pessimistic spot/ema cap.
 ///
 /// Inputs:

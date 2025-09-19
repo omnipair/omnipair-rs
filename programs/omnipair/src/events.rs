@@ -9,6 +9,7 @@ pub struct SwapEvent {
     pub is_token0_in: bool,
     pub amount_in: u64,
     pub amount_out: u64,
+    pub amount_in_after_fee: u64,
     pub timestamp: i64,
 }
 
