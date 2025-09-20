@@ -4,7 +4,7 @@ use crate::constants::*;
 use crate::utils::token::{transfer_from_pool_vault_to_user, token_burn};
 use crate::generate_gamm_pair_seeds;
 use crate::liquidity::common::AdjustLiquidity;
-use crate::events::BurnEvent;
+use crate::events::{BurnEvent, CommonFields};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct RemoveLiquidityArgs {
@@ -138,11 +138,10 @@ impl<'info> AdjustLiquidity<'info> {
 
         // Emit event
         emit_cpi!(BurnEvent {
-            user: ctx.accounts.user.key(),
+            common: CommonFields::new(ctx.accounts.user.key(), pair.key()),
             amount0: amount0_out,
             amount1: amount1_out,
             liquidity: args.liquidity_in,
-            timestamp: Clock::get()?.unix_timestamp,
         });
 
         Ok(())

@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use crate::{
     constants::*,
     errors::ErrorCode,
-    events::AdjustCollateralEvent,
+    events::{AdjustCollateralEvent, CommonFields},
     utils::token::transfer_from_pool_vault_to_user,
     generate_gamm_pair_seeds,
     instructions::lending::common::{CommonAdjustPosition, AdjustPositionArgs},
@@ -156,10 +156,9 @@ impl<'info> CommonAdjustPosition<'info> {
         };
         
         emit_cpi!(AdjustCollateralEvent {
-            user: user.key(),
+            common: CommonFields::new(user.key(), pair.key()),
             amount0,
             amount1,
-            timestamp: Clock::get()?.unix_timestamp,
         });
 
         Ok(())

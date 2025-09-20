@@ -5,7 +5,7 @@ use crate::{
     state::rate_model::RateModel,
     constants::*,
     errors::ErrorCode,
-    events::UserPositionLiquidatedEvent,
+    events::{UserPositionLiquidatedEvent, CommonFields},
     state::user_position::UserPosition,
 };
 
@@ -79,7 +79,8 @@ impl<'info> Liquidate<'info> {
     }
 
     pub fn update(&mut self) -> Result<()> {
-        self.pair.update(&self.rate_model)?;
+        let pair_key = self.pair.to_account_info().key();
+        self.pair.update(&self.rate_model, pair_key)?;
         Ok(())
     }
 
@@ -187,8 +188,7 @@ impl<'info> Liquidate<'info> {
         }
 
         emit_cpi!(UserPositionLiquidatedEvent {
-            user: position_owner.key(),
-            pair: pair.key(),
+            common: CommonFields::new(position_owner.key(), pair.key()),
             position: user_position.key(),
             liquidator: payer.key(),
             collateral0_liquidated: if is_collateral_token0 { 0 } else { collateral_final },
@@ -200,7 +200,6 @@ impl<'info> Liquidate<'info> {
             liquidation_bonus_applied: 0,
             k0: k0,
             k1: pair.k(),
-            timestamp: Clock::get()?.unix_timestamp,
         });
 
         Ok(())

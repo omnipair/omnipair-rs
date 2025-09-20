@@ -125,8 +125,8 @@ impl ViewPairData<'_> {
     pub fn handle_view_data(ctx: Context<Self>, getter: PairViewKind, args: EmitValueArgs) -> Result<()> {
         let pair = &mut ctx.accounts.pair;
 
-        // update pair to get updated rates, interest, debt, etc.
-        pair.update(&ctx.accounts.rate_model)?;
+        let pair_key = pair.to_account_info().key();
+        pair.update(&ctx.accounts.rate_model, pair_key)?;
 
         let value: (OptionalUint, OptionalUint) = match getter {
             PairViewKind::EmaPrice0Nad => (OptionalUint::from_u64(pair.ema_price0_nad()), OptionalUint::OptionalU64(None)),
@@ -167,7 +167,8 @@ impl ViewUserPositionData<'_> {
         let user_position = &ctx.accounts.user_position;
 
         // update pair to get updated rates, interest, debt, etc.
-        pair.update(&ctx.accounts.rate_model)?;
+        let pair_key = pair.to_account_info().key();
+        pair.update(&ctx.accounts.rate_model, pair_key)?;
 
         let value: (OptionalUint, OptionalUint) = match getter {
             UserPositionViewKind::UserBorrowingPower => (

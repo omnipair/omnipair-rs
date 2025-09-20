@@ -5,7 +5,7 @@ use anchor_spl::{
 };
 use crate::{
     errors::ErrorCode,
-    events::{AdjustCollateralEvent, AdjustDebtEvent, UserPositionCreatedEvent, UserPositionUpdatedEvent},
+    events::{AdjustCollateralEvent, AdjustDebtEvent, UserPositionCreatedEvent, UserPositionUpdatedEvent, CommonFields},
     utils::{token::{transfer_from_user_to_pool_vault, transfer_from_pool_vault_to_user}, account::get_size_with_discriminator},
     state::{user_position::UserPosition, pair::Pair, rate_model::RateModel},
     constants::*,
@@ -134,7 +134,8 @@ impl<'info> AddCollateralAndBorrow<'info> {
     }
     
     pub fn update(&mut self) -> Result<()> {
-        self.pair.update(&self.rate_model)?;
+        let pair_key = self.pair.to_account_info().key();
+        self.pair.update(&self.rate_model, pair_key)?;
         Ok(())
     }
 
@@ -169,10 +170,8 @@ impl<'info> AddCollateralAndBorrow<'info> {
             )?;
 
             emit_cpi!(UserPositionCreatedEvent {
-                user: user.key(),
-                pair: pair.key(),
+                common: CommonFields::new(user.key(), pair.key()),
                 position: user_position.key(),
-                timestamp: Clock::get()?.unix_timestamp,
             });
         }
 
@@ -256,10 +255,9 @@ impl<'info> AddCollateralAndBorrow<'info> {
         };
         
         emit_cpi!(AdjustCollateralEvent {
-            user: user.key(),
+            common: CommonFields::new(user.key(), pair.key()),
             amount0: collateral_amount0,
             amount1: collateral_amount1,
-            timestamp: Clock::get()?.unix_timestamp,
         });
 
         // Emit debt adjustment event
@@ -270,22 +268,19 @@ impl<'info> AddCollateralAndBorrow<'info> {
         };
         
         emit_cpi!(AdjustDebtEvent {
-            user: user.key(),
+            common: CommonFields::new(user.key(), pair.key()),
             amount0: borrow_amount0,
             amount1: borrow_amount1,
-            timestamp: Clock::get()?.unix_timestamp,
         });
 
         // Emit position updated event
         emit_cpi!(UserPositionUpdatedEvent {
-            user: user.key(),
-            pair: pair.key(),
+            common: CommonFields::new(user.key(), pair.key()),
             position: user_position.key(),
             collateral0: user_position.collateral0,
             collateral1: user_position.collateral1,
             debt0_shares: user_position.debt0_shares,
             debt1_shares: user_position.debt1_shares,
-            timestamp: Clock::get()?.unix_timestamp,
         });
 
         Ok(())

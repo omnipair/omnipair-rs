@@ -72,7 +72,8 @@ impl<'info> Swap<'info> {
     }
 
     pub fn update(&mut self) -> Result<()> {
-        self.pair.update(&self.rate_model)?;
+        let pair_key = self.pair.to_account_info().key();
+        self.pair.update(&self.rate_model, pair_key)?;
         Ok(())
     }
 
@@ -169,19 +170,15 @@ impl<'info> Swap<'info> {
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
         
-        let current_time = Clock::get()?.unix_timestamp;
-
         // Emit event
         emit_cpi!(SwapEvent {
-            user: user.key(),
-            pair: pair.key(),
+            common: CommonFields::new(user.key(), pair.key()),
             reserve0: pair.reserve0,
             reserve1: pair.reserve1,
             is_token0_in,
             amount_in: amount_in,
             amount_out: amount_out,
             amount_in_after_fee: amount_in_after_fee,
-            timestamp: current_time,
         });
         
         Ok(())

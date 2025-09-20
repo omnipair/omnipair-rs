@@ -3,7 +3,7 @@ use crate::constants::*;
 use crate::utils::gamm_math::{pessimistic_max_debt, pessimistic_min_collateral};
 use crate::utils::math::compute_ema;
 use crate::state::RateModel;
-use crate::events::UpdatePairEvent;
+use crate::events::{UpdatePairEvent, CommonFields};
 
 #[account]
 pub struct Pair {
@@ -241,7 +241,7 @@ impl Pair {
         ).map_err(|error| error.into())
     }
 
-    pub fn update(&mut self, rate_model: &Account<RateModel>) -> Result<()> {
+    pub fn update(&mut self, rate_model: &Account<RateModel>, pair_key: Pubkey) -> Result<()> {
         let current_time = Clock::get()?.unix_timestamp;
         
         if current_time > self.last_update {
@@ -312,11 +312,11 @@ impl Pair {
             self.last_update = current_time;
             
             emit!(UpdatePairEvent {
+                common: CommonFields::new(Pubkey::default(), pair_key),
                 price0_ema: self.last_price0_ema,
                 price1_ema: self.last_price1_ema,
                 rate0: self.last_rate0,
                 rate1: self.last_rate1,
-                timestamp: current_time,
             });
         }
         

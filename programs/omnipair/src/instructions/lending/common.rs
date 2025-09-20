@@ -77,7 +77,8 @@ pub struct CommonAdjustPosition<'info> {
 impl<'info> CommonAdjustPosition<'info> {
     // generic update function for pair internal state
     pub fn update(&mut self) -> Result<()> {
-        self.pair.update(&self.rate_model)?;
+        let pair_key = self.pair.to_account_info().key();
+        self.pair.update(&self.rate_model, pair_key)?;
         Ok(())
     }
 }
