@@ -79,6 +79,10 @@ pub struct UpdatePairEvent {
     pub price1_ema: u64,
     pub rate0: u64,
     pub rate1: u64,
+    pub accrued_interest0: u64,
+    pub accrued_interest1: u64,
+    pub reserve0_after_interest: u64,
+    pub reserve1_after_interest: u64,
     pub common: CommonFields,
 }
 

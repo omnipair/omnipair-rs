@@ -317,6 +317,10 @@ impl Pair {
                 price1_ema: self.last_price1_ema,
                 rate0: self.last_rate0,
                 rate1: self.last_rate1,
+                accrued_interest0: interest0,
+                accrued_interest1: interest1,
+                reserve0_after_interest: self.reserve0,
+                reserve1_after_interest: self.reserve1,
             });
         }
         
