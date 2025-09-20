@@ -307,21 +307,21 @@ impl Pair {
                 // 7. affecting the amount of interest that is earned
                 self.reserve0 += interest0 as u64;
                 self.reserve1 += interest1 as u64;
+
+                emit!(UpdatePairEvent {
+                    common: CommonFields::new(Pubkey::default(), pair_key),
+                    price0_ema: self.last_price0_ema,
+                    price1_ema: self.last_price1_ema,
+                    rate0: self.last_rate0,
+                    rate1: self.last_rate1,
+                    accrued_interest0: interest0,
+                    accrued_interest1: interest1,
+                    reserve0_after_interest: self.reserve0,
+                    reserve1_after_interest: self.reserve1,
+                });
             }
             
             self.last_update = current_time;
-            
-            emit!(UpdatePairEvent {
-                common: CommonFields::new(Pubkey::default(), pair_key),
-                price0_ema: self.last_price0_ema,
-                price1_ema: self.last_price1_ema,
-                rate0: self.last_rate0,
-                rate1: self.last_rate1,
-                accrued_interest0: interest0,
-                accrued_interest1: interest1,
-                reserve0_after_interest: self.reserve0,
-                reserve1_after_interest: self.reserve1,
-            });
         }
         
         Ok(())

@@ -1,7 +1,7 @@
 [package]
 name = "omnipair"
 version = "0.1.0"
-description = "Created with Anchor"
+description = "Oracless spot and margin money market protocol"
 edition = "2021"
 resolver = "2"
 
