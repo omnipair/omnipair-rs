@@ -5,7 +5,7 @@ use anchor_spl::{
 };
 use crate::{
     errors::ErrorCode,
-    events::{AdjustCollateralEvent, AdjustDebtEvent, UserPositionCreatedEvent, UserPositionUpdatedEvent, CommonFields},
+    events::{AdjustCollateralEvent, AdjustDebtEvent, UserPositionCreatedEvent, UserPositionUpdatedEvent, EventMetadata},
     utils::{token::{transfer_from_user_to_pool_vault, transfer_from_pool_vault_to_user}, account::get_size_with_discriminator},
     state::{user_position::UserPosition, pair::Pair, rate_model::RateModel},
     constants::*,
@@ -170,7 +170,7 @@ impl<'info> AddCollateralAndBorrow<'info> {
             )?;
 
             emit_cpi!(UserPositionCreatedEvent {
-                common: CommonFields::new(user.key(), pair.key()),
+                metadata: EventMetadata::new(user.key(), pair.key()),
                 position: user_position.key(),
             });
         }
@@ -255,7 +255,7 @@ impl<'info> AddCollateralAndBorrow<'info> {
         };
         
         emit_cpi!(AdjustCollateralEvent {
-            common: CommonFields::new(user.key(), pair.key()),
+            metadata: EventMetadata::new(user.key(), pair.key()),
             amount0: collateral_amount0,
             amount1: collateral_amount1,
         });
@@ -268,14 +268,14 @@ impl<'info> AddCollateralAndBorrow<'info> {
         };
         
         emit_cpi!(AdjustDebtEvent {
-            common: CommonFields::new(user.key(), pair.key()),
+            metadata: EventMetadata::new(user.key(), pair.key()),
             amount0: borrow_amount0,
             amount1: borrow_amount1,
         });
 
         // Emit position updated event
         emit_cpi!(UserPositionUpdatedEvent {
-            common: CommonFields::new(user.key(), pair.key()),
+            metadata: EventMetadata::new(user.key(), pair.key()),
             position: user_position.key(),
             collateral0: user_position.collateral0,
             collateral1: user_position.collateral1,

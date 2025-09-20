@@ -5,7 +5,7 @@ use crate::{
     state::rate_model::RateModel,
     constants::*,
     errors::ErrorCode,
-    events::{UserPositionLiquidatedEvent, CommonFields},
+    events::{UserPositionLiquidatedEvent, EventMetadata},
     state::user_position::UserPosition,
 };
 
@@ -188,7 +188,7 @@ impl<'info> Liquidate<'info> {
         }
 
         emit_cpi!(UserPositionLiquidatedEvent {
-            common: CommonFields::new(position_owner.key(), pair.key()),
+            metadata: EventMetadata::new(position_owner.key(), pair.key()),
             position: user_position.key(),
             liquidator: payer.key(),
             collateral0_liquidated: if is_collateral_token0 { 0 } else { collateral_final },

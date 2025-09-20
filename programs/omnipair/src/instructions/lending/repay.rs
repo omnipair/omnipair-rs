@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::{
     errors::ErrorCode,
-    events::{AdjustDebtEvent, UserPositionUpdatedEvent, CommonFields},
+    events::{AdjustDebtEvent, UserPositionUpdatedEvent, EventMetadata},
     utils::token::transfer_from_user_to_pool_vault,
     instructions::lending::common::{CommonAdjustPosition, AdjustPositionArgs},
 };
@@ -131,14 +131,14 @@ impl<'info> CommonAdjustPosition<'info> {
         };
         
         emit_cpi!(AdjustDebtEvent {
-            common: CommonFields::new(user.key(), pair.key()),
+            metadata: EventMetadata::new(user.key(), pair.key()),
             amount0,
             amount1,
         });
 
         // Emit position updated event
         emit_cpi!(UserPositionUpdatedEvent {
-            common: CommonFields::new(user.key(), pair.key()),
+            metadata: EventMetadata::new(user.key(), pair.key()),
             position: user_position.key(),
             collateral0: user_position.collateral0,
             collateral1: user_position.collateral1,

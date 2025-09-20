@@ -172,7 +172,7 @@ impl<'info> Swap<'info> {
         
         // Emit event
         emit_cpi!(SwapEvent {
-            common: CommonFields::new(user.key(), pair.key()),
+            metadata: EventMetadata::new(user.key(), pair.key()),
             reserve0: pair.reserve0,
             reserve1: pair.reserve1,
             is_token0_in,

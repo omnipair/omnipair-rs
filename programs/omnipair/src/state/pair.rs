@@ -3,7 +3,7 @@ use crate::constants::*;
 use crate::utils::gamm_math::{pessimistic_max_debt, pessimistic_min_collateral};
 use crate::utils::math::compute_ema;
 use crate::state::RateModel;
-use crate::events::{UpdatePairEvent, CommonFields};
+use crate::events::{UpdatePairEvent, EventMetadata};
 
 #[account]
 pub struct Pair {
@@ -309,7 +309,7 @@ impl Pair {
                 self.reserve1 += interest1 as u64;
 
                 emit!(UpdatePairEvent {
-                    common: CommonFields::new(Pubkey::default(), pair_key),
+                    metadata: EventMetadata::new(Pubkey::default(), pair_key),
                     price0_ema: self.last_price0_ema,
                     price1_ema: self.last_price1_ema,
                     rate0: self.last_rate0,

@@ -15,7 +15,7 @@ use crate::state::{
 use crate::errors::ErrorCode;
 use crate::constants::*;
 use crate::utils::account::get_size_with_discriminator;
-use crate::events::{PairCreatedEvent, CommonFields};
+use crate::events::{PairCreatedEvent, EventMetadata};
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct InitializePairArgs {
@@ -177,7 +177,7 @@ impl<'info> InitializePair<'info> {
 
         // Emit event
         emit_cpi!(PairCreatedEvent {
-            common: CommonFields::new(ctx.accounts.deployer.key(), pair.key()),
+            metadata: EventMetadata::new(ctx.accounts.deployer.key(), pair.key()),
             token0: ctx.accounts.token0_mint.key(),
             token1: ctx.accounts.token1_mint.key(),
         });
