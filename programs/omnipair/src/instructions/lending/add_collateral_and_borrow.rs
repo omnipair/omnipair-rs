@@ -281,6 +281,8 @@ impl<'info> AddCollateralAndBorrow<'info> {
             collateral1: user_position.collateral1,
             debt0_shares: user_position.debt0_shares,
             debt1_shares: user_position.debt1_shares,
+            collateral0_applied_min_cf_bps: user_position.collateral0_applied_min_cf_bps,
+            collateral1_applied_min_cf_bps: user_position.collateral1_applied_min_cf_bps,
         });
 
         Ok(())

@@ -99,6 +99,8 @@ pub struct UserPositionUpdatedEvent {
     pub collateral1: u64,
     pub debt0_shares: u64,
     pub debt1_shares: u64,
+    pub collateral0_applied_min_cf_bps: u16,
+    pub collateral1_applied_min_cf_bps: u16,
     pub metadata: EventMetadata,
 }
 
