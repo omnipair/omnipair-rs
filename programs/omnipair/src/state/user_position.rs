@@ -228,13 +228,13 @@ impl UserPosition {
 
         match *debt_token == pair.token0 {
             true => {
-                self.debt0_shares = 0;
                 pair.total_debt0_shares = pair.total_debt0_shares.saturating_sub(self.debt0_shares);
+                self.debt0_shares = 0;
                 pair.total_debt0 = pair.total_debt0.saturating_sub(debt_amount);
             },
             false => {
-                self.debt1_shares = 0;
                 pair.total_debt1_shares = pair.total_debt1_shares.saturating_sub(self.debt1_shares);
+                self.debt1_shares = 0;
                 pair.total_debt1 = pair.total_debt1.saturating_sub(debt_amount);
             },
         };
