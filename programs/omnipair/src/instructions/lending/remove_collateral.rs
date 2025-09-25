@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use crate::{
     constants::*,
     errors::ErrorCode,
-    events::{AdjustCollateralEvent, EventMetadata},
+    events::{AdjustCollateralEvent, EventMetadata, UserPositionUpdatedEvent},
     utils::token::transfer_from_pool_vault_to_user,
     generate_gamm_pair_seeds,
     instructions::lending::common::{CommonAdjustPosition, AdjustPositionArgs},
@@ -159,6 +159,18 @@ impl<'info> CommonAdjustPosition<'info> {
             metadata: EventMetadata::new(user.key(), pair.key()),
             amount0,
             amount1,
+        });
+        
+        // Emit position updated event
+        emit_cpi!(UserPositionUpdatedEvent {
+            metadata: EventMetadata::new(user.key(), pair.key()),
+            position: user_position.key(),
+            collateral0: user_position.collateral0,
+            collateral1: user_position.collateral1,
+            debt0_shares: user_position.debt0_shares,
+            debt1_shares: user_position.debt1_shares,
+            collateral0_applied_min_cf_bps: user_position.collateral0_applied_min_cf_bps,
+            collateral1_applied_min_cf_bps: user_position.collateral1_applied_min_cf_bps,
         });
 
         Ok(())
