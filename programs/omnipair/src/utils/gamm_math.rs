@@ -89,19 +89,16 @@ pub fn pessimistic_max_debt(
     let y_curve = curve_y_from_v(v, debt_amm_reserve);
 
     // CF_curve = Y / V (bps)
-    let mut cf_curve_bps_u128 = if v > 0 {
+    let cf_curve_bps_u128 = if v > 0 {
         y_curve
             .saturating_mul(BPS_DENOMINATOR_U128)
             / v
     } else {
         0
     };
-    if cf_curve_bps_u128 > BPS_DENOMINATOR_U128 {
-        cf_curve_bps_u128 = BPS_DENOMINATOR_U128;
-    }
     let cf_curve_bps_u64 = cf_curve_bps_u128 as u64;
 
-    // Pessimistic cap: min(CF, CF * spot/ema), clamped >= 1 bps
+    // Pessimistic cap: min(CF, CF * spot/ema) [>= 1 bps, Pessimistic CF <= 8500 bps]
     let pessimistic_cf_bps = get_pessimistic_cf_bps(
         cf_curve_bps_u64,
         collateral_spot_price_scaled,
@@ -166,12 +163,9 @@ pub fn pessimistic_min_collateral(
         / NAD_U128;
 
     // Convert CF_curve to bps
-    let mut cf_curve_bps_u128 = cf_curve_nad
+    let cf_curve_bps_u128 = cf_curve_nad
         .saturating_mul(BPS_DENOMINATOR_U128)
         / NAD_U128;
-    if cf_curve_bps_u128 > BPS_DENOMINATOR_U128 {
-        cf_curve_bps_u128 = BPS_DENOMINATOR_U128;
-    }
     let cf_curve_bps_u64 = cf_curve_bps_u128 as u64;
 
     // Apply pessimistic cap (>= 1 bps)
@@ -197,7 +191,8 @@ pub fn pessimistic_min_collateral(
 
 /// Returns a pessimistic collateral factor in bps:
 ///   CF_final = min(CF_base, CF_base * spot/ema)
-/// Clamped to [1, 10_000] bps to avoid zero-division downstream.
+/// Clamped to [100, MAX_COLLATERAL_FACTOR_BPS] bps to avoid zero-division downstream.
+/// The dynamic collateral factor is capped at 85% (8500 BPS).
 pub fn get_pessimistic_cf_bps(
     base_cf_bps: u64,
     collateral_spot_price_nad: u64,
@@ -205,12 +200,15 @@ pub fn get_pessimistic_cf_bps(
 ) -> Result<u16> {
     require!(collateral_ema_price_nad != 0, ErrorCode::DenominatorOverflow);
 
-    let base = base_cf_bps.min(BPS_DENOMINATOR as u64);
+    let base = base_cf_bps;
     let shrunk = collateral_spot_price_nad
         .saturating_mul(base)
         .checked_div(collateral_ema_price_nad)
         .ok_or(ErrorCode::DenominatorOverflow)?;
 
-    let cf_bps = min(base, shrunk).max(1); // never 0 bps
-    Ok(cf_bps as u16)
+    let cf_bps = min(base, shrunk).max(100); // never less than 1% (100 bps)
+    
+    // Apply 85% cap to dynamic collateral factor
+    let cf_bps_capped = cf_bps.min(MAX_COLLATERAL_FACTOR_BPS as u64);
+    Ok(cf_bps_capped as u16)
 }
