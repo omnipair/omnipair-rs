@@ -10,6 +10,8 @@ pub const NAD_DECIMALS: u8 = 9;
 pub const BPS_DENOMINATOR: u16 = 10_000;
 #[constant]
 pub const CLOSE_FACTOR_BPS: u16 = 5_000; // 50%
+#[constant]
+pub const MAX_COLLATERAL_FACTOR_BPS: u16 = 8_500; // 85% cap for dynamic collateral factor
 
 // EMA constants
 #[constant]
