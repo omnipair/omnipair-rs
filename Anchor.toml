@@ -7,20 +7,20 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-omnipair = "3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd"
+omnipair = "6boPPughAjq1PeoEicamfirB9SYjF8bBCSCeUvKJeZMj"
 
 [programs.localnet]
-omnipair = "3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd"
+omnipair = "6boPPughAjq1PeoEicamfirB9SYjF8bBCSCeUvKJeZMj"
 
 [programs.mainnet]
 omnipair = "3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd"
 
 [registry]
-url = "https://mainnet.helius-rpc.com/?api-key=66a4060b-2453-49cd-bf7a-fa03546c97ec"
+url = "${ANCHOR_REGISTRY_URL:-https://devnet.helius-rpc.com/?api-key=66a4060b-2453-49cd-bf7a-fa03546c97ec}"
 
 [provider]
-cluster = "mainnet"
-wallet = "deployer-keypair.json"
+cluster = "${ANCHOR_CLUSTER:-devnet}"
+wallet = "${ANCHOR_WALLET:-testnet-keypair.json}"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts --require ts-node/register"

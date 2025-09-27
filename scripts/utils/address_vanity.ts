@@ -1,7 +1,11 @@
 import { PublicKey } from '@solana/web3.js';
+import * as dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 async function main() {
-    const baseAddress = new PublicKey('C7GKpfqQyBoFR6S13DECwBjdi7aCQKbbeKjXm4Jt5Hds');
+    const baseAddress = new PublicKey(process.env.BASE_ADDRESS || 'C7GKpfqQyBoFR6S13DECwBjdi7aCQKbbeKjXm4Jt5Hds');
     const programId = new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111');
     const seed = 'vvFfCduOi9yT4iot'; // This is a string, not bytes!
 

@@ -14,12 +14,29 @@ pub use instructions::pair_initialize::InitializePair;
 pub use instructions::faucet_mint::FaucetMint;
 pub use instructions::emit_value::{EmitValueArgs, PairViewKind, UserPositionViewKind, ViewPairData, ViewUserPositionData};
 
+// Program ID based on feature flags
+#[cfg(feature = "development")]
+declare_id!("6boPPughAjq1PeoEicamfirB9SYjF8bBCSCeUvKJeZMj");
+
+#[cfg(feature = "production")]
 declare_id!("3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd");
 
+// Default to development if no feature is specified
+#[cfg(not(any(feature = "development", feature = "production")))]
+declare_id!("6boPPughAjq1PeoEicamfirB9SYjF8bBCSCeUvKJeZMj");
 
 pub mod deployer {
     use super::{pubkey, Pubkey};
+    
+    #[cfg(feature = "development")]
+    pub const ID: Pubkey = pubkey!("C7GKpfqQyBoFR6S13DECwBjdi7aCQKbbeKjXm4Jt5Hds");
+    
+    #[cfg(feature = "production")]
     pub const ID: Pubkey = pubkey!("8tF4uYMBXqGhCUGRZL3AmPqRzbX8JJ1TpYnY3uJKN4kt");
+    
+    // Default to development if no feature is specified
+    #[cfg(not(any(feature = "development", feature = "production")))]
+    pub const ID: Pubkey = pubkey!("C7GKpfqQyBoFR6S13DECwBjdi7aCQKbbeKjXm4Jt5Hds");
 }
 
 #[program]

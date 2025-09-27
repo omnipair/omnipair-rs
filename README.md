@@ -1,22 +1,42 @@
 # omnipair-rs
 
+## Network Configuration
 
-### Local and Devnet flow for get up and running
-1. Build and Deploy the Program:
-   ```bash
-   anchor keys sync
-   anchor build -- --features "development"
-   anchor deploy
-   ```
+This project supports both devnet and mainnet deployments using Cargo features and environment variables.
 
-   or on prod
-   ```
-   anchor build
-   anchor upgrade --provider.cluster https://mainnet.helius-rpc.com/?api-key={YOUR_API_KEY} 
-   --program-id 3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd ./target/deploy/omnipair.so
-   ```
+### Environment Variables
 
-2. Create Development Token Pair (with the new deployed program id as the mint authority):
+You can set these environment variables to configure the deployment:
+
+- `ANCHOR_CLUSTER`: Network cluster (devnet/mainnet)
+- `ANCHOR_WALLET`: Path to wallet keypair file
+- `ANCHOR_REGISTRY_URL`: RPC endpoint URL
+
+### Quick Start
+
+**For Devnet (default):**
+```bash
+anchor keys sync
+anchor build -- --features "development"
+anchor deploy
+```
+
+**For Mainnet:**
+```bash
+# Set environment variables
+export ANCHOR_CLUSTER=mainnet
+export ANCHOR_WALLET=mainnet-keypair.json
+export ANCHOR_REGISTRY_URL=https://api.mainnet-beta.solana.com
+
+# Build and deploy
+anchor keys sync
+anchor build -- --features "production"
+anchor deploy
+```
+
+### Development Flow
+
+1. Create Development Token Pair (with the new deployed program id as the mint authority):
    ```bash
    yarn deploy-tokens
    ```
@@ -26,30 +46,34 @@
    TOKEN1_MINT=<new_token1_mint_address>
    ```
 
-3. Initialize Futarchy Authority and Pair Config:
+2. Initialize Futarchy Authority and Pair Config:
    ```bash
    yarn init-futarchy
    ```
 
-4. Initialize the Pair:
+3. Initialize the Pair:
    ```bash
    yarn initialize
    ```
 
-5. Mint Test Tokens:
+4. Mint Test Tokens:
    ```bash
    yarn faucet-mint
    ```
 
-6. Bootstrap Liquidity:
+5. Bootstrap Liquidity:
    ```bash
    yarn bootstrap
    ```
 
-7. Pubish IDL
+6. Publish IDL
+```bash
+# For devnet
+anchor idl init --filepath target/idl/omnipair.json [program.id]
+
+# For mainnet
+ANCHOR_CLUSTER=mainnet anchor idl init --filepath target/idl/omnipair.json [program.id]
 ```
- anchor idl init --filepath target/idl/omnipair.json [program.id] --provider.cluster devnet
- ```
 
 After completing these steps, you can:
 - Add and remove liquidity
@@ -57,11 +81,20 @@ After completing these steps, you can:
 - Borrow and repay loans
 
 
-For production run: 
-   ```bash
-   anchor keys sync
-   anchor build --verifiable -- --features "production"
-   anchor deploy --verifiable
-   anchor idl init --filepath target/idl/omnipair.json <program-id> --provider.cluster mainnet
-   anchor verify -p omnipair <program-id>
-   ```
+### Production Deployment
+
+For production deployment with verification:
+
+```bash
+# Set environment variables
+export ANCHOR_CLUSTER=mainnet
+export ANCHOR_WALLET=mainnet-keypair.json
+export ANCHOR_REGISTRY_URL=https://api.mainnet-beta.solana.com
+
+# Build, deploy, and verify
+anchor keys sync
+anchor build --verifiable -- --features "production"
+anchor deploy --verifiable
+anchor idl init --filepath target/idl/omnipair.json <program-id>
+anchor verify -p omnipair <program-id>
+```
