@@ -16,11 +16,11 @@ omnipair = "6boPPughAjq1PeoEicamfirB9SYjF8bBCSCeUvKJeZMj"
 omnipair = "3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd"
 
 [registry]
-url = "${ANCHOR_REGISTRY_URL:-https://devnet.helius-rpc.com/?api-key=66a4060b-2453-49cd-bf7a-fa03546c97ec}"
+url = "https://devnet.helius-rpc.com/?api-key=66a4060b-2453-49cd-bf7a-fa03546c97ec"
 
 [provider]
-cluster = "${ANCHOR_CLUSTER:-devnet}"
-wallet = "${ANCHOR_WALLET:-testnet-keypair.json}"
+cluster = "devnet"
+wallet = "testnet-keypair.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts --require ts-node/register"

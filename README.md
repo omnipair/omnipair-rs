@@ -31,6 +31,8 @@ export ANCHOR_REGISTRY_URL=https://api.mainnet-beta.solana.com
 # Build and deploy
 anchor keys sync
 anchor build -- --features "production"
+or
+anchor build -- --features "development"
 anchor deploy
 ```
 
@@ -98,3 +100,24 @@ anchor deploy --verifiable
 anchor idl init --filepath target/idl/omnipair.json <program-id>
 anchor verify -p omnipair <program-id>
 ```
+
+### Program Upgrade
+
+To upgrade an existing deployed program:
+
+```bash
+# Set environment variables for mainnet
+export ANCHOR_CLUSTER=mainnet
+export ANCHOR_WALLET=mainnet-keypair.json
+export ANCHOR_REGISTRY_URL=https://mainnet.helius-rpc.com/?api-key={YOUR_API_KEY}
+
+# Build the new program
+anchor build -- --features "production"
+
+# Upgrade the program
+anchor upgrade --provider.cluster https://mainnet.helius-rpc.com/?api-key={YOUR_API_KEY} \
+   --program-id 3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd \
+   ./target/deploy/omnipair.so
+```
+
+**Note:** Replace `{YOUR_API_KEY}` with your actual Helius API key and `3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd` with your actual program ID.
