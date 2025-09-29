@@ -29,7 +29,7 @@ pub const MIN_RATE_BPS: u64 = 100;      // 1%
 
 // Default IRM constants
 pub const TARGET_UTIL_START_BPS: u64 = 3_300; // 33%
-pub const TARGET_UTIL_END_BPS: u64 = 6_600; // 66%
+pub const TARGET_UTIL_END_BPS: u64 = 7_500; // 75%
 pub const SECONDS_PER_DAY: u64 = 86_400;
 pub const SECONDS_PER_YEAR: u64 = 31_536_000;
 
