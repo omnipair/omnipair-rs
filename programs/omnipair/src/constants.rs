@@ -28,8 +28,8 @@ pub const INITIAL_RATE_BPS: u64 = 200; // 2%
 pub const MIN_RATE_BPS: u64 = 100;      // 1%
 
 // Default IRM constants
-pub const TARGET_UTIL_START_BPS: u64 = 3_300; // 33%
-pub const TARGET_UTIL_END_BPS: u64 = 7_500; // 75%
+pub const TARGET_UTIL_START_BPS: u64 = 5_000; // 50%
+pub const TARGET_UTIL_END_BPS: u64 = 8_500; // 85%
 pub const SECONDS_PER_DAY: u64 = 86_400;
 pub const SECONDS_PER_YEAR: u64 = 31_536_000;
 
@@ -46,6 +46,8 @@ pub const LP_MINT_SEED_PREFIX: &[u8] = b"gamm_lp_mint";
 pub const FACTORY_SEED_PREFIX: &[u8] = b"gamm_factory";
 #[constant]
 pub const POSITION_SEED_PREFIX: &[u8] = b"gamm_position";
+#[constant]
+pub const LEVERAGED_POSITION_SEED_PREFIX: &[u8] = b"gamm_leveraged_position";
 #[constant]
 pub const PAIR_CONFIG_SEED_PREFIX: &[u8] = b"gamm_pair_config";
 #[constant]
