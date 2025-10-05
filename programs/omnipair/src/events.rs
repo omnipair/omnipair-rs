@@ -119,3 +119,11 @@ pub struct UserPositionLiquidatedEvent {
     pub k1: u128,
     pub metadata: EventMetadata,
 }
+
+#[event]
+pub struct FlashloanEvent {
+    pub amount0: u64,
+    pub amount1: u64,
+    pub receiver: Pubkey,
+    pub metadata: EventMetadata,
+}
