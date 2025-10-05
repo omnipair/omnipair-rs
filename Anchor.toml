@@ -6,11 +6,19 @@ package_manager = "yarn"
 resolution = true
 skip-lint = false
 
+[workspace]
+members = [
+    "programs/omnipair",
+    "examples/flashloan_receiver"
+]
+
 [programs.devnet]
 omnipair = "6boPPughAjq1PeoEicamfirB9SYjF8bBCSCeUvKJeZMj"
+flashloan_receiver_example = "4RedqfMFEYWAujththpBsB3VPPiroUUD21xZULVfZCuR"
 
 [programs.localnet]
 omnipair = "6boPPughAjq1PeoEicamfirB9SYjF8bBCSCeUvKJeZMj"
+flashloan_receiver_example = "4RedqfMFEYWAujththpBsB3VPPiroUUD21xZULVfZCuR"
 
 [programs.mainnet]
 omnipair = "3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd"

@@ -1,7 +1,8 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{
-    instruction::Instruction,
+    instruction::{Instruction, AccountMeta},
     program::invoke,
+    hash::hash,
 };
 use anchor_spl::{
     token::{Token, TokenAccount},
@@ -195,25 +196,26 @@ impl<'info> Flashloan<'info> {
             data,
         };
 
-        // The receiver program should have a handler with discriminator for "flash_loan_callback"
+        // Build the instruction data with Anchor discriminator
+        // Anchor computes discriminators as: first 8 bytes of SHA256("global:instruction_name")
+        let discriminator = &hash(b"global:flash_loan_callback").to_bytes()[..8];
+        
         let mut callback_instruction_data = Vec::new();
-        // Add discriminator (8 bytes)
-        // For "flash_loan_callback", discriminator would be computed by the receiver program
-        // Here we just serialize the callback data
+        callback_instruction_data.extend_from_slice(discriminator);
         callback_data.serialize(&mut callback_instruction_data)?;
 
-        // Build account metas for the CPI instruction
+        // Build account metas for the CPI instruction  
+        // Order must match the receiver's FlashLoanCallback account struct
         let mut callback_account_metas = vec![
-            // Standard accounts the callback might need
-            AccountMeta::new_readonly(user.key(), true),
-            AccountMeta::new(receiver_token0_account.key(), false),
-            AccountMeta::new(receiver_token1_account.key(), false),
-            AccountMeta::new_readonly(token0_mint.key(), false),
-            AccountMeta::new_readonly(token1_mint.key(), false),
-            AccountMeta::new_readonly(token_program.key(), false),
+            AccountMeta::new_readonly(user.key(), true),           // initiator
+            AccountMeta::new(receiver_token0_account.key(), false), // receiver_token0_account
+            AccountMeta::new(receiver_token1_account.key(), false), // receiver_token1_account
+            AccountMeta::new_readonly(token0_mint.key(), false),    // token0_mint
+            AccountMeta::new_readonly(token1_mint.key(), false),    // token1_mint
         ];
 
-        // Add remaining accounts for callback's use
+        // Add remaining accounts (vaults + any additional accounts)
+        // The first two remaining accounts should be the vaults for token return
         for acc in ctx.remaining_accounts.iter() {
             callback_account_metas.push(AccountMeta {
                 pubkey: acc.key(),
@@ -221,6 +223,9 @@ impl<'info> Flashloan<'info> {
                 is_writable: acc.is_writable,
             });
         }
+        
+        // Add token_program as the last account
+        callback_account_metas.push(AccountMeta::new_readonly(token_program.key(), false));
 
         // Build the CPI instruction to the receiver program
         let callback_instruction = Instruction {
