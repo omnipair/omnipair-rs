@@ -149,6 +149,19 @@ impl<'info> Flashloan<'info> {
 
         let FlashloanArgs { amount0, amount1, data } = args;
 
+        // Calculate fees (5 bps = 0.05%)
+        let fee0 = (amount0 as u128)
+            .checked_mul(FLASHLOAN_FEE_BPS as u128)
+            .unwrap()
+            .checked_div(BPS_DENOMINATOR as u128)
+            .unwrap() as u64;
+        
+        let fee1 = (amount1 as u128)
+            .checked_mul(FLASHLOAN_FEE_BPS as u128)
+            .unwrap()
+            .checked_div(BPS_DENOMINATOR as u128)
+            .unwrap() as u64;
+
         // Record balances before the flash loan
         token0_vault.reload()?;
         token1_vault.reload()?;
@@ -258,14 +271,15 @@ impl<'info> Flashloan<'info> {
         token0_vault.reload()?;
         token1_vault.reload()?;
 
-        // Verify that the balances are restored
-        // The callback must have returned the tokens
+        let required_balance0 = balance0_before.checked_add(fee0).unwrap();
+        let required_balance1 = balance1_before.checked_add(fee1).unwrap();
+        
         require!(
-            token0_vault.amount >= balance0_before,
+            token0_vault.amount >= required_balance0,
             ErrorCode::InsufficientAmount0
         );
         require!(
-            token1_vault.amount >= balance1_before,
+            token1_vault.amount >= required_balance1,
             ErrorCode::InsufficientAmount1
         );
 
@@ -273,6 +287,8 @@ impl<'info> Flashloan<'info> {
         emit_cpi!(FlashloanEvent {
             amount0,
             amount1,
+            fee0,
+            fee1,
             receiver: receiver_program.key(),
             metadata: EventMetadata::new(user.key(), pair.key()),
         });
