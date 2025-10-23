@@ -1,0 +1,32 @@
+[package]
+name = "faucet"
+version = "0.1.0"
+description = "Token faucet for development and testing"
+edition = "2021"
+resolver = "2"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "faucet"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+cpi-no-ix = ["cpi", "no-log-ix-name"]
+no-spl-memo = []
+default = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+production = []
+development = []
+
+[dependencies]
+anchor-lang = { version = "0.31.1", features = ["init-if-needed", "event-cpi", "derive", "event-cpi"] }
+anchor-spl = { version = "0.31.1", features = ["metadata"] }
+spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
+spl-token-2022 = { version = "6.0.0", features = ["no-entrypoint"] }
+

@@ -66,7 +66,6 @@ impl<'info> Swap<'info> {
         let SwapArgs { amount_in, min_amount_out } = args;
 
         require!(*amount_in > 0, ErrorCode::AmountZero);
-        require!(*min_amount_out > 0, ErrorCode::AmountZero);
         require_gte!(self.user_token_in_account.amount, *amount_in, ErrorCode::InsufficientAmount0In);
         Ok(())
     }

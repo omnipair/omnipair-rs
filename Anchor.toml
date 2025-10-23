@@ -7,12 +7,14 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-flashloan_receiver_example = "B8kFW5kGcjNDQ4ewQ4hAg8Mbhsv1ZMKSNKfFcVpgKPB6"
-omnipair = "6wpw1CRQ3kuALv7oiih9BjT9PW1Ga7LtvTLNkhi3e9wZ"
+faucet = "3Ckfn1LMByoDfVpcDPf7nouk5nQAUm51Zkdf1oprQTAK"
+flashloan_receiver_example = "GmtswKBDrFZ9DfUfP7jbPFvbtuG7AJcX73SvoKWGxJbu"
+omnipair = "2h6oKUk4jcNQ81EzKvYVtzsyRpJwsz6J2pEeQTo1KsQB"
 
 [programs.localnet]
-flashloan_receiver_example = "B8kFW5kGcjNDQ4ewQ4hAg8Mbhsv1ZMKSNKfFcVpgKPB6"
-omnipair = "6wpw1CRQ3kuALv7oiih9BjT9PW1Ga7LtvTLNkhi3e9wZ"
+faucet = "3Ckfn1LMByoDfVpcDPf7nouk5nQAUm51Zkdf1oprQTAK"
+flashloan_receiver_example = "GmtswKBDrFZ9DfUfP7jbPFvbtuG7AJcX73SvoKWGxJbu"
+omnipair = "2h6oKUk4jcNQ81EzKvYVtzsyRpJwsz6J2pEeQTo1KsQB"
 
 [programs.mainnet]
 omnipair = "3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd"
@@ -25,9 +27,8 @@ cluster = "devnet"
 wallet = "testnet-keypair.json"
 
 [workspace]
-members = ["programs/omnipair", "examples/flashloan_receiver"]
+members = ["programs/omnipair", "programs/faucet"]
 
 [scripts]
-build = "anchor build -p omnipair"
-build-devnet = "anchor build -p omnipair -- --features \"development\""
+build-devnet = "anchor build -- --features \"development\""
 build-mainnet = "anchor build -p omnipair -- --features \"production\""

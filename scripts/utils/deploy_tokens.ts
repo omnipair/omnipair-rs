@@ -14,8 +14,8 @@ import {
     createCreateMetadataAccountV3Instruction,
 } from '@metaplex-foundation/mpl-token-metadata';
 import { PROGRAM_ID as TOKEN_METADATA_PROGRAM_ID } from '@metaplex-foundation/mpl-token-metadata/dist/src/generated/index.js';
-import idl from '../../target/idl/omnipair.json' with { type: "json" };
-import type { Omnipair } from '../../target/types/omnipair';
+import idl from '../../target/idl/faucet.json' with { type: "json" };
+import type { Faucet } from '../../target/types/faucet';
 import * as anchor from '@coral-xyz/anchor';
 import * as dotenv from 'dotenv';
 import { Program } from '@coral-xyz/anchor';
@@ -120,7 +120,7 @@ async function main() {
     
     // Setup connection and provider using Anchor configuration
     const provider = anchor.AnchorProvider.env();
-    const program = new Program<Omnipair>(idl, provider);
+    const faucetProgram = new Program<Faucet>(idl, provider);
     const DEPLOYER_KEYPAIR = provider.wallet.payer;
     
     if(!DEPLOYER_KEYPAIR) {
@@ -135,12 +135,12 @@ async function main() {
     console.log('Connected to network:', provider.connection.rpcEndpoint);
     console.log('Deployer address:', provider.wallet.publicKey.toBase58());
 
-    // Get program ID from environment
-    console.log('Program ID:', program.programId.toBase58());
+    // Get faucet program ID from environment
+    console.log('Faucet Program ID:', faucetProgram.programId.toBase58());
 
     const [mintAuthorityPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('faucet_authority'), program.programId.toBuffer()],
-        program.programId
+        [Buffer.from('faucet_authority'), faucetProgram.programId.toBuffer()],
+        faucetProgram.programId
     );
 
     // Create Token0 with deployer as mint authority
