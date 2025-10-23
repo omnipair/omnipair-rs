@@ -5,8 +5,6 @@ use anchor_spl::{
     associated_token::AssociatedToken,
 };
 use crate::utils::token::token_mint_to;
-use crate::constants::PAIR_SEED_PREFIX;
-use crate::state::Pair;
 
 #[derive(Accounts)]
 pub struct FaucetMint<'info> {
@@ -19,13 +17,6 @@ pub struct FaucetMint<'info> {
         bump
     )]
     pub faucet_authority: AccountInfo<'info>,
-
-    #[account(
-        mut,
-        seeds = [PAIR_SEED_PREFIX, token0_mint.key().as_ref(), token1_mint.key().as_ref()],
-        bump
-    )]
-    pub pair: Account<'info, Pair>,
 
     #[account(
         init_if_needed,
@@ -47,14 +38,12 @@ pub struct FaucetMint<'info> {
 
     #[account(
         mut,
-        constraint = token0_mint.key() == pair.token0,
         mint::authority = faucet_authority,
     )]
     pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         mut,
-        constraint = token1_mint.key() == pair.token1,
         mint::authority = faucet_authority,
     )]
     pub token1_mint: Box<InterfaceAccount<'info, Mint>>,

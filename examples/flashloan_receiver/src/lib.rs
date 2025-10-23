@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount, TransferChecked};
 use anchor_spl::token_interface::Mint;
 
-declare_id!("4RedqfMFEYWAujththpBsB3VPPiroUUD21xZULVfZCuR");
+declare_id!("B8kFW5kGcjNDQ4ewQ4hAg8Mbhsv1ZMKSNKfFcVpgKPB6");
 
 #[program]
 pub mod flashloan_receiver_example {

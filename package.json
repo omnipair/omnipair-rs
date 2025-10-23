@@ -7,7 +7,7 @@
     "test": "anchor test",
     "deploy-tokens": "ts-node --esm scripts/utils/deploy_tokens.ts",
     "init-futarchy": "ts-node --esm scripts/init_futarchy_and_config.ts",
-    "initialize": "ts-node --esm scripts/initialize_pair.ts",
+    "initialize": "ts-node --esm scripts/initialize.ts",
     "create-rm": "ts-node --esm scripts/create_rate_model.ts",
     "bootstrap": "ts-node --esm scripts/bootstrap_liquidity.ts",
     "add-liq": "ts-node --esm scripts/add_liquidity.ts",

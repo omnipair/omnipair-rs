@@ -15,6 +15,7 @@ import type { Omnipair } from '../target/types/omnipair';
 import BN from 'bn.js';
 import * as anchor from '@coral-xyz/anchor';
 import * as dotenv from 'dotenv';
+import { leU64 } from './utils/index.ts';
 
 // Load environment variables
 dotenv.config();
@@ -24,7 +25,7 @@ const TOKEN0_MINT = new PublicKey(process.env.TOKEN0_MINT || '');
 const TOKEN1_MINT = new PublicKey(process.env.TOKEN1_MINT || '');
 
 async function main() {
-    console.log('Starting liquidity bootstrapping...');
+    console.log('Starting pair initialization and bootstrap...');
     
     // Setup connection and provider using Anchor configuration
     const provider = anchor.AnchorProvider.env();
@@ -65,25 +66,27 @@ async function main() {
         program.programId
     );
 
-    // Get pair account to get pair config and rate model
-    const pairAccount = await program.account.pair.fetch(pairPda);
-    console.log('Pair config address:', pairAccount.config.toBase58());
-    console.log('Rate model address:', pairAccount.rateModel.toBase58());
-    
-    const RATE_MODEL = pairAccount.rateModel;
-
-    console.log('Rate Model address:', RATE_MODEL.toBase58());
-
     // Find PDA for the LP mint
     const [lpMintPda] = PublicKey.findProgramAddressSync(
         [Buffer.from('gamm_lp_mint'), pairPda.toBuffer()],
         program.programId
     );
 
+    // Generate a new keypair for the rate model
+    const rateModelKeypair = anchor.web3.Keypair.generate();
+    console.log('Rate Model address:', rateModelKeypair.publicKey.toBase58());
+
+    // Get pair config PDA
+    const pairConfigNonce = 1;
+    const [pairConfigPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('gamm_pair_config'), leU64(pairConfigNonce)],
+        program.programId
+    );
+    console.log('Pair Config PDA:', pairConfigPda.toBase58());
+
     // Get token program for each mint
     const token0Info = await provider.connection.getAccountInfo(TOKEN0_MINT);
     const token1Info = await provider.connection.getAccountInfo(TOKEN1_MINT);
-    const lpMintInfo = await provider.connection.getAccountInfo(lpMintPda);
     
     const token0Program = token0Info?.owner.equals(TOKEN_2022_PROGRAM_ID) 
         ? TOKEN_2022_PROGRAM_ID 
@@ -91,13 +94,9 @@ async function main() {
     const token1Program = token1Info?.owner.equals(TOKEN_2022_PROGRAM_ID) 
         ? TOKEN_2022_PROGRAM_ID 
         : TOKEN_PROGRAM_ID;
-    const lpTokenProgram = lpMintInfo?.owner.equals(TOKEN_2022_PROGRAM_ID)
-        ? TOKEN_2022_PROGRAM_ID
-        : TOKEN_PROGRAM_ID;
 
     console.log('Token0 Program:', token0Program.toBase58());
     console.log('Token1 Program:', token1Program.toBase58());
-    console.log('LP Token Program:', lpTokenProgram.toBase58());
 
     // Get associated token addresses for vaults
     const token0Vault = await getAssociatedTokenAddress(
@@ -113,102 +112,58 @@ async function main() {
         token1Program
     );
 
+    // Get or create LP token account
+    const deployerLpTokenAccount = await getAssociatedTokenAddress(
+        lpMintPda,
+        DEPLOYER_KEYPAIR.publicKey
+    );
+
     console.log('Pair PDA:', pairPda.toBase58());
     console.log('LP Mint PDA:', lpMintPda.toBase58());
     console.log('Token0 Vault:', token0Vault.toBase58());
     console.log('Token1 Vault:', token1Vault.toBase58());
-
-    // Create token vault accounts if they don't exist
-    try {
-        await createAssociatedTokenAccount(
-            provider.connection,
-            DEPLOYER_KEYPAIR,
-            TOKEN0_MINT,
-            pairPda,
-            { commitment: 'confirmed' },
-            token0Program
-        );
-        console.log('Created Token0 Vault account');
-    } catch (e) {
-        console.log('Token0 Vault account already exists');
-    }
-
-    try {
-        await createAssociatedTokenAccount(
-            provider.connection,
-            DEPLOYER_KEYPAIR,
-            TOKEN1_MINT,
-            pairPda,
-            { commitment: 'confirmed' },
-            token1Program
-        );
-        console.log('Created Token1 Vault account');
-    } catch (e) {
-        console.log('Token1 Vault account already exists');
-    }
-
-    // Get or create LP token account
-    const deployerLpTokenAccount = await getAssociatedTokenAddress(
-        lpMintPda,
-        DEPLOYER_KEYPAIR.publicKey,
-        false,
-        lpTokenProgram
-    );
-
     console.log('LP Token ATA:', deployerLpTokenAccount.toBase58());
 
-    // Create LP token account if it doesn't exist
-    try {
-        await createAssociatedTokenAccount(
-            provider.connection,
-            DEPLOYER_KEYPAIR,
-            lpMintPda,
-            DEPLOYER_KEYPAIR.publicKey,
-            { commitment: 'confirmed' },
-            lpTokenProgram
-        );
-        console.log('Created LP Token account');
-    } catch (e) {
-        console.log('LP Token account already exists');
-    }
-
-    // Bootstrap liquidity
-    // TODO: merge pair initialize and pair boostrap and remove the atomic liquidity addition
-    // make it supplied through add_liquidity
+    // Bootstrap liquidity amounts
     const amount0 = new BN(9_000_000); // 90 tokens (6 decimals)
     const amount1 = new BN(20_000_000); // 200 tokens (6 decimals)
     const minLiquidity = new BN(1000); // Minimum liquidity
 
-    console.log('Bootstrapping with amounts:');
+    console.log('Initializing and bootstrapping with amounts:');
     console.log('Token0:', amount0.toString());
     console.log('Token1:', amount1.toString());
     console.log('Min Liquidity:', minLiquidity.toString());
 
-    // Create transaction
+    // Create transaction for initialize and bootstrap
     const tx = await program.methods
-        .bootstrapPair({
+        .initialize({
+            swapFeeBps: 50, // 0.5% swap fee
+            halfLife: new BN(60 * 10),  // 10 minutes in seconds
+            poolDeployerFeeBps: 10, // 0.1% pool deployer fee
             amount0In: amount0,
             amount1In: amount1,
             minLiquidityOut: minLiquidity
         })
-        .accountsStrict({
-            user: DEPLOYER_KEYPAIR.publicKey,
+        .accountsPartial({
+            deployer: DEPLOYER_KEYPAIR.publicKey,
+            token0Mint: TOKEN0_MINT,
+            token1Mint: TOKEN1_MINT,
             pair: pairPda,
-            rateModel: RATE_MODEL,
+            pairConfig: pairConfigPda,
+            rateModel: rateModelKeypair.publicKey,
+            lpMint: lpMintPda,
+            deployerLpTokenAccount: deployerLpTokenAccount,
             token0Vault: token0Vault,
             token1Vault: token1Vault,
-            userToken0Account: DEPLOYER_TOKEN0_ACCOUNT,
-            userToken1Account: DEPLOYER_TOKEN1_ACCOUNT,
-            token0VaultMint: TOKEN0_MINT,
-            token1VaultMint: TOKEN1_MINT,
-            lpMint: lpMintPda,
-            userLpTokenAccount: deployerLpTokenAccount,
-            tokenProgram: lpTokenProgram,
+            deployerToken0Account: DEPLOYER_TOKEN0_ACCOUNT,
+            deployerToken1Account: DEPLOYER_TOKEN1_ACCOUNT,
+            systemProgram: SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
             token2022Program: TOKEN_2022_PROGRAM_ID,
             associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-            systemProgram: SystemProgram.programId,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
         })
-        .signers([DEPLOYER_KEYPAIR])
+        .signers([DEPLOYER_KEYPAIR, rateModelKeypair])
         .rpc();
 
     console.log('Transaction successful!');
@@ -218,4 +173,4 @@ async function main() {
 main().catch(error => {
     console.error('Error:', error);
     process.exit(1);
-}); 
+});
