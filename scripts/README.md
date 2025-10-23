@@ -19,7 +19,7 @@ npm run ts-node scripts/init_futarchy_and_config.ts
 This script:
 1. Creates the futarchy authority PDA with seed `futarchy_authority`
 2. Creates the pair config PDA with seed `gamm_pair_config` + nonce
-3. Initializes the pair config with futarchy fees and founder fees
+3. Initializes the pair config with futarchy fees
 
 **Output:**
 - Futarchy Authority PDA address
@@ -87,9 +87,7 @@ The following scripts have been updated to correctly access the rate model from 
 The new pair config structure includes:
 
 - **Futarchy Fee**: 0.5% (50 bps) - Fee collected by the futarchy authority
-- **Founder Fee**: 0.3% (30 bps) - Fee collected by the founder
-- **Swap Fee**: 0.3% (30 bps) - Fee collected by the pool
-- **Pool Deployer Fee**: 0.1% (10 bps) - Fee collected by the pool deployer
+- **Swap Fee**: 0.5% (50 bps) - Fee collected by the pool
 
 ## PDA Seeds
 
@@ -103,7 +101,6 @@ The new pair config structure includes:
 
 ### Pair Config Account
 - `futarchy_fee_bps`: u16 - Futarchy fee in basis points
-- `founder_fee_bps`: u16 - Founder fee in basis points  
 - `nonce`: u64 - Unique identifier for the pair config
 
 ### Pair Account
@@ -113,13 +110,12 @@ The new pair config structure includes:
 - `rate_model`: Pubkey - Reference to rate model account
 - `swap_fee_bps`: u16 - Swap fee in basis points
 - `half_life`: u64 - EMA half-life in seconds
-- `pool_deployer_fee_bps`: u16 - Pool deployer fee in basis points
 - Plus other pair state fields (reserves, debt, etc.)
 
 ## Notes
 
 - The rate model is now a separate account referenced in the pair account
-- The pair config contains only futarchy and founder fees
+- The pair config contains only futarchy fees
 - All scripts now correctly access the rate model from `pairAccount.rateModel`
 - The swap fee and other pair parameters are stored in the pair account itself
 - The `nonce` parameter in pair config initialization must be a BN (Big Number)

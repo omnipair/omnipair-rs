@@ -75,7 +75,6 @@ async function main() {
     const pairConfigTx = await program.methods
         .initPairConfig({
             futarchyFeeBps: 50, // 0.5% futarchy fee
-            founderFeeBps: 30,   // 0.3% founder fee
             nonce: new BN(pairConfigNonce),
         })
         .accountsPartial({

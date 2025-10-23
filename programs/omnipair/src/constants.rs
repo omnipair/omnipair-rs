@@ -20,7 +20,6 @@ pub const FLASHLOAN_FEE_BPS: u16 = 5; // 0.05%
 pub const DEFAULT_HALF_LIFE: u64 = 7 * 60; // 7 minutes (recommended)
 pub const MIN_HALF_LIFE: u64 = 1 * 60; // 1 minute
 pub const MAX_HALF_LIFE: u64 = 12 * 60 * 60; // 12 hours
-pub const DEPLOYER_MAX_FEE_BPS: u16 = 500; // 5%
 pub const TAYLOR_TERMS: u64 = 5;
 pub const NATURAL_LOG_OF_TWO_NAD: u64 = 693_147_180; // ln(2) scaled by NAD
 

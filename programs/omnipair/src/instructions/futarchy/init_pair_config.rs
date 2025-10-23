@@ -7,7 +7,6 @@ use crate::errors::ErrorCode;
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InitPairConfigArgs {
     pub futarchy_fee_bps: u16,
-    pub founder_fee_bps: u16,
     pub nonce: u64,
 }
 
@@ -50,11 +49,9 @@ impl<'info> InitPairConfig<'info> {
 
         // validate BPS bounds
         require_gte!(BPS_DENOMINATOR, args.futarchy_fee_bps, ErrorCode::InvalidFutarchyFeeBps);
-        require_gte!(BPS_DENOMINATOR, args.founder_fee_bps, ErrorCode::InvalidFounderFeeBps);
 
         pair_config.set_inner(PairConfig::initialize(
             args.futarchy_fee_bps,
-            args.founder_fee_bps,
             args.nonce,
             ctx.bumps.pair_config,
         ));

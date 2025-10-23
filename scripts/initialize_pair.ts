@@ -99,7 +99,6 @@ async function main() {
         .initializePair({
             swapFeeBps: 50, // 0.5% swap fee
             halfLife: new BN(60 * 10),  // 10 minutes in seconds
-            poolDeployerFeeBps: 10, // 0.1% pool deployer fee
         })
         .accountsPartial({
             deployer: DEPLOYER_KEYPAIR.publicKey,

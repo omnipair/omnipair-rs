@@ -6,7 +6,6 @@ use crate::errors::ErrorCode;
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct UpdatePairConfigArgs {
     pub futarchy_fee_bps: Option<u16>,
-    pub founder_fee_bps: Option<u16>,
     pub nonce: u64,
 }
 
@@ -42,7 +41,6 @@ impl<'info> UpdatePairConfig<'info> {
         // TODO: do validation on the new args and nonce
         
         PairConfig::update_if_some(&mut pair_config.futarchy_fee_bps, args.futarchy_fee_bps);
-        PairConfig::update_if_some(&mut pair_config.founder_fee_bps, args.founder_fee_bps);
 
         Ok(())
     }
