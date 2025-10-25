@@ -3,7 +3,7 @@ use anchor_lang::{
     accounts::interface_account::InterfaceAccount,
 };
 use anchor_spl::{
-    token::Token,
+    token::{Token, TokenAccount as SPLTokenAccount},
     token_interface::{Mint, TokenAccount},
     associated_token::AssociatedToken,
 };
@@ -11,6 +11,7 @@ use crate::state::{
     pair::Pair,
     rate_model::RateModel,
     pair_config::PairConfig,
+    futarchy_authority::FutarchyAuthority,
 };
 use crate::errors::ErrorCode;
 use crate::constants::*;
@@ -54,6 +55,12 @@ pub struct InitializePair<'info> {
     pub pair_config: Account<'info, PairConfig>,
 
     #[account(
+        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
+        bump
+    )]
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
+
+    #[account(
         init,
         payer = deployer,
         space = get_size_with_discriminator::<RateModel>(),
@@ -82,6 +89,21 @@ pub struct InitializePair<'info> {
         token::token_program = token_program,
     )]
     pub deployer_lp_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        constraint = deployer_wsol_account.owner == *token_program.key,
+        constraint = deployer_wsol_account.mint == spl_token::native_mint::id(),
+    )]
+    pub deployer_wsol_account: Account<'info, SPLTokenAccount>,
+
+    #[account(
+        mut,
+        constraint = authority_wsol_account.owner == *token_program.key,
+        constraint = authority_wsol_account.mint == spl_token::native_mint::id(),
+        constraint = authority_wsol_account.owner == futarchy_authority.authority @ ErrorCode::InvalidFutarchyAuthority,
+    )]
+    pub authority_wsol_account: Account<'info, SPLTokenAccount>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
@@ -142,6 +164,19 @@ impl<'info> InitializePair<'info> {
         let pair = &mut ctx.accounts.pair;
         let pair_config = &mut ctx.accounts.pair_config;
         let InitializePairArgs { swap_fee_bps, half_life } = args;
+        
+        // Transfer pair creation fee to authority
+        anchor_spl::token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::Transfer {
+                    from: ctx.accounts.deployer_wsol_account.to_account_info(),
+                    to: ctx.accounts.authority_wsol_account.to_account_info(),
+                    authority: ctx.accounts.deployer.to_account_info(),
+                },
+            ),
+            PAIR_CREATION_FEE_LAMPORTS,
+        )?;
         
         let (
             token0, 

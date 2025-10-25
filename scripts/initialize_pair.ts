@@ -5,13 +5,17 @@ import {
     Keypair,
     SystemProgram,
     SYSVAR_RENT_PUBKEY,
-    Transaction
+    Transaction,
+    LAMPORTS_PER_SOL
 } from '@solana/web3.js';
 import { 
     TOKEN_PROGRAM_ID, 
     TOKEN_2022_PROGRAM_ID,
     ASSOCIATED_TOKEN_PROGRAM_ID,
-    getAssociatedTokenAddress
+    NATIVE_MINT,
+    getAssociatedTokenAddress,
+    createAssociatedTokenAccountInstruction,
+    getAccount
 } from '@solana/spl-token';
 import BN from 'bn.js';
 import { Program } from '@coral-xyz/anchor';
@@ -93,6 +97,46 @@ async function main() {
     console.log('Token0 Program:', token0Program.toBase58());
     console.log('Token1 Program:', token1Program.toBase58());
 
+    // Find PDA for futarchy authority
+    const [futarchyAuthorityPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('futarchy_authority')],
+        program.programId
+    );
+    console.log('Futarchy Authority PDA:', futarchyAuthorityPda.toBase58());
+
+    // Get futarchy authority to find the authority address
+    const futarchyAuthority = await program.account.futarchyAuthority.fetch(futarchyAuthorityPda);
+    const authorityAddress = futarchyAuthority.authority;
+    console.log('Authority Address:', authorityAddress.toBase58());
+
+    // Get WSOL accounts for deployer and authority
+    const deployerWsolAccount = await getAssociatedTokenAddress(
+        NATIVE_MINT,
+        DEPLOYER_KEYPAIR.publicKey
+    );
+    const authorityWsolAccount = await getAssociatedTokenAddress(
+        NATIVE_MINT,
+        authorityAddress
+    );
+    console.log('Deployer WSOL Account:', deployerWsolAccount.toBase58());
+    console.log('Authority WSOL Account:', authorityWsolAccount.toBase58());
+
+    // Ensure deployer has WSOL account with enough balance
+    const pairCreationFeeSol = 0.2; // 0.2 SOL
+    const pairCreationFeeLamports = pairCreationFeeSol * LAMPORTS_PER_SOL;
+    
+    // Check if deployer WSOL account exists and has enough balance
+    try {
+        const deployerWsolInfo = await getAccount(provider.connection, deployerWsolAccount);
+        console.log('Deployer WSOL balance:', deployerWsolInfo.amount.toString());
+        if (deployerWsolInfo.amount < pairCreationFeeLamports) {
+            throw new Error(`Insufficient WSOL balance. Need ${pairCreationFeeSol} SOL but have ${Number(deployerWsolInfo.amount) / LAMPORTS_PER_SOL} SOL`);
+        }
+    } catch (error) {
+        console.log('Deployer WSOL account does not exist or has insufficient balance. Please wrap SOL first.');
+        throw error;
+    }
+
     // Initialize the pair with all required accounts
     console.log('Initializing pair...');
     const pairTx = await program.methods
@@ -103,9 +147,12 @@ async function main() {
         .accountsPartial({
             deployer: DEPLOYER_KEYPAIR.publicKey,
             pairConfig: pairConfigPda,
+            futarchyAuthority: futarchyAuthorityPda,
             token0Mint: TOKEN0_MINT,
             token1Mint: TOKEN1_MINT,
             rateModel: rateModelKeypair.publicKey,
+            deployerWsolAccount: deployerWsolAccount,
+            authorityWsolAccount: authorityWsolAccount,
         })
         .signers([DEPLOYER_KEYPAIR, rateModelKeypair])
         .rpc();

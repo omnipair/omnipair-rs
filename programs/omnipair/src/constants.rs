@@ -14,6 +14,8 @@ pub const CLOSE_FACTOR_BPS: u16 = 5_000; // 50%
 pub const MAX_COLLATERAL_FACTOR_BPS: u16 = 8_500; // 85% cap for dynamic collateral factor
 #[constant]
 pub const FLASHLOAN_FEE_BPS: u16 = 5; // 0.05%
+#[constant]
+pub const PAIR_CREATION_FEE_LAMPORTS: u64 = 200_000_000; // 0.2 SOL
 
 // EMA constants
 #[constant]
