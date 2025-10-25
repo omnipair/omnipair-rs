@@ -196,4 +196,10 @@ pub enum ErrorCode {
 
     #[msg("Math overflow during debt utilization calculation")]
     DebtUtilizationOverflow,
+
+    #[msg("Invalid mint")]
+    InvalidMint,
+
+    #[msg("Invalid distribution - percentages must sum to 100%")]
+    InvalidDistribution,
 }

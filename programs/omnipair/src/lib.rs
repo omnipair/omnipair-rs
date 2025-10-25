@@ -63,6 +63,10 @@ pub mod omnipair {
         InitPairConfig::handle_init(ctx, args)
     }
 
+    pub fn distribute_tokens(ctx: Context<DistributeTokens>, args: DistributeTokensArgs) -> Result<()> {
+        DistributeTokens::handle_distribute(ctx, args)
+    }
+
     // Pair instructions
     #[access_control(ctx.accounts.validate_and_create_rate_model(&args))]
     pub fn initialize_pair(ctx: Context<InitializePair>, args: InitializePairArgs) -> Result<()> {

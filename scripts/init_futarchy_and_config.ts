@@ -54,13 +54,29 @@ async function main() {
     // Step 1: Initialize futarchy authority (if not already initialized)
     try {
         console.log('Initializing futarchy authority...');
+        
+        // Define recipients and their percentages (must sum to 100%)
+        const recipient1 = new PublicKey(process.env.RECIPIENT1_ADDRESS || DEPLOYER_KEYPAIR.publicKey.toBase58());
+        const recipient2 = new PublicKey(process.env.RECIPIENT2_ADDRESS || DEPLOYER_KEYPAIR.publicKey.toBase58());
+        const recipient3 = new PublicKey(process.env.RECIPIENT3_ADDRESS || DEPLOYER_KEYPAIR.publicKey.toBase58());
+        
+        console.log('Recipient 1 (10%):', recipient1.toBase58());
+        console.log('Recipient 2 (20%):', recipient2.toBase58());
+        console.log('Recipient 3 (70%):', recipient3.toBase58());
+        
         const futarchyTx = await program.methods
             .initFutarchyAuthority({
                 authority: DEPLOYER_KEYPAIR.publicKey,
+                recipient1: recipient1,
+                recipient1PercentageBps: 1000, // 10%
+                recipient2: recipient2,
+                recipient2PercentageBps: 2000, // 20%
+                recipient3: recipient3,
+                recipient3PercentageBps: 7000, // 70%
             })
             .accounts({
-                authoritySigner: DEPLOYER_KEYPAIR.publicKey,
-                futarchy_authority: futarchyAuthorityPda,
+                deployer: DEPLOYER_KEYPAIR.publicKey,
+                futarchyAuthority: futarchyAuthorityPda,
                 systemProgram: SystemProgram.programId,
             })
             .signers([DEPLOYER_KEYPAIR])
@@ -74,7 +90,7 @@ async function main() {
     console.log('Initializing pair config...');
     const pairConfigTx = await program.methods
         .initPairConfig({
-            futarchyFeeBps: 50, // 0.5% futarchy fee
+            futarchyFeeBps: 1000, // 10% of total swap fees
             nonce: new BN(pairConfigNonce),
         })
         .accountsPartial({

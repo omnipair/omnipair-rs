@@ -104,22 +104,18 @@ async function main() {
     );
     console.log('Futarchy Authority PDA:', futarchyAuthorityPda.toBase58());
 
-    // Get futarchy authority to find the authority address
-    const futarchyAuthority = await program.account.futarchyAuthority.fetch(futarchyAuthorityPda);
-    const authorityAddress = futarchyAuthority.authority;
-    console.log('Authority Address:', authorityAddress.toBase58());
-
-    // Get WSOL accounts for deployer and authority
+    // Get WSOL accounts for deployer and authority (PDA-owned)
     const deployerWsolAccount = await getAssociatedTokenAddress(
         NATIVE_MINT,
         DEPLOYER_KEYPAIR.publicKey
     );
     const authorityWsolAccount = await getAssociatedTokenAddress(
         NATIVE_MINT,
-        authorityAddress
+        futarchyAuthorityPda,
+        true // allowOwnerOffCurve for PDAs
     );
     console.log('Deployer WSOL Account:', deployerWsolAccount.toBase58());
-    console.log('Authority WSOL Account:', authorityWsolAccount.toBase58());
+    console.log('Authority WSOL Account (PDA-owned):', authorityWsolAccount.toBase58());
 
     // Ensure deployer has WSOL account with enough balance
     const pairCreationFeeSol = 0.2; // 0.2 SOL

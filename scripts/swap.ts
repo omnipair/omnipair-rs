@@ -104,19 +104,14 @@ async function main() {
     );
     console.log('Futarchy Authority PDA:', futarchyAuthorityPda.toBase58());
 
-    // Get futarchy authority to find the authority address
-    const futarchyAuthority = await program.account.futarchyAuthority.fetch(futarchyAuthorityPda);
-    const authorityAddress = futarchyAuthority.authority;
-    console.log('Authority Address:', authorityAddress.toBase58());
-
-    // Get authority's token account for token being swapped (token0 in this example)
+    // Get authority's token account for token being swapped (PDA-owned)
     const authorityToken0Account = await getAssociatedTokenAddress(
         TOKEN0_MINT,
-        authorityAddress,
-        false,
+        futarchyAuthorityPda,
+        true, // allowOwnerOffCurve for PDAs
         token0Program
     );
-    console.log('Authority Token0 Account:', authorityToken0Account.toBase58());
+    console.log('Authority Token0 Account (PDA-owned):', authorityToken0Account.toBase58());
 
     // Swap parameters
     const amountIn = new BN(1000_000_000); // Amount of token0 to swap
