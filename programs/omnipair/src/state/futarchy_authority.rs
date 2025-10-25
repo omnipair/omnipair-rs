@@ -1,4 +1,6 @@
 use anchor_lang::prelude::*;
+#[allow(unused_imports)]
+use crate::constants::*;
 
 #[account]
 pub struct FutarchyAuthority {
@@ -15,4 +17,14 @@ impl FutarchyAuthority {
             bump,
         }
     }
+}
+
+#[macro_export]
+macro_rules! generate_futarchy_authority_seeds {
+    ($futarchy_authority:expr) => {{
+        &[
+            FUTARCHY_AUTHORITY_SEED_PREFIX,
+            &[$futarchy_authority.bump],
+        ]
+    }};
 }

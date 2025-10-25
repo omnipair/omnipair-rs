@@ -66,7 +66,7 @@ pub struct Swap<'info> {
     #[account(
         mut,
         constraint = authority_token_in_account.mint == token_in_vault.mint,
-        constraint = authority_token_in_account.owner == futarchy_authority.authority @ ErrorCode::InvalidFutarchyAuthority,
+        constraint = authority_token_in_account.owner == futarchy_authority.key() @ ErrorCode::InvalidFutarchyAuthority,
     )]
     pub authority_token_in_account: Account<'info, TokenAccount>,
 

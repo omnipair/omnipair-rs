@@ -99,9 +99,8 @@ pub struct InitializePair<'info> {
 
     #[account(
         mut,
-        constraint = authority_wsol_account.owner == *token_program.key,
         constraint = authority_wsol_account.mint == spl_token::native_mint::id(),
-        constraint = authority_wsol_account.owner == futarchy_authority.authority @ ErrorCode::InvalidFutarchyAuthority,
+        constraint = authority_wsol_account.owner == futarchy_authority.key() @ ErrorCode::InvalidFutarchyAuthority,
     )]
     pub authority_wsol_account: Account<'info, SPLTokenAccount>,
 
