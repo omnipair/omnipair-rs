@@ -12,6 +12,7 @@ use crate::{
     generate_gamm_pair_seeds,
 };
 
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct SwapArgs {
     pub amount_in: u64,
@@ -33,6 +34,17 @@ pub struct Swap<'info> {
         address = pair.rate_model,
     )]
     pub rate_model: Account<'info, RateModel>,
+
+    #[account(
+        address = pair.config,
+    )]
+    pub pair_config: Account<'info, PairConfig>,
+
+    #[account(
+        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
+        bump
+    )]
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
     
     #[account(
         mut,
@@ -50,6 +62,13 @@ pub struct Swap<'info> {
     pub user_token_in_account: Account<'info, TokenAccount>,
     #[account(mut)]
     pub user_token_out_account: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        constraint = authority_token_in_account.mint == token_in_vault.mint,
+        constraint = authority_token_in_account.owner == futarchy_authority.authority @ ErrorCode::InvalidFutarchyAuthority,
+    )]
+    pub authority_token_in_account: Account<'info, TokenAccount>,
 
     #[account(address = token_in_vault.mint)]
     pub token_in_mint: Box<InterfaceAccount<'info, Mint>>,
@@ -87,10 +106,13 @@ impl<'info> Swap<'info> {
         let SwapArgs { amount_in, min_amount_out } = args;
         let Swap {
             pair,
+            pair_config,
+            futarchy_authority: _, // Used in constraint validation
             token_in_vault,
             token_out_vault,
             user_token_in_account,
             user_token_out_account,
+            authority_token_in_account,
             token_in_mint,
             token_out_mint,
             token_program,
@@ -100,7 +122,38 @@ impl<'info> Swap<'info> {
         let last_k = (pair.reserve0 as u128).checked_mul(pair.reserve1 as u128).ok_or(ErrorCode::InvariantOverflow)?;
         let is_token0_in = user_token_in_account.mint == pair.token0;
 
-        // amount_in_after_fee = amount_in * (10000 - 30) / 10000 (30bps fee)
+        // Calculate total fee amount
+        let total_fee = (amount_in as u128)
+            .checked_mul(pair.swap_fee_bps as u128)
+            .ok_or(ErrorCode::FeeMathOverflow)?
+            .checked_div(BPS_DENOMINATOR as u128)
+            .ok_or(ErrorCode::FeeMathOverflow)? as u64;
+
+        // Calculate futarchy fee portion of the total fee
+        let futarchy_fee = (total_fee as u128)
+            .checked_mul(pair_config.futarchy_fee_bps as u128)
+            .ok_or(ErrorCode::FeeMathOverflow)?
+            .checked_div(BPS_DENOMINATOR as u128)
+            .ok_or(ErrorCode::FeeMathOverflow)? as u64;
+
+        // Transfer futarchy fee to authority immediately if non-zero
+        if futarchy_fee > 0 {
+            transfer_from_pool_vault_to_user(
+                pair.to_account_info(),
+                token_in_vault.to_account_info(),
+                authority_token_in_account.to_account_info(),
+                token_in_mint.to_account_info(),
+                match token_in_mint.to_account_info().owner == token_program.key {
+                    true => token_program.to_account_info(),
+                    false => token_2022_program.to_account_info(),
+                },
+                futarchy_fee,
+                token_in_mint.decimals,
+                &[&generate_gamm_pair_seeds!(pair)[..]],
+            )?;
+        }
+
+        // amount_in_after_fee = amount_in * (10000 - swap_fee_bps) / 10000
         let amount_in_after_fee = (amount_in as u128)
             .checked_mul((BPS_DENOMINATOR as u128).checked_sub(pair.swap_fee_bps as u128).ok_or(ErrorCode::FeeMathOverflow)?)
             .ok_or(ErrorCode::FeeMathOverflow)?
