@@ -35,7 +35,12 @@ impl<'info> CommonAdjustPosition<'info> {
 
         // Calculate required collateral for current debt
         let debt_token = if is_collateral_token0 { self.pair.token1 } else { self.pair.token0 };
-        let pessimistic_cf_bps = self.user_position.get_user_pessimistic_collateral_factor_bps(&self.pair, &debt_token);
+        let collateral_token = self.pair.get_collateral_token(&debt_token);
+        let collateral_amount = match collateral_token == self.pair.token0 {
+            true => self.user_position.collateral0,
+            false => self.user_position.collateral1,
+        };
+        let pessimistic_cf_bps = self.pair.get_max_debt_and_cf_bps_for_collateral(&self.pair, &collateral_token, collateral_amount)?.1;
         
         // Calculate minimum required collateral value in debt token
         let min_collateral_value = (debt as u128)

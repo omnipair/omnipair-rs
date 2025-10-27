@@ -82,11 +82,10 @@ pub struct Swap<'info> {
 
 impl<'info> Swap<'info> {
     pub fn validate(&self, args: &SwapArgs) -> Result<()> {
-        let SwapArgs { amount_in, min_amount_out } = args;
+        let amount_in = args.amount_in;
 
-        require!(*amount_in > 0, ErrorCode::AmountZero);
-        require!(*min_amount_out > 0, ErrorCode::AmountZero);
-        require_gte!(self.user_token_in_account.amount, *amount_in, ErrorCode::InsufficientAmount0In);
+        require!(amount_in > 0, ErrorCode::AmountZero);
+        require_gte!(self.user_token_in_account.amount, amount_in, ErrorCode::InsufficientAmount0In);
         Ok(())
     }
 

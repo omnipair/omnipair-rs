@@ -11,8 +11,8 @@ import {
     getAssociatedTokenAddress
 } from '@solana/spl-token';
 import { Program } from '@coral-xyz/anchor';
-import idl from '../target/idl/omnipair.json' with { type: "json" };
-import type { Omnipair } from '../target/types/omnipair';
+import idl from '../target/idl/faucet.json' with { type: "json" };
+import type { Faucet } from '../target/types/faucet';
 import * as anchor from '@coral-xyz/anchor';
 import * as dotenv from 'dotenv';
 
@@ -28,7 +28,7 @@ async function main() {
     
     // Setup connection and provider using Anchor configuration
     const provider = anchor.AnchorProvider.env();
-    const program = new Program<Omnipair>(idl, provider);
+    const program = new Program<Faucet>(idl, provider);
     const DEPLOYER_KEYPAIR = provider.wallet.payer;
     
     if(!DEPLOYER_KEYPAIR) {
@@ -42,14 +42,7 @@ async function main() {
 
     console.log('Connected to network:', provider.connection.rpcEndpoint);
     console.log('Deployer address:', provider.wallet.publicKey.toBase58());
-
-    // Find PDA for the pair
-    const [pairPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('gamm_pair'), TOKEN0_MINT.toBuffer(), TOKEN1_MINT.toBuffer()],
-        program.programId
-    );
-
-    console.log('Pair PDA:', pairPda.toBase58());
+    console.log('Faucet Program ID:', program.programId.toBase58());
 
     // Get or create token accounts for the deployer
     const deployerToken0Account = await getAssociatedTokenAddress(
@@ -76,11 +69,20 @@ async function main() {
     console.log('Token0 Program:', token0Program.toBase58());
     console.log('Token1 Program:', token1Program.toBase58());
 
+    // Find faucet authority PDA
+    const [faucetAuthority] = PublicKey.findProgramAddressSync(
+        [Buffer.from('faucet_authority'), program.programId.toBuffer()],
+        program.programId
+    );
+
+    console.log('Faucet Authority PDA:', faucetAuthority.toBase58());
+
     // Create transaction
     const tx = await program.methods
         .faucetMint()
         .accounts({
             user: DEPLOYER_KEYPAIR.publicKey,
+            faucetAuthority: faucetAuthority,
             token0Mint: TOKEN0_MINT,
             token1Mint: TOKEN1_MINT,
         })

@@ -6,19 +6,15 @@ package_manager = "yarn"
 resolution = true
 skip-lint = false
 
-[workspace]
-members = [
-    "programs/omnipair",
-    "examples/flashloan_receiver"
-]
-
 [programs.devnet]
-omnipair = "6boPPughAjq1PeoEicamfirB9SYjF8bBCSCeUvKJeZMj"
-flashloan_receiver_example = "4RedqfMFEYWAujththpBsB3VPPiroUUD21xZULVfZCuR"
+faucet = "3Ckfn1LMByoDfVpcDPf7nouk5nQAUm51Zkdf1oprQTAK"
+flashloan_receiver_example = "GmtswKBDrFZ9DfUfP7jbPFvbtuG7AJcX73SvoKWGxJbu"
+omnipair = "2h6oKUk4jcNQ81EzKvYVtzsyRpJwsz6J2pEeQTo1KsQB"
 
 [programs.localnet]
-omnipair = "6boPPughAjq1PeoEicamfirB9SYjF8bBCSCeUvKJeZMj"
-flashloan_receiver_example = "4RedqfMFEYWAujththpBsB3VPPiroUUD21xZULVfZCuR"
+faucet = "3Ckfn1LMByoDfVpcDPf7nouk5nQAUm51Zkdf1oprQTAK"
+flashloan_receiver_example = "GmtswKBDrFZ9DfUfP7jbPFvbtuG7AJcX73SvoKWGxJbu"
+omnipair = "2h6oKUk4jcNQ81EzKvYVtzsyRpJwsz6J2pEeQTo1KsQB"
 
 [programs.mainnet]
 omnipair = "3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd"
@@ -30,5 +26,9 @@ url = "https://devnet.helius-rpc.com/?api-key=66a4060b-2453-49cd-bf7a-fa03546c97
 cluster = "devnet"
 wallet = "testnet-keypair.json"
 
+[workspace]
+members = ["programs/omnipair", "programs/faucet"]
+
 [scripts]
-test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts --require ts-node/register"
+build-devnet = "anchor build -- --features \"development\""
+build-mainnet = "anchor build -p omnipair -- --features \"production\""

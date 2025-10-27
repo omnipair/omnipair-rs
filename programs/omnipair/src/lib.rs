@@ -10,20 +10,9 @@ pub mod utils;
 pub use utils::*;
 pub use instructions::*;
 pub use utils::account::*;
-pub use instructions::pair_initialize::InitializePair;
-pub use instructions::faucet_mint::FaucetMint;
 pub use instructions::emit_value::{EmitValueArgs, PairViewKind, UserPositionViewKind, ViewPairData, ViewUserPositionData};
 
-// Program ID based on feature flags
-#[cfg(feature = "development")]
-declare_id!("6boPPughAjq1PeoEicamfirB9SYjF8bBCSCeUvKJeZMj");
-
-#[cfg(feature = "production")]
-declare_id!("3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd");
-
-// Default to development if no feature is specified
-#[cfg(not(any(feature = "development", feature = "production")))]
-declare_id!("6boPPughAjq1PeoEicamfirB9SYjF8bBCSCeUvKJeZMj");
+declare_id!("2h6oKUk4jcNQ81EzKvYVtzsyRpJwsz6J2pEeQTo1KsQB");
 
 pub mod deployer {
     use super::{pubkey, Pubkey};
@@ -68,14 +57,9 @@ pub mod omnipair {
     }
 
     // Pair instructions
-    #[access_control(ctx.accounts.validate_and_create_rate_model(&args))]
-    pub fn initialize_pair(ctx: Context<InitializePair>, args: InitializePairArgs) -> Result<()> {
-        InitializePair::handle_initialize(ctx, args)
-    }
-
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn bootstrap_pair(ctx: Context<BootstrapPair>, args: AddLiquidityArgs) -> Result<()> {
-        BootstrapPair::handle_bootstrap(ctx, args)
+    pub fn initialize(ctx: Context<InitializeAndBootstrap>, args: InitializeAndBootstrapArgs) -> Result<()> {
+        InitializeAndBootstrap::handle_initialize(ctx, args)
     }
 
     #[access_control(ctx.accounts.update_and_validate_add(&args))]
@@ -137,11 +121,5 @@ pub mod omnipair {
     #[access_control(ctx.accounts.update_and_validate(&args))]
     pub fn flashloan<'info>(ctx: Context<'_, '_, '_, 'info, Flashloan<'info>>, args: FlashloanArgs) -> Result<()> {
         Flashloan::handle_flashloan(ctx, args)
-    }
-
-    // Faucet instruction
-    #[cfg(feature = "development")]
-    pub fn faucet_mint(ctx: Context<FaucetMint>) -> Result<()> {
-        FaucetMint::handle_faucet_mint(ctx)
     }
 }

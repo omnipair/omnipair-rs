@@ -17,7 +17,7 @@ You can set these environment variables to configure the deployment:
 **For Devnet (default):**
 ```bash
 anchor keys sync
-anchor build -- --features "development"
+anchor run build-devnet
 anchor deploy
 ```
 
@@ -25,12 +25,13 @@ anchor deploy
 ```bash
 # Set environment variables
 export ANCHOR_CLUSTER=mainnet
-export ANCHOR_WALLET=mainnet-keypair.json
+export ANCHOR_WALLET=deployer-keypair.json
 export ANCHOR_REGISTRY_URL=https://api.mainnet-beta.solana.com
 
 # Build and deploy
 anchor keys sync
-anchor build -- --features "production"
+anchor run build-mainnet
+anchor deploy
 ```
 
 ### Development Flow
@@ -50,22 +51,17 @@ anchor build -- --features "production"
    yarn init-futarchy
    ```
 
-3. Initialize the Pair:
-   ```bash
-   yarn initialize
-   ```
-
-4. Mint Test Tokens:
+3. Mint Test Tokens:
    ```bash
    yarn faucet-mint
    ```
 
-5. Bootstrap Liquidity:
+4. Initialize the Pair:
    ```bash
-   yarn bootstrap
+   yarn initialize
    ```
 
-6. Publish IDL
+5. Publish IDL
 ```bash
 # For devnet
 anchor idl init --filepath target/idl/omnipair.json [program.id]

@@ -53,7 +53,7 @@ fn curve_y_from_v(v: u128, r1: u64) -> u128 {
         / NAD_U128
 }
 
-/// Maximum borrowable amount of tokenY using a impact-aware CF derived
+/// Maximum borrowable amount of tokenY using an impact-aware CF derived
 /// from constant product AMM pricing mechanics, with pessimistic spot/ema cap.
 ///
 /// Inputs:
@@ -64,20 +64,21 @@ fn curve_y_from_v(v: u128, r1: u64) -> u128 {
 ///
 /// Returns:
 /// - final_borrow_limit (NAD-scaled Y)
-/// - pessimistic_cf_bps (u16)
+/// - max_allowed_cf_bps (pessimistic_cf_bps - LTV_BUFFER_BPS)
+/// - liquidation_cf_bps 
 pub fn pessimistic_max_debt(
     collateral_amount_scaled: u64,
     collateral_ema_price_scaled: u64,
     collateral_spot_price_scaled: u64,
     debt_amm_reserve: u64,
-) -> Result<(u64, u16)> {
+) -> Result<(u64, u16, u16)> {
     // sanity checks
     if debt_amm_reserve == 0
         || collateral_amount_scaled == 0
         || collateral_ema_price_scaled == 0
         || collateral_spot_price_scaled == 0
     {
-        return Ok((0, 0));
+        return Ok((0, 0, 0));
     }
 
     // V = X * P_ema / NAD  (NAD-scaled Y)
@@ -99,94 +100,31 @@ pub fn pessimistic_max_debt(
     let cf_curve_bps_u64 = cf_curve_bps_u128 as u64;
 
     // Pessimistic cap: min(CF, CF * spot/ema) [>= 1 bps, Pessimistic CF <= 8500 bps]
-    let pessimistic_cf_bps = get_pessimistic_cf_bps(
+    let liquidation_cf_bps = get_pessimistic_cf_bps(
         cf_curve_bps_u64,
         collateral_spot_price_scaled,
         collateral_ema_price_scaled,
     )?;
 
-    // Final Y = V * CF_final / BPS
-    let max_allowed_y = v
-        .saturating_mul(pessimistic_cf_bps as u128)
-        / BPS_DENOMINATOR_U128;
+    // Max allowed CF BPS = pessimistic CF BPS - LTV_BUFFER_BPS
+    let max_allowed_cf_bps = liquidation_cf_bps.saturating_sub(LTV_BUFFER_BPS);
 
+    // Max allowed Y = V * max_allowed_cf_bps / BPS
+    let max_allowed_y: u128 = v
+        .saturating_mul(max_allowed_cf_bps as u128)
+        .checked_div(BPS_DENOMINATOR_U128)
+        .unwrap_or(0);
+
+    // Apply LTV buffer: reduce borrow limit by LTV_BUFFER_BPS to create a buffer before liquidation
+    // borrow_limit = max_allowed_y * (1 - LTV_BUFFER_BPS / BPS_DENOMINATOR)
+    let ltv_buffer_scaled = BPS_DENOMINATOR_U128.saturating_sub(LTV_BUFFER_BPS as u128);
     let final_borrow_limit = max_allowed_y
+        .saturating_mul(ltv_buffer_scaled)
+        .checked_div(BPS_DENOMINATOR_U128)
+        .unwrap_or(0)
         .min(u64::MAX as u128) as u64;
 
-    Ok((final_borrow_limit, pessimistic_cf_bps))
-}
-
-/// Required minimum collateral (tokenX) to borrow a given amount of tokenY,
-/// using exact inversion of the curve and the pessimistic spot/ema cap.
-///
-/// Given Y and R1:
-///   t = Y/R1
-///   CF_curve = (1 - t)^2
-/// Apply pessimistic cap to CF, then
-///   V = Y / CF_final
-///   X = ceil(V / P_ema)
-///
-/// Returns:
-/// - required_collateral (X, NAD-scaled)
-/// - effective_cf_bps (u16)
-pub fn pessimistic_min_collateral(
-    desired_borrow_y: u64,              // Y (NAD-scaled)
-    collateral_ema_price_scaled: u64,   // P_ema (NAD-scaled)
-    collateral_spot_price_scaled: u64,  // P_spot (NAD-scaled)
-    debt_amm_reserve: u64,              // R1 (raw Y units)
-) -> Result<(u64, u16)> {
-    if desired_borrow_y == 0
-        || collateral_ema_price_scaled == 0
-        || collateral_spot_price_scaled == 0
-        || debt_amm_reserve == 0
-    {
-        return Ok((0, 0));
-    }
-
-    let y = desired_borrow_y as u128;
-    let r1 = debt_amm_reserve as u128;
-
-    // Must have Y < R1 so (1 - Y/R1) > 0
-    if y >= r1 {
-        return Err(ErrorCode::BorrowExceedsReserve.into());
-    }
-
-    // t = Y/R1 (NAD-scaled)
-    let t_scaled = y
-        .saturating_mul(NAD_U128)
-        / r1;
-
-    // CF_curve (NAD-scaled) = (1 - t)^2
-    let one_minus_t = NAD_U128.saturating_sub(t_scaled);
-    let cf_curve_nad = one_minus_t
-        .saturating_mul(one_minus_t)
-        / NAD_U128;
-
-    // Convert CF_curve to bps
-    let cf_curve_bps_u128 = cf_curve_nad
-        .saturating_mul(BPS_DENOMINATOR_U128)
-        / NAD_U128;
-    let cf_curve_bps_u64 = cf_curve_bps_u128 as u64;
-
-    // Apply pessimistic cap (>= 1 bps)
-    let final_cf_bps_u16 = get_pessimistic_cf_bps(
-        cf_curve_bps_u64,
-        collateral_spot_price_scaled,
-        collateral_ema_price_scaled,
-    )?;
-    let final_cf_bps_u128 = final_cf_bps_u16 as u128;
-
-    // V_final = ceil(Y * BPS / CF_final)
-    let v_final = y
-        .saturating_mul(BPS_DENOMINATOR_U128)
-        .div_ceil(final_cf_bps_u128.max(1));
-
-    // X = ceil(V / P_ema)
-    let x = v_final
-        .saturating_mul(NAD_U128)
-        .div_ceil(collateral_ema_price_scaled as u128);
-
-    Ok((x.min(u64::MAX as u128) as u64, final_cf_bps_u16))
+    Ok((final_borrow_limit, max_allowed_cf_bps, liquidation_cf_bps))
 }
 
 /// Returns a pessimistic collateral factor in bps:

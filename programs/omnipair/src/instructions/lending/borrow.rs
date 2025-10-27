@@ -57,7 +57,12 @@ impl<'info> CommonAdjustPosition<'info> {
         // CF_pessimistic = min(CF_base, P_spot / P_EMA * CF_base)
         // This ensures the solvency invariant: P_spot >= P_EMA * CF
         // TODO: Δprice needs an EMA, because spot price can be manipulated to match EMA to bypass this check
-        let (borrow_limit, applied_min_cf_bps) = user_position.get_user_borrow_limit_and_cf_bps(&pair, &debt_token_vault.mint);
+        let collateral_token = pair.get_collateral_token(&debt_token_vault.mint);
+        let collateral_amount = match collateral_token == pair.token0 {
+            true => user_position.collateral0,
+            false => user_position.collateral1,
+        };
+        let (borrow_limit, max_allowed_cf_bps, _) = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount)?;
         let is_max_borrow = args.amount == u64::MAX;
         let remaining_borrow_limit = borrow_limit.checked_sub(user_debt).ok_or(ErrorCode::DebtMathOverflow)?;
         let borrow_amount = if is_max_borrow { remaining_borrow_limit } else { args.amount };
@@ -91,7 +96,7 @@ impl<'info> CommonAdjustPosition<'info> {
         
         user_position.increase_debt(pair, &vault_token_mint.key(), borrow_amount)?;
         // update user position fixed CF
-        user_position.set_applied_min_cf_for_debt_token(&vault_token_mint.key(), &pair, applied_min_cf_bps);
+        user_position.set_applied_min_cf_for_debt_token(&vault_token_mint.key(), &pair, max_allowed_cf_bps);
         
         // Emit debt adjustment event
         let (amount0, amount1) = if is_token0 {
