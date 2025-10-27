@@ -1,9 +1,11 @@
 use anchor_lang::{
     prelude::*,
     accounts::interface_account::InterfaceAccount,
+    solana_program::{program::invoke, system_instruction}
 };
 use anchor_spl::{
-    token::{Token, TokenAccount as SPLTokenAccount},
+    token::spl_token,
+    token::{Token},
     token_interface::{Mint, TokenAccount, Token2022},
     associated_token::AssociatedToken,
 };
@@ -131,17 +133,11 @@ pub struct InitializeAndBootstrap<'info> {
 
     #[account(
         mut,
-        constraint = deployer_wsol_account.owner == *token_program.key,
-        constraint = deployer_wsol_account.mint == spl_token::native_mint::id(),
-    )]
-    pub deployer_wsol_account: Account<'info, SPLTokenAccount>,
-
-    #[account(
-        mut,
         constraint = authority_wsol_account.mint == spl_token::native_mint::id(),
         constraint = authority_wsol_account.owner == futarchy_authority.key() @ ErrorCode::InvalidFutarchyAuthority,
-    )]
-    pub authority_wsol_account: Account<'info, SPLTokenAccount>,
+        constraint = *authority_wsol_account.to_account_info().owner == token_program.key() @ ErrorCode::InvalidTokenProgram,
+      )]
+      pub authority_wsol_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
@@ -200,17 +196,29 @@ impl<'info> InitializeAndBootstrap<'info> {
             min_liquidity_out,
         } = args;
 
-        // Transfer pair creation fee to authority
-        anchor_spl::token::transfer(
-            CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
-                anchor_spl::token::Transfer {
-                    from: ctx.accounts.deployer_wsol_account.to_account_info(),
-                    to: ctx.accounts.authority_wsol_account.to_account_info(),
-                    authority: ctx.accounts.deployer.to_account_info(),
-                },
+        // Collect pair creation fee from deployer to futarchy authority
+        invoke(
+            &system_instruction::transfer(
+                ctx.accounts.deployer.key,
+                &ctx.accounts.authority_wsol_account.key(),
+                PAIR_CREATION_FEE_LAMPORTS,
             ),
-            PAIR_CREATION_FEE_LAMPORTS,
+            &[
+                ctx.accounts.deployer.to_account_info(),
+                ctx.accounts.authority_wsol_account.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
+
+        invoke(
+            &spl_token::instruction::sync_native(
+                ctx.accounts.token_program.key,
+                &ctx.accounts.authority_wsol_account.key(),
+            )?,
+            &[
+                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.authority_wsol_account.to_account_info(),
+            ],
         )?;
         
         let (

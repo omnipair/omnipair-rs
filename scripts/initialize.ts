@@ -1,11 +1,9 @@
 import { 
     Connection, 
     PublicKey, 
-    sendAndConfirmTransaction,
     Keypair,
     SystemProgram,
     SYSVAR_RENT_PUBKEY,
-    Transaction,
     LAMPORTS_PER_SOL
 } from '@solana/web3.js';
 import { 
@@ -14,7 +12,6 @@ import {
     ASSOCIATED_TOKEN_PROGRAM_ID,
     NATIVE_MINT,
     getAssociatedTokenAddress,
-    createAssociatedTokenAccountInstruction,
     getAccount
 } from '@solana/spl-token';
 import BN from 'bn.js';
@@ -104,51 +101,79 @@ async function main() {
     );
     console.log('Futarchy Authority PDA:', futarchyAuthorityPda.toBase58());
 
-    // Get WSOL accounts for deployer and authority (PDA-owned)
-    const deployerWsolAccount = await getAssociatedTokenAddress(
-        NATIVE_MINT,
-        DEPLOYER_KEYPAIR.publicKey
-    );
+    // Get WSOL account for authority (PDA-owned)
     const authorityWsolAccount = await getAssociatedTokenAddress(
         NATIVE_MINT,
         futarchyAuthorityPda,
         true // allowOwnerOffCurve for PDAs
     );
-    console.log('Deployer WSOL Account:', deployerWsolAccount.toBase58());
     console.log('Authority WSOL Account (PDA-owned):', authorityWsolAccount.toBase58());
 
-    // Ensure deployer has WSOL account with enough balance
-    const pairCreationFeeSol = 0.2; // 0.2 SOL
-    const pairCreationFeeLamports = pairCreationFeeSol * LAMPORTS_PER_SOL;
-    
-    // Check if deployer WSOL account exists and has enough balance
-    try {
-        const deployerWsolInfo = await getAccount(provider.connection, deployerWsolAccount);
-        console.log('Deployer WSOL balance:', deployerWsolInfo.amount.toString());
-        if (deployerWsolInfo.amount < pairCreationFeeLamports) {
-            throw new Error(`Insufficient WSOL balance. Need ${pairCreationFeeSol} SOL but have ${Number(deployerWsolInfo.amount) / LAMPORTS_PER_SOL} SOL`);
-        }
-    } catch (error) {
-        console.log('Deployer WSOL account does not exist or has insufficient balance. Please wrap SOL first.');
-        throw error;
-    }
+    // Get token accounts for deployer
+    const deployerToken0Account = await getAssociatedTokenAddress(
+        TOKEN0_MINT,
+        DEPLOYER_KEYPAIR.publicKey
+    );
+    const deployerToken1Account = await getAssociatedTokenAddress(
+        TOKEN1_MINT,
+        DEPLOYER_KEYPAIR.publicKey
+    );
+    console.log('Deployer Token0 Account:', deployerToken0Account.toBase58());
+    console.log('Deployer Token1 Account:', deployerToken1Account.toBase58());
+
+    // Get vault accounts (pair-owned)
+    const token0Vault = await getAssociatedTokenAddress(
+        TOKEN0_MINT,
+        pairPda,
+        true // allowOwnerOffCurve for PDAs
+    );
+    const token1Vault = await getAssociatedTokenAddress(
+        TOKEN1_MINT,
+        pairPda,
+        true // allowOwnerOffCurve for PDAs
+    );
+    console.log('Token0 Vault:', token0Vault.toBase58());
+    console.log('Token1 Vault:', token1Vault.toBase58());
+
+    // Check deployer token balances
+    const deployerToken0Info = await getAccount(provider.connection, deployerToken0Account);
+    const deployerToken1Info = await getAccount(provider.connection, deployerToken1Account);
+    console.log('Deployer Token0 balance:', deployerToken0Info.amount.toString());
+    console.log('Deployer Token1 balance:', deployerToken1Info.amount.toString());
+
+    // Bootstrap liquidity amounts (adjust as needed)
+    const amount0In = new BN(1_000_000_000); // 1 token with 9 decimals
+    const amount1In = new BN(1_000_000_000); // 1 token with 9 decimals
+    const minLiquidityOut = new BN(1_000); // Minimum liquidity tokens to receive
 
     // Initialize the pair with all required accounts
     console.log('Initializing pair...');
     const pairTx = await program.methods
-        .initializePair({
+        .initialize({
             swapFeeBps: 50, // 0.5% swap fee
             halfLife: new BN(60 * 10),  // 10 minutes in seconds
+            amount0In: amount0In,
+            amount1In: amount1In,
+            minLiquidityOut: minLiquidityOut,
         })
         .accountsPartial({
             deployer: DEPLOYER_KEYPAIR.publicKey,
-            pairConfig: pairConfigPda,
-            futarchyAuthority: futarchyAuthorityPda,
             token0Mint: TOKEN0_MINT,
             token1Mint: TOKEN1_MINT,
+            pair: pairPda,
+            pairConfig: pairConfigPda,
+            futarchyAuthority: futarchyAuthorityPda,
             rateModel: rateModelKeypair.publicKey,
-            deployerWsolAccount: deployerWsolAccount,
+            lpMint: lpMintPda,
+            deployerLpTokenAccount: deployerLpTokenAccount,
+            token0Vault: token0Vault,
+            token1Vault: token1Vault,
+            deployerToken0Account: deployerToken0Account,
+            deployerToken1Account: deployerToken1Account,
             authorityWsolAccount: authorityWsolAccount,
+            systemProgram: SystemProgram.programId,
+            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+            rent: SYSVAR_RENT_PUBKEY,
         })
         .signers([DEPLOYER_KEYPAIR, rateModelKeypair])
         .rpc();
