@@ -1,18 +1,26 @@
 import { 
+    Connection, 
     PublicKey, 
+    sendAndConfirmTransaction,
+    Keypair,
     SystemProgram,
+    SYSVAR_RENT_PUBKEY,
+    Transaction,
+    LAMPORTS_PER_SOL
 } from '@solana/web3.js';
 import { 
     TOKEN_PROGRAM_ID, 
     TOKEN_2022_PROGRAM_ID,
     ASSOCIATED_TOKEN_PROGRAM_ID,
+    NATIVE_MINT,
     getAssociatedTokenAddress,
-    createAssociatedTokenAccount
+    createAssociatedTokenAccountInstruction,
+    getAccount
 } from '@solana/spl-token';
+import BN from 'bn.js';
 import { Program } from '@coral-xyz/anchor';
 import idl from '../target/idl/omnipair.json' with { type: "json" };
 import type { Omnipair } from '../target/types/omnipair';
-import BN from 'bn.js';
 import * as anchor from '@coral-xyz/anchor';
 import * as dotenv from 'dotenv';
 import { leU64 } from './utils/index.ts';
@@ -25,7 +33,7 @@ const TOKEN0_MINT = new PublicKey(process.env.TOKEN0_MINT || '');
 const TOKEN1_MINT = new PublicKey(process.env.TOKEN1_MINT || '');
 
 async function main() {
-    console.log('Starting pair initialization and bootstrap...');
+    console.log('Starting pair initialization...');
     
     // Setup connection and provider using Anchor configuration
     const provider = anchor.AnchorProvider.env();
@@ -41,42 +49,36 @@ async function main() {
     provider.opts.preflightCommitment = 'confirmed';
     provider.opts.skipPreflight = false;
 
-    const DEPLOYER_TOKEN0_ACCOUNT = await getAssociatedTokenAddress(
-        TOKEN0_MINT,
-        DEPLOYER_KEYPAIR.publicKey
-    );
-    
-    const DEPLOYER_TOKEN1_ACCOUNT = await getAssociatedTokenAddress(
-        TOKEN1_MINT,
-        DEPLOYER_KEYPAIR.publicKey
-    );
-
-    // Log all addresses
-    console.log('Network:', provider.connection.rpcEndpoint);
-    console.log('Program ID:', program.programId.toBase58());
+    console.log('Connected to network:', provider.connection.rpcEndpoint);
     console.log('Deployer address:', provider.wallet.publicKey.toBase58());
-    console.log('Token0 Mint:', TOKEN0_MINT.toBase58());
-    console.log('Token1 Mint:', TOKEN1_MINT.toBase58());
-    console.log('Deployer Token0 Account:', DEPLOYER_TOKEN0_ACCOUNT.toBase58());
-    console.log('Deployer Token1 Account:', DEPLOYER_TOKEN1_ACCOUNT.toBase58());
 
-    // Find PDA for the pair
+    // Generate a new keypair for the rate model
+    const rateModelKeypair = Keypair.generate();
+    console.log('Rate Model address:', rateModelKeypair.publicKey.toBase58());
+
+    // Find PDA for the pair using correct seed prefix
     const [pairPda] = PublicKey.findProgramAddressSync(
         [Buffer.from('gamm_pair'), TOKEN0_MINT.toBuffer(), TOKEN1_MINT.toBuffer()],
         program.programId
     );
 
-    // Find PDA for the LP mint
+    // Find PDA for the LP mint using correct seed prefix
     const [lpMintPda] = PublicKey.findProgramAddressSync(
         [Buffer.from('gamm_lp_mint'), pairPda.toBuffer()],
         program.programId
     );
 
-    // Generate a new keypair for the rate model
-    const rateModelKeypair = anchor.web3.Keypair.generate();
-    console.log('Rate Model address:', rateModelKeypair.publicKey.toBase58());
+    console.log('Pair PDA:', pairPda.toBase58());
+    console.log('LP Mint PDA:', lpMintPda.toBase58());
 
-    // Get pair config PDA
+    // Get or create LP token account
+    const deployerLpTokenAccount = await getAssociatedTokenAddress(
+        lpMintPda,
+        DEPLOYER_KEYPAIR.publicKey
+    );
+
+    console.log('LP Token ATA:', deployerLpTokenAccount.toBase58());
+    
     const pairConfigNonce = 1;
     const [pairConfigPda] = PublicKey.findProgramAddressSync(
         [Buffer.from('gamm_pair_config'), leU64(pairConfigNonce)],
@@ -85,92 +87,77 @@ async function main() {
     console.log('Pair Config PDA:', pairConfigPda.toBase58());
 
     // Get token program for each mint
-    const token0Info = await provider.connection.getAccountInfo(TOKEN0_MINT);
-    const token1Info = await provider.connection.getAccountInfo(TOKEN1_MINT);
-    
-    const token0Program = token0Info?.owner.equals(TOKEN_2022_PROGRAM_ID) 
+    const token0Program = (await provider.connection.getAccountInfo(TOKEN0_MINT))?.owner.equals(TOKEN_2022_PROGRAM_ID) 
         ? TOKEN_2022_PROGRAM_ID 
         : TOKEN_PROGRAM_ID;
-    const token1Program = token1Info?.owner.equals(TOKEN_2022_PROGRAM_ID) 
+    const token1Program = (await provider.connection.getAccountInfo(TOKEN1_MINT))?.owner.equals(TOKEN_2022_PROGRAM_ID) 
         ? TOKEN_2022_PROGRAM_ID 
         : TOKEN_PROGRAM_ID;
 
     console.log('Token0 Program:', token0Program.toBase58());
     console.log('Token1 Program:', token1Program.toBase58());
 
-    // Get associated token addresses for vaults
-    const token0Vault = await getAssociatedTokenAddress(
-        TOKEN0_MINT,
-        pairPda,
-        true,
-        token0Program
+    // Find PDA for futarchy authority
+    const [futarchyAuthorityPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('futarchy_authority')],
+        program.programId
     );
-    const token1Vault = await getAssociatedTokenAddress(
-        TOKEN1_MINT,
-        pairPda,
-        true,
-        token1Program
-    );
+    console.log('Futarchy Authority PDA:', futarchyAuthorityPda.toBase58());
 
-    // Get or create LP token account
-    const deployerLpTokenAccount = await getAssociatedTokenAddress(
-        lpMintPda,
+    // Get WSOL accounts for deployer and authority (PDA-owned)
+    const deployerWsolAccount = await getAssociatedTokenAddress(
+        NATIVE_MINT,
         DEPLOYER_KEYPAIR.publicKey
     );
+    const authorityWsolAccount = await getAssociatedTokenAddress(
+        NATIVE_MINT,
+        futarchyAuthorityPda,
+        true // allowOwnerOffCurve for PDAs
+    );
+    console.log('Deployer WSOL Account:', deployerWsolAccount.toBase58());
+    console.log('Authority WSOL Account (PDA-owned):', authorityWsolAccount.toBase58());
 
-    console.log('Pair PDA:', pairPda.toBase58());
-    console.log('LP Mint PDA:', lpMintPda.toBase58());
-    console.log('Token0 Vault:', token0Vault.toBase58());
-    console.log('Token1 Vault:', token1Vault.toBase58());
-    console.log('LP Token ATA:', deployerLpTokenAccount.toBase58());
+    // Ensure deployer has WSOL account with enough balance
+    const pairCreationFeeSol = 0.2; // 0.2 SOL
+    const pairCreationFeeLamports = pairCreationFeeSol * LAMPORTS_PER_SOL;
+    
+    // Check if deployer WSOL account exists and has enough balance
+    try {
+        const deployerWsolInfo = await getAccount(provider.connection, deployerWsolAccount);
+        console.log('Deployer WSOL balance:', deployerWsolInfo.amount.toString());
+        if (deployerWsolInfo.amount < pairCreationFeeLamports) {
+            throw new Error(`Insufficient WSOL balance. Need ${pairCreationFeeSol} SOL but have ${Number(deployerWsolInfo.amount) / LAMPORTS_PER_SOL} SOL`);
+        }
+    } catch (error) {
+        console.log('Deployer WSOL account does not exist or has insufficient balance. Please wrap SOL first.');
+        throw error;
+    }
 
-    // Bootstrap liquidity amounts
-    const amount0 = new BN(9_000_000); // 90 tokens (6 decimals)
-    const amount1 = new BN(20_000_000); // 200 tokens (6 decimals)
-    const minLiquidity = new BN(1000); // Minimum liquidity
-
-    console.log('Initializing and bootstrapping with amounts:');
-    console.log('Token0:', amount0.toString());
-    console.log('Token1:', amount1.toString());
-    console.log('Min Liquidity:', minLiquidity.toString());
-
-    // Create transaction for initialize and bootstrap
-    const tx = await program.methods
-        .initialize({
+    // Initialize the pair with all required accounts
+    console.log('Initializing pair...');
+    const pairTx = await program.methods
+        .initializePair({
             swapFeeBps: 50, // 0.5% swap fee
             halfLife: new BN(60 * 10),  // 10 minutes in seconds
-            poolDeployerFeeBps: 10, // 0.1% pool deployer fee
-            amount0In: amount0,
-            amount1In: amount1,
-            minLiquidityOut: minLiquidity
         })
         .accountsPartial({
             deployer: DEPLOYER_KEYPAIR.publicKey,
+            pairConfig: pairConfigPda,
+            futarchyAuthority: futarchyAuthorityPda,
             token0Mint: TOKEN0_MINT,
             token1Mint: TOKEN1_MINT,
-            pair: pairPda,
-            pairConfig: pairConfigPda,
             rateModel: rateModelKeypair.publicKey,
-            lpMint: lpMintPda,
-            deployerLpTokenAccount: deployerLpTokenAccount,
-            token0Vault: token0Vault,
-            token1Vault: token1Vault,
-            deployerToken0Account: DEPLOYER_TOKEN0_ACCOUNT,
-            deployerToken1Account: DEPLOYER_TOKEN1_ACCOUNT,
-            systemProgram: SystemProgram.programId,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            token2022Program: TOKEN_2022_PROGRAM_ID,
-            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+            deployerWsolAccount: deployerWsolAccount,
+            authorityWsolAccount: authorityWsolAccount,
         })
         .signers([DEPLOYER_KEYPAIR, rateModelKeypair])
         .rpc();
 
-    console.log('Transaction successful!');
-    console.log('Signature:', tx);
+    console.log('Pair initialization successful!');
+    console.log('Pair Signature:', pairTx);
 }
 
 main().catch(error => {
     console.error('Error:', error);
     process.exit(1);
-});
+}); 

@@ -16,13 +16,14 @@ pub const MAX_COLLATERAL_FACTOR_BPS: u16 = 8_500; // 85% cap for dynamic collate
 pub const LTV_BUFFER_BPS: u16 = 500; // 5% buffer between borrow limit and liquidation threshold
 #[constant]
 pub const FLASHLOAN_FEE_BPS: u16 = 5; // 0.05%
+#[constant]
+pub const PAIR_CREATION_FEE_LAMPORTS: u64 = 200_000_000; // 0.2 SOL
 
 // EMA constants
 #[constant]
 pub const DEFAULT_HALF_LIFE: u64 = 7 * 60; // 7 minutes (recommended)
 pub const MIN_HALF_LIFE: u64 = 1 * 60; // 1 minute
 pub const MAX_HALF_LIFE: u64 = 12 * 60 * 60; // 12 hours
-pub const DEPLOYER_MAX_FEE_BPS: u16 = 500; // 5%
 pub const TAYLOR_TERMS: u64 = 5;
 pub const NATURAL_LOG_OF_TWO_NAD: u64 = 693_147_180; // ln(2) scaled by NAD
 

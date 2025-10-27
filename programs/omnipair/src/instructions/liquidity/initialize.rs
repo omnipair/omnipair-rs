@@ -3,7 +3,7 @@ use anchor_lang::{
     accounts::interface_account::InterfaceAccount,
 };
 use anchor_spl::{
-    token::Token,
+    token::{Token, TokenAccount as SPLTokenAccount},
     token_interface::{Mint, TokenAccount, Token2022},
     associated_token::AssociatedToken,
 };
@@ -11,6 +11,7 @@ use crate::state::{
     pair::Pair,
     rate_model::RateModel,
     pair_config::PairConfig,
+    futarchy_authority::FutarchyAuthority,
 };
 use crate::errors::ErrorCode;
 use crate::constants::*;
@@ -27,7 +28,6 @@ use crate::generate_gamm_pair_seeds;
 pub struct InitializeAndBootstrapArgs {
     pub swap_fee_bps: u16,
     pub half_life: u64,
-    pub pool_deployer_fee_bps: u16,
     pub amount0_in: u64,
     pub amount1_in: u64,
     pub min_liquidity_out: u64,
@@ -62,6 +62,12 @@ pub struct InitializeAndBootstrap<'info> {
         bump
     )]
     pub pair_config: Account<'info, PairConfig>,
+
+    #[account(
+        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
+        bump
+    )]
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
 
     #[account(
         init,
@@ -123,6 +129,20 @@ pub struct InitializeAndBootstrap<'info> {
     )]
     pub deployer_token1_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
+    #[account(
+        mut,
+        constraint = deployer_wsol_account.owner == *token_program.key,
+        constraint = deployer_wsol_account.mint == spl_token::native_mint::id(),
+    )]
+    pub deployer_wsol_account: Account<'info, SPLTokenAccount>,
+
+    #[account(
+        mut,
+        constraint = authority_wsol_account.mint == spl_token::native_mint::id(),
+        constraint = authority_wsol_account.owner == futarchy_authority.key() @ ErrorCode::InvalidFutarchyAuthority,
+    )]
+    pub authority_wsol_account: Account<'info, SPLTokenAccount>,
+
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
@@ -135,7 +155,6 @@ impl<'info> InitializeAndBootstrap<'info> {
         let InitializeAndBootstrapArgs { 
             swap_fee_bps, 
             half_life, 
-            pool_deployer_fee_bps,
             amount0_in,
             amount1_in,
             ..
@@ -143,7 +162,6 @@ impl<'info> InitializeAndBootstrap<'info> {
 
         // validate pool parameters
         require_gte!(BPS_DENOMINATOR, *swap_fee_bps, ErrorCode::InvalidSwapFeeBps); // 0 <= swap_fee_bps <= 100%
-        require_gte!(DEPLOYER_MAX_FEE_BPS, *pool_deployer_fee_bps, ErrorCode::InvalidPoolDeployerFeeBps); // 0 <= pool_deployer_fee_bps <= 10%
         require_gte!(*half_life, MIN_HALF_LIFE, ErrorCode::InvalidHalfLife); // half_life >= 1 minute
         require_gte!(MAX_HALF_LIFE, *half_life, ErrorCode::InvalidHalfLife); // half_life <= 12 hours
 
@@ -177,11 +195,23 @@ impl<'info> InitializeAndBootstrap<'info> {
         let InitializeAndBootstrapArgs { 
             swap_fee_bps, 
             half_life, 
-            pool_deployer_fee_bps,
             amount0_in,
             amount1_in,
             min_liquidity_out,
         } = args;
+
+        // Transfer pair creation fee to authority
+        anchor_spl::token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::Transfer {
+                    from: ctx.accounts.deployer_wsol_account.to_account_info(),
+                    to: ctx.accounts.authority_wsol_account.to_account_info(),
+                    authority: ctx.accounts.deployer.to_account_info(),
+                },
+            ),
+            PAIR_CREATION_FEE_LAMPORTS,
+        )?;
         
         let (
             token0, 
@@ -210,7 +240,6 @@ impl<'info> InitializeAndBootstrap<'info> {
             rate_model_key,
             swap_fee_bps,
             half_life,
-            pool_deployer_fee_bps,
             current_time,
             ctx.bumps.pair,
         ));

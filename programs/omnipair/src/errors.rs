@@ -11,17 +11,11 @@ pub enum ErrorCode {
     #[msg("Invalid futarchy fee bps")]
     InvalidFutarchyFeeBps,
 
-    #[msg("Invalid founder fee bps")]
-    InvalidFounderFeeBps,
-
     #[msg("Argument missing")]
     ArgumentMissing,
 
     #[msg("Invalid swap fee bps")]
     InvalidSwapFeeBps,
-
-    #[msg("Invalid pool deployer fee bps")]
-    InvalidPoolDeployerFeeBps,
 
     #[msg("Invalid half life")]
     InvalidHalfLife,
@@ -202,4 +196,10 @@ pub enum ErrorCode {
 
     #[msg("Math overflow during debt utilization calculation")]
     DebtUtilizationOverflow,
+
+    #[msg("Invalid mint")]
+    InvalidMint,
+
+    #[msg("Invalid distribution - percentages must sum to 100%")]
+    InvalidDistribution,
 }
