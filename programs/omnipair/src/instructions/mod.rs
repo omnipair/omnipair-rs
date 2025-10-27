@@ -8,7 +8,6 @@ pub use spot::*;
 pub use liquidity::*;
 pub use lending::common::*;
 pub use lending::add_collateral::*;
-pub use lending::add_collateral_and_borrow::*;
 pub use lending::liquidate::*;
 pub use lending::flashloan::*;
 pub use futarchy::*;

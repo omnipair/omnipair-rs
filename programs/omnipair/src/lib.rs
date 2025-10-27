@@ -102,11 +102,6 @@ pub mod omnipair {
         CommonAdjustPosition::handle_borrow(ctx, args)
     }
 
-    #[access_control(ctx.accounts.update_and_validate_borrow(&args))]
-    pub fn add_collateral_and_borrow(ctx: Context<AddCollateralAndBorrow>, args: AddCollateralAndBorrowArgs) -> Result<()> {
-        AddCollateralAndBorrow::handle_add_collateral_and_borrow(ctx, args)
-    }
-
     #[access_control(ctx.accounts.update_and_validate_repay(&args))]
     pub fn repay(ctx: Context<CommonAdjustPosition>, args: AdjustPositionArgs) -> Result<()> {
         CommonAdjustPosition::handle_repay(ctx, args)
