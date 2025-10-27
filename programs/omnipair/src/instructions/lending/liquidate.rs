@@ -102,7 +102,7 @@ impl<'info> Liquidate<'info> {
         let collateral_token = collateral_vault.mint;
         let debt_token = if collateral_token == pair.token0 { pair.token1 } else { pair.token0 };
         let is_collateral_token0 = collateral_token == pair.token0;
-        let fixed_cf_bps = user_position.get_liquidation_cf_bps(pair, &debt_token);
+        let liquidation_cf_bps = user_position.get_liquidation_cf_bps(pair, &debt_token)?;
         let k0 = pair.k(); // k before liquidation
 
         // Compute debt
@@ -128,7 +128,7 @@ impl<'info> Liquidate<'info> {
 
         // Compute borrow limit using fixed liquidation CF
         let borrow_limit = collateral_value
-        .checked_mul(fixed_cf_bps as u128).ok_or(ErrorCode::DebtMathOverflow)?
+        .checked_mul(liquidation_cf_bps as u128).ok_or(ErrorCode::DebtMathOverflow)?
         .checked_div(BPS_DENOMINATOR as u128).ok_or(ErrorCode::DebtMathOverflow)?;
 
         // Check if position is undercollateralized
@@ -157,7 +157,12 @@ impl<'info> Liquidate<'info> {
             .try_into()
             .map_err(|_| ErrorCode::DebtMathOverflow)?;
 
-        let applied_min_cf_bps = user_position.get_user_pessimistic_collateral_factor_bps(&pair, &debt_token);
+        let collateral_token = pair.get_collateral_token(&debt_token);
+        let collateral_amount = match collateral_token == pair.token0 {
+            true => user_position.collateral0,
+            false => user_position.collateral1,
+        };
+        let applied_min_cf_bps = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount)?.1;
 
         // Clamp to what user actually has
         let collateral_final = core::cmp::min(collateral_amount_to_seize_u64,

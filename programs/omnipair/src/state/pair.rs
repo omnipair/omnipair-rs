@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
-use crate::utils::gamm_math::{pessimistic_max_debt, pessimistic_min_collateral};
+use crate::utils::gamm_math::pessimistic_max_debt;
 use crate::utils::math::compute_ema;
 use crate::state::RateModel;
 use crate::events::{UpdatePairEvent, EventMetadata};
@@ -194,8 +194,9 @@ impl Pair {
     /// 
     /// Returns a tuple containing:
     /// - The maximum debt possible for the given collateral amount
-    /// - The pessimistic collateral factor in BPS
-    pub fn get_max_debt_and_cf_bps_for_collateral(&self, pair: &Pair, collateral_token: &Pubkey, collateral_amount: u64) -> Result<(u64, u16)> {
+    /// - The maximum collateral factor in BPS
+    /// - The liquidation collateral factor in BPS (max_allowed_cf_bps - LTV_BUFFER_BPS)
+    pub fn get_max_debt_and_cf_bps_for_collateral(&self, pair: &Pair, collateral_token: &Pubkey, collateral_amount: u64) -> Result<(u64, u16, u16)> {
         let (
             collateral_ema_price,
             collateral_spot_price,
@@ -210,35 +211,7 @@ impl Pair {
             collateral_ema_price,
             collateral_spot_price,
             debt_amm_reserve,
-        ).map_err(|error| error.into())
-    }
-
-
-    /// Get the minimum collateral and pessimistic collateral factor in BPS for a given debt amount
-    /// 
-    /// - `pair`: The pair the user position belongs to
-    /// - `debt_token`: The token the user is borrowing
-    /// - `debt_amount`: The amount of debt the user is borrowing
-    /// 
-    /// Returns a tuple containing:
-    /// - The minimum collateral required to avoid liquidation
-    /// - The pessimistic collateral factor in BPS
-    pub fn get_min_collateral_and_cf_bps_for_debt(&self, pair: &Pair, debt_token: &Pubkey, debt_amount: u64) -> Result<(u64, u16)> {
-        let (
-            collateral_ema_price,
-            collateral_spot_price,
-            debt_amm_reserve,
-        ) = match debt_token == &pair.token0 {
-            true => (pair.ema_price1_nad(), pair.spot_price1_nad(), pair.reserve0),
-            false => (pair.ema_price0_nad(), pair.spot_price0_nad(), pair.reserve1),
-        };
-
-        pessimistic_min_collateral(
-            debt_amount,
-            collateral_ema_price,
-            collateral_spot_price,
-            debt_amm_reserve,
-        ).map_err(|error| error.into())
+        )
     }
 
     pub fn update(&mut self, rate_model: &Account<RateModel>, pair_key: Pubkey) -> Result<()> {

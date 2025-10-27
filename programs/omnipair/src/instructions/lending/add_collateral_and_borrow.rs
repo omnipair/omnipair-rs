@@ -204,14 +204,18 @@ impl<'info> AddCollateralAndBorrow<'info> {
             }
         }
 
-
         // Borrow
         let user_debt = match user_borrow_token_account.mint == pair.token0 {
             true => user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
             false => user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
         };
 
-        let (borrow_limit, applied_min_cf_bps) = user_position.get_user_borrow_limit_and_cf_bps(&pair, &borrow_token_mint.key());
+        let collateral_token = pair.get_collateral_token(&borrow_token_mint.key());
+        let collateral_amount = match collateral_token == pair.token0 {
+            true => user_position.collateral0,
+            false => user_position.collateral1,
+        };
+        let (borrow_limit, max_allowed_cf_bps, _) = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount)?;
         let is_max_borrow = args.borrow_amount == u64::MAX;
         let remaining_borrow_limit = borrow_limit.checked_sub(user_debt).ok_or(ErrorCode::DebtMathOverflow)?;
         let borrow_amount = if is_max_borrow { remaining_borrow_limit } else { args.borrow_amount };
@@ -245,7 +249,7 @@ impl<'info> AddCollateralAndBorrow<'info> {
         
         user_position.increase_debt(pair, &borrow_token_mint.key(), borrow_amount)?;
         // Update user position fixed CF
-        user_position.set_applied_min_cf_for_debt_token(&borrow_token_mint.key(), &pair, applied_min_cf_bps);
+        user_position.set_applied_min_cf_for_debt_token(&borrow_token_mint.key(), &pair, max_allowed_cf_bps);
 
         // Emit collateral adjustment event
         let (collateral_amount0, collateral_amount1) = if is_collateral_token0 {

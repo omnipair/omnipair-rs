@@ -62,7 +62,6 @@ pub enum PairViewKind {
     SpotPrice1Nad,
     K,
     GetRates,
-    GetMinCollateralForDebt,
     GetBorrowLimitAndCfBpsForCollateral,
 
 }
@@ -75,7 +74,6 @@ impl fmt::Display for PairViewKind {
             PairViewKind::SpotPrice1Nad => write!(f, "SpotPrice1Nad"),
             PairViewKind::K => write!(f, "K"),
             PairViewKind::GetRates => write!(f, "GetRates"),
-            PairViewKind::GetMinCollateralForDebt => write!(f, "GetMinCollateralForDebt"),
             PairViewKind::GetBorrowLimitAndCfBpsForCollateral => write!(f, "GetBorrowLimitAndCfBpsForCollateral"),
         }
     }
@@ -138,13 +136,6 @@ impl ViewPairData<'_> {
                 let (rate0, rate1) = pair.get_rates(&ctx.accounts.rate_model).unwrap();
                 (OptionalUint::from_u64(rate0), OptionalUint::from_u64(rate1))
             },
-            PairViewKind::GetMinCollateralForDebt => {
-                let debt_amount = args.debt_amount.ok_or(ErrorCode::ArgumentMissing)?;
-                (
-                    OptionalUint::from_u64(pair.get_min_collateral_and_cf_bps_for_debt(&pair, &pair.token0, debt_amount).unwrap().0),
-                    OptionalUint::from_u16(pair.get_min_collateral_and_cf_bps_for_debt(&pair, &pair.token1, debt_amount).unwrap().1)
-                )
-            },
             PairViewKind::GetBorrowLimitAndCfBpsForCollateral => {
                 let collateral_amount = args.collateral_amount.ok_or(ErrorCode::ArgumentMissing)?;
                 let collateral_token = args.collateral_token.ok_or(ErrorCode::ArgumentMissing)?;
@@ -171,17 +162,49 @@ impl ViewUserPositionData<'_> {
         pair.update(&ctx.accounts.rate_model, pair_key)?;
 
         let value: (OptionalUint, OptionalUint) = match getter {
-            UserPositionViewKind::UserBorrowingPower => (
-                OptionalUint::from_u64(user_position.get_user_borrow_limit(&pair, &pair.token0)),
-                OptionalUint::from_u64(user_position.get_user_borrow_limit(&pair, &pair.token1)),
-            ),
-            UserPositionViewKind::UserAppliedCollateralFactorBps => (
-                OptionalUint::from_u16(user_position.get_user_pessimistic_collateral_factor_bps(&pair, &pair.token0)),
-                OptionalUint::from_u16(user_position.get_user_pessimistic_collateral_factor_bps(&pair, &pair.token1))
-            ),
+            UserPositionViewKind::UserBorrowingPower => {
+                let collateral_token0 = pair.get_collateral_token(&pair.token0);
+                let collateral_amount0 = match collateral_token0 == pair.token0 {
+                    true => user_position.collateral0,
+                    false => user_position.collateral1,
+                };
+                let borrow_limit0 = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token0, collateral_amount0).unwrap().0;
+                
+                let collateral_token1 = pair.get_collateral_token(&pair.token1);
+                let collateral_amount1 = match collateral_token1 == pair.token0 {
+                    true => user_position.collateral0,
+                    false => user_position.collateral1,
+                };
+                let borrow_limit1 = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token1, collateral_amount1).unwrap().0;
+                
+                (
+                    OptionalUint::from_u64(borrow_limit0),
+                    OptionalUint::from_u64(borrow_limit1),
+                )
+            },
+            UserPositionViewKind::UserAppliedCollateralFactorBps => {
+                let collateral_token0 = pair.get_collateral_token(&pair.token0);
+                let collateral_amount0 = match collateral_token0 == pair.token0 {
+                    true => user_position.collateral0,
+                    false => user_position.collateral1,
+                };
+                let token0_cf_bps = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token0, collateral_amount0).unwrap().1;
+                
+                let collateral_token1 = pair.get_collateral_token(&pair.token1);
+                let collateral_amount1 = match collateral_token1 == pair.token0 {
+                    true => user_position.collateral0,
+                    false => user_position.collateral1,
+                };
+                let token1_cf_bps = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token1, collateral_amount1).unwrap().1;
+                
+                (
+                    OptionalUint::from_u16(token0_cf_bps),
+                    OptionalUint::from_u16(token1_cf_bps)
+                )
+            },
             UserPositionViewKind::UserLiquidationCollateralFactorBps => (
-                OptionalUint::from_u16(user_position.get_liquidation_cf_bps(&pair, &pair.token0)),
-                OptionalUint::from_u16(user_position.get_liquidation_cf_bps(&pair, &pair.token1))
+                OptionalUint::from_u16(user_position.get_liquidation_cf_bps(&pair, &pair.token0).unwrap()),
+                OptionalUint::from_u16(user_position.get_liquidation_cf_bps(&pair, &pair.token1).unwrap())
             ),
             UserPositionViewKind::UserDebtUtilizationBps => (
                 OptionalUint::from_u64(user_position.get_debt_utilization_bps(&pair, &pair.token0).unwrap()),
