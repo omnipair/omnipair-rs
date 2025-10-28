@@ -7,12 +7,12 @@ use crate::errors::ErrorCode;
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InitFutarchyAuthorityArgs {
     pub authority: Pubkey,
-    pub recipient1: Pubkey,
-    pub recipient1_percentage_bps: u16,
-    pub recipient2: Pubkey,
-    pub recipient2_percentage_bps: u16,
-    pub recipient3: Pubkey,
-    pub recipient3_percentage_bps: u16,
+    pub futarchy_treasury: Pubkey,
+    pub futarchy_treasury_percentage_bps: u16,
+    pub buybacks_vault: Pubkey,
+    pub buybacks_vault_percentage_bps: u16,
+    pub team_treasury: Pubkey,
+    pub team_treasury_percentage_bps: u16,
 }
 
 
@@ -39,10 +39,10 @@ pub struct InitFutarchyAuthority<'info> {
 impl<'info> InitFutarchyAuthority<'info> {
     pub fn handle_init(ctx: Context<Self>, args: InitFutarchyAuthorityArgs) -> Result<()> {
         // Validate percentages sum to 100%
-        let total_percentage = args.recipient1_percentage_bps
-            .checked_add(args.recipient2_percentage_bps)
+        let total_percentage = args.futarchy_treasury_percentage_bps
+            .checked_add(args.buybacks_vault_percentage_bps)
             .ok_or(ErrorCode::FeeMathOverflow)?
-            .checked_add(args.recipient3_percentage_bps)
+            .checked_add(args.team_treasury_percentage_bps)
             .ok_or(ErrorCode::FeeMathOverflow)?;
 
         require_eq!(
@@ -56,12 +56,12 @@ impl<'info> InitFutarchyAuthority<'info> {
         futarchy_authority.set_inner(FutarchyAuthority::initialize(
             args.authority,
             0,
-            args.recipient1,
-            args.recipient1_percentage_bps,
-            args.recipient2,
-            args.recipient2_percentage_bps,
-            args.recipient3,
-            args.recipient3_percentage_bps,
+            args.futarchy_treasury,
+            args.futarchy_treasury_percentage_bps,
+            args.buybacks_vault,
+            args.buybacks_vault_percentage_bps,
+            args.team_treasury,
+            args.team_treasury_percentage_bps,
             ctx.bumps.futarchy_authority,
         ));
 
