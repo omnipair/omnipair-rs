@@ -28,19 +28,19 @@ pub struct DistributeTokens<'info> {
     pub source_token_account: Account<'info, TokenAccount>,
 
     #[account(mut,
-        constraint = futarchy_treasury_token_account.key() == futarchy_authority.futarchy_treasury,
+        constraint = futarchy_treasury_token_account.key() == futarchy_authority.recipients.futarchy_treasury,
         constraint = futarchy_treasury_token_account.mint == source_mint.key(),
     )]
     pub futarchy_treasury_token_account: Account<'info, TokenAccount>,
 
     #[account(mut,
-        constraint = buybacks_vault_token_account.key() == futarchy_authority.buybacks_vault,
+        constraint = buybacks_vault_token_account.key() == futarchy_authority.recipients.buybacks_vault,
         constraint = buybacks_vault_token_account.mint == source_mint.key(),
     )]
     pub buybacks_vault_token_account: Account<'info, TokenAccount>,
 
     #[account(mut,
-        constraint = team_treasury_token_account.key() == futarchy_authority.team_treasury,
+        constraint = team_treasury_token_account.key() == futarchy_authority.recipients.team_treasury,
         constraint = team_treasury_token_account.mint == source_mint.key(),
     )]
     pub team_treasury_token_account: Account<'info, TokenAccount>,
@@ -51,10 +51,10 @@ pub struct DistributeTokens<'info> {
 impl<'info> DistributeTokens<'info> {
     pub fn validate(&self, _args: &DistributeTokensArgs) -> Result<()> {
         // Verify percentages sum to 100%
-        let total_percentage = self.futarchy_authority.futarchy_treasury_percentage_bps
-            .checked_add(self.futarchy_authority.buybacks_vault_percentage_bps)
+        let total_percentage = self.futarchy_authority.revenue_distribution.futarchy_treasury_bps
+            .checked_add(self.futarchy_authority.revenue_distribution.buybacks_vault_bps)
             .ok_or(ErrorCode::FeeMathOverflow)?
-            .checked_add(self.futarchy_authority.team_treasury_percentage_bps)
+            .checked_add(self.futarchy_authority.revenue_distribution.team_treasury_bps)
             .ok_or(ErrorCode::FeeMathOverflow)?;
 
         require_eq!(
@@ -82,19 +82,19 @@ impl<'info> DistributeTokens<'info> {
 
         // Calculate amounts for each recipient using stored percentages
         let amount1 = total_balance
-            .checked_mul(futarchy_authority.futarchy_treasury_percentage_bps as u128)
+            .checked_mul(futarchy_authority.revenue_distribution.futarchy_treasury_bps as u128)
             .ok_or(ErrorCode::FeeMathOverflow)?
             .checked_div(BPS_DENOMINATOR as u128)
             .ok_or(ErrorCode::FeeMathOverflow)? as u64;
 
         let amount2 = total_balance
-            .checked_mul(futarchy_authority.buybacks_vault_percentage_bps as u128)
+            .checked_mul(futarchy_authority.revenue_distribution.buybacks_vault_bps as u128)
             .ok_or(ErrorCode::FeeMathOverflow)?
             .checked_div(BPS_DENOMINATOR as u128)
             .ok_or(ErrorCode::FeeMathOverflow)? as u64;
 
         let amount3 = total_balance
-            .checked_mul(futarchy_authority.team_treasury_percentage_bps as u128)
+            .checked_mul(futarchy_authority.revenue_distribution.team_treasury_bps as u128)
             .ok_or(ErrorCode::FeeMathOverflow)?
             .checked_div(BPS_DENOMINATOR as u128)
             .ok_or(ErrorCode::FeeMathOverflow)? as u64;

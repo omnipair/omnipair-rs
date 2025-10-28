@@ -48,10 +48,6 @@ pub mod omnipair {
         InitFutarchyAuthority::handle_init(ctx, args)
     }
 
-    pub fn init_pair_config(ctx: Context<InitPairConfig>, args: InitPairConfigArgs) -> Result<()> {
-        InitPairConfig::handle_init(ctx, args)
-    }
-
     pub fn distribute_tokens(ctx: Context<DistributeTokens>, args: DistributeTokensArgs) -> Result<()> {
         DistributeTokens::handle_distribute(ctx, args)
     }

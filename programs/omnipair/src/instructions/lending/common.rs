@@ -10,6 +10,7 @@ use crate::{
     state::pair::Pair,
     state::rate_model::RateModel,
     state::user_position::UserPosition,
+    state::futarchy_authority::FutarchyAuthority,
     constants::*,
 };
 
@@ -52,6 +53,12 @@ pub struct CommonAdjustPosition<'info> {
     pub rate_model: Account<'info, RateModel>,
 
     #[account(
+        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
+        bump
+    )]
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
+
+    #[account(
         mut,
         constraint = token_vault.mint == pair.token0 || token_vault.mint == pair.token1,
     )]
@@ -78,7 +85,7 @@ impl<'info> CommonAdjustPosition<'info> {
     // generic update function for pair internal state
     pub fn update(&mut self) -> Result<()> {
         let pair_key = self.pair.to_account_info().key();
-        self.pair.update(&self.rate_model, pair_key)?;
+        self.pair.update(&self.rate_model, &self.futarchy_authority, pair_key)?;
         Ok(())
     }
 }

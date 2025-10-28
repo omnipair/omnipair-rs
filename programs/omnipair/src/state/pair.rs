@@ -12,7 +12,7 @@ pub struct Pair {
     pub token1: Pubkey,
     pub token0_decimals: u8,
     pub token1_decimals: u8,
-    pub config: Pubkey,
+
     // pair parameters
     pub rate_model: Pubkey,
     pub swap_fee_bps: u16,
@@ -58,7 +58,6 @@ impl Pair {
         token1: Pubkey,
         token0_decimals: u8,
         token1_decimals: u8,
-        config: Pubkey,
         rate_model: Pubkey,
         swap_fee_bps: u16,
         half_life: u64,
@@ -70,7 +69,7 @@ impl Pair {
             token1,
             token0_decimals,
             token1_decimals,
-            config,
+
             // pair parameters
             rate_model,
             swap_fee_bps,
@@ -217,7 +216,7 @@ impl Pair {
         )
     }
 
-    pub fn update(&mut self, rate_model: &Account<RateModel>, pair_key: Pubkey) -> Result<()> {
+    pub fn update(&mut self, rate_model: &Account<RateModel>, futarchy_authority: &crate::state::FutarchyAuthority, pair_key: Pubkey) -> Result<()> {
         let current_time = Clock::get()?.unix_timestamp;
         
         if current_time > self.last_update {
@@ -268,9 +267,9 @@ impl Pair {
                 let total_interest0 = (self.total_debt0 as u128 * integral0 as u128) / NAD as u128;
                 let total_interest1 = (self.total_debt1 as u128 * integral1 as u128) / NAD as u128;
 
-                // calcalate protocol share of accrued interest
-                let protocol_share0: u64 = ((total_interest0 as u128 * PROTOCOL_SHARE_BPS as u128) / BPS_DENOMINATOR as u128) as u64;
-                let protocol_share1: u64 = ((total_interest1 as u128 * PROTOCOL_SHARE_BPS as u128) / BPS_DENOMINATOR as u128) as u64;
+                // calculate protocol share of accrued interest
+                let protocol_share0: u64 = ((total_interest0 as u128 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
+                let protocol_share1: u64 = ((total_interest1 as u128 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
                 let lp_share0 = total_interest0 as u64 - protocol_share0;
                 let lp_share1 = total_interest1 as u64 - protocol_share1;
 

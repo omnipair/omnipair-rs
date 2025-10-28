@@ -1,7 +1,8 @@
 use anchor_lang::prelude::*;
-use crate::state::{Pair, UserPosition, RateModel};
+use crate::state::{Pair, UserPosition, RateModel, FutarchyAuthority};
 use std::fmt;
 use crate::errors::ErrorCode;
+use crate::constants::*;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
 pub enum OptionalUint {
@@ -108,6 +109,11 @@ pub struct ViewPairData<'info> {
     #[account(mut)]
     pub pair: Account<'info, Pair>,
     pub rate_model: Account<'info, RateModel>,
+    #[account(
+        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
+        bump
+    )]
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
 }
 
 #[derive(Accounts)]
@@ -117,6 +123,11 @@ pub struct ViewUserPositionData<'info> {
     #[account(mut)]
     pub user_position: Account<'info, UserPosition>,
     pub rate_model: Account<'info, RateModel>,
+    #[account(
+        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
+        bump
+    )]
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
 }
 
 impl ViewPairData<'_> {
@@ -124,7 +135,7 @@ impl ViewPairData<'_> {
         let pair = &mut ctx.accounts.pair;
 
         let pair_key = pair.to_account_info().key();
-        pair.update(&ctx.accounts.rate_model, pair_key)?;
+        pair.update(&ctx.accounts.rate_model, &ctx.accounts.futarchy_authority, pair_key)?;
 
         let value: (OptionalUint, OptionalUint) = match getter {
             PairViewKind::EmaPrice0Nad => (OptionalUint::from_u64(pair.ema_price0_nad()), OptionalUint::OptionalU64(None)),
@@ -159,7 +170,7 @@ impl ViewUserPositionData<'_> {
 
         // update pair to get updated rates, interest, debt, etc.
         let pair_key = pair.to_account_info().key();
-        pair.update(&ctx.accounts.rate_model, pair_key)?;
+        pair.update(&ctx.accounts.rate_model, &ctx.accounts.futarchy_authority, pair_key)?;
 
         let value: (OptionalUint, OptionalUint) = match getter {
             UserPositionViewKind::UserBorrowingPower => {

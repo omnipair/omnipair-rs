@@ -18,8 +18,6 @@ pub const LTV_BUFFER_BPS: u16 = 500; // 5% buffer between borrow limit and liqui
 pub const FLASHLOAN_FEE_BPS: u16 = 5; // 0.05%
 #[constant]
 pub const PAIR_CREATION_FEE_LAMPORTS: u64 = 200_000_000; // 0.2 SOL
-#[constant]
-pub const PROTOCOL_SHARE_BPS: u16 = 1000; // 10%
 
 
 // EMA constants
@@ -56,7 +54,5 @@ pub const FACTORY_SEED_PREFIX: &[u8] = b"gamm_factory";
 pub const POSITION_SEED_PREFIX: &[u8] = b"gamm_position";
 #[constant]
 pub const LEVERAGED_POSITION_SEED_PREFIX: &[u8] = b"gamm_leveraged_position";
-#[constant]
-pub const PAIR_CONFIG_SEED_PREFIX: &[u8] = b"gamm_pair_config";
 #[constant]
 pub const FUTARCHY_AUTHORITY_SEED_PREFIX: &[u8] = b"futarchy_authority";

@@ -36,11 +36,6 @@ pub struct Swap<'info> {
     pub rate_model: Account<'info, RateModel>,
 
     #[account(
-        address = pair.config,
-    )]
-    pub pair_config: Account<'info, PairConfig>,
-
-    #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
         bump
     )]
@@ -91,7 +86,7 @@ impl<'info> Swap<'info> {
 
     pub fn update(&mut self) -> Result<()> {
         let pair_key = self.pair.to_account_info().key();
-        self.pair.update(&self.rate_model, pair_key)?;
+        self.pair.update(&self.rate_model, &self.futarchy_authority, pair_key)?;
         Ok(())
     }
 
@@ -105,8 +100,7 @@ impl<'info> Swap<'info> {
         let SwapArgs { amount_in, min_amount_out } = args;
         let Swap {
             pair,
-            pair_config,
-            futarchy_authority: _, // Used in constraint validation
+            futarchy_authority,
             token_in_vault,
             token_out_vault,
             user_token_in_account,
@@ -130,7 +124,7 @@ impl<'info> Swap<'info> {
 
         // Calculate futarchy fee portion of the total fee
         let futarchy_fee = (total_fee as u128)
-            .checked_mul(pair_config.futarchy_fee_bps as u128)
+            .checked_mul(futarchy_authority.revenue_share.swap_bps as u128)
             .ok_or(ErrorCode::FeeMathOverflow)?
             .checked_div(BPS_DENOMINATOR as u128)
             .ok_or(ErrorCode::FeeMathOverflow)? as u64;

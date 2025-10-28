@@ -12,7 +12,6 @@ use anchor_spl::{
 use crate::state::{
     pair::Pair,
     rate_model::RateModel,
-    pair_config::PairConfig,
     futarchy_authority::FutarchyAuthority,
 };
 use crate::errors::ErrorCode;
@@ -56,14 +55,6 @@ pub struct InitializeAndBootstrap<'info> {
         bump
     )]
     pub pair: Box<Account<'info, Pair>>,
-
-    // Use an existing PairConfig initialized via init_pair_config
-    #[account(
-        mut,
-        seeds = [PAIR_CONFIG_SEED_PREFIX, &pair_config.nonce.to_le_bytes()],
-        bump
-    )]
-    pub pair_config: Account<'info, PairConfig>,
 
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
@@ -186,7 +177,6 @@ impl<'info> InitializeAndBootstrap<'info> {
     pub fn handle_initialize(ctx: Context<Self>, args: InitializeAndBootstrapArgs) -> Result<()> {
         let current_time = Clock::get()?.unix_timestamp;
         let pair = &mut ctx.accounts.pair;
-        let pair_config = &mut ctx.accounts.pair_config;
         
         let InitializeAndBootstrapArgs { 
             swap_fee_bps, 
@@ -244,7 +234,6 @@ impl<'info> InitializeAndBootstrap<'info> {
             token1,
             token0_decimals,
             token1_decimals,
-            pair_config.key(),
             rate_model_key,
             swap_fee_bps,
             half_life,

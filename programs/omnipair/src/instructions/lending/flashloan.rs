@@ -49,6 +49,12 @@ pub struct Flashloan<'info> {
         address = pair.rate_model,
     )]
     pub rate_model: Account<'info, RateModel>,
+
+    #[account(
+        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
+        bump
+    )]
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
     
     #[account(
         mut,
@@ -121,7 +127,7 @@ impl<'info> Flashloan<'info> {
 
     pub fn update(&mut self) -> Result<()> {
         let pair_key = self.pair.to_account_info().key();
-        self.pair.update(&self.rate_model, pair_key)?;
+        self.pair.update(&self.rate_model, &self.futarchy_authority, pair_key)?;
         Ok(())
     }
 
