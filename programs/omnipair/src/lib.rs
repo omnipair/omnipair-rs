@@ -12,7 +12,7 @@ pub use instructions::*;
 pub use utils::account::*;
 pub use instructions::emit_value::{EmitValueArgs, PairViewKind, UserPositionViewKind, ViewPairData, ViewUserPositionData};
 
-declare_id!("2h6oKUk4jcNQ81EzKvYVtzsyRpJwsz6J2pEeQTo1KsQB");
+declare_id!("Bd9Uhf5S8yzfop8cG9oqRs6jVcLtu8B4cb2gvRmtbNzk");
 
 pub mod deployer {
     use super::{pubkey, Pubkey};
@@ -54,6 +54,11 @@ pub mod omnipair {
 
     pub fn distribute_tokens(ctx: Context<DistributeTokens>, args: DistributeTokensArgs) -> Result<()> {
         DistributeTokens::handle_distribute(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn claim_protocol_fees(ctx: Context<ClaimProtocolFees>, args: ClaimProtocolFeesArgs) -> Result<()> {
+        ClaimProtocolFees::handle_claim(ctx, args)
     }
 
     // Pair instructions
