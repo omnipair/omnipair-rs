@@ -12,13 +12,19 @@ pub const BPS_DENOMINATOR: u16 = 10_000;
 pub const CLOSE_FACTOR_BPS: u16 = 5_000; // 50%
 #[constant]
 pub const MAX_COLLATERAL_FACTOR_BPS: u16 = 8_500; // 85% cap for dynamic collateral factor
+#[constant]
+pub const LTV_BUFFER_BPS: u16 = 500; // 5% buffer between borrow limit and liquidation threshold
+#[constant]
+pub const FLASHLOAN_FEE_BPS: u16 = 5; // 0.05%
+#[constant]
+pub const PAIR_CREATION_FEE_LAMPORTS: u64 = 200_000_000; // 0.2 SOL
+
 
 // EMA constants
 #[constant]
 pub const DEFAULT_HALF_LIFE: u64 = 7 * 60; // 7 minutes (recommended)
 pub const MIN_HALF_LIFE: u64 = 1 * 60; // 1 minute
 pub const MAX_HALF_LIFE: u64 = 12 * 60 * 60; // 12 hours
-pub const DEPLOYER_MAX_FEE_BPS: u16 = 1000; // 10%
 pub const TAYLOR_TERMS: u64 = 5;
 pub const NATURAL_LOG_OF_TWO_NAD: u64 = 693_147_180; // ln(2) scaled by NAD
 
@@ -28,8 +34,8 @@ pub const INITIAL_RATE_BPS: u64 = 200; // 2%
 pub const MIN_RATE_BPS: u64 = 100;      // 1%
 
 // Default IRM constants
-pub const TARGET_UTIL_START_BPS: u64 = 3_300; // 33%
-pub const TARGET_UTIL_END_BPS: u64 = 6_600; // 66%
+pub const TARGET_UTIL_START_BPS: u64 = 5_000; // 50%
+pub const TARGET_UTIL_END_BPS: u64 = 8_500; // 85%
 pub const SECONDS_PER_DAY: u64 = 86_400;
 pub const SECONDS_PER_YEAR: u64 = 31_536_000;
 
@@ -47,6 +53,6 @@ pub const FACTORY_SEED_PREFIX: &[u8] = b"gamm_factory";
 #[constant]
 pub const POSITION_SEED_PREFIX: &[u8] = b"gamm_position";
 #[constant]
-pub const PAIR_CONFIG_SEED_PREFIX: &[u8] = b"gamm_pair_config";
+pub const LEVERAGED_POSITION_SEED_PREFIX: &[u8] = b"gamm_leveraged_position";
 #[constant]
 pub const FUTARCHY_AUTHORITY_SEED_PREFIX: &[u8] = b"futarchy_authority";

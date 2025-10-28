@@ -7,7 +7,7 @@
     "test": "anchor test",
     "deploy-tokens": "ts-node --esm scripts/utils/deploy_tokens.ts",
     "init-futarchy": "ts-node --esm scripts/init_futarchy_and_config.ts",
-    "initialize": "ts-node --esm scripts/initialize_pair.ts",
+    "initialize": "ts-node --esm scripts/initialize.ts",
     "create-rm": "ts-node --esm scripts/create_rate_model.ts",
     "bootstrap": "ts-node --esm scripts/bootstrap_liquidity.ts",
     "add-liq": "ts-node --esm scripts/add_liquidity.ts",
@@ -22,7 +22,9 @@
     "address-vanity": "ts-node --esm scripts/address_vanity.ts",
     "faucet-mint": "ts-node --esm scripts/mint_pair_tokens.ts",
     "get-pair-stats": "ts-node --esm scripts/get_pair_stats.ts",
-    "get-user-stats": "ts-node --esm scripts/get_user_stats.ts"
+    "get-user-stats": "ts-node --esm scripts/get_user_stats.ts",
+    "deploy-receiver": "anchor deploy -p flashloan_receiver_example",
+    "test-flashloan": "ts-node --esm scripts/test_flashloan.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.31.1",

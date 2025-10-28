@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
-use crate::utils::gamm_math::{pessimistic_max_debt, pessimistic_min_collateral};
+use crate::utils::gamm_math::pessimistic_max_debt;
 use crate::utils::math::compute_ema;
 use crate::state::RateModel;
 use crate::events::{UpdatePairEvent, EventMetadata};
@@ -12,16 +12,19 @@ pub struct Pair {
     pub token1: Pubkey,
     pub token0_decimals: u8,
     pub token1_decimals: u8,
-    pub config: Pubkey,
+
     // pair parameters
     pub rate_model: Pubkey,
     pub swap_fee_bps: u16,
     pub half_life: u64,
-    pub pool_deployer_fee_bps: u16,
     
     // Reserves
     pub reserve0: u64,
     pub reserve1: u64,
+
+    // Protocol revenue reserves
+    pub protocol_revenue_reserve0: u64,
+    pub protocol_revenue_reserve1: u64,
     
     // Price tracking
     pub last_price0_ema: u64,
@@ -55,11 +58,9 @@ impl Pair {
         token1: Pubkey,
         token0_decimals: u8,
         token1_decimals: u8,
-        config: Pubkey,
         rate_model: Pubkey,
         swap_fee_bps: u16,
         half_life: u64,
-        pool_deployer_fee_bps: u16,
         current_time: i64,
         bump: u8,
     ) -> Self {
@@ -68,18 +69,19 @@ impl Pair {
             token1,
             token0_decimals,
             token1_decimals,
-            config,
+
             // pair parameters
             rate_model,
             swap_fee_bps,
             half_life,
-            pool_deployer_fee_bps,
 
             last_update: current_time,
             bump,
 
             reserve0: 0,
             reserve1: 0,
+            protocol_revenue_reserve0: 0,
+            protocol_revenue_reserve1: 0,
             total_supply: MIN_LIQUIDITY,
 
             last_price0_ema: 0,
@@ -194,8 +196,9 @@ impl Pair {
     /// 
     /// Returns a tuple containing:
     /// - The maximum debt possible for the given collateral amount
-    /// - The pessimistic collateral factor in BPS
-    pub fn get_max_debt_and_cf_bps_for_collateral(&self, pair: &Pair, collateral_token: &Pubkey, collateral_amount: u64) -> Result<(u64, u16)> {
+    /// - The maximum collateral factor in BPS
+    /// - The liquidation collateral factor in BPS (max_allowed_cf_bps - LTV_BUFFER_BPS)
+    pub fn get_max_debt_and_cf_bps_for_collateral(&self, pair: &Pair, collateral_token: &Pubkey, collateral_amount: u64) -> Result<(u64, u16, u16)> {
         let (
             collateral_ema_price,
             collateral_spot_price,
@@ -210,38 +213,10 @@ impl Pair {
             collateral_ema_price,
             collateral_spot_price,
             debt_amm_reserve,
-        ).map_err(|error| error.into())
+        )
     }
 
-
-    /// Get the minimum collateral and pessimistic collateral factor in BPS for a given debt amount
-    /// 
-    /// - `pair`: The pair the user position belongs to
-    /// - `debt_token`: The token the user is borrowing
-    /// - `debt_amount`: The amount of debt the user is borrowing
-    /// 
-    /// Returns a tuple containing:
-    /// - The minimum collateral required to avoid liquidation
-    /// - The pessimistic collateral factor in BPS
-    pub fn get_min_collateral_and_cf_bps_for_debt(&self, pair: &Pair, debt_token: &Pubkey, debt_amount: u64) -> Result<(u64, u16)> {
-        let (
-            collateral_ema_price,
-            collateral_spot_price,
-            debt_amm_reserve,
-        ) = match debt_token == &pair.token0 {
-            true => (pair.ema_price1_nad(), pair.spot_price1_nad(), pair.reserve0),
-            false => (pair.ema_price0_nad(), pair.spot_price0_nad(), pair.reserve1),
-        };
-
-        pessimistic_min_collateral(
-            debt_amount,
-            collateral_ema_price,
-            collateral_spot_price,
-            debt_amm_reserve,
-        ).map_err(|error| error.into())
-    }
-
-    pub fn update(&mut self, rate_model: &Account<RateModel>, pair_key: Pubkey) -> Result<()> {
+    pub fn update(&mut self, rate_model: &Account<RateModel>, futarchy_authority: &crate::state::FutarchyAuthority, pair_key: Pubkey) -> Result<()> {
         let current_time = Clock::get()?.unix_timestamp;
         
         if current_time > self.last_update {
@@ -289,11 +264,23 @@ impl Pair {
                 self.last_rate1 = new_rate1;
                 
                 // Calculate and apply interest
-                let interest0 = (self.total_debt0 as u128 * integral0 as u128) / NAD as u128;
-                let interest1 = (self.total_debt1 as u128 * integral1 as u128) / NAD as u128;
-                
-                self.total_debt0 += interest0 as u64;
-                self.total_debt1 += interest1 as u64;
+                let total_interest0 = (self.total_debt0 as u128 * integral0 as u128) / NAD as u128;
+                let total_interest1 = (self.total_debt1 as u128 * integral1 as u128) / NAD as u128;
+
+                // calculate protocol share of accrued interest
+                let protocol_share0: u64 = ((total_interest0 as u128 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
+                let protocol_share1: u64 = ((total_interest1 as u128 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
+                let lp_share0 = total_interest0 as u64 - protocol_share0;
+                let lp_share1 = total_interest1 as u64 - protocol_share1;
+
+                // update protocol revenue reserves
+                self.protocol_revenue_reserve0 += protocol_share0;
+                self.protocol_revenue_reserve1 += protocol_share1;
+
+                // update total debt
+                self.total_debt0 += lp_share0;
+                self.total_debt1 += lp_share1;
+
                 // TODO: review this    
                 // this applies accrued interest as instant liquidity by appending it to the reserves
                 // it applies positive price impact to assets that may be borrowed
@@ -305,8 +292,8 @@ impl Pair {
                 // 5. affecting liquidation thresholds
                 // 6. affecting the amount of debt that can be borrowed
                 // 7. affecting the amount of interest that is earned
-                self.reserve0 += interest0 as u64;
-                self.reserve1 += interest1 as u64;
+                self.reserve0 += lp_share0;
+                self.reserve1 += lp_share1;
 
                 emit!(UpdatePairEvent {
                     metadata: EventMetadata::new(Pubkey::default(), pair_key),
@@ -314,8 +301,10 @@ impl Pair {
                     price1_ema: self.last_price1_ema,
                     rate0: self.last_rate0,
                     rate1: self.last_rate1,
-                    accrued_interest0: interest0,
-                    accrued_interest1: interest1,
+                    accrued_interest0: total_interest0,
+                    accrued_interest1: total_interest1,
+                    protocol_revenue_reserve0: self.protocol_revenue_reserve0,
+                    protocol_revenue_reserve1: self.protocol_revenue_reserve1,
                     reserve0_after_interest: self.reserve0,
                     reserve1_after_interest: self.reserve1,
                 });

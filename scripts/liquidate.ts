@@ -45,7 +45,7 @@ async function main() {
     console.log('Token0 Mint:', TOKEN0_MINT.toBase58());
     console.log('Token1 Mint:', TOKEN1_MINT.toBase58());
 
-    const userPublicKey = new PublicKey('C7GKpfqQyBoFR6S13DECwBjdi7aCQKbbeKjXm4Jt5Hds');
+    const userPublicKey = new PublicKey(process.env.USER_ADDRESS || 'C7GKpfqQyBoFR6S13DECwBjdi7aCQKbbeKjXm4Jt5Hds');
     console.log('User address:', userPublicKey.toBase58());
 
     // Find PDA for the pair

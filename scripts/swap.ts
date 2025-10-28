@@ -97,6 +97,22 @@ async function main() {
     console.log('Token0 Vault:', token0Vault.toBase58());
     console.log('Token1 Vault:', token1Vault.toBase58());
 
+    // Find PDA for futarchy authority
+    const [futarchyAuthorityPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('futarchy_authority')],
+        program.programId
+    );
+    console.log('Futarchy Authority PDA:', futarchyAuthorityPda.toBase58());
+
+    // Get authority's token account for token being swapped (PDA-owned)
+    const authorityToken0Account = await getAssociatedTokenAddress(
+        TOKEN0_MINT,
+        futarchyAuthorityPda,
+        true, // allowOwnerOffCurve for PDAs
+        token0Program
+    );
+    console.log('Authority Token0 Account (PDA-owned):', authorityToken0Account.toBase58());
+
     // Swap parameters
     const amountIn = new BN(1000_000_000); // Amount of token0 to swap
     const minAmountOut = new BN(0); // Minimum amount of token1 to receive
@@ -115,10 +131,12 @@ async function main() {
             user: DEPLOYER_KEYPAIR.publicKey,
             pair: pairPda,
             rateModel: RATE_MODEL,
+            futarchyAuthority: futarchyAuthorityPda,
             tokenInVault: token0Vault,
             tokenOutVault: token1Vault,
             userTokenInAccount: DEPLOYER_TOKEN0_ACCOUNT,
             userTokenOutAccount: DEPLOYER_TOKEN1_ACCOUNT,
+            authorityTokenInAccount: authorityToken0Account,
             tokenInMint: TOKEN0_MINT,
             tokenOutMint: TOKEN1_MINT,
         })

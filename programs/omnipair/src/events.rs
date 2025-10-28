@@ -81,6 +81,8 @@ pub struct UpdatePairEvent {
     pub rate1: u64,
     pub accrued_interest0: u128,
     pub accrued_interest1: u128,
+    pub protocol_revenue_reserve0: u64,
+    pub protocol_revenue_reserve1: u64,
     pub reserve0_after_interest: u64,
     pub reserve1_after_interest: u64,
     pub metadata: EventMetadata,
@@ -117,5 +119,15 @@ pub struct UserPositionLiquidatedEvent {
     pub liquidation_bonus_applied: u64,
     pub k0: u128,
     pub k1: u128,
+    pub metadata: EventMetadata,
+}
+
+#[event]
+pub struct FlashloanEvent {
+    pub amount0: u64,
+    pub amount1: u64,
+    pub fee0: u64,
+    pub fee1: u64,
+    pub receiver: Pubkey,
     pub metadata: EventMetadata,
 }

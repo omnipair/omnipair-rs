@@ -1,13 +1,13 @@
 [package]
-name = "omnipair"
+name = "faucet"
 version = "0.1.0"
-description = "Oracless spot and margin money market protocol"
+description = "Token faucet for development and testing"
 edition = "2021"
 resolver = "2"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "omnipair"
+name = "faucet"
 
 [features]
 no-entrypoint = []
@@ -29,15 +29,4 @@ anchor-lang = { version = "0.31.1", features = ["init-if-needed", "event-cpi", "
 anchor-spl = { version = "0.31.1", features = ["metadata"] }
 spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
 spl-token-2022 = { version = "6.0.0", features = ["no-entrypoint"] }
-spl-math = { version = "0.3.0", features = ["no-entrypoint"] }
-solana-security-txt = "1.1.1"
-num-traits = "0.2.19"
-spl-memo = "4.0.0"
-uint = "0.9.1"
-bytemuck = { version = "1.4.0", features = ["derive", "min_const_generics"] }
-arrayref = { version = "0.3.6" }
 
-[dev-dependencies]
-quickcheck = "0.9"
-proptest = "1.0"
-rand = "0.8.5"

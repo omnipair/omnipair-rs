@@ -1,5 +1,5 @@
 [workspace]
-members = ["programs/*"]
+members = ["programs/omnipair", "programs/faucet", "examples/flashloan_receiver"]
 resolver = "2"
 
 [profile.release]

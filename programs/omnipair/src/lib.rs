@@ -10,16 +10,22 @@ pub mod utils;
 pub use utils::*;
 pub use instructions::*;
 pub use utils::account::*;
-pub use instructions::pair_initialize::InitializePair;
-pub use instructions::faucet_mint::FaucetMint;
 pub use instructions::emit_value::{EmitValueArgs, PairViewKind, UserPositionViewKind, ViewPairData, ViewUserPositionData};
 
-declare_id!("3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd");
-
+declare_id!("Bd9Uhf5S8yzfop8cG9oqRs6jVcLtu8B4cb2gvRmtbNzk");
 
 pub mod deployer {
     use super::{pubkey, Pubkey};
+    
+    #[cfg(feature = "development")]
+    pub const ID: Pubkey = pubkey!("C7GKpfqQyBoFR6S13DECwBjdi7aCQKbbeKjXm4Jt5Hds");
+    
+    #[cfg(feature = "production")]
     pub const ID: Pubkey = pubkey!("8tF4uYMBXqGhCUGRZL3AmPqRzbX8JJ1TpYnY3uJKN4kt");
+    
+    // Default to development if no feature is specified
+    #[cfg(not(any(feature = "development", feature = "production")))]
+    pub const ID: Pubkey = pubkey!("C7GKpfqQyBoFR6S13DECwBjdi7aCQKbbeKjXm4Jt5Hds");
 }
 
 #[program]
@@ -42,19 +48,19 @@ pub mod omnipair {
         InitFutarchyAuthority::handle_init(ctx, args)
     }
 
-    pub fn init_pair_config(ctx: Context<InitPairConfig>, args: InitPairConfigArgs) -> Result<()> {
-        InitPairConfig::handle_init(ctx, args)
-    }
-
-    // Pair instructions
-    #[access_control(ctx.accounts.validate_and_create_rate_model(&args))]
-    pub fn initialize_pair(ctx: Context<InitializePair>, args: InitializePairArgs) -> Result<()> {
-        InitializePair::handle_initialize(ctx, args)
+    pub fn distribute_tokens(ctx: Context<DistributeTokens>, args: DistributeTokensArgs) -> Result<()> {
+        DistributeTokens::handle_distribute(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn bootstrap_pair(ctx: Context<BootstrapPair>, args: AddLiquidityArgs) -> Result<()> {
-        BootstrapPair::handle_bootstrap(ctx, args)
+    pub fn claim_protocol_fees(ctx: Context<ClaimProtocolFees>, args: ClaimProtocolFeesArgs) -> Result<()> {
+        ClaimProtocolFees::handle_claim(ctx, args)
+    }
+
+    // Pair instructions
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn initialize(ctx: Context<InitializeAndBootstrap>, args: InitializeAndBootstrapArgs) -> Result<()> {
+        InitializeAndBootstrap::handle_initialize(ctx, args)
     }
 
     #[access_control(ctx.accounts.update_and_validate_add(&args))]
@@ -97,11 +103,6 @@ pub mod omnipair {
         CommonAdjustPosition::handle_borrow(ctx, args)
     }
 
-    #[access_control(ctx.accounts.update_and_validate_borrow(&args))]
-    pub fn add_collateral_and_borrow(ctx: Context<AddCollateralAndBorrow>, args: AddCollateralAndBorrowArgs) -> Result<()> {
-        AddCollateralAndBorrow::handle_add_collateral_and_borrow(ctx, args)
-    }
-
     #[access_control(ctx.accounts.update_and_validate_repay(&args))]
     pub fn repay(ctx: Context<CommonAdjustPosition>, args: AdjustPositionArgs) -> Result<()> {
         CommonAdjustPosition::handle_repay(ctx, args)
@@ -112,9 +113,9 @@ pub mod omnipair {
         Liquidate::handle_liquidate(ctx)
     }
 
-    // Faucet instruction
-    #[cfg(feature = "development")]
-    pub fn faucet_mint(ctx: Context<FaucetMint>) -> Result<()> {
-        FaucetMint::handle_faucet_mint(ctx)
+    // Flash loan instruction
+    #[access_control(ctx.accounts.update_and_validate(&args))]
+    pub fn flashloan<'info>(ctx: Context<'_, '_, '_, 'info, Flashloan<'info>>, args: FlashloanArgs) -> Result<()> {
+        Flashloan::handle_flashloan(ctx, args)
     }
 }

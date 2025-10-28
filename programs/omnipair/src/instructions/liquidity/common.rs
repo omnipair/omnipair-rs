@@ -10,6 +10,7 @@ use anchor_spl::{
 use crate::{
     state::pair::Pair,
     state::rate_model::RateModel,
+    state::futarchy_authority::FutarchyAuthority,
     constants::*,
 };
 
@@ -39,6 +40,12 @@ pub struct AdjustLiquidity<'info> {
         address = pair.rate_model,
     )]
     pub rate_model: Account<'info, RateModel>,
+
+    #[account(
+        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
+        bump
+    )]
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
     
     #[account(
         mut,
@@ -109,7 +116,7 @@ impl<'info> AdjustLiquidity<'info> {
     // generic update function for pair internal state
     pub fn update(&mut self) -> Result<()> {
         let pair_key = self.pair.to_account_info().key();
-        self.pair.update(&self.rate_model, pair_key)?;
+        self.pair.update(&self.rate_model, &self.futarchy_authority, pair_key)?;
         Ok(())
     }
 }

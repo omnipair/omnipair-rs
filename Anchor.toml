@@ -7,20 +7,28 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-omnipair = "3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd"
+faucet = "3Ckfn1LMByoDfVpcDPf7nouk5nQAUm51Zkdf1oprQTAK"
+flashloan_receiver_example = "GmtswKBDrFZ9DfUfP7jbPFvbtuG7AJcX73SvoKWGxJbu"
+omnipair = "2h6oKUk4jcNQ81EzKvYVtzsyRpJwsz6J2pEeQTo1KsQB"
 
 [programs.localnet]
-omnipair = "3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd"
+faucet = "3Ckfn1LMByoDfVpcDPf7nouk5nQAUm51Zkdf1oprQTAK"
+flashloan_receiver_example = "GmtswKBDrFZ9DfUfP7jbPFvbtuG7AJcX73SvoKWGxJbu"
+omnipair = "2h6oKUk4jcNQ81EzKvYVtzsyRpJwsz6J2pEeQTo1KsQB"
 
 [programs.mainnet]
 omnipair = "3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd"
 
 [registry]
-url = "https://mainnet.helius-rpc.com/?api-key=66a4060b-2453-49cd-bf7a-fa03546c97ec"
+url = "https://devnet.helius-rpc.com/?api-key=66a4060b-2453-49cd-bf7a-fa03546c97ec"
 
 [provider]
-cluster = "mainnet"
-wallet = "deployer-keypair.json"
+cluster = "devnet"
+wallet = "testnet-keypair.json"
+
+[workspace]
+members = ["programs/omnipair", "programs/faucet"]
 
 [scripts]
-test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts --require ts-node/register"
+build-devnet = "anchor build -- --features \"development\""
+build-mainnet = "anchor build -p omnipair -- --features \"production\""

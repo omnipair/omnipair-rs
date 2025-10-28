@@ -8,7 +8,7 @@ use crate::{
     events::{AdjustCollateralEvent, UserPositionCreatedEvent, UserPositionUpdatedEvent, EventMetadata},
     utils::{token::transfer_from_user_to_pool_vault, account::get_size_with_discriminator},
     instructions::lending::common::AdjustPositionArgs,
-    state::{user_position::UserPosition, pair::Pair, rate_model::RateModel},
+    state::{user_position::UserPosition, pair::Pair, rate_model::RateModel, futarchy_authority::FutarchyAuthority},
     constants::*,
 };
 
@@ -31,6 +31,12 @@ pub struct AddCollateral<'info> {
         address = pair.rate_model,
     )]
     pub rate_model: Account<'info, RateModel>,
+
+    #[account(
+        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
+        bump
+    )]
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
 
     #[account(
         init_if_needed,
@@ -87,7 +93,7 @@ impl<'info> AddCollateral<'info> {
     
     pub fn update(&mut self) -> Result<()> {
         let pair_key = self.pair.to_account_info().key();
-        self.pair.update(&self.rate_model, pair_key)?;
+        self.pair.update(&self.rate_model, &self.futarchy_authority, pair_key)?;
         Ok(())
     }
 
