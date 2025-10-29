@@ -4,7 +4,8 @@ import {
     Keypair,
     SystemProgram,
     SYSVAR_RENT_PUBKEY,
-    LAMPORTS_PER_SOL
+    LAMPORTS_PER_SOL,
+    Transaction
 } from '@solana/web3.js';
 import { 
     TOKEN_PROGRAM_ID, 
@@ -12,7 +13,9 @@ import {
     ASSOCIATED_TOKEN_PROGRAM_ID,
     NATIVE_MINT,
     getAssociatedTokenAddress,
-    getAccount
+    getAccount,
+    createAssociatedTokenAccountInstruction,
+    getAssociatedTokenAddressSync
 } from '@solana/spl-token';
 import BN from 'bn.js';
 import { Program } from '@coral-xyz/anchor';
@@ -20,7 +23,6 @@ import idl from '../target/idl/omnipair.json' with { type: "json" };
 import type { Omnipair } from '../target/types/omnipair';
 import * as anchor from '@coral-xyz/anchor';
 import * as dotenv from 'dotenv';
-import { leU64 } from './utils/index.ts';
 
 // Load environment variables
 dotenv.config();
@@ -75,13 +77,6 @@ async function main() {
     );
 
     console.log('LP Token ATA:', deployerLpTokenAccount.toBase58());
-    
-    const pairConfigNonce = 1;
-    const [pairConfigPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('gamm_pair_config'), leU64(pairConfigNonce)],
-        program.programId
-    );
-    console.log('Pair Config PDA:', pairConfigPda.toBase58());
 
     // Get token program for each mint
     const token0Program = (await provider.connection.getAccountInfo(TOKEN0_MINT))?.owner.equals(TOKEN_2022_PROGRAM_ID) 
@@ -102,12 +97,31 @@ async function main() {
     console.log('Futarchy Authority PDA:', futarchyAuthorityPda.toBase58());
 
     // Get WSOL account for authority (PDA-owned)
-    const authorityWsolAccount = await getAssociatedTokenAddress(
+    const authorityWsolAccount = getAssociatedTokenAddressSync(
         NATIVE_MINT,
         futarchyAuthorityPda,
         true // allowOwnerOffCurve for PDAs
     );
     console.log('Authority WSOL Account (PDA-owned):', authorityWsolAccount.toBase58());
+    
+    // Check if the WSOL account exists, if not create it
+    const authorityWsolAccountInfo = await provider.connection.getAccountInfo(authorityWsolAccount);
+    if (!authorityWsolAccountInfo) {
+        console.log('Creating authority WSOL account...');
+        const createWsolIx = createAssociatedTokenAccountInstruction(
+            DEPLOYER_KEYPAIR.publicKey,
+            authorityWsolAccount,
+            futarchyAuthorityPda,
+            NATIVE_MINT,
+            TOKEN_PROGRAM_ID
+        );
+        
+        const tx = new Transaction().add(createWsolIx);
+        const signature = await provider.sendAndConfirm(tx, [DEPLOYER_KEYPAIR]);
+        console.log('Authority WSOL account created:', signature);
+    } else {
+        console.log('Authority WSOL account already exists');
+    }
 
     // Get token accounts for deployer
     const deployerToken0Account = await getAssociatedTokenAddress(
@@ -161,7 +175,6 @@ async function main() {
             token0Mint: TOKEN0_MINT,
             token1Mint: TOKEN1_MINT,
             pair: pairPda,
-            pairConfig: pairConfigPda,
             futarchyAuthority: futarchyAuthorityPda,
             rateModel: rateModelKeypair.publicKey,
             lpMint: lpMintPda,
@@ -172,6 +185,8 @@ async function main() {
             deployerToken1Account: deployerToken1Account,
             authorityWsolAccount: authorityWsolAccount,
             systemProgram: SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            token2022Program: TOKEN_2022_PROGRAM_ID,
             associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
             rent: SYSVAR_RENT_PUBKEY,
         })

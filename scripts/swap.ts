@@ -1,10 +1,13 @@
 import { 
     PublicKey, 
+    Transaction
 } from '@solana/web3.js';
 import { 
     TOKEN_PROGRAM_ID, 
     TOKEN_2022_PROGRAM_ID,
     getAssociatedTokenAddress,
+    createAssociatedTokenAccountInstruction,
+    getAssociatedTokenAddressSync
 } from '@solana/spl-token';
 import { Program } from '@coral-xyz/anchor';
 import idl from '../target/idl/omnipair.json' with { type: "json" };
@@ -59,9 +62,8 @@ async function main() {
     );
     console.log('Pair PDA:', pairPda.toBase58());
     
-    // Get pair account to get pair config and rate model
+    // Get pair account to get rate model
     const pairAccount = await program.account.pair.fetch(pairPda);
-    console.log('Pair config address:', pairAccount.config.toBase58());
     console.log('Rate model address:', pairAccount.rateModel.toBase58());
     
     const RATE_MODEL = pairAccount.rateModel;
@@ -105,13 +107,32 @@ async function main() {
     console.log('Futarchy Authority PDA:', futarchyAuthorityPda.toBase58());
 
     // Get authority's token account for token being swapped (PDA-owned)
-    const authorityToken0Account = await getAssociatedTokenAddress(
+    const authorityToken0Account = getAssociatedTokenAddressSync(
         TOKEN0_MINT,
         futarchyAuthorityPda,
         true, // allowOwnerOffCurve for PDAs
         token0Program
     );
     console.log('Authority Token0 Account (PDA-owned):', authorityToken0Account.toBase58());
+    
+    // Check if the authority token account exists, if not create it
+    const authorityToken0AccountInfo = await provider.connection.getAccountInfo(authorityToken0Account);
+    if (!authorityToken0AccountInfo) {
+        console.log('Creating authority token0 account...');
+        const createToken0Ix = createAssociatedTokenAccountInstruction(
+            DEPLOYER_KEYPAIR.publicKey,
+            authorityToken0Account,
+            futarchyAuthorityPda,
+            TOKEN0_MINT,
+            token0Program
+        );
+        
+        const tx = new Transaction().add(createToken0Ix);
+        const signature = await provider.sendAndConfirm(tx, [DEPLOYER_KEYPAIR]);
+        console.log('Authority token0 account created:', signature);
+    } else {
+        console.log('Authority token0 account already exists');
+    }
 
     // Swap parameters
     const amountIn = new BN(1000_000_000); // Amount of token0 to swap
@@ -139,6 +160,8 @@ async function main() {
             authorityTokenInAccount: authorityToken0Account,
             tokenInMint: TOKEN0_MINT,
             tokenOutMint: TOKEN1_MINT,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            token2022Program: TOKEN_2022_PROGRAM_ID,
         })
         .signers([DEPLOYER_KEYPAIR])
         .rpc();

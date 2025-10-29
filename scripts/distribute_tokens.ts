@@ -38,33 +38,33 @@ async function main() {
 
     // Fetch futarchy authority to get recipients
     const futarchyAuthority = await program.account.futarchyAuthority.fetch(futarchyAuthorityPda);
-    console.log('Recipient 1:', futarchyAuthority.recipient1.toBase58(), `(${futarchyAuthority.recipient1PercentageBps / 100}%)`);
-    console.log('Recipient 2:', futarchyAuthority.recipient2.toBase58(), `(${futarchyAuthority.recipient2PercentageBps / 100}%)`);
-    console.log('Recipient 3:', futarchyAuthority.recipient3.toBase58(), `(${futarchyAuthority.recipient3PercentageBps / 100}%)`);
+    console.log('Futarchy Treasury:', futarchyAuthority.recipients.futarchyTreasury.toBase58(), `(${futarchyAuthority.revenueDistribution.futarchyTreasuryBps / 100}%)`);
+    console.log('Buybacks Vault:', futarchyAuthority.recipients.buybacksVault.toBase58(), `(${futarchyAuthority.revenueDistribution.buybacksVaultBps / 100}%)`);
+    console.log('Team Treasury:', futarchyAuthority.recipients.teamTreasury.toBase58(), `(${futarchyAuthority.revenueDistribution.teamTreasuryBps / 100}%)`);
 
     // Get associated token addresses for recipients
-    const recipient1Ata = await getAssociatedTokenAddress(
+    const futarchyTreasuryAta = await getAssociatedTokenAddress(
         MINT_ADDRESS,
-        futarchyAuthority.recipient1,
+        futarchyAuthority.recipients.futarchyTreasury,
         false,
         TOKEN_PROGRAM_ID
     );
-    const recipient2Ata = await getAssociatedTokenAddress(
+    const buybacksVaultAta = await getAssociatedTokenAddress(
         MINT_ADDRESS,
-        futarchyAuthority.recipient2,
+        futarchyAuthority.recipients.buybacksVault,
         false,
         TOKEN_PROGRAM_ID
     );
-    const recipient3Ata = await getAssociatedTokenAddress(
+    const teamTreasuryAta = await getAssociatedTokenAddress(
         MINT_ADDRESS,
-        futarchyAuthority.recipient3,
+        futarchyAuthority.recipients.teamTreasury,
         false,
         TOKEN_PROGRAM_ID
     );
 
-    console.log('Recipient 1 ATA:', recipient1Ata.toBase58());
-    console.log('Recipient 2 ATA:', recipient2Ata.toBase58());
-    console.log('Recipient 3 ATA:', recipient3Ata.toBase58());
+    console.log('Futarchy Treasury ATA:', futarchyTreasuryAta.toBase58());
+    console.log('Buybacks Vault ATA:', buybacksVaultAta.toBase58());
+    console.log('Team Treasury ATA:', teamTreasuryAta.toBase58());
 
     // Get the source token account (PDA-owned)
     const sourceTokenAccount = await getAssociatedTokenAddress(
@@ -89,10 +89,11 @@ async function main() {
         .distributeTokens({})
         .accountsPartial({
             futarchyAuthority: futarchyAuthorityPda,
+            sourceMint: MINT_ADDRESS,
             sourceTokenAccount: sourceTokenAccount,
-            recipient1TokenAccount: recipient1Ata,
-            recipient2TokenAccount: recipient2Ata,
-            recipient3TokenAccount: recipient3Ata,
+            futarchyTreasuryTokenAccount: futarchyTreasuryAta,
+            buybacksVaultTokenAccount: buybacksVaultAta,
+            teamTreasuryTokenAccount: teamTreasuryAta,
             tokenProgram: TOKEN_PROGRAM_ID,
         })
         .rpc();
