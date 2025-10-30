@@ -5,6 +5,10 @@
   "type": "module",
   "scripts": {
     "test": "anchor test",
+    "test-litesvm": "mocha --require ts-node/register --extensions ts tests/**/*.test.ts",
+    "test-coverage": "yarn test-litesvm",
+    "coverage": "cargo tarpaulin --out Html --output-dir coverage --exclude-files tests examples",
+    "coverage-report": "open coverage/index.html",
     "deploy-tokens": "ts-node --esm scripts/utils/deploy_tokens.ts",
     "init-futarchy": "ts-node --esm scripts/init_futarchy_and_config.ts",
     "initialize": "ts-node --esm scripts/initialize.ts",
@@ -40,6 +44,7 @@
     "@types/mocha": "^10.0.0",
     "@types/node": "^20.0.0",
     "chai": "^4.3.0",
+    "litesvm": "^0.3.3",
     "mocha": "^10.0.0",
     "ts-mocha": "^10.0.0",
     "ts-node": "^10.9.1",
