@@ -1,5 +1,8 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::TokenAccount;
+use anchor_spl::{
+    token::Token,
+    token_interface::{TokenAccount, Mint, Token2022},
+};
 use crate::{
     state::pair::Pair,
     state::rate_model::RateModel,
@@ -8,6 +11,8 @@ use crate::{
     errors::ErrorCode,
     events::{UserPositionLiquidatedEvent, EventMetadata},
     state::user_position::UserPosition,
+    utils::token::transfer_from_pool_vault_to_user,
+    generate_gamm_pair_seeds,
 };
 
 #[event_cpi]
@@ -53,11 +58,22 @@ pub struct Liquidate<'info> {
     )]
     pub collateral_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
+    #[account(
+        mut,
+        constraint = caller_token_account.mint == collateral_vault.mint,
+    )]
+    pub caller_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(address = collateral_vault.mint)]
+    pub collateral_token_mint: Box<InterfaceAccount<'info, Mint>>,
+
     /// CHECK: This is the owner of the position being liquidated.
-    #[account(mut)]
+    #[account(address = user_position.owner)]
     pub position_owner: AccountInfo<'info>,
     #[account(mut)]
     pub payer: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+    pub token_2022_program: Program<'info, Token2022>,
     pub system_program: Program<'info, System>,
 }
 
@@ -99,9 +115,13 @@ impl<'info> Liquidate<'info> {
     pub fn handle_liquidate(ctx: Context<Self>) -> Result<()> {
         let Liquidate {
             collateral_vault,
+            caller_token_account,
+            collateral_token_mint,
             position_owner,
             payer,
             user_position,
+            token_program,
+            token_2022_program,
             ..
         } = ctx.accounts;
         let pair = &mut ctx.accounts.pair;
@@ -175,6 +195,15 @@ impl<'info> Liquidate<'info> {
             if is_collateral_token0 { user_position.collateral0 } else { user_position.collateral1 }
         );
 
+        let caller_incentive = (collateral_final as u128)
+            .checked_mul(LIQUIDATION_INCENTIVE_BPS as u128).ok_or(ErrorCode::DebtMathOverflow)?
+            .checked_div(BPS_DENOMINATOR as u128).ok_or(ErrorCode::DebtMathOverflow)?.try_into().map_err(|_| ErrorCode::DebtMathOverflow)?;
+        
+        // Remaining collateral goes to reserves (after incentive)
+        let collateral_to_reserves = collateral_final
+            .checked_sub(caller_incentive)
+            .ok_or(ErrorCode::DebtMathOverflow)?;
+
         if is_insolvent {
             user_position.writeoff_debt(pair, &debt_token)?;
         } else {
@@ -182,18 +211,38 @@ impl<'info> Liquidate<'info> {
         }
         user_position.set_applied_min_cf_for_debt_token(&debt_token, &pair, applied_min_cf_bps);
 
-        // LP seize collateral
-        // Liquidation incentive is shared across LPs with no caller incentive
-        // No actual transfer of collateral is done here, just increasing reserves
+        // Transfer liquidation incentive to caller from collateral vault
+        if caller_incentive > 0 {
+            transfer_from_pool_vault_to_user(
+                pair.to_account_info(),
+                collateral_vault.to_account_info(),
+                caller_token_account.to_account_info(),
+                collateral_token_mint.to_account_info(),
+                match collateral_token_mint.to_account_info().owner == token_program.key {
+                    true => token_program.to_account_info(),
+                    false => token_2022_program.to_account_info(),
+                },
+                caller_incentive,
+                collateral_token_mint.decimals,
+                &[&generate_gamm_pair_seeds!(pair)[..]],
+            )?;
+        }
+
+        // Update user position collateral and pair reserves
+        // Subtract the full seized amount from user position
         match is_collateral_token0 {
             true => {
                 user_position.collateral0 = user_position.collateral0.checked_sub(collateral_final).unwrap();
-                pair.reserve0 = pair.reserve0.checked_add(collateral_final).unwrap();
+                pair.total_collateral0 = pair.total_collateral0.checked_sub(collateral_final).unwrap();
+                // Add remaining collateral (after incentive) to reserves
+                pair.reserve0 = pair.reserve0.checked_add(collateral_to_reserves).unwrap();
                 pair.reserve1 = pair.reserve1.saturating_sub(debt_to_repay);
             }
             false => {
                 user_position.collateral1 = user_position.collateral1.checked_sub(collateral_final).unwrap();
-                pair.reserve1 = pair.reserve1.checked_add(collateral_final).unwrap();
+                pair.total_collateral1 = pair.total_collateral1.checked_sub(collateral_final).unwrap();
+                // Add remaining collateral (after incentive) to reserves
+                pair.reserve1 = pair.reserve1.checked_add(collateral_to_reserves).unwrap();
                 pair.reserve0 = pair.reserve0.saturating_sub(debt_to_repay);
             }
         }
@@ -208,7 +257,7 @@ impl<'info> Liquidate<'info> {
             debt1_liquidated: if is_collateral_token0 { debt_to_repay } else { 0 },
             collateral_price: if is_collateral_token0 { pair.ema_price0_nad() } else { pair.ema_price1_nad() },
             shortfall: if is_insolvent { (user_debt as u128).checked_sub(collateral_value).unwrap() } else { 0 },
-            liquidation_bonus_applied: 0,
+            liquidation_bonus_applied: caller_incentive,
             k0: k0,
             k1: pair.k(),
         });

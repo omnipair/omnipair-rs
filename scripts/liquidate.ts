@@ -120,6 +120,18 @@ async function main() {
     console.log('Liquidating with parameters:');
     console.log('Token:', liquidateToken0 ? 'Token0' : 'Token1');
 
+    // Get caller's token account for receiving liquidation incentive
+    const collateralMint = liquidateToken0 ? TOKEN0_MINT : TOKEN1_MINT;
+    const collateralTokenProgram = liquidateToken0 ? token0Program : token1Program;
+    const callerTokenAccount = await getAssociatedTokenAddress(
+        collateralMint,
+        DEPLOYER_KEYPAIR.publicKey,
+        false,
+        collateralTokenProgram,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+    console.log('Caller token account (for incentive):', callerTokenAccount.toBase58());
+
     // Create transaction
     const tx = await program.methods
         .liquidate()
@@ -131,6 +143,10 @@ async function main() {
             futarchyAuthority: futarchyAuthorityPda,
             userPosition: userPositionPda,
             collateralVault: liquidateToken0 ? token0Vault : token1Vault,
+            callerTokenAccount: callerTokenAccount,
+            collateralTokenMint: collateralMint,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            token2022Program: TOKEN_2022_PROGRAM_ID,
             systemProgram: SystemProgram.programId,
         })
         .signers([DEPLOYER_KEYPAIR])
