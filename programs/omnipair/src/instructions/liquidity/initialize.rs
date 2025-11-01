@@ -29,6 +29,7 @@ use crate::generate_gamm_pair_seeds;
 pub struct InitializeAndBootstrapArgs {
     pub swap_fee_bps: u16,
     pub half_life: u64,
+    pub fixed_cf_bps: Option<u16>,
     pub amount0_in: u64,
     pub amount1_in: u64,
     pub min_liquidity_out: u64,
@@ -181,6 +182,7 @@ impl<'info> InitializeAndBootstrap<'info> {
         let InitializeAndBootstrapArgs { 
             swap_fee_bps, 
             half_life, 
+            fixed_cf_bps,
             amount0_in,
             amount1_in,
             min_liquidity_out,
@@ -237,6 +239,7 @@ impl<'info> InitializeAndBootstrap<'info> {
             rate_model_key,
             swap_fee_bps,
             half_life,
+            fixed_cf_bps,
             current_time,
             ctx.bumps.pair,
         ));
