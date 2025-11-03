@@ -1,6 +1,8 @@
 import { 
     PublicKey, 
     SystemProgram,
+    Keypair,
+    Transaction,
 } from '@solana/web3.js';
 import { Program } from '@coral-xyz/anchor';
 import idl from '../target/idl/omnipair.json' with { type: "json" };
@@ -43,25 +45,87 @@ async function main() {
         console.log('Initializing futarchy authority...');
         
         // Define treasury accounts and their percentages (must sum to 100%)
-        const futarchyTreasury = new PublicKey(process.env.FUTARCHY_TREASURY_ADDRESS || DEPLOYER_KEYPAIR.publicKey.toBase58());
-        const buybacksVault = new PublicKey(process.env.BUYBACKS_VAULT_ADDRESS || DEPLOYER_KEYPAIR.publicKey.toBase58());
-        const teamTreasury = new PublicKey(process.env.TEAM_TREASURY_ADDRESS || DEPLOYER_KEYPAIR.publicKey.toBase58());
+        // Futarchy treasury is the futarchy authority PDA itself
+        const futarchyTreasury = futarchyAuthorityPda;
         
-        console.log('Futarchy Treasury (10%):', futarchyTreasury.toBase58());
-        console.log('Buybacks Vault (20%):', buybacksVault.toBase58());
-        console.log('Team Treasury (70%):', teamTreasury.toBase58());
+        // Generate keypairs for buybacks vault and team treasury (or use from env if provided)
+        const buybacksVaultKeypair = process.env.BUYBACKS_VAULT_ADDRESS 
+            ? null // Will use PublicKey from env
+            : Keypair.generate();
+        const buybacksVault = process.env.BUYBACKS_VAULT_ADDRESS 
+            ? new PublicKey(process.env.BUYBACKS_VAULT_ADDRESS)
+            : buybacksVaultKeypair!.publicKey;
+        
+        const teamTreasuryKeypair = process.env.TEAM_TREASURY_ADDRESS 
+            ? null // Will use PublicKey from env
+            : Keypair.generate();
+        const teamTreasury = process.env.TEAM_TREASURY_ADDRESS 
+            ? new PublicKey(process.env.TEAM_TREASURY_ADDRESS)
+            : teamTreasuryKeypair!.publicKey;
+        
+        console.log('Futarchy Treasury (30%):', futarchyTreasury.toBase58());
+        console.log('Buybacks Vault (60%):', buybacksVault.toBase58());
+        if (buybacksVaultKeypair) {
+            console.log('⚠️  Buybacks Vault keypair generated. Save this keypair securely!');
+            console.log('   Private key (base58):', Buffer.from(buybacksVaultKeypair.secretKey).toString('base64'));
+        }
+        console.log('Team Treasury (10%):', teamTreasury.toBase58());
+        if (teamTreasuryKeypair) {
+            console.log('⚠️  Team Treasury keypair generated. Save this keypair securely!');
+            console.log('   Private key (base58):', Buffer.from(teamTreasuryKeypair.secretKey).toString('base64'));
+        }
+        
+        // Create accounts for buybacks vault and team treasury if they were generated
+        const signers: Keypair[] = [DEPLOYER_KEYPAIR];
+        if (buybacksVaultKeypair || teamTreasuryKeypair) {
+            console.log('Creating accounts for generated vaults...');
+            const createAccountsTx = new Transaction();
+            
+            if (buybacksVaultKeypair) {
+                const rentExemptAmount = await provider.connection.getMinimumBalanceForRentExemption(0);
+                createAccountsTx.add(
+                    SystemProgram.createAccount({
+                        fromPubkey: DEPLOYER_KEYPAIR.publicKey,
+                        newAccountPubkey: buybacksVault,
+                        lamports: rentExemptAmount,
+                        space: 0,
+                        programId: SystemProgram.programId,
+                    })
+                );
+                signers.push(buybacksVaultKeypair);
+            }
+            
+            if (teamTreasuryKeypair) {
+                const rentExemptAmount = await provider.connection.getMinimumBalanceForRentExemption(0);
+                createAccountsTx.add(
+                    SystemProgram.createAccount({
+                        fromPubkey: DEPLOYER_KEYPAIR.publicKey,
+                        newAccountPubkey: teamTreasury,
+                        lamports: rentExemptAmount,
+                        space: 0,
+                        programId: SystemProgram.programId,
+                    })
+                );
+                signers.push(teamTreasuryKeypair);
+            }
+            
+            if (createAccountsTx.instructions.length > 0) {
+                const createAccountsSig = await provider.sendAndConfirm(createAccountsTx, signers);
+                console.log('Accounts created:', createAccountsSig);
+            }
+        }
         
         const futarchyTx = await program.methods
             .initFutarchyAuthority({
                 authority: DEPLOYER_KEYPAIR.publicKey,
-                swapBps: 100, // 1% swap fee
-                interestBps: 50, // 0.5% interest fee
+                swapBps: 100, // 10% swap fee
+                interestBps: 100, // 10% interest fee
                 futarchyTreasury: futarchyTreasury,
-                futarchyTreasuryBps: 1000, // 10%
+                futarchyTreasuryBps: 3000, // 30%
                 buybacksVault: buybacksVault,
-                buybacksVaultBps: 2000, // 20%
+                buybacksVaultBps: 6000, // 60%
                 teamTreasury: teamTreasury,
-                teamTreasuryBps: 7000, // 70%
+                teamTreasuryBps: 1000, // 10%
             })
             .accounts({
                 deployer: DEPLOYER_KEYPAIR.publicKey,
