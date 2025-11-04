@@ -200,6 +200,40 @@ pub enum ErrorCode {
     #[msg("Invalid mint")]
     InvalidMint,
 
+    #[msg("Invalid mint length")]
+    InvalidMintLen,
+
     #[msg("Invalid distribution - percentages must sum to 100%")]
     InvalidDistribution,
+
+    #[msg("Invalid LP mint key")]
+    InvalidLpMintKey,
+
+    #[msg("Invalid pair key")]
+    InvalidPairKey,
+
+    #[msg("Invalid LP name")]
+    InvalidLpName,
+
+    #[msg("Invalid LP symbol")]
+    InvalidLpSymbol,
+
+    #[msg("Invalid LP URI")]
+    InvalidLpUri,
+
+    #[msg("Account not empty")]
+    AccountNotEmpty,
+
+    #[msg("Invalid mint authority")]
+    InvalidMintAuthority,
+
+    #[msg("Frozen LP mint")]
+    FrozenLpMint,
+
+    #[msg("Non-zero supply")]
+    NonZeroSupply,
+
+    #[msg("Wrong LP decimals")]
+    WrongLpDecimals,
+    
 }

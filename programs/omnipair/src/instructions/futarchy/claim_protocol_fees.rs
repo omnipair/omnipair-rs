@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::{
     token::{Token, TokenAccount},
     token_interface::{Mint, Token2022},
+    associated_token::AssociatedToken,
 };
 use crate::{
     state::*,
@@ -25,7 +26,7 @@ pub struct ClaimProtocolFees<'info> {
 
     #[account(
         mut,
-        seeds = [PAIR_SEED_PREFIX, pair.token0.as_ref(), pair.token1.as_ref()],
+        seeds = [PAIR_SEED_PREFIX, pair.token0.as_ref(), pair.token1.as_ref(), pair.pair_nonce.as_ref()],
         bump
     )]
     pub pair: Account<'info, Pair>,
@@ -49,16 +50,18 @@ pub struct ClaimProtocolFees<'info> {
     pub token1_vault: Account<'info, TokenAccount>,
 
     #[account(
-        mut,
-        constraint = authority_token0_account.mint == pair.token0,
-        constraint = authority_token0_account.owner == futarchy_authority.key() @ ErrorCode::InvalidFutarchyAuthority,
+        init_if_needed,
+        payer = caller,
+        associated_token::mint = token0_mint,
+        associated_token::authority = futarchy_authority,
     )]
     pub authority_token0_account: Account<'info, TokenAccount>,
 
     #[account(
-        mut,
-        constraint = authority_token1_account.mint == pair.token1,
-        constraint = authority_token1_account.owner == futarchy_authority.key() @ ErrorCode::InvalidFutarchyAuthority,
+        init_if_needed,
+        payer = caller,
+        associated_token::mint = token1_mint,
+        associated_token::authority = futarchy_authority,
     )]
     pub authority_token1_account: Account<'info, TokenAccount>,
 
@@ -70,6 +73,8 @@ pub struct ClaimProtocolFees<'info> {
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
 }
 
 impl<'info> ClaimProtocolFees<'info> {

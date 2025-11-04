@@ -12,6 +12,7 @@ use crate::{
     state::rate_model::RateModel,
     state::futarchy_authority::FutarchyAuthority,
     constants::*,
+    errors::ErrorCode,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -29,7 +30,8 @@ pub struct AdjustLiquidity<'info> {
         seeds = [
             PAIR_SEED_PREFIX, 
             pair.token0.as_ref(),
-            pair.token1.as_ref()
+            pair.token1.as_ref(),
+            pair.pair_nonce.as_ref()
         ],
         bump
     )]
@@ -87,11 +89,7 @@ pub struct AdjustLiquidity<'info> {
     
     #[account(
         mut,
-        seeds = [
-            LP_MINT_SEED_PREFIX,
-            pair.key().as_ref(),
-        ],
-        bump,
+        address = pair.lp_mint @ ErrorCode::InvalidMint,
     )]
     pub lp_mint: Box<InterfaceAccount<'info, Mint>>,
     

@@ -7,8 +7,15 @@ use anchor_spl::{
     token::spl_token,
     token::{Token},
     token_interface::{Mint, TokenAccount, Token2022},
-    associated_token::AssociatedToken,
+    associated_token::{AssociatedToken, create_idempotent},
 };
+use anchor_spl::metadata::{
+    create_metadata_accounts_v3,
+    mpl_token_metadata::types::DataV2,
+    mpl_token_metadata::ID as MPL_TOKEN_METADATA_PROGRAM_ID,
+    CreateMetadataAccountsV3, Metadata,
+};
+use anchor_lang::solana_program::program_pack::Pack;
 use crate::state::{
     pair::Pair,
     rate_model::RateModel,
@@ -30,13 +37,20 @@ pub struct InitializeAndBootstrapArgs {
     pub swap_fee_bps: u16,
     pub half_life: u64,
     pub fixed_cf_bps: Option<u16>,
+    pub pair_nonce: [u8; 16],
+
     pub amount0_in: u64,
     pub amount1_in: u64,
     pub min_liquidity_out: u64,
+
+    pub lp_name: String,   // e.g. "OMFG/USDC omLP" (<= 32)
+    pub lp_symbol: String, // e.g. "OM.US-OMLP" (<= 10)
+    pub lp_uri: String,    // e.g. "ipfs://assets.../OMFG-USDC.json" (<= 200 chars)
 }
 
 #[event_cpi]
 #[derive(Accounts)]
+#[instruction(args: InitializeAndBootstrapArgs)]
 pub struct InitializeAndBootstrap<'info> {
     #[account(mut)]
     pub deployer: Signer<'info>,
@@ -51,7 +65,8 @@ pub struct InitializeAndBootstrap<'info> {
         seeds = [
             PAIR_SEED_PREFIX, 
             token0_mint.key().as_ref(), 
-            token1_mint.key().as_ref()
+            token1_mint.key().as_ref(),
+            args.pair_nonce.as_ref(),
             ],
         bump
     )]
@@ -71,27 +86,24 @@ pub struct InitializeAndBootstrap<'info> {
     pub rate_model: Box<Account<'info, RateModel>>,
 
     #[account(
-        init,
-        seeds = [
-            LP_MINT_SEED_PREFIX,
-            pair.key().as_ref(),
-        ],
-        bump,
-        mint::decimals = 9,
-        mint::authority = pair,
-        payer = deployer,
-        mint::token_program = token_program,
+        mut,
+        constraint = lp_mint.owner == token_program.key @ ErrorCode::InvalidTokenProgram,
     )]
-    pub lp_mint: Box<InterfaceAccount<'info, Mint>>,
+    /// CHECK: initialized in-program via initialize_mint2; validated at runtime
+    pub lp_mint: UncheckedAccount<'info>,
 
     #[account(
-        init,
-        associated_token::mint = lp_mint,
-        associated_token::authority = deployer,
-        payer = deployer,
-        token::token_program = token_program,
+        mut,
+        seeds = [METADATA_SEED_PREFIX, MPL_TOKEN_METADATA_PROGRAM_ID.as_ref(), lp_mint.key().as_ref()],
+        seeds::program = MPL_TOKEN_METADATA_PROGRAM_ID,
+        bump
     )]
-    pub deployer_lp_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    /// CHECK: derived/checked via seeds above
+    pub lp_token_metadata: UncheckedAccount<'info>,
+
+    #[account(mut)]
+    /// CHECK: created via CPI after lp_mint is initialized
+    pub deployer_lp_token_account: UncheckedAccount<'info>,
 
     #[account(
         init_if_needed,
@@ -134,6 +146,7 @@ pub struct InitializeAndBootstrap<'info> {
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
+    pub token_metadata_program: Program<'info, Metadata>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub rent: Sysvar<'info, Rent>,
 }
@@ -145,6 +158,9 @@ impl<'info> InitializeAndBootstrap<'info> {
             half_life, 
             amount0_in,
             amount1_in,
+            lp_name,
+            lp_symbol,
+            lp_uri,
             ..
         } = args;
 
@@ -158,13 +174,19 @@ impl<'info> InitializeAndBootstrap<'info> {
         require_gte!(self.deployer_token0_account.amount, *amount0_in, ErrorCode::InsufficientAmount0In);
         require_gte!(self.deployer_token1_account.amount, *amount1_in, ErrorCode::InsufficientAmount1In);
 
-        // Enforce address of lp mint is postfixed with "omni"
         #[cfg(feature = "production")]
         {
-            let token_key: String = self.lp_mint.key().to_string();
-            let last_4_chars = &token_key[token_key.len() - 4..];
-            require_eq!("omni", last_4_chars, ErrorCode::InvalidTokenKey);
+            let lp_mint_key: String = self.lp_mint.key().to_string();
+            let last_4_chars = &lp_mint_key[lp_mint_key.len() - 4..];
+            require_eq!("omLP", last_4_chars, ErrorCode::InvalidLpMintKey);
         }
+    
+        require!(lp_name.len() <= 32, ErrorCode::InvalidLpName);
+        require!(lp_name.is_ascii(), ErrorCode::InvalidLpName);
+        require!(lp_symbol.len() <= 10, ErrorCode::InvalidLpSymbol);
+        require!(lp_symbol.is_ascii(), ErrorCode::InvalidLpSymbol);
+        require!(lp_uri.len() <= 200, ErrorCode::InvalidLpUri);
+        require!(lp_uri.starts_with("http"), ErrorCode::InvalidLpUri);
         
         Ok(())
     }
@@ -177,6 +199,7 @@ impl<'info> InitializeAndBootstrap<'info> {
 
     pub fn handle_initialize(ctx: Context<Self>, args: InitializeAndBootstrapArgs) -> Result<()> {
         let current_time = Clock::get()?.unix_timestamp;
+        let pair_key = ctx.accounts.pair.key();
         let pair = &mut ctx.accounts.pair;
         
         let InitializeAndBootstrapArgs { 
@@ -186,6 +209,10 @@ impl<'info> InitializeAndBootstrap<'info> {
             amount0_in,
             amount1_in,
             min_liquidity_out,
+            lp_name,
+            lp_symbol,
+            lp_uri,
+            pair_nonce,
         } = args;
 
         // Collect pair creation fee from deployer to futarchy authority
@@ -218,22 +245,25 @@ impl<'info> InitializeAndBootstrap<'info> {
             token1, 
             token0_decimals,
             token1_decimals,
-            rate_model_key
+            rate_model_key,
+            lp_mint_key
         ) = (
             ctx.accounts.token0_mint.key(), 
             ctx.accounts.token1_mint.key(), 
             ctx.accounts.token0_mint.decimals,
             ctx.accounts.token1_mint.decimals,
-            ctx.accounts.rate_model.key()
+            ctx.accounts.rate_model.key(),
+            ctx.accounts.lp_mint.key(),
         );
 
         // Initialize rate model
         ctx.accounts.rate_model.set_inner(RateModel::new());
 
-        // Initialize pair
+        // Initialize pair (before LP mint is initialized, but we store the key)
         pair.set_inner(Pair::initialize(
             token0,
             token1,
+            lp_mint_key,
             token0_decimals,
             token1_decimals,
             rate_model_key,
@@ -241,6 +271,8 @@ impl<'info> InitializeAndBootstrap<'info> {
             half_life,
             fixed_cf_bps,
             current_time,
+            
+            pair_nonce,
             ctx.bumps.pair,
         ));
 
@@ -270,8 +302,85 @@ impl<'info> InitializeAndBootstrap<'info> {
             amount1_in,
             ctx.accounts.token1_mint.decimals,
         )?;
+        
+        // Initialize LP mint
+        require!(
+            ctx.accounts.lp_mint.data_len() == 82,
+            ErrorCode::InvalidMintLen
+        );
+        let mint_unchecked = spl_token::state::Mint::unpack_unchecked(
+            &ctx.accounts.lp_mint.to_account_info().data.borrow()
+        )?;
+        require!(!mint_unchecked.is_initialized, ErrorCode::AccountNotEmpty);
+        
+        let ix = spl_token::instruction::initialize_mint2(
+            &ctx.accounts.token_program.key(),
+            &ctx.accounts.lp_mint.key(),
+            &pair_key,
+            None,
+            9,
+        )?;
+        invoke(
+            &ix,
+            &[
+                ctx.accounts.lp_mint.to_account_info(),
+            ],
+        )?;
 
-        // Calculate liquidity:
+        // lp mint post-initialize checks
+        let lp_mint_account = ctx.accounts.lp_mint.to_account_info();
+        let mint = spl_token::state::Mint::unpack(&lp_mint_account.data.borrow())?;
+        require_keys_eq!(mint.mint_authority.unwrap(), pair_key, ErrorCode::InvalidMintAuthority);
+        require!(mint.freeze_authority.is_none(), ErrorCode::FrozenLpMint);
+        require!(mint.supply == 0, ErrorCode::NonZeroSupply);
+        require_eq!(mint.decimals, 9, ErrorCode::WrongLpDecimals);
+
+        // Create associated token account for deployer LP token
+        create_idempotent(
+            CpiContext::new(
+                ctx.accounts.associated_token_program.to_account_info(),
+                anchor_spl::associated_token::Create {
+                    payer: ctx.accounts.deployer.to_account_info(),
+                    associated_token: ctx.accounts.deployer_lp_token_account.to_account_info(),
+                    authority: ctx.accounts.deployer.to_account_info(),
+                    mint: ctx.accounts.lp_mint.to_account_info(),
+                    system_program: ctx.accounts.system_program.to_account_info(),
+                    token_program: ctx.accounts.token_program.to_account_info(),
+                },
+            ),
+        )?;
+        
+        // --- Create Metaplex metadata for LP mint ---
+        let data = DataV2 {
+            name:   lp_name.clone(),
+            symbol: lp_symbol.clone(),
+            uri:    lp_uri.clone(),
+            seller_fee_basis_points: 0,
+            creators: None,
+            collection: None,
+            uses: None,
+        };
+        
+        let cpi_accounts = CreateMetadataAccountsV3 {
+            metadata:         ctx.accounts.lp_token_metadata.to_account_info(),
+            mint:             ctx.accounts.lp_mint.to_account_info(),
+            mint_authority:   pair.to_account_info(),   // pair PDA signs
+            payer:            ctx.accounts.deployer.to_account_info(),
+            update_authority: pair.to_account_info(),   // keep program-controlled
+            system_program:   ctx.accounts.system_program.to_account_info(),
+            rent:             ctx.accounts.rent.to_account_info(),
+        };
+        
+        create_metadata_accounts_v3(
+            CpiContext::new(ctx.accounts.token_metadata_program.to_account_info(), cpi_accounts)
+                .with_signer(&[&generate_gamm_pair_seeds!(pair)[..]]),
+            data,
+            true,  // is_mutable
+            true,  // update_authority_is_signer (pair PDA)
+            None,  // token_standard
+        )?;
+
+        // Calculate liquidity
         // sqrt(amount0_in * amount1_in) - MINIMUM_LIQUIDITY
         // MINIMUM_LIQUIDITY = 1000
         // 9 decimals: 1000 / 10^9 = 1e-6 full LP tokens

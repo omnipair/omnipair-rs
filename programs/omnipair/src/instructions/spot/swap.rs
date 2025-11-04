@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::{
     token::{Token, TokenAccount},
     token_interface::{Mint, Token2022},
+    associated_token::AssociatedToken,
 };
 use crate::{
     state::*,
@@ -24,7 +25,7 @@ pub struct SwapArgs {
 pub struct Swap<'info> { 
     #[account(
         mut,
-        seeds = [PAIR_SEED_PREFIX, pair.token0.key().as_ref(), pair.token1.key().as_ref()],
+        seeds = [PAIR_SEED_PREFIX, pair.token0.as_ref(), pair.token1.as_ref(), pair.pair_nonce.as_ref()],
         bump
     )]
     pub pair: Account<'info, Pair>,
@@ -58,21 +59,25 @@ pub struct Swap<'info> {
     #[account(mut)]
     pub user_token_out_account: Account<'info, TokenAccount>,
 
-    #[account(
-        mut,
-        constraint = authority_token_in_account.mint == token_in_vault.mint,
-        constraint = authority_token_in_account.owner == futarchy_authority.key() @ ErrorCode::InvalidFutarchyAuthority,
-    )]
-    pub authority_token_in_account: Account<'info, TokenAccount>,
-
     #[account(address = token_in_vault.mint)]
     pub token_in_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(address = token_out_vault.mint)]
     pub token_out_mint: Box<InterfaceAccount<'info, Mint>>,
+
+    #[account(
+        init_if_needed,
+        payer = user,
+        associated_token::mint = token_in_mint,
+        associated_token::authority = futarchy_authority,
+    )]
+    pub authority_token_in_account: Account<'info, TokenAccount>,
     
+    #[account(mut)]
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
 }
 
 impl<'info> Swap<'info> {

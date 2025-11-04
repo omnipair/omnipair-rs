@@ -97,10 +97,10 @@ impl FutarchyAuthority {
 
 #[macro_export]
 macro_rules! generate_futarchy_authority_seeds {
-    ($futarchy_authority:expr) => {{
-        &[
+    ($futarchy_authority:expr) => {
+        [
             FUTARCHY_AUTHORITY_SEED_PREFIX,
             &[$futarchy_authority.bump],
         ]
-    }};
+    };
 }

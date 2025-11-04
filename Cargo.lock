@@ -1066,7 +1066,6 @@ dependencies = [
  "rand 0.8.5",
  "solana-security-txt",
  "spl-math",
- "spl-memo 4.0.3",
  "spl-token 4.0.2",
  "spl-token-2022",
  "uint 0.9.5",
@@ -2498,15 +2497,6 @@ dependencies = [
 
 [[package]]
 name = "spl-memo"
-version = "4.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64f13e674ae639249a78e2445fb043cf70e18f60e6dcf87a5411bc8c9580f130"
-dependencies = [
- "solana-program",
-]
-
-[[package]]
-name = "spl-memo"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f09647c0974e33366efeb83b8e2daebb329f0420149e74d3a4bd2c08cf9f7cb"
@@ -2631,7 +2621,7 @@ dependencies = [
  "solana-security-txt",
  "solana-zk-sdk",
  "spl-elgamal-registry",
- "spl-memo 6.0.0",
+ "spl-memo",
  "spl-pod",
  "spl-token 7.0.0",
  "spl-token-confidential-transfer-ciphertext-arithmetic",

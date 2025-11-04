@@ -58,3 +58,6 @@ pub const POSITION_SEED_PREFIX: &[u8] = b"gamm_position";
 pub const LEVERAGED_POSITION_SEED_PREFIX: &[u8] = b"gamm_leveraged_position";
 #[constant]
 pub const FUTARCHY_AUTHORITY_SEED_PREFIX: &[u8] = b"futarchy_authority";
+#[constant]
+pub const METADATA_SEED_PREFIX: &[u8] = b"metadata";
+// TODO: check unused and clean up

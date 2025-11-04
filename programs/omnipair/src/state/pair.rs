@@ -10,6 +10,8 @@ pub struct Pair {
     // Token addresses
     pub token0: Pubkey,
     pub token1: Pubkey,
+    pub lp_mint: Pubkey,
+
     pub token0_decimals: u8,
     pub token1_decimals: u8,
 
@@ -50,7 +52,7 @@ pub struct Pair {
     pub total_collateral0: u64,
     pub total_collateral1: u64,
 
-    // PDA bump
+    pub pair_nonce: [u8; 16],
     pub bump: u8,
 }
 
@@ -58,6 +60,7 @@ impl Pair {
     pub fn initialize(
         token0: Pubkey,
         token1: Pubkey,
+        lp_mint: Pubkey,
         token0_decimals: u8,
         token1_decimals: u8,
         rate_model: Pubkey,
@@ -65,11 +68,13 @@ impl Pair {
         half_life: u64,
         fixed_cf_bps: Option<u16>,
         current_time: i64,
+        pair_nonce: [u8; 16],
         bump: u8,
     ) -> Self {
         Self {
             token0,
             token1,
+            lp_mint,
             token0_decimals,
             token1_decimals,
 
@@ -78,9 +83,7 @@ impl Pair {
             swap_fee_bps,
             half_life,
             fixed_cf_bps,
-
             last_update: current_time,
-            bump,
 
             reserve0: 0,
             reserve1: 0,
@@ -99,6 +102,8 @@ impl Pair {
             total_debt1_shares: 0,
             total_collateral0: 0,
             total_collateral1: 0,
+            pair_nonce,
+            bump,
         }
     }
 
@@ -323,13 +328,14 @@ impl Pair {
 
 #[macro_export]
 macro_rules! generate_gamm_pair_seeds {
-    ($pair:expr) => {{
-        &[
+    ($pair:expr) => {
+        [
             PAIR_SEED_PREFIX,
             $pair.token0.as_ref(),
             $pair.token1.as_ref(),
+            $pair.pair_nonce.as_ref(),
             &[$pair.bump],
         ]
-    }};
+    };
 }
 
