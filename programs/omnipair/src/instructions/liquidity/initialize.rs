@@ -155,7 +155,8 @@ impl<'info> InitializeAndBootstrap<'info> {
     pub fn validate(&self, args: &InitializeAndBootstrapArgs) -> Result<()> {
         let InitializeAndBootstrapArgs { 
             swap_fee_bps, 
-            half_life, 
+            half_life,
+            fixed_cf_bps,
             amount0_in,
             amount1_in,
             lp_name,
@@ -168,6 +169,12 @@ impl<'info> InitializeAndBootstrap<'info> {
         require_gte!(BPS_DENOMINATOR, *swap_fee_bps, ErrorCode::InvalidSwapFeeBps); // 0 <= swap_fee_bps <= 100%
         require_gte!(*half_life, MIN_HALF_LIFE, ErrorCode::InvalidHalfLife); // half_life >= 1 minute
         require_gte!(MAX_HALF_LIFE, *half_life, ErrorCode::InvalidHalfLife); // half_life <= 12 hours
+
+        // validate fixed_cf_bps if provided
+        if let Some(cf_bps) = fixed_cf_bps {
+            require_gte!(BPS_DENOMINATOR, *cf_bps, ErrorCode::InvalidArgument); // 0 <= fixed_cf_bps <= 100%
+            require_gte!(*cf_bps, 100, ErrorCode::InvalidArgument); // fixed_cf_bps >= 1% (100 bps) minimum
+        }
 
         // validate bootstrap parameters
         require!(*amount0_in > 0 && *amount1_in > 0, ErrorCode::AmountZero);

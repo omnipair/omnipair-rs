@@ -207,6 +207,8 @@ impl Pair {
     /// - The maximum debt possible for the given collateral amount
     /// - The maximum collateral factor in BPS
     /// - The liquidation collateral factor in BPS (max_allowed_cf_bps - LTV_BUFFER_BPS)
+    /// 
+    /// If `fixed_cf_bps` is `Some`, uses the fixed collateral factor instead of dynamic calculation.
     pub fn get_max_debt_and_cf_bps_for_collateral(&self, pair: &Pair, collateral_token: &Pubkey, collateral_amount: u64) -> Result<(u64, u16, u16)> {
         let (
             collateral_ema_price,
@@ -222,6 +224,7 @@ impl Pair {
             collateral_ema_price,
             collateral_spot_price,
             debt_amm_reserve,
+            pair.fixed_cf_bps,
         )
     }
 
