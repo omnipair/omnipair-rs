@@ -236,4 +236,12 @@ pub enum ErrorCode {
     #[msg("Wrong LP decimals")]
     WrongLpDecimals,
     
+    #[msg("Invalid vault - token_in_vault must be owned by the pair")]
+    InvalidVaultIn,
+    
+    #[msg("Invalid vault - token_out_vault must be owned by the pair")]
+    InvalidVaultOut,
+    
+    #[msg("Invalid vault - token_in_vault and token_out_vault must be different")]
+    InvalidVaultSameAccount,
 }

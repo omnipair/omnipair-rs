@@ -45,12 +45,14 @@ pub struct Swap<'info> {
     #[account(
         mut,
         constraint = token_in_vault.mint == pair.token0 || token_in_vault.mint == pair.token1,
+        constraint = token_in_vault.owner == pair.key() @ ErrorCode::InvalidVaultIn,
     )]
     pub token_in_vault: Account<'info, TokenAccount>,
     
     #[account(
         mut,
         constraint = token_out_vault.mint == pair.token0 || token_out_vault.mint == pair.token1,
+        constraint = token_out_vault.owner == pair.key() @ ErrorCode::InvalidVaultOut,
     )]
     pub token_out_vault: Account<'info, TokenAccount>,
     
@@ -86,6 +88,43 @@ impl<'info> Swap<'info> {
 
         require!(amount_in > 0, ErrorCode::AmountZero);
         require_gte!(self.user_token_in_account.amount, amount_in, ErrorCode::InsufficientAmount0In);
+        
+        // Ensure token_in_vault and token_out_vault are different accounts
+        require_keys_neq!(
+            self.token_in_vault.key(),
+            self.token_out_vault.key(),
+            ErrorCode::InvalidVaultSameAccount
+        );
+        
+        // Verify vaults match the correct tokens based on swap direction
+        let is_token0_in = self.user_token_in_account.mint == self.pair.token0;
+        
+        if is_token0_in {
+            // Swapping token0 -> token1
+            require_keys_eq!(
+                self.token_in_vault.mint,
+                self.pair.token0,
+                ErrorCode::InvalidTokenAccount
+            );
+            require_keys_eq!(
+                self.token_out_vault.mint,
+                self.pair.token1,
+                ErrorCode::InvalidTokenAccount
+            );
+        } else {
+            // Swapping token1 -> token0
+            require_keys_eq!(
+                self.token_in_vault.mint,
+                self.pair.token1,
+                ErrorCode::InvalidTokenAccount
+            );
+            require_keys_eq!(
+                self.token_out_vault.mint,
+                self.pair.token0,
+                ErrorCode::InvalidTokenAccount
+            );
+        }
+        
         Ok(())
     }
 
