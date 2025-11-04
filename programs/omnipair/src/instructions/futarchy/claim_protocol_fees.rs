@@ -40,12 +40,14 @@ pub struct ClaimProtocolFees<'info> {
     #[account(
         mut,
         constraint = token0_vault.mint == pair.token0,
+        constraint = token0_vault.owner == pair.key() @ ErrorCode::InvalidVaultIn,
     )]
     pub token0_vault: Account<'info, TokenAccount>,
 
     #[account(
         mut,
         constraint = token1_vault.mint == pair.token1,
+        constraint = token1_vault.owner == pair.key() @ ErrorCode::InvalidVaultOut,
     )]
     pub token1_vault: Account<'info, TokenAccount>,
 
