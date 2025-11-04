@@ -54,18 +54,24 @@ async function main() {
         program.programId
     );
 
-    // Get pair account to get pair config and rate model
+    // Get pair account to get rate model
     const pairAccount = await program.account.pair.fetch(pairPda);
     console.log('Pair total debt0:', pairAccount.totalDebt0.toString());
     console.log('Pair total debt1:', pairAccount.totalDebt1.toString());
     console.log('Pair total debt0 shares:', pairAccount.totalDebt0Shares.toString());
     console.log('Pair total debt1 shares:', pairAccount.totalDebt1Shares.toString());
-    console.log('Pair config address:', pairAccount.config.toBase58());
     console.log('Rate model address:', pairAccount.rateModel.toBase58());
     
     const RATE_MODEL = pairAccount.rateModel;
 
     console.log('Rate Model address:', RATE_MODEL.toBase58());
+
+    // Find PDA for futarchy authority
+    const [futarchyAuthorityPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('futarchy_authority')],
+        program.programId
+    );
+    console.log('Futarchy Authority PDA:', futarchyAuthorityPda.toBase58());
 
     // Find PDA for the user position
     const [userPositionPda] = PublicKey.findProgramAddressSync(
@@ -114,16 +120,33 @@ async function main() {
     console.log('Liquidating with parameters:');
     console.log('Token:', liquidateToken0 ? 'Token0' : 'Token1');
 
+    // Get caller's token account for receiving liquidation incentive
+    const collateralMint = liquidateToken0 ? TOKEN0_MINT : TOKEN1_MINT;
+    const collateralTokenProgram = liquidateToken0 ? token0Program : token1Program;
+    const callerTokenAccount = await getAssociatedTokenAddress(
+        collateralMint,
+        DEPLOYER_KEYPAIR.publicKey,
+        false,
+        collateralTokenProgram,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+    console.log('Caller token account (for incentive):', callerTokenAccount.toBase58());
+
     // Create transaction
     const tx = await program.methods
         .liquidate()
-        .accountsStrict({
+        .accountsPartial({
             payer: DEPLOYER_KEYPAIR.publicKey,
             positionOwner: userPublicKey,
             pair: pairPda,
             rateModel: RATE_MODEL,
+            futarchyAuthority: futarchyAuthorityPda,
             userPosition: userPositionPda,
             collateralVault: liquidateToken0 ? token0Vault : token1Vault,
+            callerTokenAccount: callerTokenAccount,
+            collateralTokenMint: collateralMint,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            token2022Program: TOKEN_2022_PROGRAM_ID,
             systemProgram: SystemProgram.programId,
         })
         .signers([DEPLOYER_KEYPAIR])

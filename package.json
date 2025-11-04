@@ -20,7 +20,6 @@
     "add-collateral": "ts-node --esm scripts/add_collateral.ts",
     "remove-collateral": "ts-node --esm scripts/remove_collateral.ts",
     "borrow": "ts-node --esm scripts/borrow.ts",
-    "add-collateral-and-borrow": "ts-node --esm scripts/add_collateral_and_borrow.ts",
     "repay": "ts-node --esm scripts/repay.ts",
     "liquidate": "ts-node --esm scripts/liquidate.ts",
     "address-vanity": "ts-node --esm scripts/address_vanity.ts",

@@ -62,14 +62,32 @@ async function main() {
         program.programId
     );
 
-    // Get pair account to get pair config and rate model
+    // Get pair account to get rate model
     const pairAccount = await program.account.pair.fetch(pairPda);
-    console.log('Pair config address:', pairAccount.config.toBase58());
     console.log('Rate model address:', pairAccount.rateModel.toBase58());
     
     const RATE_MODEL = pairAccount.rateModel;
 
-    console.log('Rate Model address:', RATE_MODEL.toBase58());
+    // Find PDA for futarchy authority
+    const [futarchyAuthorityPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('futarchy_authority')],
+        program.programId
+    );
+    console.log('Futarchy Authority PDA:', futarchyAuthorityPda.toBase58());
+
+    // Get vault accounts (pair-owned)
+    const token0Vault = await getAssociatedTokenAddress(
+        TOKEN0_MINT,
+        pairPda,
+        true // allowOwnerOffCurve for PDAs
+    );
+    const token1Vault = await getAssociatedTokenAddress(
+        TOKEN1_MINT,
+        pairPda,
+        true // allowOwnerOffCurve for PDAs
+    );
+    console.log('Token0 Vault:', token0Vault.toBase58());
+    console.log('Token1 Vault:', token1Vault.toBase58());
 
     // Find PDA for the LP mint
     const [lpMintPda] = PublicKey.findProgramAddressSync(
@@ -77,44 +95,10 @@ async function main() {
         program.programId
     );
 
-    // Get token program for each mint
-    const token0Info = await provider.connection.getAccountInfo(TOKEN0_MINT);
-    const token1Info = await provider.connection.getAccountInfo(TOKEN1_MINT);
-    const lpMintInfo = await provider.connection.getAccountInfo(lpMintPda);
-    
-    const token0Program = token0Info?.owner.equals(TOKEN_2022_PROGRAM_ID) 
-        ? TOKEN_2022_PROGRAM_ID 
-        : TOKEN_PROGRAM_ID;
-    const token1Program = token1Info?.owner.equals(TOKEN_2022_PROGRAM_ID) 
-        ? TOKEN_2022_PROGRAM_ID 
-        : TOKEN_PROGRAM_ID;
-    const lpTokenProgram = lpMintInfo?.owner.equals(TOKEN_2022_PROGRAM_ID)
-        ? TOKEN_2022_PROGRAM_ID
-        : TOKEN_PROGRAM_ID;
-
-    // Get associated token addresses for vaults
-    const token0Vault = await getAssociatedTokenAddress(
-        TOKEN0_MINT,
-        pairPda,
-        true,
-        token0Program,
-        ASSOCIATED_TOKEN_PROGRAM_ID
-    );
-    const token1Vault = await getAssociatedTokenAddress(
-        TOKEN1_MINT,
-        pairPda,
-        true,
-        token1Program,
-        ASSOCIATED_TOKEN_PROGRAM_ID
-    );
-
     // Get or create LP token account
     const deployerLpTokenAccount = await getAssociatedTokenAddress(
         lpMintPda,
-        DEPLOYER_KEYPAIR.publicKey,
-        false,
-        lpTokenProgram,
-        ASSOCIATED_TOKEN_PROGRAM_ID
+        DEPLOYER_KEYPAIR.publicKey
     );
 
     // Add liquidity
@@ -138,6 +122,7 @@ async function main() {
             user: DEPLOYER_KEYPAIR.publicKey,
             pair: pairPda,
             rateModel: RATE_MODEL,
+            futarchyAuthority: futarchyAuthorityPda,
             token0Vault: token0Vault,
             token1Vault: token1Vault,
             token0VaultMint: TOKEN0_MINT,
@@ -146,8 +131,9 @@ async function main() {
             userToken1Account: DEPLOYER_TOKEN1_ACCOUNT,
             lpMint: lpMintPda,
             userLpTokenAccount: deployerLpTokenAccount,
-            tokenProgram: lpTokenProgram,
+            tokenProgram: TOKEN_PROGRAM_ID,
             token2022Program: TOKEN_2022_PROGRAM_ID,
+            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
             systemProgram: SystemProgram.programId,
         })
         .signers([DEPLOYER_KEYPAIR])

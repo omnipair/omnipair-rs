@@ -32,7 +32,6 @@ spl-token-2022 = { version = "6.0.0", features = ["no-entrypoint"] }
 spl-math = { version = "0.3.0", features = ["no-entrypoint"] }
 solana-security-txt = "1.1.1"
 num-traits = "0.2.19"
-spl-memo = "4.0.0"
 uint = "0.9.1"
 bytemuck = { version = "1.4.0", features = ["derive", "min_const_generics"] }
 arrayref = { version = "0.3.6" }

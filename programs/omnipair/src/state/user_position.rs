@@ -333,12 +333,12 @@ impl UserPosition {
 
 #[macro_export]
 macro_rules! generate_user_position_seeds {
-    ($position:expr) => {{
-        &[
+    ($position:expr) => {
+        [
             USER_POSITION_SEED_PREFIX,
             $position.pair.as_ref(),
             $position.owner.as_ref(),
             &[$position.bump],
         ]
-    }};
+    };
 } 

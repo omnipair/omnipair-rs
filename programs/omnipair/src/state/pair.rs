@@ -10,6 +10,8 @@ pub struct Pair {
     // Token addresses
     pub token0: Pubkey,
     pub token1: Pubkey,
+    pub lp_mint: Pubkey,
+
     pub token0_decimals: u8,
     pub token1_decimals: u8,
 
@@ -17,6 +19,8 @@ pub struct Pair {
     pub rate_model: Pubkey,
     pub swap_fee_bps: u16,
     pub half_life: u64,
+    // Fixed collateral factor (BPS). If Some, use this instead of dynamic CF
+    pub fixed_cf_bps: Option<u16>,
     
     // Reserves
     pub reserve0: u64,
@@ -48,7 +52,7 @@ pub struct Pair {
     pub total_collateral0: u64,
     pub total_collateral1: u64,
 
-    // PDA bump
+    pub pair_nonce: [u8; 16],
     pub bump: u8,
 }
 
@@ -56,17 +60,21 @@ impl Pair {
     pub fn initialize(
         token0: Pubkey,
         token1: Pubkey,
+        lp_mint: Pubkey,
         token0_decimals: u8,
         token1_decimals: u8,
         rate_model: Pubkey,
         swap_fee_bps: u16,
         half_life: u64,
+        fixed_cf_bps: Option<u16>,
         current_time: i64,
+        pair_nonce: [u8; 16],
         bump: u8,
     ) -> Self {
         Self {
             token0,
             token1,
+            lp_mint,
             token0_decimals,
             token1_decimals,
 
@@ -74,9 +82,8 @@ impl Pair {
             rate_model,
             swap_fee_bps,
             half_life,
-
+            fixed_cf_bps,
             last_update: current_time,
-            bump,
 
             reserve0: 0,
             reserve1: 0,
@@ -95,6 +102,8 @@ impl Pair {
             total_debt1_shares: 0,
             total_collateral0: 0,
             total_collateral1: 0,
+            pair_nonce,
+            bump,
         }
     }
 
@@ -198,6 +207,8 @@ impl Pair {
     /// - The maximum debt possible for the given collateral amount
     /// - The maximum collateral factor in BPS
     /// - The liquidation collateral factor in BPS (max_allowed_cf_bps - LTV_BUFFER_BPS)
+    /// 
+    /// If `fixed_cf_bps` is `Some`, uses the fixed collateral factor instead of dynamic calculation.
     pub fn get_max_debt_and_cf_bps_for_collateral(&self, pair: &Pair, collateral_token: &Pubkey, collateral_amount: u64) -> Result<(u64, u16, u16)> {
         let (
             collateral_ema_price,
@@ -213,6 +224,7 @@ impl Pair {
             collateral_ema_price,
             collateral_spot_price,
             debt_amm_reserve,
+            pair.fixed_cf_bps,
         )
     }
 
@@ -319,13 +331,14 @@ impl Pair {
 
 #[macro_export]
 macro_rules! generate_gamm_pair_seeds {
-    ($pair:expr) => {{
-        &[
+    ($pair:expr) => {
+        [
             PAIR_SEED_PREFIX,
             $pair.token0.as_ref(),
             $pair.token1.as_ref(),
+            $pair.pair_nonce.as_ref(),
             &[$pair.bump],
         ]
-    }};
+    };
 }
 

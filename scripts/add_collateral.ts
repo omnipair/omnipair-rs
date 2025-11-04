@@ -66,14 +66,20 @@ async function main() {
         program.programId
     );
 
-    // Get pair account to get pair config and rate model
+    // Get pair account to get rate model
     const pairAccount = await program.account.pair.fetch(pairPda);
-    console.log('Pair config address:', pairAccount.config.toBase58());
     console.log('Rate model address:', pairAccount.rateModel.toBase58());
     
     const RATE_MODEL = pairAccount.rateModel;
 
     console.log('Rate Model address:', RATE_MODEL.toBase58());
+
+    // Find PDA for futarchy authority
+    const [futarchyAuthorityPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('futarchy_authority')],
+        program.programId
+    );
+    console.log('Futarchy Authority PDA:', futarchyAuthorityPda.toBase58());
 
     // Find PDA for the user position
     const [userPositionPda] = PublicKey.findProgramAddressSync(
@@ -126,6 +132,7 @@ async function main() {
             user: DEPLOYER_KEYPAIR.publicKey,
             pair: pairPda,
             rateModel: RATE_MODEL,
+            futarchyAuthority: futarchyAuthorityPda,
             userPosition: userPositionPda,
             collateralVault: collateralToken0 ? token0Vault : token1Vault,
             userCollateralTokenAccount: collateralToken0 ? DEPLOYER_TOKEN0_ACCOUNT : DEPLOYER_TOKEN1_ACCOUNT,

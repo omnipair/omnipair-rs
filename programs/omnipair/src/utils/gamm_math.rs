@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
 use crate::utils::math::SqrtU128;
 use crate::constants::*;
-use std::cmp::min;
 use crate::errors::ErrorCode;
+use std::cmp::min;
 
 const NAD_U128: u128 = NAD as u128;
 const BPS_DENOMINATOR_U128: u128 = BPS_DENOMINATOR as u128;
@@ -53,14 +53,15 @@ fn curve_y_from_v(v: u128, r1: u64) -> u128 {
         / NAD_U128
 }
 
-/// Maximum borrowable amount of tokenY using an impact-aware CF derived
-/// from constant product AMM pricing mechanics, with pessimistic spot/ema cap.
+/// Maximum borrowable amount of tokenY using either a fixed CF or an impact-aware CF
+/// derived from constant product AMM pricing mechanics, with pessimistic spot/ema cap.
 ///
 /// Inputs:
 /// - collateral_amount_scaled: X (NAD-scaled)
 /// - collateral_ema_price_scaled: P_ema (NAD-scaled, Y/X)
 /// - collateral_spot_price_scaled: P_spot (NAD-scaled, Y/X)
-/// - debt_amm_reserve: R1 (raw Y units)
+/// - debt_amm_reserve: R1 (raw Y units) - only used for dynamic CF calculation
+/// - fixed_cf_bps: Optional fixed collateral factor. If Some, uses this directly instead of AMM-based CF
 ///
 /// Returns:
 /// - final_borrow_limit (NAD-scaled Y)
@@ -71,10 +72,10 @@ pub fn pessimistic_max_debt(
     collateral_ema_price_scaled: u64,
     collateral_spot_price_scaled: u64,
     debt_amm_reserve: u64,
+    fixed_cf_bps: Option<u16>,
 ) -> Result<(u64, u16, u16)> {
     // sanity checks
-    if debt_amm_reserve == 0
-        || collateral_amount_scaled == 0
+    if collateral_amount_scaled == 0
         || collateral_ema_price_scaled == 0
         || collateral_spot_price_scaled == 0
     {
@@ -86,25 +87,52 @@ pub fn pessimistic_max_debt(
         .saturating_mul(collateral_ema_price_scaled as u128)
         / NAD_U128;
 
-    // Exact curve solution Y_curve (NAD-scaled)
-    let y_curve = curve_y_from_v(v, debt_amm_reserve);
-
-    // CF_curve = Y / V (bps)
-    let cf_curve_bps_u128 = if v > 0 {
-        y_curve
-            .saturating_mul(BPS_DENOMINATOR_U128)
-            / v
+    // Determine base CF: either fixed CF or dynamic AMM-based CF
+    let base_cf_bps: u64 = if let Some(fixed_cf) = fixed_cf_bps {
+        // Fixed CF path: use the fixed CF directly as base
+        fixed_cf as u64
     } else {
-        0
-    };
-    let cf_curve_bps_u64 = cf_curve_bps_u128 as u64;
+        // Dynamic CF path: calculate impact-aware CF from AMM curve
+        if debt_amm_reserve == 0 {
+            return Ok((0, 0, 0));
+        }
 
-    // Pessimistic cap: min(CF, CF * spot/ema) [>= 1 bps, Pessimistic CF <= 8500 bps]
-    let liquidation_cf_bps = get_pessimistic_cf_bps(
-        cf_curve_bps_u64,
-        collateral_spot_price_scaled,
-        collateral_ema_price_scaled,
-    )?;
+        // Exact curve solution Y_curve (NAD-scaled)
+        let y_curve = curve_y_from_v(v, debt_amm_reserve);
+
+        // CF_curve = Y / V (bps)
+        if v > 0 {
+            (y_curve
+                .saturating_mul(BPS_DENOMINATOR_U128)
+                / v) as u64
+        } else {
+            return Ok((0, 0, 0));
+        }
+    };
+
+    // Apply pessimistic spot/EMA divergence cap to prevent EMA lag front-running
+    // CF_pessimistic = min(CF_base, CF_base * spot/ema)
+    // fixed CF: capped at [100 bps, fixed_cf_bps]
+    // dynamic CF: capped at [100, MAX_COLLATERAL_FACTOR_BPS] bps
+    let liquidation_cf_bps = if fixed_cf_bps.is_some() {
+        // If spot > ema: CF stays at fixed CF (no increase)
+        // If spot < ema: CF reduces proportionally to render front-running non-profitable
+        require!(collateral_ema_price_scaled != 0, ErrorCode::DenominatorOverflow);
+        let base = base_cf_bps as u128;
+        let shrunk = (collateral_spot_price_scaled as u128)
+            .saturating_mul(base)
+            .checked_div(collateral_ema_price_scaled as u128)
+            .ok_or(ErrorCode::DenominatorOverflow)?;
+        // Apply pessimistic cap: min(fixed_cf_bps, fixed_cf_bps * spot/ema)
+        min(base, shrunk).max(100) as u16
+    } else {
+        // Dynamic CF: apply divergence cap with 85% maximum
+        get_pessimistic_cf_bps(
+            base_cf_bps,
+            collateral_spot_price_scaled,
+            collateral_ema_price_scaled,
+        )?
+    };
 
     // Max allowed CF BPS = pessimistic CF BPS - LTV_BUFFER_BPS
     let max_allowed_cf_bps = liquidation_cf_bps.saturating_sub(LTV_BUFFER_BPS);
