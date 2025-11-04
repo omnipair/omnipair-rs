@@ -12,6 +12,7 @@ use crate::{
     state::user_position::UserPosition,
     state::futarchy_authority::FutarchyAuthority,
     constants::*,
+    errors::ErrorCode,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -62,6 +63,7 @@ pub struct CommonAdjustPosition<'info> {
     #[account(
         mut,
         constraint = token_vault.mint == pair.token0 || token_vault.mint == pair.token1,
+        constraint = token_vault.owner == pair.key() @ ErrorCode::InvalidVaultIn,
     )]
     pub token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 

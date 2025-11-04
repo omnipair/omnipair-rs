@@ -56,7 +56,8 @@ pub struct AddCollateral<'info> {
 
     #[account(
         mut,
-        constraint = collateral_vault.mint == pair.token0 || collateral_vault.mint == pair.token1,
+        constraint = collateral_vault.mint == pair.token0 || collateral_vault.mint == pair.token1 @ ErrorCode::InvalidVault,
+        constraint = collateral_vault.owner == pair.key() @ ErrorCode::InvalidVaultIn,
     )]
     pub collateral_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 

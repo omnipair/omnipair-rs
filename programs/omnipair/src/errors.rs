@@ -244,4 +244,7 @@ pub enum ErrorCode {
     
     #[msg("Invalid vault - token_in_vault and token_out_vault must be different")]
     InvalidVaultSameAccount,
+
+    #[msg("Invalid vault")]
+    InvalidVault,
 }
