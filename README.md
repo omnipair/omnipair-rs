@@ -116,4 +116,4 @@ anchor upgrade --provider.cluster https://mainnet.helius-rpc.com/?api-key={YOUR_
 anchor upgrade --provider.cluster https://devnet.helius-rpc.com/?api-key=66a4060b-2453-49cd-bf7a-fa03546c97ec --program-id 6boPPughAjq1PeoEicamfirB9SYjF8bBCSCeUvKJeZMj ./target/deploy/omnipair.so
 ```
 
-**Note:** Replace `{YOUR_API_KEY}` with your actual Helius API key and `3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd` with your actual program ID.
+**Note:** Replace `{YOUR_API_KEY}` with your Helius API key and `3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd` with program ID.
