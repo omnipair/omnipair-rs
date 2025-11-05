@@ -19,6 +19,7 @@ pub struct InitializeInstructionAccounts {
     pub futarchy_authority: solana_pubkey::Pubkey,
     pub rate_model: solana_pubkey::Pubkey,
     pub lp_mint: solana_pubkey::Pubkey,
+    pub lp_token_metadata: solana_pubkey::Pubkey,
     pub deployer_lp_token_account: solana_pubkey::Pubkey,
     pub token0_vault: solana_pubkey::Pubkey,
     pub token1_vault: solana_pubkey::Pubkey,
@@ -28,6 +29,7 @@ pub struct InitializeInstructionAccounts {
     pub system_program: solana_pubkey::Pubkey,
     pub token_program: solana_pubkey::Pubkey,
     pub token_2022_program: solana_pubkey::Pubkey,
+    pub token_metadata_program: solana_pubkey::Pubkey,
     pub associated_token_program: solana_pubkey::Pubkey,
     pub rent: solana_pubkey::Pubkey,
     pub event_authority: solana_pubkey::Pubkey,
@@ -46,6 +48,7 @@ impl carbon_core::deserialize::ArrangeAccounts for Initialize {
         let futarchy_authority = next_account(&mut iter)?;
         let rate_model = next_account(&mut iter)?;
         let lp_mint = next_account(&mut iter)?;
+        let lp_token_metadata = next_account(&mut iter)?;
         let deployer_lp_token_account = next_account(&mut iter)?;
         let token0_vault = next_account(&mut iter)?;
         let token1_vault = next_account(&mut iter)?;
@@ -55,6 +58,7 @@ impl carbon_core::deserialize::ArrangeAccounts for Initialize {
         let system_program = next_account(&mut iter)?;
         let token_program = next_account(&mut iter)?;
         let token_2022_program = next_account(&mut iter)?;
+        let token_metadata_program = next_account(&mut iter)?;
         let associated_token_program = next_account(&mut iter)?;
         let rent = next_account(&mut iter)?;
         let event_authority = next_account(&mut iter)?;
@@ -68,6 +72,7 @@ impl carbon_core::deserialize::ArrangeAccounts for Initialize {
             futarchy_authority,
             rate_model,
             lp_mint,
+            lp_token_metadata,
             deployer_lp_token_account,
             token0_vault,
             token1_vault,
@@ -77,6 +82,7 @@ impl carbon_core::deserialize::ArrangeAccounts for Initialize {
             system_program,
             token_program,
             token_2022_program,
+            token_metadata_program,
             associated_token_program,
             rent,
             event_authority,

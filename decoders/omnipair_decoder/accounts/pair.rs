@@ -11,6 +11,7 @@ use carbon_core::{borsh, CarbonDeserialize};
 pub struct Pair {
         pub token0: solana_pubkey::Pubkey,
         pub token1: solana_pubkey::Pubkey,
+        pub lp_mint: solana_pubkey::Pubkey,
         pub token0_decimals: u8,
         pub token1_decimals: u8,
         pub rate_model: solana_pubkey::Pubkey,
@@ -33,5 +34,6 @@ pub struct Pair {
         pub total_supply: u64,
         pub total_collateral0: u64,
         pub total_collateral1: u64,
+        pub pair_nonce: [u8; 16],
         pub bump: u8, 
 }

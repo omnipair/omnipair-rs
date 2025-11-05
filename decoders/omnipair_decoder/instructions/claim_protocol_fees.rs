@@ -23,6 +23,8 @@ pub struct ClaimProtocolFeesInstructionAccounts {
     pub token1_mint: solana_pubkey::Pubkey,
     pub token_program: solana_pubkey::Pubkey,
     pub token_2022_program: solana_pubkey::Pubkey,
+    pub associated_token_program: solana_pubkey::Pubkey,
+    pub system_program: solana_pubkey::Pubkey,
 }
 
 impl carbon_core::deserialize::ArrangeAccounts for ClaimProtocolFees {
@@ -41,6 +43,8 @@ impl carbon_core::deserialize::ArrangeAccounts for ClaimProtocolFees {
         let token1_mint = next_account(&mut iter)?;
         let token_program = next_account(&mut iter)?;
         let token_2022_program = next_account(&mut iter)?;
+        let associated_token_program = next_account(&mut iter)?;
+        let system_program = next_account(&mut iter)?;
 
         Some(ClaimProtocolFeesInstructionAccounts {
             caller,
@@ -54,6 +58,8 @@ impl carbon_core::deserialize::ArrangeAccounts for ClaimProtocolFees {
             token1_mint,
             token_program,
             token_2022_program,
+            associated_token_program,
+            system_program,
         })
     }
 }
