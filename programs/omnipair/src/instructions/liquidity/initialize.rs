@@ -184,7 +184,8 @@ impl<'info> InitializeAndBootstrap<'info> {
         #[cfg(feature = "production")]
         {
             let lp_mint_key: String = self.lp_mint.key().to_string();
-            let last_4_chars = &lp_mint_key[lp_mint_key.len() - 4..];
+            let start_idx = lp_mint_key.len().checked_sub(4).ok_or(ErrorCode::InvalidLpMintKey)?;
+            let last_4_chars = &lp_mint_key[start_idx..];
             require_eq!("omLP", last_4_chars, ErrorCode::InvalidLpMintKey);
         }
     
@@ -435,6 +436,13 @@ impl<'info> InitializeAndBootstrap<'info> {
             metadata: EventMetadata::new(ctx.accounts.deployer.key(), pair.key()),
             token0: ctx.accounts.token0_mint.key(),
             token1: ctx.accounts.token1_mint.key(),
+            lp_mint: ctx.accounts.lp_mint.key(),
+            token0_decimals: ctx.accounts.token0_mint.decimals,
+            token1_decimals: ctx.accounts.token1_mint.decimals,
+            rate_model: ctx.accounts.rate_model.key(),
+            swap_fee_bps: pair.swap_fee_bps,
+            half_life: pair.half_life,
+            fixed_cf_bps: pair.fixed_cf_bps,
         });
 
         Ok(())
