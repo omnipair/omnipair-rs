@@ -5,12 +5,6 @@ pub enum ErrorCode {
     #[msg("Invalid deployer")]
     InvalidDeployer,
 
-    #[msg("Invalid nonce")]
-    InvalidNonce,
-
-    #[msg("Invalid futarchy fee bps")]
-    InvalidFutarchyFeeBps,
-
     #[msg("Argument missing")]
     ArgumentMissing,
 
@@ -25,21 +19,9 @@ pub enum ErrorCode {
 
     #[msg("Invalid argument")]
     InvalidArgument,
-
-    #[msg("Pair already initialized")]
-    PairAlreadyInitialized,
-
-    #[msg("Invalid K value")]
-    InvalidK,
     
     #[msg("Insufficient collateral")]
     InsufficientCollateral,
-
-    #[msg("User already added collateral")]
-    UserAlreadyAddedCollateral,
-
-    #[msg("Zero collateral amount")]
-    ZeroCollateralAmount,
 
     #[msg("Amount cannot be zero")]
     AmountZero,
@@ -53,59 +35,14 @@ pub enum ErrorCode {
     #[msg("Borrowing power exceeded")]
     BorrowingPowerExceeded,
     
-    #[msg("Invalid amount")]
-    InvalidAmount,
-    
-    #[msg("Invalid rate model")]
-    InvalidRateModel,
-    
     #[msg("Invalid token account")]
     InvalidTokenAccount,
     
     #[msg("Invalid token program")]
     InvalidTokenProgram,
     
-    #[msg("Invalid system program")]
-    InvalidSystemProgram,
-    
-    #[msg("Invalid signer")]
-    InvalidSigner,
-    
-    #[msg("Invalid account")]
-    InvalidAccount,
-    
-    #[msg("Invalid program")]
-    InvalidProgram,
-    
-    #[msg("Invalid instruction")]
-    InvalidInstruction,
-    
-    #[msg("Invalid state")]
-    InvalidState,
-    
-    #[msg("Invalid calculation")]
-    InvalidCalculation,
-    
-    #[msg("Invalid time")]
-    InvalidTime,
-    
-    #[msg("Invalid price")]
-    InvalidPrice,
-    
-    #[msg("Invalid rate")]
-    InvalidRate,
-    
-    #[msg("Invalid utilization")]
-    InvalidUtilization,
-    
     #[msg("Borrow exceeds reserve")]
     BorrowExceedsReserve,
-
-    #[msg("Invalid token order")]
-    InvalidTokenOrder,
-
-    #[msg("Debt not zero")]
-    DebtNotZero,
 
     #[msg("Insufficient amount0")]
     InsufficientAmount0,
@@ -124,12 +61,6 @@ pub enum ErrorCode {
 
     #[msg("Undercollateralized")]
     Undercollateralized,
-
-    #[msg("Insufficient collateral for token0")]
-    InsufficientCollateral0,
-
-    #[msg("Insufficient collateral for token1")]
-    InsufficientCollateral1,
 
     #[msg("Insufficient balance for collateral")]
     InsufficientBalanceForCollateral,
@@ -179,9 +110,6 @@ pub enum ErrorCode {
     #[msg("Math overflow during liquidity conversion")]
     LiquidityConversionOverflow,
 
-    #[msg("Math overflow during liquidity division")]
-    LiquidityDivisionOverflow,
-
     #[msg("Math overflow during supply calculation")]
     SupplyOverflow,
 
@@ -208,9 +136,6 @@ pub enum ErrorCode {
 
     #[msg("Invalid LP mint key")]
     InvalidLpMintKey,
-
-    #[msg("Invalid pair key")]
-    InvalidPairKey,
 
     #[msg("Invalid LP name")]
     InvalidLpName,

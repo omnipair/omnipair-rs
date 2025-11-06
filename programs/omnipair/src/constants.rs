@@ -23,8 +23,6 @@ pub const PAIR_CREATION_FEE_LAMPORTS: u64 = 200_000_000; // 0.2 SOL
 
 
 // EMA constants
-#[constant]
-pub const DEFAULT_HALF_LIFE: u64 = 7 * 60; // 7 minutes (recommended)
 pub const MIN_HALF_LIFE: u64 = 1 * 60; // 1 minute
 pub const MAX_HALF_LIFE: u64 = 12 * 60 * 60; // 12 hours
 pub const TAYLOR_TERMS: u64 = 5;
@@ -38,26 +36,14 @@ pub const MIN_RATE_BPS: u64 = 100;      // 1%
 // Default IRM constants
 pub const TARGET_UTIL_START_BPS: u64 = 5_000; // 50%
 pub const TARGET_UTIL_END_BPS: u64 = 8_500; // 85%
-pub const SECONDS_PER_DAY: u64 = 86_400;
 pub const SECONDS_PER_YEAR: u64 = 31_536_000;
-
-// Math constants
-pub const MAX_X_E18: u128 = 161_324_830_204_992_680_279;
-pub const MAX_X_E12: u64 = 289_279_112_968_179;
 
 // Global Seeds for deterministic PDAs
 #[constant]
 pub const PAIR_SEED_PREFIX: &[u8] = b"gamm_pair";
 #[constant]
-pub const LP_MINT_SEED_PREFIX: &[u8] = b"gamm_lp_mint";
-#[constant]
-pub const FACTORY_SEED_PREFIX: &[u8] = b"gamm_factory";
-#[constant]
 pub const POSITION_SEED_PREFIX: &[u8] = b"gamm_position";
-#[constant]
-pub const LEVERAGED_POSITION_SEED_PREFIX: &[u8] = b"gamm_leveraged_position";
 #[constant]
 pub const FUTARCHY_AUTHORITY_SEED_PREFIX: &[u8] = b"futarchy_authority";
 #[constant]
 pub const METADATA_SEED_PREFIX: &[u8] = b"metadata";
-// TODO: check unused and clean up
