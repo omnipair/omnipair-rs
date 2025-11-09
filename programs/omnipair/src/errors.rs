@@ -172,4 +172,13 @@ pub enum ErrorCode {
 
     #[msg("Invalid vault")]
     InvalidVault,
+
+    #[msg("Invalid params hash - hash does not match computed parameters")]
+    InvalidParamsHash,
+
+    #[msg("Invalid version")]
+    InvalidVersion,
+
+    #[msg("Invalid token order")]
+    InvalidTokenOrder,
 }

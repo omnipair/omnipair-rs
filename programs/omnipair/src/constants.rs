@@ -47,3 +47,5 @@ pub const POSITION_SEED_PREFIX: &[u8] = b"gamm_position";
 pub const FUTARCHY_AUTHORITY_SEED_PREFIX: &[u8] = b"futarchy_authority";
 #[constant]
 pub const METADATA_SEED_PREFIX: &[u8] = b"metadata";
+#[constant]
+pub const VERSION: u8 = 1;

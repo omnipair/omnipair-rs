@@ -15,5 +15,7 @@ pub struct PairCreatedEvent {
     pub swap_fee_bps: u16,
     pub half_life: u64,
     pub fixed_cf_bps: Option<u16>,
+    pub params_hash: [u8; 32],
+    pub version: u8,
     pub metadata: EventMetadata,
 }

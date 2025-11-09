@@ -34,6 +34,7 @@ pub struct Pair {
         pub total_supply: u64,
         pub total_collateral0: u64,
         pub total_collateral1: u64,
-        pub pair_nonce: [u8; 16],
+        pub params_hash: [u8; 32],
+        pub version: u8,
         pub bump: u8, 
 }

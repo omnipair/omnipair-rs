@@ -1,7 +1,11 @@
 use anchor_lang::{
-    prelude::*,
-    accounts::interface_account::InterfaceAccount,
-    solana_program::{program::invoke, system_instruction}
+    accounts::interface_account::InterfaceAccount, 
+    prelude::*, 
+    solana_program::{
+        program::invoke, 
+        system_instruction,
+        hash::hash,
+    }
 };
 use anchor_spl::{
     token::spl_token,
@@ -37,7 +41,8 @@ pub struct InitializeAndBootstrapArgs {
     pub swap_fee_bps: u16,
     pub half_life: u64,
     pub fixed_cf_bps: Option<u16>,
-    pub pair_nonce: [u8; 16],
+    pub params_hash: [u8; 32],
+    pub version: u8,
 
     pub amount0_in: u64,
     pub amount1_in: u64,
@@ -66,8 +71,8 @@ pub struct InitializeAndBootstrap<'info> {
             PAIR_SEED_PREFIX, 
             token0_mint.key().as_ref(), 
             token1_mint.key().as_ref(),
-            args.pair_nonce.as_ref(),
-            ],
+            args.params_hash.as_ref(),
+        ],
         bump
     )]
     pub pair: Box<Account<'info, Pair>>,
@@ -154,9 +159,11 @@ pub struct InitializeAndBootstrap<'info> {
 impl<'info> InitializeAndBootstrap<'info> {
     pub fn validate(&self, args: &InitializeAndBootstrapArgs) -> Result<()> {
         let InitializeAndBootstrapArgs { 
+            version,
             swap_fee_bps, 
             half_life,
             fixed_cf_bps,
+            params_hash,
             amount0_in,
             amount1_in,
             lp_name,
@@ -165,7 +172,12 @@ impl<'info> InitializeAndBootstrap<'info> {
             ..
         } = args;
 
+        // tokens canonical order check (token0 > token1)
+        // this prevents the same token pair from having two valid addresses (0,1) and (1,0)
+        require_gt!(self.token1_mint.key(), self.token0_mint.key(), ErrorCode::InvalidTokenOrder);
+
         // validate pool parameters
+        require_eq!(*version, VERSION, ErrorCode::InvalidVersion);
         require_gte!(BPS_DENOMINATOR, *swap_fee_bps, ErrorCode::InvalidSwapFeeBps); // 0 <= swap_fee_bps <= 100%
         require_gte!(*half_life, MIN_HALF_LIFE, ErrorCode::InvalidHalfLife); // half_life >= 1 minute
         require_gte!(MAX_HALF_LIFE, *half_life, ErrorCode::InvalidHalfLife); // half_life <= 12 hours
@@ -175,6 +187,17 @@ impl<'info> InitializeAndBootstrap<'info> {
             require_gte!(BPS_DENOMINATOR, *cf_bps, ErrorCode::InvalidArgument); // 0 <= fixed_cf_bps <= 100%
             require_gte!(*cf_bps, 100, ErrorCode::InvalidArgument); // fixed_cf_bps >= 1% (100 bps) minimum
         }
+
+        // Verify params_hash matches the computed hash
+        // SHA256(VERSION || swap_fee_bps || half_life || fixed_cf_bps)
+        let mut hash_data = Vec::new();
+        hash_data.extend_from_slice(&VERSION.to_le_bytes());
+        hash_data.extend_from_slice(&swap_fee_bps.to_le_bytes());
+        hash_data.extend_from_slice(&half_life.to_le_bytes());
+        hash_data.extend_from_slice(&fixed_cf_bps.unwrap_or(0).to_le_bytes());
+        let computed_hash = hash(&hash_data).to_bytes();
+        let hashes_match = computed_hash.iter().zip(params_hash.iter()).all(|(a, b)| a == b);
+        require!(hashes_match, ErrorCode::InvalidParamsHash);
 
         // validate bootstrap parameters
         require!(*amount0_in > 0 && *amount1_in > 0, ErrorCode::AmountZero);
@@ -214,13 +237,14 @@ impl<'info> InitializeAndBootstrap<'info> {
             swap_fee_bps, 
             half_life, 
             fixed_cf_bps,
+            params_hash,
+            version,
             amount0_in,
             amount1_in,
             min_liquidity_out,
             lp_name,
             lp_symbol,
             lp_uri,
-            pair_nonce,
         } = args;
 
         // Collect pair creation fee from deployer to futarchy authority
@@ -279,8 +303,8 @@ impl<'info> InitializeAndBootstrap<'info> {
             half_life,
             fixed_cf_bps,
             current_time,
-            
-            pair_nonce,
+            params_hash,
+            version,
             ctx.bumps.pair,
         ));
 
@@ -443,6 +467,8 @@ impl<'info> InitializeAndBootstrap<'info> {
             swap_fee_bps: pair.swap_fee_bps,
             half_life: pair.half_life,
             fixed_cf_bps: pair.fixed_cf_bps,
+            params_hash: pair.params_hash,
+            version: pair.version,
         });
 
         Ok(())

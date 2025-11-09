@@ -39,7 +39,7 @@ pub struct FlashLoanCallbackData {
 pub struct Flashloan<'info> {
     #[account(
         mut,
-        seeds = [PAIR_SEED_PREFIX, pair.token0.as_ref(), pair.token1.as_ref(), pair.pair_nonce.as_ref()],
+        seeds = [PAIR_SEED_PREFIX, pair.token0.as_ref(), pair.token1.as_ref(), pair.params_hash.as_ref()],
         bump
     )]
     pub pair: Account<'info, Pair>,

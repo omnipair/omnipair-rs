@@ -52,7 +52,8 @@ pub struct Pair {
     pub total_collateral0: u64,
     pub total_collateral1: u64,
 
-    pub pair_nonce: [u8; 16],
+    pub params_hash: [u8; 32],
+    pub version: u8,
     pub bump: u8,
 }
 
@@ -68,7 +69,8 @@ impl Pair {
         half_life: u64,
         fixed_cf_bps: Option<u16>,
         current_time: i64,
-        pair_nonce: [u8; 16],
+        params_hash: [u8; 32],
+        version: u8,
         bump: u8,
     ) -> Self {
         Self {
@@ -102,7 +104,8 @@ impl Pair {
             total_debt1_shares: 0,
             total_collateral0: 0,
             total_collateral1: 0,
-            pair_nonce,
+            params_hash,
+            version,
             bump,
         }
     }
@@ -336,7 +339,7 @@ macro_rules! generate_gamm_pair_seeds {
             PAIR_SEED_PREFIX,
             $pair.token0.as_ref(),
             $pair.token1.as_ref(),
-            $pair.pair_nonce.as_ref(),
+            $pair.params_hash.as_ref(),
             &[$pair.bump],
         ]
     };
