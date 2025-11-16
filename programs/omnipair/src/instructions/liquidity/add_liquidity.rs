@@ -4,7 +4,7 @@ use crate::constants::*;
 use crate::utils::token::{transfer_from_user_to_pool_vault, token_mint_to};
 use crate::generate_gamm_pair_seeds;
 use crate::liquidity::common::{AdjustLiquidity, AddLiquidityArgs};
-use crate::events::{MintEvent, EventMetadata};
+use crate::events::{MintEvent, UserPositionUpdatedEvent, EventMetadata};
 
 impl<'info> AdjustLiquidity<'info> {
     fn validate_add(&self, args: &AddLiquidityArgs) -> Result<()> {
@@ -114,12 +114,40 @@ impl<'info> AdjustLiquidity<'info> {
             .checked_add(liquidity)
             .ok_or(ErrorCode::SupplyOverflow)?;
         
+        user_lp_token_account.reload()?;
+        let user_lp_balance = user_lp_token_account.amount;
+        
+        let user_token0_amount = (user_lp_balance as u128)
+            .checked_mul(pair.reserve0 as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .checked_div(pair.total_supply as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .try_into()
+            .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
+        let user_token1_amount = (user_lp_balance as u128)
+            .checked_mul(pair.reserve1 as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .checked_div(pair.total_supply as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .try_into()
+            .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
+        
         // Emit event
         emit_cpi!(MintEvent {
             metadata: EventMetadata::new(user.key(), pair.key()),
             amount0: args.amount0_in,
             amount1: args.amount1_in,
             liquidity: liquidity as u64,
+        });
+
+        emit_cpi!(UserPositionUpdatedEvent {
+            metadata: EventMetadata::new(user.key(), pair.key()),
+            token0_amount: user_token0_amount,
+            token1_amount: user_token1_amount,
+            lp_amount: user_lp_balance,
+            token0_mint: pair.token0,
+            token1_mint: pair.token1,
+            lp_mint: lp_mint.key(),
         });
         
         Ok(())

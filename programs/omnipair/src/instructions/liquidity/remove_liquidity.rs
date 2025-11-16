@@ -4,7 +4,7 @@ use crate::constants::*;
 use crate::utils::token::{transfer_from_pool_vault_to_user, token_burn};
 use crate::generate_gamm_pair_seeds;
 use crate::liquidity::common::AdjustLiquidity;
-use crate::events::{BurnEvent, EventMetadata};
+use crate::events::{BurnEvent, UserPositionUpdatedEvent, EventMetadata};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct RemoveLiquidityArgs {
@@ -136,12 +136,42 @@ impl<'info> AdjustLiquidity<'info> {
         pair.reserve1 = pair.reserve1.checked_sub(amount1_out).ok_or(ErrorCode::ReserveOverflow)?;
         pair.total_supply = pair.total_supply.checked_sub(args.liquidity_in).ok_or(ErrorCode::SupplyOverflow)?;
 
+        // Reload LP token account to get updated balance after burn
+        user_lp_token_account.reload()?;
+        let user_lp_balance = user_lp_token_account.amount;
+        
+        // Calculate user's token amounts from LP balance (same formula as add_liquidity)
+        let user_token0_amount = (user_lp_balance as u128)
+            .checked_mul(pair.reserve0 as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .checked_div(pair.total_supply as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .try_into()
+            .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
+        let user_token1_amount = (user_lp_balance as u128)
+            .checked_mul(pair.reserve1 as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .checked_div(pair.total_supply as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .try_into()
+            .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
+
         // Emit event
         emit_cpi!(BurnEvent {
             metadata: EventMetadata::new(ctx.accounts.user.key(), pair.key()),
             amount0: amount0_out,
             amount1: amount1_out,
             liquidity: args.liquidity_in,
+        });
+
+        emit_cpi!(UserPositionUpdatedEvent {
+            metadata: EventMetadata::new(ctx.accounts.user.key(), pair.key()),
+            token0_amount: user_token0_amount,
+            token1_amount: user_token1_amount,
+            lp_amount: user_lp_balance,
+            token0_mint: pair.token0,
+            token1_mint: pair.token1,
+            lp_mint: lp_mint.key(),
         });
 
         Ok(())
