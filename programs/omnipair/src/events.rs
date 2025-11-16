@@ -83,7 +83,7 @@ pub struct MintEvent {
 }
 
 #[event]
-pub struct UserPositionUpdatedEvent {
+pub struct UserLiquidityPositionUpdatedEvent {
     pub token0_amount: u64,
     pub token1_amount: u64,
     pub lp_amount: u64,
@@ -115,7 +115,7 @@ pub struct UserPositionCreatedEvent {
 }
 
 #[event]
-pub struct UserLiquidityPositionUpdatedEvent {
+pub struct UserPositionUpdatedEvent {
     pub position: Pubkey,
     pub collateral0: u64,
     pub collateral1: u64,

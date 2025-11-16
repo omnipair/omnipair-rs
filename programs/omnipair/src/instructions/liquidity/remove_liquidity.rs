@@ -4,7 +4,7 @@ use crate::constants::*;
 use crate::utils::token::{transfer_from_pool_vault_to_user, token_burn};
 use crate::generate_gamm_pair_seeds;
 use crate::liquidity::common::AdjustLiquidity;
-use crate::events::{BurnEvent, UserPositionUpdatedEvent, EventMetadata};
+use crate::events::{BurnEvent, UserLiquidityPositionUpdatedEvent, EventMetadata};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct RemoveLiquidityArgs {
@@ -164,7 +164,7 @@ impl<'info> AdjustLiquidity<'info> {
             liquidity: args.liquidity_in,
         });
 
-        emit_cpi!(UserPositionUpdatedEvent {
+        emit_cpi!(UserLiquidityPositionUpdatedEvent {
             metadata: EventMetadata::new(ctx.accounts.user.key(), pair.key()),
             token0_amount: user_token0_amount,
             token1_amount: user_token1_amount,

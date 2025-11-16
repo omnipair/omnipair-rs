@@ -4,7 +4,7 @@ use crate::constants::*;
 use crate::utils::token::{transfer_from_user_to_pool_vault, token_mint_to};
 use crate::generate_gamm_pair_seeds;
 use crate::liquidity::common::{AdjustLiquidity, AddLiquidityArgs};
-use crate::events::{MintEvent, UserPositionUpdatedEvent, EventMetadata};
+use crate::events::{MintEvent, UserLiquidityPositionUpdatedEvent, EventMetadata};
 
 impl<'info> AdjustLiquidity<'info> {
     fn validate_add(&self, args: &AddLiquidityArgs) -> Result<()> {
@@ -140,7 +140,7 @@ impl<'info> AdjustLiquidity<'info> {
             liquidity: liquidity as u64,
         });
 
-        emit_cpi!(UserPositionUpdatedEvent {
+        emit_cpi!(UserLiquidityPositionUpdatedEvent {
             metadata: EventMetadata::new(user.key(), pair.key()),
             token0_amount: user_token0_amount,
             token1_amount: user_token1_amount,
