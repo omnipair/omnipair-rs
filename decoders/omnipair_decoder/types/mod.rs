@@ -52,6 +52,8 @@ pub mod swap_event;
 pub use swap_event::*;
 pub mod update_pair_event;
 pub use update_pair_event::*;
+pub mod user_liquidity_position_updated_event;
+pub use user_liquidity_position_updated_event::*;
 pub mod user_position;
 pub use user_position::*;
 pub mod user_position_created_event;

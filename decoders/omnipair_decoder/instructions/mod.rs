@@ -27,6 +27,7 @@ pub mod mint_event;
 pub mod pair_created_event;
 pub mod swap_event;
 pub mod update_pair_event;
+pub mod user_liquidity_position_updated_event;
 pub mod user_position_created_event;
 pub mod user_position_liquidated_event;
 pub mod user_position_updated_event;
@@ -57,6 +58,7 @@ pub enum OmnipairInstruction {
     PairCreatedEvent(pair_created_event::PairCreatedEvent),
     SwapEvent(swap_event::SwapEvent),
     UpdatePairEvent(update_pair_event::UpdatePairEvent),
+    UserLiquidityPositionUpdatedEvent(user_liquidity_position_updated_event::UserLiquidityPositionUpdatedEvent),
     UserPositionCreatedEvent(user_position_created_event::UserPositionCreatedEvent),
     UserPositionLiquidatedEvent(user_position_liquidated_event::UserPositionLiquidatedEvent),
     UserPositionUpdatedEvent(user_position_updated_event::UserPositionUpdatedEvent),
@@ -94,6 +96,7 @@ impl<'a> carbon_core::instruction::InstructionDecoder<'a> for OmnipairDecoder {
             OmnipairInstruction::PairCreatedEvent => pair_created_event::PairCreatedEvent,
             OmnipairInstruction::SwapEvent => swap_event::SwapEvent,
             OmnipairInstruction::UpdatePairEvent => update_pair_event::UpdatePairEvent,
+            OmnipairInstruction::UserLiquidityPositionUpdatedEvent => user_liquidity_position_updated_event::UserLiquidityPositionUpdatedEvent,
             OmnipairInstruction::UserPositionCreatedEvent => user_position_created_event::UserPositionCreatedEvent,
             OmnipairInstruction::UserPositionLiquidatedEvent => user_position_liquidated_event::UserPositionLiquidatedEvent,
             OmnipairInstruction::UserPositionUpdatedEvent => user_position_updated_event::UserPositionUpdatedEvent,
