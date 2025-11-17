@@ -33,7 +33,7 @@ use crate::utils::token::{
     token_mint_to,  
 };
 use crate::utils::math::SqrtU128;
-use crate::events::{PairCreatedEvent, EventMetadata};
+use crate::events::{PairCreatedEvent, MintEvent, UserLiquidityPositionUpdatedEvent, EventMetadata};
 use crate::generate_gamm_pair_seeds;
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
@@ -455,7 +455,23 @@ impl<'info> InitializeAndBootstrap<'info> {
             .checked_add(liquidity)
             .ok_or(ErrorCode::SupplyOverflow)?;
 
-        // Emit event
+
+        let deployer_lp_balance = liquidity;
+        let deployer_token0_amount = (deployer_lp_balance as u128)
+            .checked_mul(pair.reserve0 as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .checked_div(pair.total_supply as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .try_into()
+            .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
+        let deployer_token1_amount = (deployer_lp_balance as u128)
+            .checked_mul(pair.reserve1 as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .checked_div(pair.total_supply as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .try_into()
+            .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
+
         emit_cpi!(PairCreatedEvent {
             metadata: EventMetadata::new(ctx.accounts.deployer.key(), pair.key()),
             token0: ctx.accounts.token0_mint.key(),
@@ -470,6 +486,24 @@ impl<'info> InitializeAndBootstrap<'info> {
             params_hash: pair.params_hash,
             version: pair.version,
         });
+
+        emit_cpi!(MintEvent {
+            metadata: EventMetadata::new(ctx.accounts.deployer.key(), pair.key()),
+            amount0: amount0_in,
+            amount1: amount1_in,
+            liquidity: liquidity,
+        });
+
+        emit_cpi!(UserLiquidityPositionUpdatedEvent {
+            metadata: EventMetadata::new(ctx.accounts.deployer.key(), pair.key()),
+            token0_amount: deployer_token0_amount,
+            token1_amount: deployer_token1_amount,
+            lp_amount: deployer_lp_balance,
+            token0_mint: pair.token0,
+            token1_mint: pair.token1,
+            lp_mint: ctx.accounts.lp_mint.key(),
+        });
+        
 
         Ok(())
     }   
