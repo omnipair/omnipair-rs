@@ -8,6 +8,63 @@ use crate::{
     instructions::lending::common::{CommonAdjustPosition, AdjustPositionArgs},
 };
 
+use crate::state::{Pair, UserPosition};
+
+fn calculate_max_withdrawable(pair: &Pair, user_position: &UserPosition, is_collateral_token0: bool) -> Result<u64> {
+    let user_collateral = match is_collateral_token0 {
+        true => user_position.collateral0,
+        false => user_position.collateral1,
+    };
+
+    // Calculate current debt
+    let debt = match is_collateral_token0 {
+        true => user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
+        false => user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
+    };
+
+    // If no debt, can withdraw all collateral
+    if debt == 0 {
+        return Ok(user_collateral);
+    }
+
+    // Calculate required collateral for current debt
+    let debt_token = if is_collateral_token0 { pair.token1 } else { pair.token0 };
+    let collateral_token = pair.get_collateral_token(&debt_token);
+    let collateral_amount = match collateral_token == pair.token0 {
+        true => user_position.collateral0,
+        false => user_position.collateral1,
+    };
+    let pessimistic_cf_bps = pair.get_max_debt_and_cf_bps_for_collateral(pair, &collateral_token, collateral_amount)?.1;
+    
+    // Calculate minimum required collateral value in debt token
+    let min_collateral_value = (debt as u128)
+        .checked_mul(BPS_DENOMINATOR as u128)
+        .ok_or(ErrorCode::DebtMathOverflow)?
+        .checked_div(pessimistic_cf_bps as u128)
+        .ok_or(ErrorCode::DebtMathOverflow)?;
+ 
+    // Convert collateral value back to collateral token amount
+    let collateral_price = if is_collateral_token0 {
+        pair.ema_price0_nad()
+    } else {
+        pair.ema_price1_nad()
+    };
+ 
+    // minimum collateral to cover outstanding debt
+    let min_collateral = (min_collateral_value as u128)
+        .checked_mul(NAD as u128)
+        .ok_or(ErrorCode::DebtMathOverflow)?
+        .checked_div(collateral_price as u128)
+        .ok_or(ErrorCode::DebtMathOverflow)?;
+ 
+    // Calculate maximum withdrawable amount
+    let max_withdrawable = user_collateral
+        .checked_sub(min_collateral as u64)
+        .ok_or(ErrorCode::DebtMathOverflow)?;
+    
+    Ok(max_withdrawable)
+}
+
 impl<'info> CommonAdjustPosition<'info> {
     pub fn validate_remove(&self, args: &AdjustPositionArgs) -> Result<()> {
         let AdjustPositionArgs { amount } = args;
@@ -33,41 +90,8 @@ impl<'info> CommonAdjustPosition<'info> {
             return Ok(());
         }
 
-        // Calculate required collateral for current debt
-        let debt_token = if is_collateral_token0 { self.pair.token1 } else { self.pair.token0 };
-        let collateral_token = self.pair.get_collateral_token(&debt_token);
-        let collateral_amount = match collateral_token == self.pair.token0 {
-            true => self.user_position.collateral0,
-            false => self.user_position.collateral1,
-        };
-        let pessimistic_cf_bps = self.pair.get_max_debt_and_cf_bps_for_collateral(&self.pair, &collateral_token, collateral_amount)?.1;
-        
-        // Calculate minimum required collateral value in debt token
-        let min_collateral_value = (debt as u128)
-            .checked_mul(BPS_DENOMINATOR as u128)
-            .ok_or(ErrorCode::DebtMathOverflow)?
-            .checked_div(pessimistic_cf_bps as u128)
-            .ok_or(ErrorCode::DebtMathOverflow)?;
-
-        // Convert collateral value back to collateral token amount
-        let collateral_price = if is_collateral_token0 {
-            self.pair.ema_price0_nad()
-        } else {
-            self.pair.ema_price1_nad()
-        };
-
-        // minimum collateral to cover outstanding debt
-        let min_collateral = (min_collateral_value as u128)
-            .checked_mul(NAD as u128)
-            .ok_or(ErrorCode::DebtMathOverflow)?
-            .checked_div(collateral_price as u128)
-            .ok_or(ErrorCode::DebtMathOverflow)?;
-
         // Calculate maximum withdrawable amount
-        let max_withdrawable = user_collateral
-            .checked_sub(min_collateral as u64)
-            .ok_or(ErrorCode::DebtMathOverflow)?;
-
+        let max_withdrawable = calculate_max_withdrawable(&self.pair, &self.user_position, is_collateral_token0)?;
         let withdraw_amount = if is_withdraw_all { max_withdrawable } else { *amount };
         
         // Check if user has enough collateral
@@ -119,14 +143,24 @@ impl<'info> CommonAdjustPosition<'info> {
 
         let is_withdraw_all = args.amount == u64::MAX;
         let is_token0 = user_token_account.mint == pair.token0;
-        let withdraw_amount = if is_withdraw_all {
-            match is_token0 {
-                true => user_position.collateral0,
-                false => user_position.collateral1,
-            }
-        } else {
-            args.amount
+        // Calculate current debt
+        let debt = match is_token0 {
+            true => user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
+            false => user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
         };
+
+        let withdraw_amount = if !is_withdraw_all { args.amount } else { 
+            if debt == 0 {
+                match is_token0 {
+                    true => user_position.collateral0,
+                    false => user_position.collateral1,
+                }
+            } else {
+                // Calculate maximum withdrawable amount
+                let max_withdrawable = calculate_max_withdrawable(&pair, &user_position, is_token0)?;
+                max_withdrawable
+            }
+         }; 
 
         transfer_from_pool_vault_to_user(
             pair.to_account_info(),
