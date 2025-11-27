@@ -292,9 +292,13 @@ impl Pair {
                 self.protocol_revenue_reserve0 += protocol_share0;
                 self.protocol_revenue_reserve1 += protocol_share1;
 
-                // update total debt
-                self.total_debt0 += lp_share0;
-                self.total_debt1 += lp_share1;
+                // update total debt - now includes full interest accrued (not just LP share)
+                self.total_debt0 = self.total_debt0
+                    .checked_add(u64::try_from(total_interest0).expect("Interest overflow"))
+                    .expect("Total debt0 overflow");
+                self.total_debt1 = self.total_debt1
+                    .checked_add(u64::try_from(total_interest1).expect("Interest overflow"))
+                    .expect("Total debt1 overflow");
 
                 // TODO: review this    
                 // this applies accrued interest as instant liquidity by appending it to the reserves
