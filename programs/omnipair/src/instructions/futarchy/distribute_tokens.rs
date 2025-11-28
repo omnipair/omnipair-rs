@@ -4,6 +4,7 @@ use anchor_spl::token_interface::Mint;
 use crate::state::futarchy_authority::FutarchyAuthority;
 use crate::constants::{FUTARCHY_AUTHORITY_SEED_PREFIX, BPS_DENOMINATOR};
 use crate::errors::ErrorCode;
+use crate::utils::math::ceil_div;
 use crate::generate_futarchy_authority_seeds;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -80,24 +81,34 @@ impl<'info> DistributeTokens<'info> {
         // Get total balance to distribute
         let total_balance = source_token_account.amount as u128;
 
-        // Calculate amounts for each recipient using stored percentages
-        let amount1 = total_balance
-            .checked_mul(futarchy_authority.revenue_distribution.futarchy_treasury_bps as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)?
-            .checked_div(BPS_DENOMINATOR as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)? as u64;
+        // Calculate amounts for each recipient using ceiling division to ensure no funds are lost
+        // Use ceiling for first two, then calculate third as remainder to ensure exact distribution
+        let amount1 = ceil_div(
+            total_balance
+                .checked_mul(futarchy_authority.revenue_distribution.futarchy_treasury_bps as u128)
+                .ok_or(ErrorCode::FeeMathOverflow)?,
+            BPS_DENOMINATOR as u128
+        )
+        .ok_or(ErrorCode::FeeMathOverflow)? as u64;
 
-        let amount2 = total_balance
-            .checked_mul(futarchy_authority.revenue_distribution.buybacks_vault_bps as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)?
-            .checked_div(BPS_DENOMINATOR as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)? as u64;
+        let amount2 = ceil_div(
+            total_balance
+                .checked_mul(futarchy_authority.revenue_distribution.buybacks_vault_bps as u128)
+                .ok_or(ErrorCode::FeeMathOverflow)?,
+            BPS_DENOMINATOR as u128
+        )
+        .ok_or(ErrorCode::FeeMathOverflow)? as u64;
 
-        let amount3 = total_balance
-            .checked_mul(futarchy_authority.revenue_distribution.team_treasury_bps as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)?
-            .checked_div(BPS_DENOMINATOR as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)? as u64;
+        // This ensures all funds are distributed exactly
+        let amount1_plus_amount2 = (amount1 as u128)
+            .checked_add(amount2 as u128)
+            .ok_or(ErrorCode::FeeMathOverflow)?;
+        let amount3 = if amount1_plus_amount2 <= total_balance {
+            (total_balance - amount1_plus_amount2) as u64
+        } else {
+            // This should never happen if percentages are valid, but handle gracefully
+            return Err(ErrorCode::FeeMathOverflow.into());
+        };
 
         // Generate PDA seeds for signing
         let seeds = generate_futarchy_authority_seeds!(futarchy_authority);

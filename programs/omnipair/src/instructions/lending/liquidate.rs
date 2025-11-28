@@ -12,6 +12,7 @@ use crate::{
     events::{UserPositionLiquidatedEvent, EventMetadata},
     state::user_position::UserPosition,
     utils::token::transfer_from_pool_vault_to_user,
+    utils::math::ceil_div,
     generate_gamm_pair_seeds,
 };
 
@@ -197,9 +198,17 @@ impl<'info> Liquidate<'info> {
             if is_collateral_token0 { user_position.collateral0 } else { user_position.collateral1 }
         );
 
-        let caller_incentive = (collateral_final as u128)
-            .checked_mul(LIQUIDATION_INCENTIVE_BPS as u128).ok_or(ErrorCode::DebtMathOverflow)?
-            .checked_div(BPS_DENOMINATOR as u128).ok_or(ErrorCode::DebtMathOverflow)?.try_into().map_err(|_| ErrorCode::DebtMathOverflow)?;
+        // Use ceiling division to ensure liquidators always get at least some incentive
+        // This prevents zero incentives for small liquidations which would disincentivize liquidators
+        let caller_incentive = ceil_div(
+            (collateral_final as u128)
+                .checked_mul(LIQUIDATION_INCENTIVE_BPS as u128)
+                .ok_or(ErrorCode::DebtMathOverflow)?,
+            BPS_DENOMINATOR as u128
+        )
+        .ok_or(ErrorCode::DebtMathOverflow)?
+        .try_into()
+        .map_err(|_| ErrorCode::DebtMathOverflow)?;
         
         // Remaining collateral goes to reserves (after incentive)
         let collateral_to_reserves = collateral_final

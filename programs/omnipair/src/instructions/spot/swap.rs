@@ -10,6 +10,7 @@ use crate::{
     errors::ErrorCode,
     events::*,
     utils::token::{transfer_from_user_to_pool_vault, transfer_from_pool_vault_to_user},
+    utils::math::ceil_div,
     generate_gamm_pair_seeds,
 };
 
@@ -159,19 +160,23 @@ impl<'info> Swap<'info> {
         let last_k = (pair.reserve0 as u128).checked_mul(pair.reserve1 as u128).ok_or(ErrorCode::InvariantOverflow)?;
         let is_token0_in = user_token_in_account.mint == pair.token0;
 
-        // Calculate total fee amount
-        let total_fee = (amount_in as u128)
-            .checked_mul(pair.swap_fee_bps as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)?
-            .checked_div(BPS_DENOMINATOR as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)? as u64;
+        // Calculate total fee amount using ceiling division to ensure fees are never zero
+        let total_fee = ceil_div(
+            (amount_in as u128)
+                .checked_mul(pair.swap_fee_bps as u128)
+                .ok_or(ErrorCode::FeeMathOverflow)?,
+            BPS_DENOMINATOR as u128
+        )
+        .ok_or(ErrorCode::FeeMathOverflow)? as u64;
 
-        // Calculate futarchy fee portion of the total fee
-        let futarchy_fee = (total_fee as u128)
-            .checked_mul(futarchy_authority.revenue_share.swap_bps as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)?
-            .checked_div(BPS_DENOMINATOR as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)? as u64;
+        // Calculate futarchy fee portion of the total fee using ceiling division
+        let futarchy_fee = ceil_div(
+            (total_fee as u128)
+                .checked_mul(futarchy_authority.revenue_share.swap_bps as u128)
+                .ok_or(ErrorCode::FeeMathOverflow)?,
+            BPS_DENOMINATOR as u128
+        )
+        .ok_or(ErrorCode::FeeMathOverflow)? as u64;
 
         // Transfer futarchy fee to authority immediately if non-zero
         if futarchy_fee > 0 {
