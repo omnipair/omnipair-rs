@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::errors::ErrorCode;
+use crate::utils::math::ceil_div;
 use super::Pair;
 use std::cmp::max;
 
@@ -59,13 +60,15 @@ impl UserPosition {
                     pair.total_debt0_shares = amount;
                     self.debt0_shares = amount;
                 } else {
-                    let shares = (amount as u128)
-                        .checked_mul(pair.total_debt0_shares as u128)
-                        .ok_or(ErrorCode::DebtShareMathOverflow)?
-                        .checked_div(pair.total_debt0 as u128)
-                        .ok_or(ErrorCode::DebtShareDivisionOverflow)?
-                        .try_into()
-                        .map_err(|_| ErrorCode::DebtShareDivisionOverflow)?;
+                    let shares = ceil_div(
+                        (amount as u128)
+                            .checked_mul(pair.total_debt0_shares as u128)
+                            .ok_or(ErrorCode::DebtShareMathOverflow)?,
+                        pair.total_debt0 as u128
+                    )
+                    .ok_or(ErrorCode::DebtShareDivisionOverflow)?
+                    .try_into()
+                    .map_err(|_| ErrorCode::DebtShareDivisionOverflow)?;
                     pair.total_debt0_shares = pair.total_debt0_shares.saturating_add(shares);
                     self.debt0_shares = self.debt0_shares.saturating_add(shares);
                 }
@@ -76,13 +79,15 @@ impl UserPosition {
                     pair.total_debt1_shares = amount;
                     self.debt1_shares = amount;
                 } else {
-                    let shares = (amount as u128)
-                        .checked_mul(pair.total_debt1_shares as u128)
-                        .ok_or(ErrorCode::DebtShareMathOverflow)?
-                        .checked_div(pair.total_debt1 as u128)
-                        .ok_or(ErrorCode::DebtShareDivisionOverflow)?
-                        .try_into()
-                        .map_err(|_| ErrorCode::DebtShareDivisionOverflow)?;
+                    let shares = ceil_div(
+                        (amount as u128)
+                            .checked_mul(pair.total_debt1_shares as u128)
+                            .ok_or(ErrorCode::DebtShareMathOverflow)?,
+                        pair.total_debt1 as u128
+                    )
+                    .ok_or(ErrorCode::DebtShareDivisionOverflow)?
+                    .try_into()
+                    .map_err(|_| ErrorCode::DebtShareDivisionOverflow)?;
                     pair.total_debt1_shares = pair.total_debt1_shares.saturating_add(shares);
                     self.debt1_shares = self.debt1_shares.saturating_add(shares);
                 }
