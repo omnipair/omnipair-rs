@@ -157,6 +157,16 @@ impl<'info> AddCollateral<'info> {
                 user_position.collateral1 = user_position.collateral1.checked_add(args.amount).unwrap();
             }
         }
+        
+        let collateral_token = if is_collateral_token0 { pair.token0 } else { pair.token1 };
+        let debt_token = if is_collateral_token0 { pair.token1 } else { pair.token0 };
+        let collateral_amount = if is_collateral_token0 {
+            user_position.collateral0
+        } else {
+            user_position.collateral1
+        };
+        let (_, max_allowed_cf_bps, _) = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount)?;
+        user_position.set_applied_min_cf_for_debt_token(&debt_token, &pair, max_allowed_cf_bps);
 
         // Emit collateral adjustment event
         let (amount0, amount1) = if user_collateral_token_account.mint == pair.token0 {
