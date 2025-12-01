@@ -111,6 +111,10 @@ impl<'info> AdjustLiquidity<'info> {
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
 
+        // Reload vault accounts to get updated balances after transfers
+        token0_vault.reload()?;
+        token1_vault.reload()?;
+
         // Check collateral requirements
         require!(
             token0_vault.amount >= pair.total_collateral0,
