@@ -455,6 +455,9 @@ impl<'info> InitializeAndBootstrap<'info> {
             .checked_add(liquidity)
             .ok_or(ErrorCode::SupplyOverflow)?;
 
+        // Initialize EMA prices based on initial liquidity
+        pair.last_price0_ema = ((pair.reserve1 as u128 * NAD as u128) / pair.reserve0 as u128) as u64;
+        pair.last_price1_ema = ((pair.reserve0 as u128 * NAD as u128) / pair.reserve1 as u128) as u64;
 
         let deployer_lp_balance = liquidity;
         let deployer_token0_amount = (deployer_lp_balance as u128)
