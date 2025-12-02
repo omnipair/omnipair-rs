@@ -281,6 +281,10 @@ impl<'info> Flashloan<'info> {
 
         let required_balance0 = balance0_before.checked_add(fee0).unwrap();
         let required_balance1 = balance1_before.checked_add(fee1).unwrap();
+
+        // update the reserves
+        pair.reserve0 = pair.reserve0.checked_add(fee0).unwrap();
+        pair.reserve1 = pair.reserve1.checked_add(fee1).unwrap();
         
         require!(
             token0_vault.amount >= required_balance0,
