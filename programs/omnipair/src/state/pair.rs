@@ -285,19 +285,22 @@ impl Pair {
                 // calculate protocol share of accrued interest
                 let protocol_share0: u64 = ((total_interest0 as u128 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
                 let protocol_share1: u64 = ((total_interest1 as u128 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
-                let lp_share0 = total_interest0 as u64 - protocol_share0;
-                let lp_share1 = total_interest1 as u64 - protocol_share1;
+                let lp_share0 = total_interest0 as u64;
+                let lp_share1 = total_interest1 as u64;
 
                 // update protocol revenue reserves
                 self.protocol_revenue_reserve0 += protocol_share0;
                 self.protocol_revenue_reserve1 += protocol_share1;
 
+                let total_interest0_with_protocol_share = total_interest0.checked_add(protocol_share0 as u128).expect("Interest overflow");
+                let total_interest1_with_protocol_share = total_interest1.checked_add(protocol_share1 as u128).expect("Interest overflow");
+
                 // update total debt - now includes full interest accrued (not just LP share)
                 self.total_debt0 = self.total_debt0
-                    .checked_add(u64::try_from(total_interest0).expect("Interest overflow"))
+                    .checked_add(u64::try_from(total_interest0_with_protocol_share).expect("Interest overflow"))
                     .expect("Total debt0 overflow");
                 self.total_debt1 = self.total_debt1
-                    .checked_add(u64::try_from(total_interest1).expect("Interest overflow"))
+                    .checked_add(u64::try_from(total_interest1_with_protocol_share).expect("Interest overflow"))
                     .expect("Total debt1 overflow");
 
                 // TODO: review this    
