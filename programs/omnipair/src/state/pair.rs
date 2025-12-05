@@ -282,25 +282,29 @@ impl Pair {
                 let total_interest0 = (self.total_debt0 as u128 * integral0 as u128) / NAD as u128;
                 let total_interest1 = (self.total_debt1 as u128 * integral1 as u128) / NAD as u128;
 
-                // calculate protocol share of accrued interest
-                let protocol_share0: u64 = ((total_interest0 as u128 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
-                let protocol_share1: u64 = ((total_interest1 as u128 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
+                // Calculate protocol fee as an extra fee on top of interest (not a share of interest)
+                // Borrowers pay: interest + protocol_fee
+                // LPs receive: interest (full amount)
+                // Protocol receives: protocol_fee (extra fee charged to borrowers)
+                let protocol_fee0: u64 = ((total_interest0 as u128 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
+                let protocol_fee1: u64 = ((total_interest1 as u128 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
                 let lp_share0 = total_interest0 as u64;
                 let lp_share1 = total_interest1 as u64;
 
-                // update protocol revenue reserves
-                self.protocol_revenue_reserve0 += protocol_share0;
-                self.protocol_revenue_reserve1 += protocol_share1;
+                // update protocol revenue reserves (tracks extra fees charged to borrowers)
+                self.protocol_revenue_reserve0 += protocol_fee0;
+                self.protocol_revenue_reserve1 += protocol_fee1;
 
-                let total_interest0_with_protocol_share = total_interest0.checked_add(protocol_share0 as u128).expect("Interest overflow");
-                let total_interest1_with_protocol_share = total_interest1.checked_add(protocol_share1 as u128).expect("Interest overflow");
+                // Total amount borrowers owe = interest + protocol_fee (extra fee)
+                let total_borrower_cost0 = total_interest0.checked_add(protocol_fee0 as u128).expect("Interest overflow");
+                let total_borrower_cost1 = total_interest1.checked_add(protocol_fee1 as u128).expect("Interest overflow");
 
-                // update total debt - now includes full interest accrued (not just LP share)
+                // update total debt - includes interest plus protocol fee (extra fee charged to borrowers)
                 self.total_debt0 = self.total_debt0
-                    .checked_add(u64::try_from(total_interest0_with_protocol_share).expect("Interest overflow"))
+                    .checked_add(u64::try_from(total_borrower_cost0).expect("Interest overflow"))
                     .expect("Total debt0 overflow");
                 self.total_debt1 = self.total_debt1
-                    .checked_add(u64::try_from(total_interest1_with_protocol_share).expect("Interest overflow"))
+                    .checked_add(u64::try_from(total_borrower_cost1).expect("Interest overflow"))
                     .expect("Total debt1 overflow");
 
                 // TODO: review this    
