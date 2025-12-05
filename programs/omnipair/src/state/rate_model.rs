@@ -52,7 +52,7 @@ impl RateModel {
             // ∫ r dt = (r1 - r0) / k_real = (r1 - r0) * NAD / exp_rate, then / YEAR
             let numer    = curr.saturating_sub(last).saturating_mul(NAD as u128);
             let integral = numer / exp_rate / (SECONDS_PER_YEAR as u128);
-            return (curr as u64, integral as u64);
+            return (curr.min(u64::MAX as u128) as u64, integral.min(u64::MAX as u128) as u64);
         }
 
         // Low util: exponential decay with MIN floor
@@ -65,12 +65,12 @@ impl RateModel {
                 // ∫ = (r0 - r1) * NAD / exp_rate, then / YEAR
                 let numer    = last.saturating_sub(curr).saturating_mul(NAD as u128);
                 let integral = numer / exp_rate / (SECONDS_PER_YEAR as u128);
-                return (curr as u64, integral as u64);
+                return (curr.min(u64::MAX as u128) as u64, integral.min(u64::MAX as u128) as u64);
             } else {
                 // Hit MIN during window → split: exponential down to MIN, then flat MIN
                 if last <= min_nad {
                     let integral = min_nad.saturating_mul(dt) / (SECONDS_PER_YEAR as u128);
-                    return (min_nad as u64, integral as u64);
+                    return (min_nad.min(u64::MAX as u128) as u64, integral.min(u64::MAX as u128) as u64);
                 }
                 let t_to_min = Self::time_to_reach_closed_form(last, min_nad, exp_rate, /*up=*/false)
                     .min(dt);
@@ -80,13 +80,13 @@ impl RateModel {
                 // flat tail: MIN * (dt - t*)
                 let flat_part = min_nad.saturating_mul(dt.saturating_sub(t_to_min));
                 let integral  = (exp_part + flat_part) / (SECONDS_PER_YEAR as u128);
-                return (min_nad as u64, integral as u64);
+                return (min_nad.min(u64::MAX as u128) as u64, integral.min(u64::MAX as u128) as u64);
             }
         }
 
         // Middle band: flat
         let integral = (last.saturating_mul(dt)) / (SECONDS_PER_YEAR as u128);
-        (last as u64, integral as u64)
+        (last.min(u64::MAX as u128) as u64, integral.min(u64::MAX as u128) as u64)
     }
 
     /// Closed-form time to reach target using ln.
