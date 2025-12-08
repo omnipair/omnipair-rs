@@ -185,17 +185,21 @@ impl<'info> Liquidate<'info> {
             .try_into()
             .map_err(|_| ErrorCode::DebtMathOverflow)?;
 
-        let collateral_token = pair.get_collateral_token(&debt_token);
-        let collateral_amount = match collateral_token == pair.token0 {
-            true => user_position.collateral0,
-            false => user_position.collateral1,
-        };
-        let applied_min_cf_bps = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount)?.1;
-
         // Clamp to what user actually has
         let collateral_final = core::cmp::min(collateral_amount_to_seize_u64,
             if is_collateral_token0 { user_position.collateral0 } else { user_position.collateral1 }
         );
+
+        let collateral_token = pair.get_collateral_token(&debt_token);
+        let collateral_amount_pre_liquidation = match collateral_token == pair.token0 {
+            true => user_position.collateral0,
+            false => user_position.collateral1,
+        };
+
+        let collateral_amount_post_liquidation = collateral_amount_pre_liquidation
+            .checked_sub(collateral_final)
+            .ok_or(ErrorCode::DebtMathOverflow)?;
+        let applied_min_cf_bps = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount_post_liquidation)?.1;
 
         let caller_incentive = (collateral_final as u128)
             .checked_mul(LIQUIDATION_INCENTIVE_BPS as u128).ok_or(ErrorCode::DebtMathOverflow)?
