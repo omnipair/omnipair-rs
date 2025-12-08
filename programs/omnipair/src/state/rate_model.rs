@@ -90,7 +90,8 @@ impl RateModel {
     }
 
     /// Closed-form time to reach target using ln.
-    /// up=false : r(t) = r0 * e^{-k t} <= target  ⇒  t = ln(r0/target) * NAD / exp_rate
+    /// up=false : r(t) = r0 * e^{-k t} <= target  ⇒  t = ln(r0/target) / k = ln(r0/target) * NAD / exp_rate
+    /// Since ln_ratio is already NAD-scaled, t = ln_ratio / exp_rate (no extra NAD multiplier needed)
     #[inline]
     fn time_to_reach_closed_form(r0: u128, target: u128, exp_rate_nad_per_s: u128, up: bool) -> u128 {
         if up {
@@ -98,13 +99,13 @@ impl RateModel {
             if target <= r0 { return 0; }
             let ratio_nad = (target.saturating_mul(NAD as u128)) / r0.max(1);
             let ln_ratio  = Self::ln_nad(ratio_nad as u64);  // NAD (signed)
-            let t = ((NAD as i128) * ln_ratio) / (exp_rate_nad_per_s as i128);
+            let t = ln_ratio / (exp_rate_nad_per_s as i128);
             if t <= 0 { 0 } else { t as u128 }
         } else {
             if r0 <= target { return 0; }
             let ratio_nad = (r0.saturating_mul(NAD as u128)) / target.max(1);
             let ln_ratio  = Self::ln_nad(ratio_nad as u64);  // NAD (signed)
-            let t = ((NAD as i128) * ln_ratio) / (exp_rate_nad_per_s as i128);
+            let t = ln_ratio / (exp_rate_nad_per_s as i128);
             if t <= 0 { 0 } else { t as u128 }
         }
     }
