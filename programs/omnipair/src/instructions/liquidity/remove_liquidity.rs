@@ -56,7 +56,7 @@ impl<'info> AdjustLiquidity<'info> {
         } = ctx.accounts;
 
         // Calculate amounts to remove
-        let total_supply = lp_mint.supply;
+        let total_supply = pair.total_supply;
         let amount0_out = (args.liquidity_in as u128)
             .checked_mul(pair.reserve0 as u128)
             .ok_or(ErrorCode::LiquidityMathOverflow)?
