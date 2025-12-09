@@ -28,7 +28,8 @@ pub struct Swap<'info> {
         seeds = [PAIR_SEED_PREFIX, pair.token0.as_ref(), pair.token1.as_ref(), pair.pair_nonce.as_ref()],
         bump
     )]
-    pub pair: Account<'info, Pair>,
+    // Box used to avoid Access violation in stack frame... error
+    pub pair: Box<Account<'info, Pair>>,
 
     #[account(
         mut,
