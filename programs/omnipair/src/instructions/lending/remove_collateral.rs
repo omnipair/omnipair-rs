@@ -30,11 +30,7 @@ fn calculate_max_withdrawable(pair: &Pair, user_position: &UserPosition, is_coll
     // Calculate required collateral for current debt
     let debt_token = if is_collateral_token0 { pair.token1 } else { pair.token0 };
     let collateral_token = pair.get_collateral_token(&debt_token);
-    let collateral_amount = match collateral_token == pair.token0 {
-        true => user_position.collateral0,
-        false => user_position.collateral1,
-    };
-    let pessimistic_cf_bps = pair.get_max_debt_and_cf_bps_for_collateral(pair, &collateral_token, collateral_amount)?.1;
+    let pessimistic_cf_bps = pair.get_max_debt_and_cf_bps_for_collateral(pair, &collateral_token, user_collateral)?.1;
     
     // Calculate minimum required collateral value in debt token
     let min_collateral_value = (debt as u128)
@@ -74,43 +70,10 @@ impl<'info> CommonAdjustPosition<'info> {
         let collateral_token = self.user_token_account.mint;
         let is_collateral_token0 = collateral_token == self.pair.token0;
         let is_withdraw_all = args.amount == u64::MAX;
-        let user_collateral = match is_collateral_token0 {
-            true => self.user_position.collateral0,
-            false => self.user_position.collateral1,
-        };
-
-        // Calculate current debt
-        let debt = match is_collateral_token0 {
-            true => self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares)?,
-            false => self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares)?,
-        };
-
-        // If no debt, can withdraw all collateral
-        if debt == 0 {
-            return Ok(());
-        }
 
         // Calculate maximum withdrawable amount
         let max_withdrawable = calculate_max_withdrawable(&self.pair, &self.user_position, is_collateral_token0)?;
         let withdraw_amount = if is_withdraw_all { max_withdrawable } else { *amount };
-        
-        // Check if user has enough collateral
-        match is_collateral_token0 {
-            true => {
-                require_gte!(
-                    user_collateral,
-                    withdraw_amount,
-                    ErrorCode::InsufficientCollateral
-                );
-            },
-            false => {
-                require_gte!(
-                    user_collateral,
-                    withdraw_amount,
-                    ErrorCode::InsufficientCollateral
-                );
-            }
-        }
 
         // Ensure withdrawal amount doesn't exceed maximum withdrawable
         require_gte!(
