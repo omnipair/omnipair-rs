@@ -282,10 +282,6 @@ impl<'info> Flashloan<'info> {
         let required_balance0 = balance0_before.checked_add(fee0).unwrap();
         let required_balance1 = balance1_before.checked_add(fee1).unwrap();
 
-        // update the reserves
-        pair.reserve0 = pair.reserve0.checked_add(fee0).unwrap();
-        pair.reserve1 = pair.reserve1.checked_add(fee1).unwrap();
-        
         require!(
             token0_vault.amount >= required_balance0,
             ErrorCode::InsufficientAmount0
@@ -294,6 +290,14 @@ impl<'info> Flashloan<'info> {
             token1_vault.amount >= required_balance1,
             ErrorCode::InsufficientAmount1
         );
+
+        // Calculate excess repaid tokens (if any) and accumulate them
+        let excess0 = token0_vault.amount.checked_sub(required_balance0).unwrap_or(0);
+        let excess1 = token1_vault.amount.checked_sub(required_balance1).unwrap_or(0);
+
+        // update the reserves: fee + excess repaid
+        pair.reserve0 = pair.reserve0.checked_add(fee0).unwrap().checked_add(excess0).unwrap();
+        pair.reserve1 = pair.reserve1.checked_add(fee1).unwrap().checked_add(excess1).unwrap();
 
         // Emit event
         emit_cpi!(FlashloanEvent {

@@ -190,14 +190,8 @@ impl<'info> Swap<'info> {
             )?;
         }
 
-        // amount_in_after_swap_fee = amount_in * (10000 - swap_fee_bps) / 10000
-        let amount_in_after_swap_fee: u64 = (amount_in as u128)
-            .checked_mul((BPS_DENOMINATOR as u128).checked_sub(pair.swap_fee_bps as u128).ok_or(ErrorCode::FeeMathOverflow)?)
-            .ok_or(ErrorCode::FeeMathOverflow)?
-            .checked_div(BPS_DENOMINATOR as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)?
-            .try_into()
-            .map_err(|_| ErrorCode::FeeMathOverflow)?;
+        // amount_in_after_swap_fee = amount_in - swap_fee
+        let amount_in_after_swap_fee = amount_in.checked_sub(swap_fee).ok_or(ErrorCode::FeeMathOverflow)?;
 
         let reserve_in = if is_token0_in { pair.reserve0 } else { pair.reserve1 };
         let reserve_out = if is_token0_in { pair.reserve1 } else { pair.reserve0 };
