@@ -49,33 +49,8 @@ impl<'info> AdjustLiquidity<'info> {
             user,
             ..
         } = ctx.accounts;
-        // transfer token0 from user to pair
-        transfer_from_user_to_pool_vault(
-            user.to_account_info(),
-            user_token0_account.to_account_info(),
-            token0_vault.to_account_info(),
-            token0_vault_mint.to_account_info(),
-            match token0_vault_mint.to_account_info().owner == token_program.key {
-                true => token_program.to_account_info(),
-                false => token_2022_program.to_account_info(),
-            },
-            args.amount0_in,
-            token0_vault_mint.decimals,
-        )?;
-        transfer_from_user_to_pool_vault(
-            user.to_account_info(),
-            user_token1_account.to_account_info(),
-            token1_vault.to_account_info(),
-            token1_vault_mint.to_account_info(),
-            match token1_vault_mint.to_account_info().owner == token_program.key {
-                true => token_program.to_account_info(),
-                false => token_2022_program.to_account_info(),
-            },
-            args.amount1_in,
-            token1_vault_mint.decimals,
-        )?;
 
-        // Calculate liquidity
+        // Calculate liquidity based on input amounts
         let total_supply = pair.total_supply; // total supply is set to MIN_LIQUIDITY in initialize
         let liquidity: u64 = {
                 let liquidity0 = (args.amount0_in as u128)
@@ -92,6 +67,50 @@ impl<'info> AdjustLiquidity<'info> {
             liquidity >= args.min_liquidity_out,
             ErrorCode::InsufficientLiquidity
         );
+
+        // Calculate exact amounts to transfer based on liquidity minted
+        // amount_used = (liquidity * reserve) / total_supply
+        let amount0_used: u64 = (liquidity as u128)
+            .checked_mul(pair.reserve0 as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .checked_div(total_supply as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .try_into()
+            .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
+        
+        let amount1_used: u64 = (liquidity as u128)
+            .checked_mul(pair.reserve1 as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .checked_div(total_supply as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .try_into()
+            .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
+
+        // Transfer only the exact amounts needed
+        transfer_from_user_to_pool_vault(
+            user.to_account_info(),
+            user_token0_account.to_account_info(),
+            token0_vault.to_account_info(),
+            token0_vault_mint.to_account_info(),
+            match token0_vault_mint.to_account_info().owner == token_program.key {
+                true => token_program.to_account_info(),
+                false => token_2022_program.to_account_info(),
+            },
+            amount0_used,
+            token0_vault_mint.decimals,
+        )?;
+        transfer_from_user_to_pool_vault(
+            user.to_account_info(),
+            user_token1_account.to_account_info(),
+            token1_vault.to_account_info(),
+            token1_vault_mint.to_account_info(),
+            match token1_vault_mint.to_account_info().owner == token_program.key {
+                true => token_program.to_account_info(),
+                false => token_2022_program.to_account_info(),
+            },
+            amount1_used,
+            token1_vault_mint.decimals,
+        )?;
         
         // Mint LP tokens to user
         token_mint_to(
@@ -105,10 +124,10 @@ impl<'info> AdjustLiquidity<'info> {
         
         // Update reserves
         pair.reserve0 = pair.reserve0
-            .checked_add(args.amount0_in)
+            .checked_add(amount0_used)
             .ok_or(ErrorCode::ReserveOverflow)?;
         pair.reserve1 = pair.reserve1
-            .checked_add(args.amount1_in)
+            .checked_add(amount1_used)
             .ok_or(ErrorCode::ReserveOverflow)?;
         pair.total_supply = pair.total_supply
             .checked_add(liquidity)
@@ -135,8 +154,8 @@ impl<'info> AdjustLiquidity<'info> {
         // Emit event
         emit_cpi!(MintEvent {
             metadata: EventMetadata::new(user.key(), pair.key()),
-            amount0: args.amount0_in,
-            amount1: args.amount1_in,
+            amount0: amount0_used,
+            amount1: amount1_used,
             liquidity: liquidity as u64,
         });
 
