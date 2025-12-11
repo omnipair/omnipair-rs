@@ -220,8 +220,9 @@ impl UserPosition {
         }
     
         // NOTE: debt in token0 → collateral is token1
-        let applied_min_cf_bps = self.get_liquidation_cf_bps(pair, debt_token)?;
-        let borrow_limit = self.get_remaining_borrow_limit(pair, debt_token, applied_min_cf_bps)?;
+        // Use maximum allowed collateral factor (not liquidation CF) for accurate debt utilization
+        let max_allowed_cf_bps = self.get_max_allowed_cf_bps(pair, debt_token)?;
+        let borrow_limit = self.get_remaining_borrow_limit(pair, debt_token, max_allowed_cf_bps)?;
         
         
         if borrow_limit == 0 {
@@ -232,6 +233,27 @@ impl UserPosition {
             .saturating_mul(BPS_DENOMINATOR as u64)
             .checked_div(borrow_limit)
             .ok_or(ErrorCode::DebtUtilizationOverflow)?)
+    }
+
+    /// Get the maximum allowed collateral factor in BPS for a given debt token
+    /// 
+    /// - `pair`: The pair the user position belongs to
+    /// - `debt_token`: The token the user is borrowing
+    /// 
+    /// Returns the max of the maximum allowed collateral factor in BPS and the applied min. cf in BPS
+    pub fn get_max_allowed_cf_bps(&self, pair: &Pair, debt_token: &Pubkey) -> Result<u16> {
+        match debt_token == &pair.token1 {
+            true => {
+                let cf_bps = pair.get_max_debt_and_cf_bps_for_collateral(pair, &pair.token0, self.collateral0)?.1;
+                let min_cf_bps = self.collateral0_applied_min_cf_bps;
+                Ok(max(cf_bps, min_cf_bps))
+            },
+            false => {
+                let cf_bps = pair.get_max_debt_and_cf_bps_for_collateral(pair, &pair.token1, self.collateral1)?.1;
+                let min_cf_bps = self.collateral1_applied_min_cf_bps;
+                Ok(max(cf_bps, min_cf_bps))
+            }
+        }        
     }
 
         /// Get the liquidation collateral factor in BPS for a given debt token
