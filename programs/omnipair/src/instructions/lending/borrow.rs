@@ -3,21 +3,21 @@ use crate::{
     constants::*,
     errors::ErrorCode,
     events::{AdjustDebtEvent, UserPositionUpdatedEvent, EventMetadata},
-    utils::token::transfer_from_pool_vault_to_user,
+    utils::token::transfer_from_vault_to_user,
     generate_gamm_pair_seeds,
-    instructions::lending::common::{CommonAdjustPosition, AdjustPositionArgs},
+    instructions::lending::common::{CommonAdjustDebt, AdjustDebtArgs},
 };
 
-impl<'info> CommonAdjustPosition<'info> {
-    pub fn validate_borrow(&self, args: &AdjustPositionArgs) -> Result<()> {
-        let AdjustPositionArgs { amount: borrow_amount } = args;
+impl<'info> CommonAdjustDebt<'info> {
+    pub fn validate_borrow(&self, args: &AdjustDebtArgs) -> Result<()> {
+        let AdjustDebtArgs { amount: borrow_amount } = args;
         
         require!(*borrow_amount > 0, ErrorCode::AmountZero);
         
         Ok(())
     }
 
-    pub fn update_and_validate_borrow(&mut self, args: &AdjustPositionArgs) -> Result<()> {
+    pub fn update_and_validate_borrow(&mut self, args: &AdjustDebtArgs) -> Result<()> {
         self.update()?;
         self.validate_borrow(args)?;
         Ok(())
@@ -33,10 +33,10 @@ impl<'info> CommonAdjustPosition<'info> {
     /// Only the specified borrow amount of the `vault_token_mint` is transferred.
     /// Tokens are sourced directly from the AMM's liquidity vault (`token_vault`).
     /// Assumes that collateral checks have already passed via [`CommonAdjustPosition::validate_borrow`].
-    pub fn handle_borrow(ctx: Context<Self>, args: AdjustPositionArgs) -> Result<()> {
-        let CommonAdjustPosition {
-            user_token_account,
-            vault_token_mint,
+    pub fn handle_borrow(ctx: Context<Self>, args: AdjustDebtArgs) -> Result<()> {
+        let CommonAdjustDebt {
+            user_reserve_token_account,
+            reserve_token_mint,
             token_program,
             token_2022_program,
             user,
@@ -44,9 +44,9 @@ impl<'info> CommonAdjustPosition<'info> {
             ..
         } = ctx.accounts;
         let pair = &mut ctx.accounts.pair;
-        let debt_token_vault = &ctx.accounts.token_vault;
+        let debt_token_vault = &ctx.accounts.reserve_vault;
 
-        let user_debt = match user_token_account.mint == pair.token0 {
+        let user_debt = match user_reserve_token_account.mint == pair.token0 {
             true => user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
             false => user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
         };
@@ -77,26 +77,26 @@ impl<'info> CommonAdjustPosition<'info> {
             ErrorCode::BorrowingPowerExceeded
         );
         
-        let is_token0 = user_token_account.mint == pair.token0;
+        let is_token0 = user_reserve_token_account.mint == pair.token0;
 
         // Transfer tokens from vault to user
-        transfer_from_pool_vault_to_user(
+        transfer_from_vault_to_user(
             pair.to_account_info(),
             debt_token_vault.to_account_info(),
-            user_token_account.to_account_info(),
-            vault_token_mint.to_account_info(),
-            match vault_token_mint.to_account_info().owner == token_program.key {
+            user_reserve_token_account.to_account_info(),
+            reserve_token_mint.to_account_info(),
+            match reserve_token_mint.to_account_info().owner == token_program.key {
                 true => token_program.to_account_info(),
                 false => token_2022_program.to_account_info(),
             },
             borrow_amount,
-            vault_token_mint.decimals,
+            reserve_token_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
         
-        user_position.increase_debt(pair, &vault_token_mint.key(), borrow_amount)?;
+        user_position.increase_debt(pair, &reserve_token_mint.key(), borrow_amount)?;
         // update user position fixed CF
-        user_position.set_applied_min_cf_for_debt_token(&vault_token_mint.key(), &pair, max_allowed_cf_bps);
+        user_position.set_applied_min_cf_for_debt_token(&reserve_token_mint.key(), &pair, max_allowed_cf_bps);
         
         // Emit debt adjustment event
         let (amount0, amount1) = if is_token0 {

@@ -9,7 +9,7 @@ use crate::{
     constants::*,
     errors::ErrorCode,
     events::*,
-    utils::token::{transfer_from_user_to_pool_vault, transfer_from_pool_vault_to_user},
+    utils::token::{transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault},
     generate_gamm_pair_seeds,
 };
 
@@ -175,7 +175,7 @@ impl<'info> Swap<'info> {
 
         // Transfer futarchy fee to authority immediately if non-zero
         if futarchy_fee > 0 {
-            transfer_from_pool_vault_to_user(
+            transfer_from_vault_to_vault(
                 pair.to_account_info(),
                 token_in_vault.to_account_info(),
                 authority_token_in_account.to_account_info(),
@@ -233,7 +233,7 @@ impl<'info> Swap<'info> {
         require_gte!((pair.reserve0 as u128).checked_mul(pair.reserve1 as u128).ok_or(ErrorCode::Overflow)?, last_k, ErrorCode::BrokenInvariant);
         
         // Transfer tokens
-        transfer_from_user_to_pool_vault(
+        transfer_from_user_to_vault(
             user.to_account_info(),
             user_token_in_account.to_account_info(),
             token_in_vault.to_account_info(),
@@ -246,7 +246,7 @@ impl<'info> Swap<'info> {
             token_in_mint.decimals,
         )?;
 
-        transfer_from_pool_vault_to_user(
+        transfer_from_vault_to_user(
             pair.to_account_info(),
             token_out_vault.to_account_info(),
             user_token_out_account.to_account_info(),

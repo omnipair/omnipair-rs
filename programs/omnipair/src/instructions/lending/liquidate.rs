@@ -11,7 +11,7 @@ use crate::{
     errors::ErrorCode,
     events::{UserPositionLiquidatedEvent, EventMetadata},
     state::user_position::UserPosition,
-    utils::token::transfer_from_pool_vault_to_user,
+    utils::token::{transfer_from_vault_to_user, transfer_from_vault_to_vault},
     generate_gamm_pair_seeds,
 };
 
@@ -55,8 +55,15 @@ pub struct Liquidate<'info> {
 
     #[account(
         mut,
-        constraint = collateral_vault.mint == pair.token0 || collateral_vault.mint == pair.token1,
-        constraint = collateral_vault.owner == pair.key() @ ErrorCode::InvalidVaultIn,
+        seeds = [
+            COLLATERAL_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            collateral_token_mint.key().as_ref(),
+        ],
+        bump = match collateral_token_mint.key() == pair.token0 {
+            true => pair.vault_bumps.collateral0,
+            false => pair.vault_bumps.collateral1
+        }
     )]
     pub collateral_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
@@ -66,8 +73,24 @@ pub struct Liquidate<'info> {
     )]
     pub caller_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    #[account(address = collateral_vault.mint)]
+    #[account(
+        constraint = collateral_token_mint.key() == pair.token0 || collateral_token_mint.key() == pair.token1 @ ErrorCode::InvalidVault
+    )]
     pub collateral_token_mint: Box<InterfaceAccount<'info, Mint>>,
+    
+    #[account(
+        mut,
+        seeds = [
+            RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            collateral_token_mint.key().as_ref(),
+        ],
+        bump = match collateral_token_mint.key() == pair.token0 {
+            true => pair.vault_bumps.reserve0,
+            false => pair.vault_bumps.reserve1
+        }
+    )]
+    pub reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// CHECK: This is the owner of the position being liquidated.
     #[account(address = user_position.owner)]
@@ -86,7 +109,7 @@ impl<'info> Liquidate<'info> {
         require!(user_position.is_initialized(), ErrorCode::UserPositionNotInitialized);
         
         // Check if user has enough debt
-        match self.collateral_vault.mint == self.pair.token0 {
+        match self.collateral_token_mint.key() == self.pair.token0 {
             true => require_gt!(
                 user_position.debt1_shares,
                 0,
@@ -119,6 +142,7 @@ impl<'info> Liquidate<'info> {
             collateral_vault,
             caller_token_account,
             collateral_token_mint,
+            reserve_vault,
             position_owner,
             payer,
             user_position,
@@ -127,7 +151,25 @@ impl<'info> Liquidate<'info> {
             ..
         } = ctx.accounts;
         let pair = &mut ctx.accounts.pair;
-        let collateral_token = collateral_vault.mint;
+        
+        // Validate collateral vault and pool vault - already validated by Anchor seeds
+        require_keys_eq!(
+            collateral_vault.mint,
+            collateral_token_mint.key(),
+            ErrorCode::InvalidVault
+        );
+        require_keys_eq!(
+            reserve_vault.mint,
+            collateral_token_mint.key(),
+            ErrorCode::InvalidVault
+        );
+        require_keys_eq!(
+            reserve_vault.owner,
+            pair.key(),
+            ErrorCode::InvalidVault
+        );
+
+        let collateral_token = collateral_token_mint.key();
         let debt_token = if collateral_token == pair.token0 { pair.token1 } else { pair.token0 };
         let is_collateral_token0 = collateral_token == pair.token0;
         let liquidation_cf_bps = user_position.get_liquidation_cf_bps(pair, &debt_token)?;
@@ -219,7 +261,7 @@ impl<'info> Liquidate<'info> {
 
         // Transfer liquidation incentive to caller from collateral vault
         if caller_incentive > 0 {
-            transfer_from_pool_vault_to_user(
+            transfer_from_vault_to_user(
                 pair.to_account_info(),
                 collateral_vault.to_account_info(),
                 caller_token_account.to_account_info(),
@@ -233,6 +275,21 @@ impl<'info> Liquidate<'info> {
                 &[&generate_gamm_pair_seeds!(pair)[..]],
             )?;
         }
+
+        // Transfer remaining collateral from collateral vault to reserve vault
+        transfer_from_vault_to_vault(
+            pair.to_account_info(),
+            collateral_vault.to_account_info(),
+            reserve_vault.to_account_info(),
+            collateral_token_mint.to_account_info(),
+            match collateral_token_mint.to_account_info().owner == token_program.key {
+                true => token_program.to_account_info(),
+                false => token_2022_program.to_account_info(),
+            },
+            collateral_to_reserves,
+            collateral_token_mint.decimals,
+            &[&generate_gamm_pair_seeds!(pair)[..]],
+        )?;
 
         // Update user position collateral and pair reserves
         // Subtract the full seized amount from user position

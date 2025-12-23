@@ -5,15 +5,20 @@ use crate::utils::math::compute_ema;
 use crate::state::RateModel;
 use crate::events::{UpdatePairEvent, EventMetadata};
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default)]
+pub struct VaultBumps {
+    pub reserve0: u8,
+    pub reserve1: u8,
+    pub collateral0: u8,
+    pub collateral1: u8,
+}
+
 #[account]
 pub struct Pair {
     // Token addresses
     pub token0: Pubkey,
     pub token1: Pubkey,
     pub lp_mint: Pubkey,
-
-    pub token0_decimals: u8,
-    pub token1_decimals: u8,
 
     // pair parameters
     pub rate_model: Pubkey,
@@ -52,9 +57,13 @@ pub struct Pair {
     pub total_collateral0: u64,
     pub total_collateral1: u64,
 
+    pub token0_decimals: u8,
+    pub token1_decimals: u8,
+    
     pub params_hash: [u8; 32],
     pub version: u8,
     pub bump: u8,
+    pub vault_bumps: VaultBumps,
 }
 
 impl Pair {
@@ -72,6 +81,7 @@ impl Pair {
         params_hash: [u8; 32],
         version: u8,
         bump: u8,
+        vault_bumps: VaultBumps,
     ) -> Self {
         Self {
             token0,
@@ -107,6 +117,8 @@ impl Pair {
             params_hash,
             version,
             bump,
+            // don't use default values for vault bumps
+            vault_bumps,
         }
     }
 
@@ -355,4 +367,3 @@ macro_rules! generate_gamm_pair_seeds {
         ]
     };
 }
-

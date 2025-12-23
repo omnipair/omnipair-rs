@@ -8,7 +8,7 @@ use crate::{
     state::*,
     constants::*,
     errors::ErrorCode,
-    utils::token::transfer_from_pool_vault_to_user,
+    utils::token::transfer_from_vault_to_vault,
     generate_gamm_pair_seeds,
 };
 
@@ -39,17 +39,25 @@ pub struct ClaimProtocolFees<'info> {
 
     #[account(
         mut,
-        constraint = token0_vault.mint == pair.token0,
-        constraint = token0_vault.owner == pair.key() @ ErrorCode::InvalidVaultIn,
+        seeds = [
+            RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            pair.token0.as_ref(),
+        ],
+        bump = pair.vault_bumps.reserve0
     )]
-    pub token0_vault: Account<'info, TokenAccount>,
+    pub reserve0_vault: Account<'info, TokenAccount>,
 
     #[account(
         mut,
-        constraint = token1_vault.mint == pair.token1,
-        constraint = token1_vault.owner == pair.key() @ ErrorCode::InvalidVaultOut,
+        seeds = [
+            RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            pair.token1.as_ref(),
+        ],
+        bump = pair.vault_bumps.reserve1
     )]
-    pub token1_vault: Account<'info, TokenAccount>,
+    pub reserve1_vault: Account<'info, TokenAccount>,
 
     #[account(
         init_if_needed,
@@ -112,9 +120,9 @@ impl<'info> ClaimProtocolFees<'info> {
         let pair = &mut ctx.accounts.pair;
 
         if amount0 > 0 {
-            transfer_from_pool_vault_to_user(
+            transfer_from_vault_to_vault(
                 pair.to_account_info(),
-                ctx.accounts.token0_vault.to_account_info(),
+                ctx.accounts.reserve0_vault.to_account_info(),
                 ctx.accounts.authority_token0_account.to_account_info(),
                 ctx.accounts.token0_mint.to_account_info(),
                 match ctx.accounts.token0_mint.to_account_info().owner == ctx.accounts.token_program.key {
@@ -133,9 +141,9 @@ impl<'info> ClaimProtocolFees<'info> {
         }
 
         if amount1 > 0 {
-            transfer_from_pool_vault_to_user(
+            transfer_from_vault_to_vault(
                 pair.to_account_info(),
-                ctx.accounts.token1_vault.to_account_info(),
+                ctx.accounts.reserve1_vault.to_account_info(),
                 ctx.accounts.authority_token1_account.to_account_info(),
                 ctx.accounts.token1_mint.to_account_info(),
                 match ctx.accounts.token1_mint.to_account_info().owner == ctx.accounts.token_program.key {

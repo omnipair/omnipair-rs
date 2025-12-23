@@ -6,8 +6,8 @@ use anchor_spl::{
 use crate::{
     errors::ErrorCode,
     events::{AdjustCollateralEvent, UserPositionCreatedEvent, UserPositionUpdatedEvent, EventMetadata},
-    utils::{token::transfer_from_user_to_pool_vault, account::get_size_with_discriminator},
-    instructions::lending::common::AdjustPositionArgs,
+    utils::{token::transfer_from_user_to_vault, account::get_size_with_discriminator},
+    instructions::lending::common::AdjustCollateralArgs,
     state::{user_position::UserPosition, pair::Pair, rate_model::RateModel, futarchy_authority::FutarchyAuthority},
     constants::*,
 };
@@ -56,8 +56,15 @@ pub struct AddCollateral<'info> {
 
     #[account(
         mut,
-        constraint = collateral_vault.mint == pair.token0 || collateral_vault.mint == pair.token1 @ ErrorCode::InvalidVault,
-        constraint = collateral_vault.owner == pair.key() @ ErrorCode::InvalidVaultIn,
+        seeds = [
+            COLLATERAL_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            collateral_token_mint.key().as_ref(),
+        ],
+        bump = match collateral_vault.mint == pair.token0 {
+            true => pair.vault_bumps.collateral0,
+            false => pair.vault_bumps.collateral1
+        }
     )]
     pub collateral_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
@@ -68,7 +75,9 @@ pub struct AddCollateral<'info> {
     )]
     pub user_collateral_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    #[account(address = collateral_vault.mint)]
+    #[account(
+        constraint = collateral_token_mint.key() == pair.token0 || collateral_token_mint.key() == pair.token1 @ ErrorCode::InvalidMint
+    )]
     pub collateral_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
@@ -79,8 +88,8 @@ pub struct AddCollateral<'info> {
 }
 
 impl<'info> AddCollateral<'info> {
-    pub fn validate_add(&self, args: &AdjustPositionArgs) -> Result<()> {
-        let AdjustPositionArgs { amount } = args;
+    pub fn validate_add(&self, args: &AdjustCollateralArgs) -> Result<()> {
+        let AdjustCollateralArgs { amount } = args;
         
         require!(*amount > 0, ErrorCode::AmountZero);
         
@@ -99,13 +108,13 @@ impl<'info> AddCollateral<'info> {
         Ok(())
     }
 
-    pub fn update_and_validate_add(&mut self, args: &AdjustPositionArgs) -> Result<()> {
+    pub fn update_and_validate_add(&mut self, args: &AdjustCollateralArgs) -> Result<()> {
         self.update()?;
         self.validate_add(args)?;
         Ok(())
     }
 
-    pub fn handle_add_collateral(ctx: Context<Self>, args: AdjustPositionArgs) -> Result<()> {
+    pub fn handle_add_collateral(ctx: Context<Self>, args: AdjustCollateralArgs) -> Result<()> {
         let AddCollateral { 
             pair, 
             user, 
@@ -134,7 +143,7 @@ impl<'info> AddCollateral<'info> {
         // Transfer tokens from user to collateral vault
         let is_collateral_token0 = user_collateral_token_account.mint == pair.token0;
 
-        transfer_from_user_to_pool_vault(
+        transfer_from_user_to_vault(
             user.to_account_info(),
             user_collateral_token_account.to_account_info(),
             collateral_vault.to_account_info(),
