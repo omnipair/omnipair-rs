@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    token::{Token, TokenAccount},
-    token_interface::{Mint, Token2022},
+    token::{Token, TokenAccount, Mint},
+    token_interface::{Token2022},
     associated_token::AssociatedToken,
 };
 use crate::{
@@ -85,11 +85,11 @@ pub struct Swap<'info> {
     #[account(
         constraint = token_in_mint.key() == pair.token0 || token_in_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub token_in_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token_in_mint: Box<Account<'info, Mint>>,
     #[account(
         constraint = token_out_mint.key() == pair.token0 || token_out_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub token_out_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token_out_mint: Box<Account<'info, Mint>>,
 
     #[account(
         init_if_needed,

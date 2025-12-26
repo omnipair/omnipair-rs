@@ -1,10 +1,9 @@
 use anchor_lang::{
     prelude::*,
-    accounts::interface_account::InterfaceAccount,
 };
 use anchor_spl::{
-    token::Token,
-    token_interface::{Mint, TokenAccount, Token2022},
+    token::{Token, TokenAccount, Mint},
+    token_interface::{Token2022},
 };
 use crate::{
     state::pair::Pair,
@@ -72,19 +71,19 @@ pub struct CommonAdjustCollateral<'info> {
             false => pair.vault_bumps.collateral1
         }
     )]
-    pub collateral_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub collateral_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         constraint = user_collateral_token_account.mint == pair.token0 || user_collateral_token_account.mint == pair.token1,
         token::authority = user,
     )]
-    pub user_collateral_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub user_collateral_token_account: Box<Account<'info, TokenAccount>>,
 
     #[account(
         constraint = collateral_token_mint.key() == pair.token0 || collateral_token_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub collateral_token_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub collateral_token_mint: Box<Account<'info, Mint>>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -159,19 +158,19 @@ pub struct CommonAdjustDebt<'info> {
             false => pair.vault_bumps.reserve1
         }
     )]
-    pub reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub reserve_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         constraint = user_reserve_token_account.mint == pair.token0 || user_reserve_token_account.mint == pair.token1,
         token::authority = user,
     )]
-    pub user_reserve_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub user_reserve_token_account: Box<Account<'info, TokenAccount>>,
 
     #[account(
         constraint = reserve_token_mint.key() == pair.token0 || reserve_token_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub reserve_token_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub reserve_token_mint: Box<Account<'info, Mint>>,
 
     #[account(mut)]
     pub user: Signer<'info>,

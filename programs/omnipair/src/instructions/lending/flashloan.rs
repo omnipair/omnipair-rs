@@ -5,8 +5,8 @@ use anchor_lang::solana_program::{
     hash::hash,
 };
 use anchor_spl::{
-    token::{Token, TokenAccount},
-    token_interface::{Mint, Token2022},
+    token::{Token, TokenAccount, Mint},
+    token_interface::{Token2022},
 };
 use crate::{
     state::*,
@@ -81,12 +81,12 @@ pub struct Flashloan<'info> {
     #[account(
         address = pair.token0 @ ErrorCode::InvalidMint
     )]
-    pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token0_mint: Box<Account<'info, Mint>>,
     
     #[account(
         address = pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub token1_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token1_mint: Box<Account<'info, Mint>>,
 
     #[account(
         mut,

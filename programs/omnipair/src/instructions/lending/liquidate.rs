@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    token::Token,
-    token_interface::{TokenAccount, Mint, Token2022},
+    token::{Token, TokenAccount, Mint},
+    token_interface::{Token2022},
 };
 use crate::{
     state::pair::Pair,
@@ -65,18 +65,18 @@ pub struct Liquidate<'info> {
             false => pair.vault_bumps.collateral1
         }
     )]
-    pub collateral_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub collateral_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         constraint = caller_token_account.mint == collateral_vault.mint,
     )]
-    pub caller_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub caller_token_account: Box<Account<'info, TokenAccount>>,
 
     #[account(
         constraint = collateral_token_mint.key() == pair.token0 || collateral_token_mint.key() == pair.token1 @ ErrorCode::InvalidVault
     )]
-    pub collateral_token_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub collateral_token_mint: Box<Account<'info, Mint>>,
     
     #[account(
         mut,
@@ -90,7 +90,7 @@ pub struct Liquidate<'info> {
             false => pair.vault_bumps.reserve1
         }
     )]
-    pub reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub reserve_vault: Box<Account<'info, TokenAccount>>,
 
     /// CHECK: This is the owner of the position being liquidated.
     #[account(address = user_position.owner)]

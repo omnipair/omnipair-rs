@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    token::Token,
-    token_interface::{Mint, TokenAccount},
+    token::{Token, Mint, TokenAccount},
     associated_token::AssociatedToken,
     token_2022::{self},
 };
@@ -36,7 +35,7 @@ pub struct FaucetMint<'info> {
         associated_token::mint = token0_mint,
         token::token_program = token_program,
     )]
-    pub user_token0_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub user_token0_account: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -45,19 +44,19 @@ pub struct FaucetMint<'info> {
         associated_token::authority = user,
         token::token_program = token_program,
     )]
-    pub user_token1_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub user_token1_account: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         mint::authority = faucet_authority,
     )]
-    pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token0_mint: Box<Account<'info, Mint>>,
 
     #[account(
         mut,
         mint::authority = faucet_authority,
     )]
-    pub token1_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token1_mint: Box<Account<'info, Mint>>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,

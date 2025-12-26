@@ -1,5 +1,4 @@
 use anchor_lang::{
-    accounts::interface_account::InterfaceAccount, 
     prelude::*, 
     solana_program::{
         program::invoke, 
@@ -9,8 +8,8 @@ use anchor_lang::{
 };
 use anchor_spl::{
     token::spl_token,
-    token::{Token},
-    token_interface::{Mint, TokenAccount, Token2022},
+    token::{Token, TokenAccount, Mint},
+    token_interface::{Token2022},
     associated_token::{AssociatedToken, create_idempotent},
 };
 use anchor_spl::metadata::{
@@ -60,8 +59,8 @@ pub struct InitializeAndBootstrap<'info> {
     #[account(mut)]
     pub deployer: Signer<'info>,
 
-    pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
-    pub token1_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token0_mint: Box<Account<'info, Mint>>,
+    pub token1_mint: Box<Account<'info, Mint>>,
     
     #[account(
         init,
@@ -122,7 +121,7 @@ pub struct InitializeAndBootstrap<'info> {
         token::authority = pair,
         bump
     )]
-    pub reserve0_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub reserve0_vault: Box<Account<'info, TokenAccount>>,
     
     #[account(
         init,
@@ -136,7 +135,7 @@ pub struct InitializeAndBootstrap<'info> {
         token::authority = pair,
         bump
     )]
-    pub reserve1_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub reserve1_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init,
@@ -150,7 +149,7 @@ pub struct InitializeAndBootstrap<'info> {
         token::authority = pair,
         bump
     )]
-    pub collateral0_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub collateral0_vault: Box<Account<'info, TokenAccount>>,
     
     #[account(
         init,
@@ -164,21 +163,21 @@ pub struct InitializeAndBootstrap<'info> {
         token::authority = pair,
         bump
     )]
-    pub collateral1_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub collateral1_vault: Box<Account<'info, TokenAccount>>,
     
     #[account(
         mut,
         token::mint = token0_mint,
         token::authority = deployer,
     )]
-    pub deployer_token0_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub deployer_token0_account: Box<Account<'info, TokenAccount>>,
     
     #[account(
         mut,
         token::mint = token1_mint,
         token::authority = deployer,
     )]
-    pub deployer_token1_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub deployer_token1_account: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -186,7 +185,7 @@ pub struct InitializeAndBootstrap<'info> {
         constraint = authority_wsol_account.owner == futarchy_authority.key() @ ErrorCode::InvalidFutarchyAuthority,
         constraint = *authority_wsol_account.to_account_info().owner == token_program.key() @ ErrorCode::InvalidTokenProgram,
       )]
-      pub authority_wsol_account: Box<InterfaceAccount<'info, TokenAccount>>,
+      pub authority_wsol_account: Box<Account<'info, TokenAccount>>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,

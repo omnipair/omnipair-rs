@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    token::{Token, TokenAccount},
-    token_interface::{Mint, Token2022},
+    token::{Token, TokenAccount, Mint},
+    token_interface::{Token2022},
     associated_token::AssociatedToken,
 };
 use crate::{
@@ -76,10 +76,10 @@ pub struct ClaimProtocolFees<'info> {
     pub authority_token1_account: Account<'info, TokenAccount>,
 
     #[account(address = pair.token0)]
-    pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token0_mint: Box<Account<'info, Mint>>,
     
     #[account(address = pair.token1)]
-    pub token1_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token1_mint: Box<Account<'info, Mint>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,

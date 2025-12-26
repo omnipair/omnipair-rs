@@ -109,8 +109,8 @@ pub struct FlashLoanCallback<'info> {
     #[account(mut)]
     pub receiver_token1_account: Account<'info, TokenAccount>,
     
-    pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
-    pub token1_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token0_mint: Box<Account<'info, Mint>>,
+    pub token1_mint: Box<Account<'info, Mint>>,
     
     #[account(mut)]
     pub token0_vault: Account<'info, TokenAccount>,

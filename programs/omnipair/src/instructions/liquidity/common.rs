@@ -1,10 +1,9 @@
 use anchor_lang::{
     prelude::*,
-    accounts::interface_account::InterfaceAccount,
 };
 use anchor_spl::{
-    token::Token,
-    token_interface::{Mint, TokenAccount, Token2022},
+    token::{Token, TokenAccount, Mint},
+    token_interface::{Token2022},
     associated_token::AssociatedToken,
 };
 use crate::{
@@ -58,7 +57,7 @@ pub struct AdjustLiquidity<'info> {
         ],
         bump = pair.vault_bumps.reserve0
     )]
-    pub reserve0_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub reserve0_vault: Box<Account<'info, TokenAccount>>,
     
     #[account(
         mut,
@@ -69,37 +68,37 @@ pub struct AdjustLiquidity<'info> {
         ],
         bump = pair.vault_bumps.reserve1
     )]
-    pub reserve1_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub reserve1_vault: Box<Account<'info, TokenAccount>>,
     
     #[account(
         mut,
         token::mint = pair.token0,
         token::authority = user,
     )]
-    pub user_token0_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub user_token0_account: Box<Account<'info, TokenAccount>>,
     
     #[account(
         mut,
         token::mint = pair.token1,
         token::authority = user,
     )]
-    pub user_token1_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub user_token1_account: Box<Account<'info, TokenAccount>>,
 
     #[account(
         address = pair.token0 @ ErrorCode::InvalidMint
     )]
-    pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token0_mint: Box<Account<'info, Mint>>,
 
     #[account(
         address = pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub token1_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token1_mint: Box<Account<'info, Mint>>,
     
     #[account(
         mut,
         address = pair.lp_mint @ ErrorCode::InvalidMint,
     )]
-    pub lp_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub lp_mint: Box<Account<'info, Mint>>,
     
     #[account(
         init_if_needed,
@@ -108,7 +107,7 @@ pub struct AdjustLiquidity<'info> {
         payer = user,
         token::token_program = token_program,
     )]
-    pub user_lp_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub user_lp_token_account: Box<Account<'info, TokenAccount>>,
     
     #[account(mut)]
     pub user: Signer<'info>,
