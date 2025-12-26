@@ -44,26 +44,51 @@ pub struct Swap<'info> {
     
     #[account(
         mut,
-        constraint = token_in_vault.mint == pair.token0 || token_in_vault.mint == pair.token1,
-        constraint = token_in_vault.owner == pair.key() @ ErrorCode::InvalidVaultIn,
+        seeds = [
+            RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            token_in_mint.key().as_ref(),
+        ],
+        bump = match token_in_mint.key() == pair.token0 {
+            true => pair.vault_bumps.reserve0,
+            false => pair.vault_bumps.reserve1
+        }
     )]
     pub token_in_vault: Account<'info, TokenAccount>,
     
     #[account(
         mut,
-        constraint = token_out_vault.mint == pair.token0 || token_out_vault.mint == pair.token1,
-        constraint = token_out_vault.owner == pair.key() @ ErrorCode::InvalidVaultOut,
+        seeds = [
+            RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            token_out_mint.key().as_ref(),
+        ],
+        bump = match token_out_mint.key() == pair.token0 {
+            true => pair.vault_bumps.reserve0,
+            false => pair.vault_bumps.reserve1
+        }
     )]
     pub token_out_vault: Account<'info, TokenAccount>,
     
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = user_token_in_account.mint == token_in_mint.key() @ ErrorCode::InvalidTokenAccount,
+        token::authority = user,
+    )]
     pub user_token_in_account: Account<'info, TokenAccount>,
-    #[account(mut)]
+    #[account(mut,
+        constraint = user_token_out_account.mint == token_out_mint.key() @ ErrorCode::InvalidTokenAccount,
+        token::authority = user,
+    )]
     pub user_token_out_account: Account<'info, TokenAccount>,
 
-    #[account(address = token_in_vault.mint)]
+    #[account(
+        constraint = token_in_mint.key() == pair.token0 || token_in_mint.key() == pair.token1 @ ErrorCode::InvalidMint
+    )]
     pub token_in_mint: Box<InterfaceAccount<'info, Mint>>,
-    #[account(address = token_out_vault.mint)]
+    #[account(
+        constraint = token_out_mint.key() == pair.token0 || token_out_mint.key() == pair.token1 @ ErrorCode::InvalidMint
+    )]
     pub token_out_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
