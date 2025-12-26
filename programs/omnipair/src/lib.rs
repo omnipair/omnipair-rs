@@ -89,23 +89,23 @@ pub mod omnipair {
 
     // Lending instructions
     #[access_control(ctx.accounts.update_and_validate_add(&args))]
-    pub fn add_collateral(ctx: Context<AddCollateral>, args: AdjustPositionArgs) -> Result<()> {
+    pub fn add_collateral(ctx: Context<AddCollateral>, args: AdjustCollateralArgs) -> Result<()> {
         AddCollateral::handle_add_collateral(ctx, args)
     }
 
     #[access_control(ctx.accounts.update_and_validate_remove(&args))]
-    pub fn remove_collateral(ctx: Context<CommonAdjustPosition>, args: AdjustPositionArgs) -> Result<()> {
-        CommonAdjustPosition::handle_remove_collateral(ctx, args)
+    pub fn remove_collateral(ctx: Context<CommonAdjustCollateral>, args: AdjustCollateralArgs) -> Result<()> {
+        CommonAdjustCollateral::handle_remove_collateral(ctx, args)
     }
 
     #[access_control(ctx.accounts.update_and_validate_borrow(&args))]
-    pub fn borrow(ctx: Context<CommonAdjustPosition>, args: AdjustPositionArgs) -> Result<()> {
-        CommonAdjustPosition::handle_borrow(ctx, args)
+    pub fn borrow(ctx: Context<CommonAdjustDebt>, args: AdjustDebtArgs) -> Result<()> {
+        CommonAdjustDebt::handle_borrow(ctx, args)
     }
 
     #[access_control(ctx.accounts.update_and_validate_repay(&args))]
-    pub fn repay(ctx: Context<CommonAdjustPosition>, args: AdjustPositionArgs) -> Result<()> {
-        CommonAdjustPosition::handle_repay(ctx, args)
+    pub fn repay(ctx: Context<CommonAdjustDebt>, args: AdjustDebtArgs) -> Result<()> {
+        CommonAdjustDebt::handle_repay(ctx, args)
     }
 
     #[access_control(ctx.accounts.update_and_validate_liquidate())]

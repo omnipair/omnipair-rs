@@ -3,9 +3,9 @@ use crate::{
     constants::*,
     errors::ErrorCode,
     events::{AdjustCollateralEvent, EventMetadata, UserPositionUpdatedEvent},
-    utils::token::transfer_from_pool_vault_to_user,
+    utils::token::transfer_from_vault_to_user,
     generate_gamm_pair_seeds,
-    instructions::lending::common::{CommonAdjustPosition, AdjustPositionArgs},
+    instructions::lending::common::{CommonAdjustCollateral, AdjustCollateralArgs},
 };
 
 use crate::state::{Pair, UserPosition};
@@ -61,13 +61,13 @@ fn calculate_max_withdrawable(pair: &Pair, user_position: &UserPosition, is_coll
     Ok(max_withdrawable)
 }
 
-impl<'info> CommonAdjustPosition<'info> {
-    pub fn validate_remove(&self, args: &AdjustPositionArgs) -> Result<()> {
-        let AdjustPositionArgs { amount } = args;
+impl<'info> CommonAdjustCollateral<'info> {
+    pub fn validate_remove(&self, args: &AdjustCollateralArgs) -> Result<()> {
+        let AdjustCollateralArgs { amount } = args;
         
         require!(*amount > 0, ErrorCode::AmountZero);
 
-        let collateral_token = self.user_token_account.mint;
+        let collateral_token = self.user_collateral_token_account.mint;
         let is_collateral_token0 = collateral_token == self.pair.token0;
         let is_withdraw_all = args.amount == u64::MAX;
 
@@ -85,18 +85,18 @@ impl<'info> CommonAdjustPosition<'info> {
         Ok(())
     }
 
-    pub fn update_and_validate_remove(&mut self, args: &AdjustPositionArgs) -> Result<()> {
+    pub fn update_and_validate_remove(&mut self, args: &AdjustCollateralArgs) -> Result<()> {
         self.update()?;
         self.validate_remove(args)?;
         Ok(())
     }
 
-    pub fn handle_remove_collateral(ctx: Context<Self>, args: AdjustPositionArgs) -> Result<()> {
-        let CommonAdjustPosition {
+    pub fn handle_remove_collateral(ctx: Context<Self>, args: AdjustCollateralArgs) -> Result<()> {
+        let CommonAdjustCollateral {
             pair,
-            token_vault,
-            user_token_account,
-            vault_token_mint,
+            collateral_vault,
+            user_collateral_token_account,
+            collateral_token_mint,
             token_program,
             token_2022_program,
             user,
@@ -105,7 +105,7 @@ impl<'info> CommonAdjustPosition<'info> {
         } = ctx.accounts;
 
         let is_withdraw_all = args.amount == u64::MAX;
-        let is_token0 = user_token_account.mint == pair.token0;
+        let is_token0 = user_collateral_token_account.mint == pair.token0;
         // Calculate current debt
         let debt = match is_token0 {
             true => user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
@@ -125,17 +125,17 @@ impl<'info> CommonAdjustPosition<'info> {
             }
          }; 
 
-        transfer_from_pool_vault_to_user(
+        transfer_from_vault_to_user(
             pair.to_account_info(),
-            token_vault.to_account_info(),
-            user_token_account.to_account_info(),
-            vault_token_mint.to_account_info(),
-            match vault_token_mint.to_account_info().owner == token_program.key {
+            collateral_vault.to_account_info(),
+            user_collateral_token_account.to_account_info(),
+            collateral_token_mint.to_account_info(),
+            match collateral_vault.to_account_info().owner == token_program.key {
                 true => token_program.to_account_info(),
                 false => token_2022_program.to_account_info(),
             },
             withdraw_amount,
-            vault_token_mint.decimals,
+            collateral_token_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
 

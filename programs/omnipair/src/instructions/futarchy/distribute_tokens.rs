@@ -1,6 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
-use anchor_spl::token_interface::Mint;
+use anchor_spl::token::{self, Token, TokenAccount, Transfer, Mint};
 use crate::state::futarchy_authority::FutarchyAuthority;
 use crate::constants::{FUTARCHY_AUTHORITY_SEED_PREFIX, BPS_DENOMINATOR};
 use crate::errors::ErrorCode;
@@ -19,7 +18,7 @@ pub struct DistributeTokens<'info> {
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
 
-    pub source_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub source_mint: Box<Account<'info, Mint>>,
 
     #[account(mut,
         constraint = source_token_account.owner == futarchy_authority.key(),

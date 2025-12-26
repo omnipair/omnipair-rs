@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::errors::ErrorCode;
 use crate::constants::*;
-use crate::utils::token::{transfer_from_user_to_pool_vault, token_mint_to};
+use crate::utils::token::{transfer_from_user_to_vault, token_mint_to};
 use crate::generate_gamm_pair_seeds;
 use crate::liquidity::common::{AdjustLiquidity, AddLiquidityArgs};
 use crate::events::{MintEvent, UserLiquidityPositionUpdatedEvent, EventMetadata};
@@ -38,14 +38,14 @@ impl<'info> AdjustLiquidity<'info> {
             pair,
             user_token0_account,
             user_token1_account,
-            token0_vault,
-            token1_vault,
+            reserve0_vault,
+            reserve1_vault,
             user_lp_token_account,
             lp_mint,
             token_program,
             token_2022_program,
-            token0_vault_mint,
-            token1_vault_mint,
+            token0_mint,
+            token1_mint,
             user,
             ..
         } = ctx.accounts;
@@ -87,29 +87,29 @@ impl<'info> AdjustLiquidity<'info> {
             .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
 
         // Transfer only the exact amounts needed
-        transfer_from_user_to_pool_vault(
+        transfer_from_user_to_vault(
             user.to_account_info(),
             user_token0_account.to_account_info(),
-            token0_vault.to_account_info(),
-            token0_vault_mint.to_account_info(),
-            match token0_vault_mint.to_account_info().owner == token_program.key {
+            reserve0_vault.to_account_info(),
+            token0_mint.to_account_info(),
+            match token0_mint.to_account_info().owner == token_program.key {
                 true => token_program.to_account_info(),
                 false => token_2022_program.to_account_info(),
             },
             amount0_used,
-            token0_vault_mint.decimals,
+            token0_mint.decimals,
         )?;
-        transfer_from_user_to_pool_vault(
+        transfer_from_user_to_vault(
             user.to_account_info(),
             user_token1_account.to_account_info(),
-            token1_vault.to_account_info(),
-            token1_vault_mint.to_account_info(),
-            match token1_vault_mint.to_account_info().owner == token_program.key {
+            reserve1_vault.to_account_info(),
+            token1_mint.to_account_info(),
+            match token1_mint.to_account_info().owner == token_program.key {
                 true => token_program.to_account_info(),
                 false => token_2022_program.to_account_info(),
             },
             amount1_used,
-            token1_vault_mint.decimals,
+            token1_mint.decimals,
         )?;
         
         // Mint LP tokens to user
