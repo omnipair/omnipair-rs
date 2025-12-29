@@ -243,6 +243,20 @@ impl Pair {
         )
     }
 
+    pub fn get_reserve_vault_bump(&self, reserve_token_mint: &Pubkey) -> u8 {
+        match reserve_token_mint == &self.token0 {
+            true => self.vault_bumps.reserve0,
+            false => self.vault_bumps.reserve1,
+        }
+    }
+
+    pub fn get_collateral_vault_bump(&self, collateral_token_mint: &Pubkey) -> u8 {
+        match collateral_token_mint == &self.token0 {
+            true => self.vault_bumps.collateral0,
+            false => self.vault_bumps.collateral1,
+        }
+    }
+
     pub fn update(&mut self, rate_model: &Account<RateModel>, futarchy_authority: &crate::state::FutarchyAuthority, pair_key: Pubkey) -> Result<()> {
         let current_time = Clock::get()?.unix_timestamp;
         

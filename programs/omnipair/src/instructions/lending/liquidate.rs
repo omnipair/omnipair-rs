@@ -60,10 +60,7 @@ pub struct Liquidate<'info> {
             pair.key().as_ref(),
             collateral_token_mint.key().as_ref(),
         ],
-        bump = match collateral_token_mint.key() == pair.token0 {
-            true => pair.vault_bumps.collateral0,
-            false => pair.vault_bumps.collateral1
-        }
+        bump = pair.get_collateral_vault_bump(&collateral_token_mint.key())
     )]
     pub collateral_vault: Box<Account<'info, TokenAccount>>,
 
@@ -85,10 +82,7 @@ pub struct Liquidate<'info> {
             pair.key().as_ref(),
             collateral_token_mint.key().as_ref(),
         ],
-        bump = match collateral_token_mint.key() == pair.token0 {
-            true => pair.vault_bumps.reserve0,
-            false => pair.vault_bumps.reserve1
-        }
+        bump = pair.get_reserve_vault_bump(&collateral_token_mint.key())
     )]
     pub reserve_vault: Box<Account<'info, TokenAccount>>,
 

@@ -49,10 +49,7 @@ pub struct Swap<'info> {
             pair.key().as_ref(),
             token_in_mint.key().as_ref(),
         ],
-        bump = match token_in_mint.key() == pair.token0 {
-            true => pair.vault_bumps.reserve0,
-            false => pair.vault_bumps.reserve1
-        }
+        bump = pair.get_reserve_vault_bump(&token_in_mint.key())
     )]
     pub token_in_vault: Account<'info, TokenAccount>,
     
@@ -63,10 +60,7 @@ pub struct Swap<'info> {
             pair.key().as_ref(),
             token_out_mint.key().as_ref(),
         ],
-        bump = match token_out_mint.key() == pair.token0 {
-            true => pair.vault_bumps.reserve0,
-            false => pair.vault_bumps.reserve1
-        }
+        bump = pair.get_reserve_vault_bump(&token_out_mint.key())
     )]
     pub token_out_vault: Account<'info, TokenAccount>,
     
