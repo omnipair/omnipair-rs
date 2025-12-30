@@ -2,18 +2,18 @@ use anchor_lang::prelude::*;
 use crate::{
     errors::ErrorCode,
     events::{AdjustDebtEvent, UserPositionUpdatedEvent, EventMetadata},
-    utils::token::transfer_from_user_to_pool_vault,
-    instructions::lending::common::{CommonAdjustPosition, AdjustPositionArgs},
+    utils::token::transfer_from_user_to_vault,
+    instructions::lending::common::{CommonAdjustDebt, AdjustDebtArgs},
 };
 
-impl<'info> CommonAdjustPosition<'info> {
-    pub fn validate_repay(&self, args: &AdjustPositionArgs) -> Result<()> {
-        let AdjustPositionArgs { amount } = args;
+impl<'info> CommonAdjustDebt<'info> {
+    pub fn validate_repay(&self, args: &AdjustDebtArgs) -> Result<()> {
+        let AdjustDebtArgs { amount } = args;
         
         require!(*amount > 0, ErrorCode::AmountZero);
 
         let is_repay_all = *amount == u64::MAX;
-        let is_token0 = self.user_token_account.mint == self.pair.token0;
+        let is_token0 = self.user_reserve_token_account.mint == self.pair.token0;
         let user_total_debt = match is_token0 {
             true => self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares)?,
             false => self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares)?,
@@ -22,7 +22,7 @@ impl<'info> CommonAdjustPosition<'info> {
         
         // Check user token balance >= debt to repay
         require_gte!(
-            self.user_token_account.amount,
+            self.user_reserve_token_account.amount,
             debt_to_repay,
             ErrorCode::InsufficientAmount
         );
@@ -44,18 +44,18 @@ impl<'info> CommonAdjustPosition<'info> {
         Ok(())
     }
 
-    pub fn update_and_validate_repay(&mut self, args: &AdjustPositionArgs) -> Result<()> {
+    pub fn update_and_validate_repay(&mut self, args: &AdjustDebtArgs) -> Result<()> {
         self.update()?;
         self.validate_repay(args)?;
         Ok(())
     }
 
-    pub fn handle_repay(ctx: Context<Self>, args: AdjustPositionArgs) -> Result<()> {
-        let CommonAdjustPosition {
+    pub fn handle_repay(ctx: Context<Self>, args: AdjustDebtArgs) -> Result<()> {
+        let CommonAdjustDebt {
             pair,
-            token_vault,
-            user_token_account,
-            vault_token_mint,
+            reserve_vault,
+            user_reserve_token_account,
+            reserve_token_mint,
             token_program,
             token_2022_program,
             user,
@@ -64,7 +64,7 @@ impl<'info> CommonAdjustPosition<'info> {
         } = ctx.accounts;
 
         let is_repay_all = args.amount == u64::MAX;
-        let is_token0 = user_token_account.mint == pair.token0;
+        let is_token0 = user_reserve_token_account.mint == pair.token0;
         let debt_to_repay = if is_repay_all { 
             match is_token0 {
                 true => user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
@@ -75,17 +75,17 @@ impl<'info> CommonAdjustPosition<'info> {
         };
 
         // Transfer tokens from user to vault
-        transfer_from_user_to_pool_vault(
+        transfer_from_user_to_vault(
             user.to_account_info(),
-            user_token_account.to_account_info(),
-            token_vault.to_account_info(),
-            vault_token_mint.to_account_info(),
-            match vault_token_mint.to_account_info().owner == token_program.key {
+            user_reserve_token_account.to_account_info(),
+            reserve_vault.to_account_info(),
+            reserve_token_mint.to_account_info(),
+            match reserve_token_mint.to_account_info().owner == token_program.key {
                 true => token_program.to_account_info(),
                 false => token_2022_program.to_account_info(),
             },
             debt_to_repay,
-            vault_token_mint.decimals,
+            reserve_token_mint.decimals,
         )?;
 
         
@@ -124,7 +124,7 @@ impl<'info> CommonAdjustPosition<'info> {
         
 
         // Emit event
-        let (amount0, amount1) = if user_token_account.mint == pair.token0 {
+        let (amount0, amount1) = if user_reserve_token_account.mint == pair.token0 {
             (-(debt_to_repay as i64), 0)
         } else {
             (0, -(debt_to_repay as i64))

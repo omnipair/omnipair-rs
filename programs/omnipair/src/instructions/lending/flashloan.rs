@@ -5,15 +5,15 @@ use anchor_lang::solana_program::{
     hash::hash,
 };
 use anchor_spl::{
-    token::{Token, TokenAccount},
-    token_interface::{Mint, Token2022},
+    token::{Token, TokenAccount, Mint},
+    token_interface::{Token2022},
 };
 use crate::{
     state::*,
     constants::*,
     errors::ErrorCode,
     events::*,
-    utils::token::transfer_from_pool_vault_to_user,
+    utils::token::transfer_from_vault_to_user,
     generate_gamm_pair_seeds,
 };
 
@@ -58,23 +58,35 @@ pub struct Flashloan<'info> {
     
     #[account(
         mut,
-        constraint = token0_vault.mint == pair.token0,
-        constraint = token0_vault.owner == pair.key() @ ErrorCode::InvalidVaultIn,
+        seeds = [
+            RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            pair.token0.as_ref(),
+        ],
+        bump = pair.vault_bumps.reserve0
     )]
-    pub token0_vault: Account<'info, TokenAccount>,
+    pub reserve0_vault: Account<'info, TokenAccount>,
     
     #[account(
         mut,
-        constraint = token1_vault.mint == pair.token1,
-        constraint = token1_vault.owner == pair.key() @ ErrorCode::InvalidVaultOut,
+        seeds = [
+            RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            pair.token1.as_ref(),
+        ],
+        bump = pair.vault_bumps.reserve1
     )]
-    pub token1_vault: Account<'info, TokenAccount>,
+    pub reserve1_vault: Account<'info, TokenAccount>,
 
-    #[account(address = token0_vault.mint)]
-    pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(
+        address = pair.token0 @ ErrorCode::InvalidMint
+    )]
+    pub token0_mint: Box<Account<'info, Mint>>,
     
-    #[account(address = token1_vault.mint)]
-    pub token1_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(
+        address = pair.token1 @ ErrorCode::InvalidMint
+    )]
+    pub token1_mint: Box<Account<'info, Mint>>,
 
     #[account(
         mut,
@@ -142,8 +154,8 @@ impl<'info> Flashloan<'info> {
     pub fn handle_flashloan(ctx: Context<'_, '_, '_, 'info, Self>, args: FlashloanArgs) -> Result<()> {
         let Flashloan {
             pair,
-            token0_vault,
-            token1_vault,
+            reserve0_vault,
+            reserve1_vault,
             receiver_token0_account,
             receiver_token1_account,
             token0_mint,
@@ -171,16 +183,16 @@ impl<'info> Flashloan<'info> {
             .unwrap() as u64;
 
         // Record balances before the flash loan
-        token0_vault.reload()?;
-        token1_vault.reload()?;
-        let balance0_before = token0_vault.amount;
-        let balance1_before = token1_vault.amount;
+        reserve0_vault.reload()?;
+        reserve1_vault.reload()?;
+        let balance0_before = reserve0_vault.amount;
+        let balance1_before = reserve1_vault.amount;
 
         // Transfer tokens to receiver if requested
         if amount0 > 0 {
-            transfer_from_pool_vault_to_user(
+            transfer_from_vault_to_user(
                 pair.to_account_info(),
-                token0_vault.to_account_info(),
+                reserve0_vault.to_account_info(),
                 receiver_token0_account.to_account_info(),
                 token0_mint.to_account_info(),
                 match token0_mint.to_account_info().owner == token_program.key {
@@ -194,9 +206,9 @@ impl<'info> Flashloan<'info> {
         }
 
         if amount1 > 0 {
-            transfer_from_pool_vault_to_user(
+            transfer_from_vault_to_user(
                 pair.to_account_info(),
-                token1_vault.to_account_info(),
+                reserve1_vault.to_account_info(),
                 receiver_token1_account.to_account_info(),
                 token1_mint.to_account_info(),
                 match token1_mint.to_account_info().owner == token_program.key {
@@ -276,18 +288,18 @@ impl<'info> Flashloan<'info> {
         )?;
 
         // Reload vault accounts to get updated balances after callback execution
-        token0_vault.reload()?;
-        token1_vault.reload()?;
+        reserve0_vault.reload()?;
+        reserve1_vault.reload()?;
 
         let required_balance0 = balance0_before.checked_add(fee0).unwrap();
         let required_balance1 = balance1_before.checked_add(fee1).unwrap();
         
         require!(
-            token0_vault.amount >= required_balance0,
+            reserve0_vault.amount >= required_balance0,
             ErrorCode::InsufficientAmount0
         );
         require!(
-            token1_vault.amount >= required_balance1,
+            reserve1_vault.amount >= required_balance1,
             ErrorCode::InsufficientAmount1
         );
 

@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    token::{Token, TokenAccount},
-    token_interface::{Mint, Token2022},
+    token::{Token, TokenAccount, Mint},
+    token_interface::{Token2022},
     associated_token::AssociatedToken,
 };
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
     constants::*,
     errors::ErrorCode,
     events::*,
-    utils::token::{transfer_from_user_to_pool_vault, transfer_from_pool_vault_to_user},
+    utils::token::{transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault},
     generate_gamm_pair_seeds,
 };
 
@@ -44,27 +44,46 @@ pub struct Swap<'info> {
     
     #[account(
         mut,
-        constraint = token_in_vault.mint == pair.token0 || token_in_vault.mint == pair.token1,
-        constraint = token_in_vault.owner == pair.key() @ ErrorCode::InvalidVaultIn,
+        seeds = [
+            RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            token_in_mint.key().as_ref(),
+        ],
+        bump = pair.get_reserve_vault_bump(&token_in_mint.key())
     )]
     pub token_in_vault: Account<'info, TokenAccount>,
     
     #[account(
         mut,
-        constraint = token_out_vault.mint == pair.token0 || token_out_vault.mint == pair.token1,
-        constraint = token_out_vault.owner == pair.key() @ ErrorCode::InvalidVaultOut,
+        seeds = [
+            RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            token_out_mint.key().as_ref(),
+        ],
+        bump = pair.get_reserve_vault_bump(&token_out_mint.key())
     )]
     pub token_out_vault: Account<'info, TokenAccount>,
     
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = user_token_in_account.mint == token_in_mint.key() @ ErrorCode::InvalidTokenAccount,
+        token::authority = user,
+    )]
     pub user_token_in_account: Account<'info, TokenAccount>,
-    #[account(mut)]
+    #[account(mut,
+        constraint = user_token_out_account.mint == token_out_mint.key() @ ErrorCode::InvalidTokenAccount,
+        token::authority = user,
+    )]
     pub user_token_out_account: Account<'info, TokenAccount>,
 
-    #[account(address = token_in_vault.mint)]
-    pub token_in_mint: Box<InterfaceAccount<'info, Mint>>,
-    #[account(address = token_out_vault.mint)]
-    pub token_out_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(
+        constraint = token_in_mint.key() == pair.token0 || token_in_mint.key() == pair.token1 @ ErrorCode::InvalidMint
+    )]
+    pub token_in_mint: Box<Account<'info, Mint>>,
+    #[account(
+        constraint = token_out_mint.key() == pair.token0 || token_out_mint.key() == pair.token1 @ ErrorCode::InvalidMint
+    )]
+    pub token_out_mint: Box<Account<'info, Mint>>,
 
     #[account(
         init_if_needed,
@@ -175,7 +194,7 @@ impl<'info> Swap<'info> {
 
         // Transfer futarchy fee to authority immediately if non-zero
         if futarchy_fee > 0 {
-            transfer_from_pool_vault_to_user(
+            transfer_from_vault_to_vault(
                 pair.to_account_info(),
                 token_in_vault.to_account_info(),
                 authority_token_in_account.to_account_info(),
@@ -233,7 +252,7 @@ impl<'info> Swap<'info> {
         require_gte!((pair.reserve0 as u128).checked_mul(pair.reserve1 as u128).ok_or(ErrorCode::Overflow)?, last_k, ErrorCode::BrokenInvariant);
         
         // Transfer tokens
-        transfer_from_user_to_pool_vault(
+        transfer_from_user_to_vault(
             user.to_account_info(),
             user_token_in_account.to_account_info(),
             token_in_vault.to_account_info(),
@@ -246,7 +265,7 @@ impl<'info> Swap<'info> {
             token_in_mint.decimals,
         )?;
 
-        transfer_from_pool_vault_to_user(
+        transfer_from_vault_to_user(
             pair.to_account_info(),
             token_out_vault.to_account_info(),
             user_token_out_account.to_account_info(),

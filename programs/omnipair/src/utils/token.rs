@@ -22,7 +22,7 @@ use anchor_spl::{
     },
 };
 
-pub fn transfer_from_user_to_pool_vault<'a>(
+pub fn transfer_from_user_to_vault<'a>(
     authority: AccountInfo<'a>,
     from: AccountInfo<'a>,
     to_vault: AccountInfo<'a>,
@@ -66,7 +66,7 @@ pub fn transfer_from_user_to_pool_vault<'a>(
     }
 }
 
-pub fn transfer_from_pool_vault_to_user<'a>(
+pub fn transfer_from_vault<'a>(
     authority: AccountInfo<'a>,
     from_vault: AccountInfo<'a>,
     to: AccountInfo<'a>,
@@ -79,19 +79,103 @@ pub fn transfer_from_pool_vault_to_user<'a>(
     if amount == 0 {
         return Ok(());
     }
-    token_2022::transfer_checked(
-        CpiContext::new_with_signer(
-            token_program.to_account_info(),
-            token_2022::TransferChecked {
-                from: from_vault,
-                to,
-                authority,
-                mint,
-            },
-            signer_seeds,
-        ),
+    if *token_program.key == Token2022::id() {
+        token_2022::transfer_checked(
+            CpiContext::new_with_signer(
+                token_program.to_account_info(),
+                token_2022::TransferChecked {
+                    from: from_vault,
+                    to,
+                    authority,
+                    mint,
+                },
+                signer_seeds,
+            ),
+            amount,
+            mint_decimals,
+        )
+    } else {
+        token::transfer_checked(
+            CpiContext::new_with_signer(
+                token_program.to_account_info(),
+                token::TransferChecked {
+                    from: from_vault,
+                    to,
+                    authority,
+                    mint,
+                },
+                signer_seeds,
+            ),
+            amount,
+            mint_decimals,
+        )
+    }
+}
+
+/// Transfers tokens from one vault account to another vault account.
+/// 
+/// This function is an explicit alias for `transfer_from_vault`, providing clearer intent for vault-to-vault token movement.
+/// Arguments:
+///   - `authority`: The account authorized to sign for the transfer (typically a PDA).
+///   - `from_vault`: The source token account (vault).
+///   - `to_vault`: The destination token account (vault).
+///   - `mint`: The mint for the token being transferred.
+///   - `token_program`: The token program account (can be SPL Token or Token2022).
+pub fn transfer_from_vault_to_vault<'a>(
+    authority: AccountInfo<'a>,
+    from_vault: AccountInfo<'a>,
+    to_vault: AccountInfo<'a>,
+    mint: AccountInfo<'a>,
+    token_program: AccountInfo<'a>,
+    amount: u64,
+    mint_decimals: u8,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    transfer_from_vault(
+        authority,
+        from_vault,
+        to_vault,
+        mint,
+        token_program.to_account_info(),
         amount,
         mint_decimals,
+        signer_seeds,
+    )
+}
+
+/// Transfers tokens from one vault account to a user's token account.
+/// 
+/// This function is an explicit alias for `transfer_from_vault`, providing clearer intent for vault-to-user token movement.
+/// Arguments:
+///   - `authority`: The account authorized to sign for the transfer (typically a PDA).
+///   - `from_vault`: The source token account (vault).
+///   - `to_vault`: The destination token account (vault).
+///   - `mint`: The mint for the token being transferred.
+///   - `token_program`: The token program account (can be SPL Token or Token2022).
+///   - `amount`: Number of tokens to transfer.
+///   - `mint_decimals`: Decimals for the mint (to support checked instruction).
+///   - `signer_seeds`: Seeds used for PDA authority (for cross-program invocation).
+/// Returns:
+///   - Result containing unit on success or an error on failure.
+pub fn transfer_from_vault_to_user<'a>(
+    authority: AccountInfo<'a>,
+    from_vault: AccountInfo<'a>,
+    to: AccountInfo<'a>,
+    mint: AccountInfo<'a>,
+    token_program: AccountInfo<'a>,
+    amount: u64,
+    mint_decimals: u8,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    transfer_from_vault(
+        authority,
+        from_vault,
+        to,
+        mint,
+        token_program.to_account_info(),
+        amount,
+        mint_decimals,
+        signer_seeds,
     )
 }
 

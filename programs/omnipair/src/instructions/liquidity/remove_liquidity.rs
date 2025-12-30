@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::errors::ErrorCode;
 use crate::constants::*;
-use crate::utils::token::{transfer_from_pool_vault_to_user, token_burn};
+use crate::utils::token::{transfer_from_vault_to_user, token_burn};
 use crate::generate_gamm_pair_seeds;
 use crate::liquidity::common::AdjustLiquidity;
 use crate::events::{BurnEvent, UserLiquidityPositionUpdatedEvent, EventMetadata};
@@ -43,15 +43,15 @@ impl<'info> AdjustLiquidity<'info> {
         let AdjustLiquidity {
             pair,
             user_lp_token_account,
-            token0_vault,
-            token1_vault,
+            reserve0_vault,
+            reserve1_vault,
             user_token0_account,
             user_token1_account,
             lp_mint,
             token_program,
             token_2022_program,
-            token0_vault_mint,
-            token1_vault_mint,
+            token0_mint,
+            token1_mint,
             ..
         } = ctx.accounts;
 
@@ -83,47 +83,37 @@ impl<'info> AdjustLiquidity<'info> {
         );
 
         // Transfer tokens from pool to user
-        transfer_from_pool_vault_to_user(
+        transfer_from_vault_to_user(
             pair.to_account_info(),
-            token0_vault.to_account_info(),
+            reserve0_vault.to_account_info(),
             user_token0_account.to_account_info(),
-            token0_vault_mint.to_account_info(),
-            match token0_vault_mint.to_account_info().owner == token_program.key {
+            token0_mint.to_account_info(),
+            match token0_mint.to_account_info().owner == token_program.key {
                 true => token_program.to_account_info(),
                 false => token_2022_program.to_account_info(),
             },
             amount0_out,
-            token0_vault_mint.decimals,
+            token0_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
 
-        transfer_from_pool_vault_to_user(
+        transfer_from_vault_to_user(
             pair.to_account_info(),
-            token1_vault.to_account_info(),
+            reserve1_vault.to_account_info(),
             user_token1_account.to_account_info(),
-            token1_vault_mint.to_account_info(),
-            match token1_vault_mint.to_account_info().owner == token_program.key {
+            token1_mint.to_account_info(),
+            match token1_mint.to_account_info().owner == token_program.key {
                 true => token_program.to_account_info(),
                 false => token_2022_program.to_account_info(),
             },
             amount1_out,
-            token1_vault_mint.decimals,
+            token1_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
 
         // Reload vault accounts to get updated balances after transfers
-        token0_vault.reload()?;
-        token1_vault.reload()?;
-
-        // Check collateral requirements
-        require!(
-            token0_vault.amount >= pair.total_collateral0,
-            ErrorCode::Undercollateralized
-        );
-        require!(
-            token1_vault.amount >= pair.total_collateral1,
-            ErrorCode::Undercollateralized
-        );
+        reserve0_vault.reload()?;
+        reserve1_vault.reload()?;
 
         // Burn LP tokens from user
         token_burn(

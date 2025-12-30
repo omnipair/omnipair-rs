@@ -1,5 +1,4 @@
 use anchor_lang::{
-    accounts::interface_account::InterfaceAccount, 
     prelude::*, 
     solana_program::{
         program::invoke, 
@@ -9,8 +8,8 @@ use anchor_lang::{
 };
 use anchor_spl::{
     token::spl_token,
-    token::{Token},
-    token_interface::{Mint, TokenAccount, Token2022},
+    token::{Token, TokenAccount, Mint},
+    token_interface::{Token2022},
     associated_token::{AssociatedToken, create_idempotent},
 };
 use anchor_spl::metadata::{
@@ -21,7 +20,7 @@ use anchor_spl::metadata::{
 };
 use anchor_lang::solana_program::program_pack::Pack;
 use crate::state::{
-    pair::Pair,
+    pair::{Pair, VaultBumps},
     rate_model::RateModel,
     futarchy_authority::FutarchyAuthority,
 };
@@ -29,7 +28,7 @@ use crate::errors::ErrorCode;
 use crate::constants::*;
 use crate::utils::account::get_size_with_discriminator;
 use crate::utils::token::{
-    transfer_from_user_to_pool_vault,
+    transfer_from_user_to_vault,
     token_mint_to,  
 };
 use crate::utils::math::SqrtU128;
@@ -60,8 +59,8 @@ pub struct InitializeAndBootstrap<'info> {
     #[account(mut)]
     pub deployer: Signer<'info>,
 
-    pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
-    pub token1_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token0_mint: Box<Account<'info, Mint>>,
+    pub token1_mint: Box<Account<'info, Mint>>,
     
     #[account(
         init,
@@ -111,34 +110,74 @@ pub struct InitializeAndBootstrap<'info> {
     pub deployer_lp_token_account: UncheckedAccount<'info>,
 
     #[account(
-        init_if_needed,
+        init,
+        seeds = [
+            RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            token0_mint.key().as_ref(),
+        ],
         payer = deployer,
-        associated_token::mint = token0_mint,
-        associated_token::authority = pair,
+        token::mint = token0_mint,
+        token::authority = pair,
+        bump
     )]
-    pub token0_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub reserve0_vault: Box<Account<'info, TokenAccount>>,
     
     #[account(
-        init_if_needed,
+        init,
+        seeds = [
+            RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            token1_mint.key().as_ref(),
+        ],
         payer = deployer,
-        associated_token::mint = token1_mint,
-        associated_token::authority = pair,
+        token::mint = token1_mint,
+        token::authority = pair,
+        bump
     )]
-    pub token1_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub reserve1_vault: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+        init,
+        seeds = [
+            COLLATERAL_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            token0_mint.key().as_ref(),
+        ],
+        payer = deployer,
+        token::mint = token0_mint,
+        token::authority = pair,
+        bump
+    )]
+    pub collateral0_vault: Box<Account<'info, TokenAccount>>,
+    
+    #[account(
+        init,
+        seeds = [
+            COLLATERAL_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            token1_mint.key().as_ref(),
+        ],
+        payer = deployer,
+        token::mint = token1_mint,
+        token::authority = pair,
+        bump
+    )]
+    pub collateral1_vault: Box<Account<'info, TokenAccount>>,
     
     #[account(
         mut,
         token::mint = token0_mint,
         token::authority = deployer,
     )]
-    pub deployer_token0_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub deployer_token0_account: Box<Account<'info, TokenAccount>>,
     
     #[account(
         mut,
         token::mint = token1_mint,
         token::authority = deployer,
     )]
-    pub deployer_token1_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub deployer_token1_account: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -146,7 +185,7 @@ pub struct InitializeAndBootstrap<'info> {
         constraint = authority_wsol_account.owner == futarchy_authority.key() @ ErrorCode::InvalidFutarchyAuthority,
         constraint = *authority_wsol_account.to_account_info().owner == token_program.key() @ ErrorCode::InvalidTokenProgram,
       )]
-      pub authority_wsol_account: Box<InterfaceAccount<'info, TokenAccount>>,
+      pub authority_wsol_account: Box<Account<'info, TokenAccount>>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
@@ -292,6 +331,13 @@ impl<'info> InitializeAndBootstrap<'info> {
         ctx.accounts.rate_model.set_inner(RateModel::new());
 
         // Initialize pair (before LP mint is initialized, but we store the key)
+        let vault_bumps = VaultBumps {
+            reserve0: ctx.bumps.reserve0_vault,
+            reserve1: ctx.bumps.reserve1_vault,
+            collateral0: ctx.bumps.collateral0_vault,
+            collateral1: ctx.bumps.collateral1_vault,
+        };
+
         pair.set_inner(Pair::initialize(
             token0,
             token1,
@@ -306,13 +352,14 @@ impl<'info> InitializeAndBootstrap<'info> {
             params_hash,
             version,
             ctx.bumps.pair,
+            vault_bumps,
         ));
 
         // Transfer tokens from deployer to vaults
-        transfer_from_user_to_pool_vault(
+        transfer_from_user_to_vault(
             ctx.accounts.deployer.to_account_info(),
             ctx.accounts.deployer_token0_account.to_account_info(),
-            ctx.accounts.token0_vault.to_account_info(),
+            ctx.accounts.reserve0_vault.to_account_info(),
             ctx.accounts.token0_mint.to_account_info(),
             match ctx.accounts.token0_mint.to_account_info().owner == ctx.accounts.token_program.key {
                 true => ctx.accounts.token_program.to_account_info(),
@@ -322,10 +369,10 @@ impl<'info> InitializeAndBootstrap<'info> {
             ctx.accounts.token0_mint.decimals,
         )?;
 
-        transfer_from_user_to_pool_vault(
+        transfer_from_user_to_vault(
             ctx.accounts.deployer.to_account_info(),
             ctx.accounts.deployer_token1_account.to_account_info(),
-            ctx.accounts.token1_vault.to_account_info(),
+            ctx.accounts.reserve1_vault.to_account_info(),
             ctx.accounts.token1_mint.to_account_info(),
             match ctx.accounts.token1_mint.to_account_info().owner == ctx.accounts.token_program.key {
                 true => ctx.accounts.token_program.to_account_info(),

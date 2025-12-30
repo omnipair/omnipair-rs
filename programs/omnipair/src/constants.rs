@@ -48,4 +48,8 @@ pub const FUTARCHY_AUTHORITY_SEED_PREFIX: &[u8] = b"futarchy_authority";
 #[constant]
 pub const METADATA_SEED_PREFIX: &[u8] = b"metadata";
 #[constant]
+pub const RESERVE_VAULT_SEED_PREFIX: &[u8] = b"reserve_vault";
+#[constant]
+pub const COLLATERAL_VAULT_SEED_PREFIX: &[u8] = b"collateral_vault";
+#[constant]
 pub const VERSION: u8 = 1;
