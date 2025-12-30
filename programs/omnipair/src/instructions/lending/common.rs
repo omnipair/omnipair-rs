@@ -66,7 +66,7 @@ pub struct CommonAdjustCollateral<'info> {
             pair.key().as_ref(),
             collateral_token_mint.key().as_ref(),
         ],
-        bump = pair.get_collateral_vault_bump(&collateral_vault.mint)
+        bump = pair.get_collateral_vault_bump(&collateral_token_mint.key())
     )]
     pub collateral_vault: Box<Account<'info, TokenAccount>>,
 
@@ -150,7 +150,7 @@ pub struct CommonAdjustDebt<'info> {
             pair.key().as_ref(),
             reserve_token_mint.key().as_ref(),
         ],
-        bump = pair.get_reserve_vault_bump(&reserve_vault.mint)
+        bump = pair.get_reserve_vault_bump(&reserve_token_mint.key())
     )]
     pub reserve_vault: Box<Account<'info, TokenAccount>>,
 

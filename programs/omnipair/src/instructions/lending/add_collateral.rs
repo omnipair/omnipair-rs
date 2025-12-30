@@ -61,7 +61,7 @@ pub struct AddCollateral<'info> {
             pair.key().as_ref(),
             collateral_token_mint.key().as_ref(),
         ],
-        bump = pair.get_collateral_vault_bump(&collateral_vault.mint)
+        bump = pair.get_collateral_vault_bump(&collateral_token_mint.key())
     )]
     pub collateral_vault: Box<Account<'info, TokenAccount>>,
 
