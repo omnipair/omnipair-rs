@@ -1,0 +1,26 @@
+[workspace]
+
+[package]
+name = "fuzz_tests"
+version = "0.1.0"
+description = "Created with Trident"
+edition = "2021"
+
+[dependencies]
+borsh = "1.5.3"
+
+[dependencies.trident-fuzz]
+version = "0.12.0"
+features = ["token"]
+
+[[bin]]
+name = "fuzz"
+path = "fuzz/test_fuzz.rs"
+
+[[bin]]
+name = "fuzz_lending"
+path = "fuzz_lending/test_fuzz.rs"
+
+[[bin]]
+name = "fuzz_liquidity_swaps"
+path = "fuzz_liquidity_swaps/test_fuzz.rs"
