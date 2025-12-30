@@ -135,18 +135,22 @@ impl<'info> Liquidate<'info> {
 
         // Compute debt
 
-        let (user_debt, collateral_amount, collateral_price_nad) = match is_collateral_token0 {
+        let (user_debt, collateral_amount, collateral_price_nad, reserve_amount) = match is_collateral_token0 {
             true => (
                 // collateral is token0, debt is token1
                 user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
                 user_position.collateral0 as u128, 
-                pair.ema_price0_nad() as u128
+                pair.ema_price0_nad() as u128,
+                // if collateral is token0, then we need reserve1 (debt token reserve)
+                pair.reserve1 as u64,
             ),
             false => (
                 // collateral is token1, debt is token0
                 user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?, 
                 user_position.collateral1 as u128, 
-                pair.ema_price1_nad() as u128
+                pair.ema_price1_nad() as u128,
+                // if collateral is token1, then we need reserve0 (debt token reserve)
+                pair.reserve0 as u64,
             ),
         };
 
@@ -167,13 +171,21 @@ impl<'info> Liquidate<'info> {
         // user_debt > collateral_value: insolvent (bad debt, collateral can't cover principal)
         // If insolvent, repay all debt; else, repay a portion using close factor (partial liquidation)
         let is_insolvent = user_debt as u128 > collateral_value;
-        let debt_to_repay: u64 = if is_insolvent {
+        // made it mutable to allow for custom debt repayment logic in case of debt token reserve is not enough
+        let mut debt_to_repay: u64 = if is_insolvent {
             user_debt
         } else {
             let partial = (user_debt as u128)
                 .checked_mul(CLOSE_FACTOR_BPS as u128).ok_or(ErrorCode::DebtMathOverflow)?
                 .checked_div(BPS_DENOMINATOR as u128).ok_or(ErrorCode::DebtMathOverflow)?;
             core::cmp::min(user_debt, partial as u64)
+        };
+
+        let is_debt_token_reserve_not_enough = debt_to_repay > reserve_amount;
+        // if debt token reserve is not enough, then we use half of the reserve to repay the debt, to prevent zero reserve
+        debt_to_repay = match is_debt_token_reserve_not_enough {
+            true => (reserve_amount) / 2,
+            false => debt_to_repay
         };
 
         // collateral_amount_to_seize = debt_to_repay * NAD / collateral_price
@@ -210,7 +222,7 @@ impl<'info> Liquidate<'info> {
             .checked_sub(caller_incentive)
             .ok_or(ErrorCode::DebtMathOverflow)?;
 
-        if is_insolvent {
+        if is_insolvent && !is_debt_token_reserve_not_enough {
             user_position.writeoff_debt(pair, &debt_token)?;
         } else {
             user_position.decrease_debt(pair, &debt_token, debt_to_repay)?;
@@ -262,6 +274,7 @@ impl<'info> Liquidate<'info> {
             debt0_liquidated: if is_collateral_token0 { 0 } else { debt_to_repay },
             debt1_liquidated: if is_collateral_token0 { debt_to_repay } else { 0 },
             collateral_price: if is_collateral_token0 { pair.ema_price0_nad() } else { pair.ema_price1_nad() },
+            // needs review after adding not enough debt token reserve case
             shortfall: if is_insolvent { (user_debt as u128).checked_sub(collateral_value).unwrap() } else { 0 },
             liquidation_bonus_applied: caller_incentive,
             k0: k0,
