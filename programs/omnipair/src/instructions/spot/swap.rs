@@ -178,15 +178,15 @@ impl<'info> Swap<'info> {
         let last_k = (pair.reserve0 as u128).checked_mul(pair.reserve1 as u128).ok_or(ErrorCode::InvariantOverflow)?;
         let is_token0_in = user_token_in_account.mint == pair.token0;
 
-        // Calculate total fee amount
-        let total_fee = (amount_in as u128)
+        // Swap fee = LP fee + Futarchy fee
+        let swap_fee = (amount_in as u128)
             .checked_mul(pair.swap_fee_bps as u128)
             .ok_or(ErrorCode::FeeMathOverflow)?
             .checked_div(BPS_DENOMINATOR as u128)
             .ok_or(ErrorCode::FeeMathOverflow)? as u64;
 
-        // Calculate futarchy fee portion of the total fee
-        let futarchy_fee = (total_fee as u128)
+        // Calculate futarchy fee portion of the swap fee
+        let futarchy_fee = (swap_fee as u128)
             .checked_mul(futarchy_authority.revenue_share.swap_bps as u128)
             .ok_or(ErrorCode::FeeMathOverflow)?
             .checked_div(BPS_DENOMINATOR as u128)
@@ -209,23 +209,17 @@ impl<'info> Swap<'info> {
             )?;
         }
 
-        // amount_in_after_fee = amount_in * (10000 - swap_fee_bps) / 10000
-        let amount_in_after_fee = (amount_in as u128)
-            .checked_mul((BPS_DENOMINATOR as u128).checked_sub(pair.swap_fee_bps as u128).ok_or(ErrorCode::FeeMathOverflow)?)
-            .ok_or(ErrorCode::FeeMathOverflow)?
-            .checked_div(BPS_DENOMINATOR as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)?
-            .try_into()
-            .map_err(|_| ErrorCode::FeeMathOverflow)?;
+        // amount_in_after_swap_fee = amount_in - swap_fee
+        let amount_in_after_swap_fee = amount_in.checked_sub(swap_fee).ok_or(ErrorCode::FeeMathOverflow)?;
 
         let reserve_in = if is_token0_in { pair.reserve0 } else { pair.reserve1 };
         let reserve_out = if is_token0_in { pair.reserve1 } else { pair.reserve0 };
 
         // Δy = (Δx * y) / (x + Δx)
         let denominator = (reserve_in as u128)
-            .checked_add(amount_in_after_fee as u128)
+            .checked_add(amount_in_after_swap_fee as u128)
             .ok_or(ErrorCode::DenominatorOverflow)?;
-        let amount_out = (amount_in_after_fee as u128)
+        let amount_out = (amount_in_after_swap_fee as u128)
             .checked_mul(reserve_out as u128)
             .ok_or(ErrorCode::OutputAmountOverflow)?
             .checked_div(denominator)
@@ -233,7 +227,10 @@ impl<'info> Swap<'info> {
             .try_into()
             .map_err(|_| ErrorCode::OutputAmountOverflow)?;
 
-        let new_reserve_in = reserve_in.checked_add(amount_in_after_fee).ok_or(ErrorCode::Overflow)?;
+        // Calculate the amount in with the LP portion of the fee:
+        // amount_in_with_lp_fee = amount_in - swap_fee + lp_fee = amount_in - futarchy_fee
+        let amount_in_with_lp_fee = amount_in.checked_sub(futarchy_fee).ok_or(ErrorCode::Overflow)?;
+        let new_reserve_in = reserve_in.checked_add(amount_in_with_lp_fee).ok_or(ErrorCode::Overflow)?;
         let new_reserve_out = reserve_out.checked_sub(amount_out).ok_or(ErrorCode::Overflow)?;
 
         require_gte!(amount_out, min_amount_out, ErrorCode::InsufficientOutputAmount);
@@ -287,7 +284,7 @@ impl<'info> Swap<'info> {
             is_token0_in,
             amount_in: amount_in,
             amount_out: amount_out,
-            amount_in_after_fee: amount_in_after_fee,
+            amount_in_after_fee: amount_in_after_swap_fee as u64,
         });
         
         Ok(())
