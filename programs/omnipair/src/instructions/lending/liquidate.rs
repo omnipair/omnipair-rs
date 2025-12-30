@@ -274,8 +274,7 @@ impl<'info> Liquidate<'info> {
             debt0_liquidated: if is_collateral_token0 { 0 } else { debt_to_repay },
             debt1_liquidated: if is_collateral_token0 { debt_to_repay } else { 0 },
             collateral_price: if is_collateral_token0 { pair.ema_price0_nad() } else { pair.ema_price1_nad() },
-            // needs review after adding not enough debt token reserve case
-            shortfall: if is_insolvent { (user_debt as u128).checked_sub(collateral_value).unwrap() } else { 0 },
+            shortfall: if is_insolvent && !is_debt_token_reserve_not_enough { (user_debt as u128).checked_sub(collateral_value).unwrap() } else { 0 },
             liquidation_bonus_applied: caller_incentive,
             k0: k0,
             k1: pair.k(),
