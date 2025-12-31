@@ -181,8 +181,10 @@ impl<'info> Liquidate<'info> {
             core::cmp::min(user_debt, partial as u64)
         };
 
-        let is_debt_token_reserve_not_enough = debt_to_repay > reserve_amount;
-        // if debt token reserve is not enough, then we use half of the reserve to repay the debt, to prevent zero reserve
+        // Ensure there will be some reserve left after liquidation.
+        // If the debt token reserve cannot fully cover the debt to be written off, only allow a partial (50%) liquidation.
+        // This avoids fully depleting the reserve, Zero reserve will break the invariant irreversibly.
+        let is_debt_token_reserve_not_enough = debt_to_repay >= reserve_amount;
         debt_to_repay = match is_debt_token_reserve_not_enough {
             true => (reserve_amount) / 2,
             false => debt_to_repay
