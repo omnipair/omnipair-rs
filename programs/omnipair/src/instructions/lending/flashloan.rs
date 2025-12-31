@@ -304,8 +304,8 @@ impl<'info> Flashloan<'info> {
         );
 
         // Calculate excess repaid tokens (if any) and accumulate them
-        let excess0 = token0_vault.amount.checked_sub(required_balance0).unwrap_or(0);
-        let excess1 = token1_vault.amount.checked_sub(required_balance1).unwrap_or(0);
+        let excess0 = reserve0_vault.amount.checked_sub(required_balance0).unwrap_or(0);
+        let excess1 = reserve1_vault.amount.checked_sub(required_balance1).unwrap_or(0);
 
         // update the reserves: fee + excess repaid
         pair.reserve0 = pair.reserve0.checked_add(fee0).unwrap().checked_add(excess0).unwrap();
