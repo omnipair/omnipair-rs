@@ -157,4 +157,12 @@ pub fn normalize_two_values_to_nad(
     normalize_two_values_to_scale(a, a_decimals, b, NAD_DECIMALS)
 }
 
-        
+/// Ceiling division: rounds up to the nearest integer
+/// Formula: ceil(a / b) = (a + b - 1) / b
+/// Returns None on overflow
+pub fn ceil_div(a: u128, b: u128) -> Option<u128> {
+    if b == 0 {
+        return None;
+    }
+    a.checked_add(b - 1)?.checked_div(b)
+}

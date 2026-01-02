@@ -3,7 +3,7 @@ use crate::{
     constants::*,
     errors::ErrorCode,
     events::{AdjustCollateralEvent, EventMetadata, UserPositionUpdatedEvent},
-    utils::token::transfer_from_vault_to_user,
+    utils::{token::transfer_from_vault_to_user, math::ceil_div},
     generate_gamm_pair_seeds,
     instructions::lending::common::{CommonAdjustCollateral, AdjustCollateralArgs},
 };
@@ -33,11 +33,12 @@ fn calculate_max_withdrawable(pair: &Pair, user_position: &UserPosition, is_coll
     let pessimistic_cf_bps = pair.get_max_debt_and_cf_bps_for_collateral(pair, &collateral_token, user_collateral)?.1;
     
     // Calculate minimum required collateral value in debt token
-    let min_collateral_value = (debt as u128)
-        .checked_mul(BPS_DENOMINATOR as u128)
-        .ok_or(ErrorCode::DebtMathOverflow)?
-        .checked_div(pessimistic_cf_bps as u128)
-        .ok_or(ErrorCode::DebtMathOverflow)?;
+    let min_collateral_value = ceil_div(
+        (debt as u128)
+            .checked_mul(BPS_DENOMINATOR as u128)
+            .ok_or(ErrorCode::DebtMathOverflow)?,
+        pessimistic_cf_bps as u128
+    ).ok_or(ErrorCode::DebtMathOverflow)?;
  
     // Convert collateral value back to collateral token amount
     let collateral_price = if is_collateral_token0 {
@@ -47,11 +48,12 @@ fn calculate_max_withdrawable(pair: &Pair, user_position: &UserPosition, is_coll
     };
  
     // minimum collateral to cover outstanding debt
-    let min_collateral = (min_collateral_value as u128)
-        .checked_mul(NAD as u128)
-        .ok_or(ErrorCode::DebtMathOverflow)?
-        .checked_div(collateral_price as u128)
-        .ok_or(ErrorCode::DebtMathOverflow)?;
+    let min_collateral = ceil_div(
+        (min_collateral_value as u128)
+            .checked_mul(NAD as u128)
+            .ok_or(ErrorCode::DebtMathOverflow)?,
+        collateral_price as u128
+    ).ok_or(ErrorCode::DebtMathOverflow)?;
  
     // Calculate maximum withdrawable amount
     let max_withdrawable = user_collateral
