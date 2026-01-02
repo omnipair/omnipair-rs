@@ -11,7 +11,7 @@ use crate::{
     errors::ErrorCode,
     events::{UserPositionLiquidatedEvent, EventMetadata},
     state::user_position::UserPosition,
-    utils::token::{transfer_from_vault_to_user, transfer_from_vault_to_vault},
+    utils::{token::{transfer_from_vault_to_user, transfer_from_vault_to_vault}, math::ceil_div},
     generate_gamm_pair_seeds,
 };
 
@@ -206,16 +206,20 @@ impl<'info> Liquidate<'info> {
         let debt_to_repay: u64 = if is_insolvent {
             user_debt
         } else {
-            let partial = (user_debt as u128)
-                .checked_mul(CLOSE_FACTOR_BPS as u128).ok_or(ErrorCode::DebtMathOverflow)?
-                .checked_div(BPS_DENOMINATOR as u128).ok_or(ErrorCode::DebtMathOverflow)?;
+            let partial = ceil_div(
+                (user_debt as u128)
+                    .checked_mul(CLOSE_FACTOR_BPS as u128).ok_or(ErrorCode::DebtMathOverflow)?,
+                BPS_DENOMINATOR as u128
+            ).ok_or(ErrorCode::DebtMathOverflow)?;
             core::cmp::min(user_debt, partial as u64)
         };
 
         // collateral_amount_to_seize = debt_to_repay * NAD / collateral_price
-        let collateral_amount_to_seize = (debt_to_repay as u128)
-        .checked_mul(NAD as u128).ok_or(ErrorCode::DebtMathOverflow)?
-        .checked_div(collateral_price_nad).ok_or(ErrorCode::DebtMathOverflow)?;
+        let collateral_amount_to_seize = ceil_div(
+            (debt_to_repay as u128)
+                .checked_mul(NAD as u128).ok_or(ErrorCode::DebtMathOverflow)?,
+            collateral_price_nad
+        ).ok_or(ErrorCode::DebtMathOverflow)?;
 
         let collateral_amount_to_seize_u64: u64 = collateral_amount_to_seize
             .try_into()
