@@ -332,7 +332,7 @@ impl Pair {
                 // 1. Always add lp_share to virtual reserves.
                 // 2. Only add the "uncovered" portion of protocol_fee to virtual reserves.
                 //
-                // This ensures the invariant r_virtual = r_cash + r_debt holds, where:
+                // This ensures the state ΔR_virtual = ΔR_cash + ΔR_debt holds, where:
                 // L: r_virtual + lp_share + (protocol_fee - cash_covered_fee)
                 // R: (r_cash - cash_covered_fee) + (r_debt + lp_share + protocol_fee)
                 // where:

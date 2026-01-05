@@ -103,7 +103,8 @@ impl UserPosition {
 
     // Invariants: 
     // 1. x_virtual * y_virtual = k (Constant product invariant)
-    // 2. r_virtual = r_cash + r_debt (Constant sum invariant)
+    // 2. r_virtual >= r_debt (Solvency invariant)
+    // with a state transition: ΔR_virtual = ΔR_cash + ΔR_debt
     //
     // I. during solvency 
     //   1. debt repayment: r_virtual (constant) = (r_cash + amount) + (r_debt - amount) [debt reduced, cash reserve increased]
