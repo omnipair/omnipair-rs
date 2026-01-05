@@ -4,6 +4,12 @@ use crate::errors::ErrorCode;
 use super::Pair;
 use std::cmp::max;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DebtDecreaseReason {
+    Repayment,
+    WriteOff,
+}
+
 #[account]
 pub struct UserPosition {
     // User and pair info
@@ -70,6 +76,7 @@ impl UserPosition {
                     self.debt0_shares = self.debt0_shares.saturating_add(shares);
                 }
                 pair.total_debt0 = pair.total_debt0.saturating_add(amount);
+                pair.cash_reserve0 = pair.cash_reserve0.checked_sub(amount).ok_or(ErrorCode::CashReserveUnderflow)?;
             }
             false => {
                 if pair.total_debt1_shares == 0 {
@@ -87,13 +94,29 @@ impl UserPosition {
                     self.debt1_shares = self.debt1_shares.saturating_add(shares);
                 }
                 pair.total_debt1 = pair.total_debt1.saturating_add(amount);
+                pair.cash_reserve1 = pair.cash_reserve1.checked_sub(amount).ok_or(ErrorCode::CashReserveUnderflow)?;
             }
         }
         Ok(())
     }
     
 
-    pub fn decrease_debt(&mut self, pair: &mut Pair, debt_token: &Pubkey, amount: u64) -> Result<()> {
+    // Invariants: 
+    // 1. x_virtual * y_virtual = k (Constant product invariant)
+    // 2. r_virtual = r_cash + r_debt (Constant sum invariant)
+    //
+    // I. during solvency 
+    //   1. debt repayment: r_virtual (constant) = (r_cash + amount) + (r_debt - amount) [debt reduced, cash reserve increased]
+    //   2. during liquidation: 
+    //      a. x_virtual (-written_off_debt) = x_cash (constant) + (x_debt - written_off_debt)
+    //      b. y_virtual + (collateral_seized_amount) = y_cash + (collateral_seized_amount) + y_debt (constant)
+    //      c. x_virtual * y_virtual >= last_k
+    //      where collateral_seized amount value > reduced_debt value
+    // II. during insolvency: 
+    //   same as (2) but with collateral_seized amount value < reduced_debt value so k_new < k_old
+    //   reduced k means bad debt is accrued and socialized via LP math
+    // any surplus in repayment (r_virtual - r_cash) is protocol fee
+    pub fn decrease_debt(&mut self, pair: &mut Pair, debt_token: &Pubkey, amount: u64, reason: DebtDecreaseReason) -> Result<()> {
         match *debt_token == pair.token0 {
             true => {
                 let shares = (amount as u128)
@@ -106,6 +129,12 @@ impl UserPosition {
                 self.debt0_shares = self.debt0_shares.saturating_sub(shares);
                 pair.total_debt0_shares = pair.total_debt0_shares.saturating_sub(shares);
                 pair.total_debt0 = pair.total_debt0.saturating_sub(amount);
+                // if debt is repaid, add the amount to the cash reserve (avoid adding to cash reserve if debt is written off)
+                match reason {
+                    DebtDecreaseReason::Repayment => pair.cash_reserve0 = pair.cash_reserve0.saturating_add(amount),
+                    // r_virtual can't reach zero during write off
+                    DebtDecreaseReason::WriteOff => pair.reserve0 = pair.reserve0.checked_sub(amount).unwrap_or(1)
+                };
             }
             false => {
                 let shares = (amount as u128)
@@ -118,30 +147,12 @@ impl UserPosition {
                 self.debt1_shares = self.debt1_shares.saturating_sub(shares);
                 pair.total_debt1_shares = pair.total_debt1_shares.saturating_sub(shares);
                 pair.total_debt1 = pair.total_debt1.saturating_sub(amount);
+                match reason {
+                    DebtDecreaseReason::Repayment => pair.cash_reserve1 = pair.cash_reserve1.saturating_add(amount),
+                    DebtDecreaseReason::WriteOff => pair.reserve1 = pair.reserve1.checked_sub(amount).unwrap_or(1)
+                };
             }
         }
-        Ok(())
-    }
-
-    pub fn writeoff_debt(&mut self, pair: &mut Pair, debt_token: &Pubkey) -> Result<()> {
-        let debt_amount = match *debt_token == pair.token0 {
-            true => self.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
-            false => self.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
-        };
-
-        match *debt_token == pair.token0 {
-            true => {
-                pair.total_debt0_shares = pair.total_debt0_shares.saturating_sub(self.debt0_shares);
-                self.debt0_shares = 0;
-                pair.total_debt0 = pair.total_debt0.saturating_sub(debt_amount);
-            },
-            false => {
-                pair.total_debt1_shares = pair.total_debt1_shares.saturating_sub(self.debt1_shares);
-                self.debt1_shares = 0;
-                pair.total_debt1 = pair.total_debt1.saturating_sub(debt_amount);
-            },
-        };
-        
         Ok(())
     }
 

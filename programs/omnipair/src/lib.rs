@@ -52,9 +52,9 @@ pub mod omnipair {
         DistributeTokens::handle_distribute(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate(&args))]
-    pub fn claim_protocol_fees(ctx: Context<ClaimProtocolFees>, args: ClaimProtocolFeesArgs) -> Result<()> {
-        ClaimProtocolFees::handle_claim(ctx, args)
+    #[access_control(ctx.accounts.update())]
+    pub fn claim_protocol_fees(ctx: Context<ClaimProtocolFees>) -> Result<()> {
+        ClaimProtocolFees::handle_claim(ctx)
     }
 
     // Pair instructions
