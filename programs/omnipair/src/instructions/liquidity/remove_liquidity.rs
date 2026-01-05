@@ -82,6 +82,14 @@ impl<'info> AdjustLiquidity<'info> {
             ErrorCode::InsufficientLiquidity
         );
 
+        // Ensure sufficient cash reserves: (internally accounted instead of relying on token account balance for deciding liquidity availability)
+        // - Token account balances may include protocol fees and external donation, allowing them
+        //   to be higher than the virtual reserves (r_virtual).
+        // - If the invariant r_cash + r_debt = r_virtual is broken, the pool's solvency
+        //   assumption (r_virtual >= r_debt) may also be violated.
+        require_gte!(pair.cash_reserve0, amount0_out, ErrorCode::InsufficientCashReserve0);
+        require_gte!(pair.cash_reserve1, amount1_out, ErrorCode::InsufficientCashReserve1);
+
         // Transfer tokens from pool to user
         transfer_from_vault_to_user(
             pair.to_account_info(),
@@ -126,9 +134,13 @@ impl<'info> AdjustLiquidity<'info> {
         )?;
 
         // Update reserves
-        pair.reserve0 = pair.reserve0.checked_sub(amount0_out).ok_or(ErrorCode::ReserveOverflow)?;
-        pair.reserve1 = pair.reserve1.checked_sub(amount1_out).ok_or(ErrorCode::ReserveOverflow)?;
-        pair.total_supply = pair.total_supply.checked_sub(args.liquidity_in).ok_or(ErrorCode::SupplyOverflow)?;
+        pair.reserve0 = pair.reserve0.checked_sub(amount0_out).ok_or(ErrorCode::ReserveUnderflow)?;
+        pair.reserve1 = pair.reserve1.checked_sub(amount1_out).ok_or(ErrorCode::ReserveUnderflow)?;
+        pair.total_supply = pair.total_supply.checked_sub(args.liquidity_in).ok_or(ErrorCode::SupplyUnderflow)?;
+
+        // Update cash reserves
+        pair.cash_reserve0 = pair.cash_reserve0.checked_sub(amount0_out).ok_or(ErrorCode::CashReserveUnderflow)?;
+        pair.cash_reserve1 = pair.cash_reserve1.checked_sub(amount1_out).ok_or(ErrorCode::CashReserveUnderflow)?;
 
         // Reload LP token account to get updated balance after burn
         user_lp_token_account.reload()?;
@@ -160,6 +172,7 @@ impl<'info> AdjustLiquidity<'info> {
 
         emit_cpi!(UserLiquidityPositionUpdatedEvent {
             metadata: EventMetadata::new(ctx.accounts.user.key(), pair.key()),
+            // TODO: append cash reserves to the event
             token0_amount: user_token0_amount,
             token1_amount: user_token1_amount,
             lp_amount: user_lp_balance,

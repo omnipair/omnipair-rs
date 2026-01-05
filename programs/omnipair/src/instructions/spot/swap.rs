@@ -239,15 +239,25 @@ impl<'info> Swap<'info> {
             true => {
                 pair.reserve0 = new_reserve_in;
                 pair.reserve1 = new_reserve_out;
+                pair.cash_reserve0 = pair.cash_reserve0.saturating_add(amount_in_with_lp_fee);
+                pair.cash_reserve1 = pair.cash_reserve1.saturating_sub(amount_out);
             },
             false => {
                 pair.reserve1 = new_reserve_in;
                 pair.reserve0 = new_reserve_out;
+                pair.cash_reserve1 = pair.cash_reserve1.saturating_add(amount_in_with_lp_fee);
+                pair.cash_reserve0 = pair.cash_reserve0.saturating_sub(amount_out);
             }
         }
 
+        // 1. x * y >= last_k
         require_gte!((pair.reserve0 as u128).checked_mul(pair.reserve1 as u128).ok_or(ErrorCode::Overflow)?, last_k, ErrorCode::BrokenInvariant);
-        
+        // 2. r_cash >= r_out
+        match is_token0_in {
+            true => require_gte!(pair.cash_reserve1, amount_out, ErrorCode::InsufficientCashReserve1),
+            false => require_gte!(pair.cash_reserve0, amount_out, ErrorCode::InsufficientCashReserve0),
+        }
+
         // Transfer tokens
         transfer_from_user_to_vault(
             user.to_account_info(),
