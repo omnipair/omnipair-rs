@@ -65,7 +65,7 @@ fn curve_y_from_v(v: u128, r1: u64) -> u128 {
 ///
 /// Returns:
 /// - final_borrow_limit (NAD-scaled Y)
-/// - max_allowed_cf_bps (pessimistic_cf_bps - LTV_BUFFER_BPS)
+/// - max_allowed_cf_bps (liquidation_cf_bps * 95%)
 /// - liquidation_cf_bps 
 pub fn pessimistic_max_debt(
     collateral_amount_scaled: u64,
@@ -134,20 +134,15 @@ pub fn pessimistic_max_debt(
         )?
     };
 
-    // Max allowed CF BPS = pessimistic CF BPS - LTV_BUFFER_BPS
-    let max_allowed_cf_bps = liquidation_cf_bps.saturating_sub(LTV_BUFFER_BPS);
+    // Max allowed CF BPS = liquidation CF * (1 - LTV_BUFFER_BPS / BPS_DENOMINATOR)
+    // This creates a buffer between borrow limit and liquidation threshold
+    let max_allowed_cf_bps = ((liquidation_cf_bps as u32)
+        .saturating_mul((BPS_DENOMINATOR - LTV_BUFFER_BPS) as u32)
+        / BPS_DENOMINATOR as u32) as u16;
 
-    // Max allowed Y = V * max_allowed_cf_bps / BPS
-    let max_allowed_y: u128 = v
+    // Final borrow limit = V * max_allowed_cf_bps / BPS
+    let final_borrow_limit: u64 = v
         .saturating_mul(max_allowed_cf_bps as u128)
-        .checked_div(BPS_DENOMINATOR_U128)
-        .unwrap_or(0);
-
-    // Apply LTV buffer: reduce borrow limit by LTV_BUFFER_BPS to create a buffer before liquidation
-    // borrow_limit = max_allowed_y * (1 - LTV_BUFFER_BPS / BPS_DENOMINATOR)
-    let ltv_buffer_scaled = BPS_DENOMINATOR_U128.saturating_sub(LTV_BUFFER_BPS as u128);
-    let final_borrow_limit = max_allowed_y
-        .saturating_mul(ltv_buffer_scaled)
         .checked_div(BPS_DENOMINATOR_U128)
         .unwrap_or(0)
         .min(u64::MAX as u128) as u64;
