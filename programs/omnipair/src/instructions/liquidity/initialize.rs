@@ -20,7 +20,7 @@ use anchor_spl::metadata::{
 };
 use anchor_lang::solana_program::program_pack::Pack;
 use crate::state::{
-    pair::{Pair, VaultBumps},
+    pair::{Pair, VaultBumps, LastPriceEMA},
     rate_model::RateModel,
     futarchy_authority::FutarchyAuthority,
 };
@@ -503,8 +503,14 @@ impl<'info> InitializeAndBootstrap<'info> {
             .ok_or(ErrorCode::SupplyOverflow)?;
 
         // Initialize EMA prices based on initial liquidity
-        pair.last_price0_ema = pair.spot_price0_nad();
-        pair.last_price1_ema = pair.spot_price1_nad();
+        pair.last_price0_ema = LastPriceEMA {
+            symmetric: pair.spot_price0_nad(),
+            directional: pair.spot_price0_nad(),
+        };
+        pair.last_price1_ema = LastPriceEMA {
+            symmetric: pair.spot_price1_nad(),
+            directional: pair.spot_price1_nad(),
+        };
 
         let deployer_lp_balance = liquidity;
         let deployer_token0_amount = (deployer_lp_balance as u128)
