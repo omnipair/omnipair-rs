@@ -1,0 +1,23 @@
+[fuzz.metrics]
+enabled = true
+dashboard = true
+
+# *-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+# PROGRAMS
+
+[[fuzz.programs]]
+address = "Bd9Uhf5S8yzfop8cG9oqRs6jVcLtu8B4cb2gvRmtbNzk"
+program = "../target/deploy/omnipair.so"
+
+[[fuzz.programs]]
+address = "GmtswKBDrFZ9DfUfP7jbPFvbtuG7AJcX73SvoKWGxJbu"
+program = "../target/deploy/flashloan_receiver_example.so"
+
+
+# *-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+# MINTS
+
+# WSOL
+[[fuzz.accounts]]
+address = "So11111111111111111111111111111111111111112"
+filename = "./accounts/mints/wsol.json"
