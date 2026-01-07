@@ -230,9 +230,10 @@ impl Pair {
             collateral_spot_price,
             debt_amm_reserve,
             debt_total,
+            collateral_amm_reserve
         ) = match collateral_token == &pair.token0 {
-            true => (pair.ema_price0_nad(), pair.spot_price0_nad(), pair.reserve1, pair.total_debt1),
-            false => (pair.ema_price1_nad(), pair.spot_price1_nad(), pair.reserve0, pair.total_debt0),
+            true => (pair.ema_price0_nad(), pair.spot_price0_nad(), pair.reserve1, pair.total_debt1, pair.total_collateral1),
+            false => (pair.ema_price1_nad(), pair.spot_price1_nad(), pair.reserve0, pair.total_debt0, pair.total_collateral0),
         };
 
         // collateral factor should be based on the remaining cash reserves, not the total supply (virtual reserve)
@@ -245,6 +246,8 @@ impl Pair {
             collateral_ema_price,
             collateral_spot_price,
             cash_reserve,
+            collateral_amm_reserve,
+            debt_total,
             pair.fixed_cf_bps,
         )
     }

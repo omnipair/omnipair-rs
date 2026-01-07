@@ -7,50 +7,18 @@ use std::cmp::min;
 const NAD_U128: u128 = NAD as u128;
 const BPS_DENOMINATOR_U128: u128 = BPS_DENOMINATOR as u128;
 
-/// Exact curve solution: given V (NAD-scaled Y) and R1 (raw Y units),
-/// solve Y from Y = V * (1 - Y/R1)^2.
-/// Let a = V/R1, t = Y/R1. Then
-///   t = 2a / (2a + 1 + sqrt(4a + 1))
-/// Returns Y as NAD-scaled Y.
-#[inline]
-fn curve_y_from_v(v: u128, r1: u64) -> u128 {
-    if v == 0 || r1 == 0 {
-        return 0;
-    }
+// Util functions
+fn calculate_utilized_collateral(total_debt: u64, collateral_amm_reserve: u64, debt_amm_reserve: u64) -> Result<u64> {
+    let utilized_collateral_denominator = debt_amm_reserve.checked_sub(total_debt).unwrap();
+    let utilized_collateral = total_debt.checked_mul(collateral_amm_reserve).ok_or(ErrorCode::Overflow)?.checked_div(utilized_collateral_denominator).ok_or(ErrorCode::Overflow)?;
+    Ok(utilized_collateral)
+}
 
-    // a_scaled = a * NAD = (V/R1) * NAD
-    let a_scaled = v
-        .saturating_mul(NAD_U128)
-        / (r1 as u128);
-
-    // sqrt_term_scaled = NAD * sqrt(4a + 1)
-    // where 4a + 1 = (4*a_scaled + NAD) / NAD
-    // => sqrt_term_scaled = NAD * sqrt(4*a_scaled + NAD) / sqrt(NAD)
-    let sqrt_nad = NAD_U128.sqrt().expect("sqrt(NAD) must succeed");
-    let four_a_plus_one_num = a_scaled
-        .saturating_mul(4)
-        .saturating_add(NAD_U128);
-    let sqrt_num = four_a_plus_one_num.sqrt().unwrap_or(0);
-    let sqrt_term_scaled = NAD_U128
-        .saturating_mul(sqrt_num)
-        / sqrt_nad;
-
-    // t_scaled = NAD * 2a / (2a + 1 + sqrt(4a+1))
-    // with all terms scaled to NAD
-    let two_a_scaled = a_scaled.saturating_mul(2);
-    let denom = two_a_scaled
-        .saturating_add(NAD_U128)        // + 1
-        .saturating_add(sqrt_term_scaled) // + sqrt(4a+1)
-        .max(1);
-
-    let t_scaled = NAD_U128
-        .saturating_mul(two_a_scaled)
-        / denom;
-
-    // Y = R1 * t
-    (r1 as u128)
-        .saturating_mul(t_scaled)
-        / NAD_U128
+fn calculate_max_debt(utilized_collateral: u64, collateral_amm_reserve: u64, debt_amm_reserve: u64) -> Result<u64> {
+    let utilized_collateral_plus_user_collateral = utilized_collateral.checked_add(collateral_amm_reserve).unwrap();
+    let max_debt_denominator = utilized_collateral_plus_user_collateral.checked_add(collateral_amm_reserve).unwrap();
+    let max_debt = utilized_collateral_plus_user_collateral.checked_mul(debt_amm_reserve).unwrap().checked_div(max_debt_denominator).unwrap();
+    Ok(max_debt)
 }
 
 /// Maximum borrowable amount of tokenY using either a fixed CF or an impact-aware CF
@@ -72,6 +40,8 @@ pub fn pessimistic_max_debt(
     collateral_ema_price_scaled: u64,
     collateral_spot_price_scaled: u64,
     debt_amm_reserve: u64,
+    collateral_amm_reserve: u64,
+    total_debt: u64,
     fixed_cf_bps: Option<u16>,
 ) -> Result<(u64, u16, u16)> {
     // sanity checks
@@ -97,17 +67,16 @@ pub fn pessimistic_max_debt(
             return Ok((0, 0, 0));
         }
 
-        // Exact curve solution Y_curve (NAD-scaled)
-        let y_curve = curve_y_from_v(v, debt_amm_reserve);
+        // 0
+        let utilized_collateral = calculate_utilized_collateral(total_debt, collateral_amm_reserve, debt_amm_reserve)?;
 
-        // CF_curve = Y / V (bps)
-        if v > 0 {
-            (y_curve
-                .saturating_mul(BPS_DENOMINATOR_U128)
-                / v) as u64
-        } else {
-            return Ok((0, 0, 0));
-        }
+        // 1
+        let max_debt = calculate_max_debt(utilized_collateral, collateral_amm_reserve, debt_amm_reserve)?;
+
+        // 2
+        let user_max_debt = max_debt.checked_sub(total_debt).ok_or(ErrorCode::Overflow)?;
+
+        user_max_debt.checked_mul(BPS_DENOMINATOR_U128 as u64).ok_or(ErrorCode::Overflow)?.checked_div(v as u64).ok_or(ErrorCode::Overflow)? as u64
     };
 
     // Apply pessimistic spot/EMA divergence cap to prevent EMA lag front-running
