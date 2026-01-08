@@ -265,14 +265,14 @@ impl UserPosition {
     pub fn get_liquidation_cf_bps(&self, pair: &Pair, debt_token: &Pubkey) -> Result<u16> {
         match debt_token == &pair.token1 {
             true => {
-                let cf_bps = pair.get_max_debt_and_cf_bps_for_collateral(pair, &pair.token0, self.collateral0)?.2;
-                let min_cf_bps = self.collateral0_applied_min_cf_bps  + LTV_BUFFER_BPS;
-                Ok(max(cf_bps, min_cf_bps))
+                let (_, _, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(pair, &pair.token0, self.collateral0)?;
+                let min_cf_bps = self.collateral0_applied_min_cf_bps;
+                Ok(max(liquidation_cf_bps, min_cf_bps))
             },
             false => {
-                let cf_bps = pair.get_max_debt_and_cf_bps_for_collateral(pair, &pair.token1, self.collateral1)?.2;
-                let min_cf_bps = self.collateral1_applied_min_cf_bps  + LTV_BUFFER_BPS;
-                Ok(max(cf_bps, min_cf_bps))
+                let (_, _, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(pair, &pair.token1, self.collateral1)?;
+                let min_cf_bps = self.collateral1_applied_min_cf_bps;
+                Ok(max(liquidation_cf_bps, min_cf_bps))
             }
         }        
     }
