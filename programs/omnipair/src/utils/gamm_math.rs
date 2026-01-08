@@ -105,10 +105,12 @@ pub fn pessimistic_max_debt(
         return Ok((0, 0, 0));
     }
 
+    // Collateral Value (V) in debt token (Y) = Collateral Amount (X) * Collateral EMA Price (P_ema) / NAD
     // V = X * P_ema / NAD  (NAD-scaled Y)
-    let v = (collateral_amount_scaled as u128)
+    let collateral_value = (collateral_amount_scaled as u128)
         .saturating_mul(collateral_ema_price_scaled as u128)
-        / NAD_U128;
+        .checked_div(NAD_U128)
+        .ok_or(ErrorCode::Overflow)?;
 
     // Determine base CF: either fixed CF or dynamic AMM-based CF
     let base_cf_bps: u64 = if let Some(fixed_cf) = fixed_cf_bps {
@@ -133,7 +135,10 @@ pub fn pessimistic_max_debt(
         // 2. Calculate user max debt.
         let user_max_debt = max_allowed_total_debt.checked_sub(total_debt).unwrap_or(0);
 
-        user_max_debt.checked_mul(BPS_DENOMINATOR_U128 as u64).ok_or(ErrorCode::Overflow)?.checked_div(v as u64).ok_or(ErrorCode::Overflow)? as u64
+        // 3. Calculate base CF = user max debt * BPS_DENOMINATOR / Collateral Value (V)
+        user_max_debt
+        .saturating_mul(BPS_DENOMINATOR_U128 as u64)
+        .checked_div(collateral_value as u64).unwrap_or(0) as u64
     };
 
     // Apply pessimistic spot/EMA divergence cap to prevent EMA lag front-running
@@ -167,7 +172,7 @@ pub fn pessimistic_max_debt(
         / BPS_DENOMINATOR as u32) as u16;
 
     // Final borrow limit = V * max_allowed_cf_bps / BPS
-    let final_borrow_limit: u64 = v
+    let final_borrow_limit: u64 = collateral_value
         .saturating_mul(max_allowed_cf_bps as u128)
         .checked_div(BPS_DENOMINATOR_U128)
         .unwrap_or(0)
