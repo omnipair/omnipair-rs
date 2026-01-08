@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use crate::utils::math::SqrtU128;
 use crate::constants::*;
 use crate::errors::ErrorCode;
 use std::cmp::min;
@@ -7,18 +6,72 @@ use std::cmp::min;
 const NAD_U128: u128 = NAD as u128;
 const BPS_DENOMINATOR_U128: u128 = BPS_DENOMINATOR as u128;
 
-// Util functions
-fn calculate_utilized_collateral(total_debt: u64, collateral_amm_reserve: u64, debt_amm_reserve: u64) -> Result<u64> {
-    let utilized_collateral_denominator = debt_amm_reserve.checked_sub(total_debt).unwrap();
-    let utilized_collateral = total_debt.checked_mul(collateral_amm_reserve).ok_or(ErrorCode::Overflow)?.checked_div(utilized_collateral_denominator).ok_or(ErrorCode::Overflow)?;
-    Ok(utilized_collateral)
+/// Constant Product Curve (invariant: x * y = k)
+///
+/// Exposes two functions for computing swaps under the constant-product equality:
+///   (x + Δx) * (y − Δy) = x * y
+///
+/// Provides:
+///   - [`CPCurve::calculate_amount_out`]: Given amount_in and reserves, computes amount_out (“how much out for a given in”)
+///         Δy = (Δx * y) / (x + Δx)
+///   - [`CPCurve::calculate_amount_in`]:  Given desired amount_out and reserves, computes required amount_in (“how much in to get desired out”)
+///         Δx = (Δy * x) / (y - Δy)
+/// 
+/// Assumes no fees and integer division rounding down.
+pub struct CPCurve;
+
+impl CPCurve {
+    /// Calculate amount out given amount in.
+    /// ```text
+    /// Δy = (Δx * y) / (x + Δx)
+    /// amount_out = (amount_in * reserve_out) / (reserve_in + amount_in)
+    /// ```
+    pub fn calculate_amount_out(reserve_in: u64, reserve_out: u64, amount_in: u64) -> Result<u64> {
+        let denominator = (reserve_in as u128)
+            .checked_add(amount_in as u128)
+            .ok_or(ErrorCode::DenominatorOverflow)?;
+        let amount_out = (amount_in as u128)
+            .checked_mul(reserve_out as u128)
+            .ok_or(ErrorCode::OutputAmountOverflow)?
+            .checked_div(denominator)
+            .ok_or(ErrorCode::OutputAmountOverflow)?
+            .try_into()
+            .map_err(|_| ErrorCode::OutputAmountOverflow)?;
+        Ok(amount_out)
+    }
+
+    /// Calculate amount in required to obtain a given amount out.
+    /// ```text
+    /// Δx = (Δy * x) / (y - Δy)
+    /// amount_in = (amount_out * reserve_in) / (reserve_out - amount_out)
+    /// ```
+    pub fn calculate_amount_in(reserve_in: u64, reserve_out: u64, amount_out: u64) -> Result<u64> {
+        let denominator = (reserve_out as u128)
+            .checked_sub(amount_out as u128)
+            .ok_or(ErrorCode::DenominatorOverflow)?;
+        let amount_in = (amount_out as u128)
+            .checked_mul(reserve_in as u128)
+            .ok_or(ErrorCode::OutputAmountOverflow)?
+            .checked_div(denominator)
+            .ok_or(ErrorCode::OutputAmountOverflow)?
+            .try_into()
+            .map_err(|_| ErrorCode::OutputAmountOverflow)?;
+        Ok(amount_in)
+    }
 }
 
-fn calculate_max_debt(utilized_collateral: u64, collateral_amm_reserve: u64, debt_amm_reserve: u64) -> Result<u64> {
-    let utilized_collateral_plus_user_collateral = utilized_collateral.checked_add(collateral_amm_reserve).unwrap();
-    let max_debt_denominator = utilized_collateral_plus_user_collateral.checked_add(collateral_amm_reserve).unwrap();
-    let max_debt = utilized_collateral_plus_user_collateral.checked_mul(debt_amm_reserve).unwrap().checked_div(max_debt_denominator).unwrap();
-    Ok(max_debt)
+/// Calculates collateral (X) needed to repay a given debt (Y) via AMM swap.
+/// Answers: "How much X must be swapped to get `current_total_debt` Y out?"
+/// Includes price impact from the constant product curve.
+fn calculate_utilized_collateral_with_impact(current_total_debt: u64, collateral_amm_reserve: u64, debt_amm_reserve: u64) -> Result<u64> {
+    CPCurve::calculate_amount_in(collateral_amm_reserve, debt_amm_reserve, current_total_debt)
+}
+
+/// Calculates the pool's max total debt capacity given utilized + user collateral.
+/// Includes price impact from the constant product curve.
+fn calculate_max_allowed_total_debt(utilized_collateral: u64, user_collateral_amount: u64, collateral_amm_reserve: u64, debt_amm_reserve: u64) -> Result<u64> {
+    let total_collateral_amount = utilized_collateral.checked_add(user_collateral_amount).ok_or(ErrorCode::Overflow)?;
+    CPCurve::calculate_amount_out(debt_amm_reserve, collateral_amm_reserve, total_collateral_amount)
 }
 
 /// Maximum borrowable amount of tokenY using either a fixed CF or an impact-aware CF
@@ -39,8 +92,8 @@ pub fn pessimistic_max_debt(
     collateral_amount_scaled: u64,
     collateral_ema_price_scaled: u64,
     collateral_spot_price_scaled: u64,
-    debt_amm_reserve: u64,
     collateral_amm_reserve: u64,
+    debt_amm_reserve: u64,
     total_debt: u64,
     fixed_cf_bps: Option<u16>,
 ) -> Result<(u64, u16, u16)> {
@@ -67,14 +120,18 @@ pub fn pessimistic_max_debt(
             return Ok((0, 0, 0));
         }
 
-        // 0
-        let utilized_collateral = calculate_utilized_collateral(total_debt, collateral_amm_reserve, debt_amm_reserve)?;
+        // 0. Calculate utilized collateral with price impact.
+        let utilized_collateral = calculate_utilized_collateral_with_impact(total_debt, collateral_amm_reserve, debt_amm_reserve)?;
 
-        // 1
-        let max_debt = calculate_max_debt(utilized_collateral, collateral_amm_reserve, debt_amm_reserve)?;
+        // 1. Calculate max allowed total debt.
+        let max_allowed_total_debt = calculate_max_allowed_total_debt(
+            utilized_collateral,
+            collateral_amount_scaled, 
+            collateral_amm_reserve, 
+            debt_amm_reserve)?;
 
-        // 2
-        let user_max_debt = max_debt.checked_sub(total_debt).ok_or(ErrorCode::Overflow)?;
+        // 2. Calculate user max debt.
+        let user_max_debt = max_allowed_total_debt.checked_sub(total_debt).unwrap_or(0);
 
         user_max_debt.checked_mul(BPS_DENOMINATOR_U128 as u64).ok_or(ErrorCode::Overflow)?.checked_div(v as u64).ok_or(ErrorCode::Overflow)? as u64
     };
