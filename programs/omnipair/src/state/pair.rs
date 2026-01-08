@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
-use crate::utils::gamm_math::pessimistic_max_debt;
-use crate::utils::math::compute_ema;
+use crate::errors::ErrorCode;
+use crate::utils::{gamm_math::pessimistic_max_debt, math::{ceil_div, compute_ema}};
 use crate::state::RateModel;
 use crate::events::{UpdatePairEvent, EventMetadata};
 
@@ -305,15 +305,15 @@ impl Pair {
                 self.last_rate1 = new_rate1;
                 
                 // Calculate and apply interest
-                let total_interest0 = (self.total_debt0 as u128 * integral0 as u128) / NAD as u128;
-                let total_interest1 = (self.total_debt1 as u128 * integral1 as u128) / NAD as u128;
+                let total_interest0 = ceil_div(self.total_debt0 as u128 * integral0 as u128, NAD as u128).ok_or(ErrorCode::DebtMathOverflow)?;
+                let total_interest1 = ceil_div(self.total_debt1 as u128 * integral1 as u128, NAD as u128).ok_or(ErrorCode::DebtMathOverflow)?;
 
                 // Calculate protocol fee as an extra fee on top of interest (not a share of interest)
                 // Borrowers pay: interest + protocol_fee
                 // LPs receive: interest (full amount)
                 // Protocol receives: protocol_fee (extra fee charged to borrowers)
-                let protocol_fee0: u64 = ((total_interest0 as u128 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
-                let protocol_fee1: u64 = ((total_interest1 as u128 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
+                let protocol_fee0: u64 = ((total_interest0 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
+                let protocol_fee1: u64 = ((total_interest1 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
                 let lp_share0 = total_interest0 as u64;
                 let lp_share1 = total_interest1 as u64;
 
