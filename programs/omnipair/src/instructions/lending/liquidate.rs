@@ -235,7 +235,7 @@ impl<'info> Liquidate<'info> {
         let collateral_amount_post_liquidation = collateral_amount_pre_liquidation
             .checked_sub(collateral_final)
             .ok_or(ErrorCode::DebtMathOverflow)?;
-        let applied_min_cf_bps = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount_post_liquidation)?.1;
+        let (_, _, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount_post_liquidation)?;
 
         let caller_incentive = (collateral_final as u128)
             .checked_mul(LIQUIDATION_INCENTIVE_BPS as u128).ok_or(ErrorCode::DebtMathOverflow)?
@@ -251,7 +251,7 @@ impl<'info> Liquidate<'info> {
         } else {
             user_position.decrease_debt(pair, &debt_token, debt_to_repay)?;
         }
-        user_position.set_applied_min_cf_for_debt_token(&debt_token, &pair, applied_min_cf_bps);
+        user_position.set_applied_min_cf_for_debt_token(&debt_token, &pair, liquidation_cf_bps);
 
         // Transfer liquidation incentive to caller from collateral vault
         if caller_incentive > 0 {
