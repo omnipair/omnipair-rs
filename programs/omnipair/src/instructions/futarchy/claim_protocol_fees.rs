@@ -7,16 +7,10 @@ use anchor_spl::{
 use crate::{
     state::*,
     constants::*,
-    errors::ErrorCode,
     utils::token::transfer_from_vault_to_vault,
     generate_gamm_pair_seeds,
 };
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct ClaimProtocolFeesArgs {
-    pub amount0: u64,
-    pub amount1: u64,
-}
 
 #[derive(Accounts)]
 pub struct ClaimProtocolFees<'info> {
@@ -30,6 +24,12 @@ pub struct ClaimProtocolFees<'info> {
         bump
     )]
     pub pair: Account<'info, Pair>,
+
+    #[account(
+        mut,
+        address = pair.rate_model,
+    )]
+    pub rate_model: Account<'info, RateModel>,
 
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
@@ -88,78 +88,44 @@ pub struct ClaimProtocolFees<'info> {
 }
 
 impl<'info> ClaimProtocolFees<'info> {
-    pub fn validate(&self, args: &ClaimProtocolFeesArgs) -> Result<()> {
-        let ClaimProtocolFeesArgs { amount0, amount1 } = args;
-
-        require!(
-            *amount0 > 0 || *amount1 > 0,
-            ErrorCode::AmountZero
-        );
-
-        if *amount0 > 0 {
-            require_gte!(
-                self.pair.protocol_revenue_reserve0,
-                *amount0,
-                ErrorCode::InsufficientAmount0
-            );
-        }
-
-        if *amount1 > 0 {
-            require_gte!(
-                self.pair.protocol_revenue_reserve1,
-                *amount1,
-                ErrorCode::InsufficientAmount1
-            );
-        }
-
+    pub fn update(&mut self) -> Result<()> {
+        let pair_key = self.pair.to_account_info().key();
+        self.pair.update(&self.rate_model, &self.futarchy_authority, pair_key)?;
         Ok(())
     }
 
-    pub fn handle_claim(ctx: Context<Self>, args: ClaimProtocolFeesArgs) -> Result<()> {
-        let ClaimProtocolFeesArgs { amount0, amount1 } = args;
-        let pair = &mut ctx.accounts.pair;
+    pub fn handle_claim(ctx: Context<Self>) -> Result<()> {
+        let ClaimProtocolFees { pair, reserve0_vault, reserve1_vault, .. } = ctx.accounts;
+        let claimable_amount0 = reserve0_vault.amount.saturating_sub(pair.cash_reserve0);
+        let claimable_amount1 = reserve1_vault.amount.saturating_sub(pair.cash_reserve1);
 
-        if amount0 > 0 {
-            transfer_from_vault_to_vault(
-                pair.to_account_info(),
-                ctx.accounts.reserve0_vault.to_account_info(),
-                ctx.accounts.authority_token0_account.to_account_info(),
-                ctx.accounts.token0_mint.to_account_info(),
-                match ctx.accounts.token0_mint.to_account_info().owner == ctx.accounts.token_program.key {
-                    true => ctx.accounts.token_program.to_account_info(),
-                    false => ctx.accounts.token_2022_program.to_account_info(),
-                },
-                amount0,
-                ctx.accounts.token0_mint.decimals,
-                &[&generate_gamm_pair_seeds!(pair)[..]],
-            )?;
+        transfer_from_vault_to_vault(
+            pair.to_account_info(),
+            ctx.accounts.reserve0_vault.to_account_info(),
+            ctx.accounts.authority_token0_account.to_account_info(),
+            ctx.accounts.token0_mint.to_account_info(),
+            match ctx.accounts.token0_mint.to_account_info().owner == ctx.accounts.token_program.key {
+                true => ctx.accounts.token_program.to_account_info(),
+                false => ctx.accounts.token_2022_program.to_account_info(),
+            },
+            claimable_amount0,
+            ctx.accounts.token0_mint.decimals,
+            &[&generate_gamm_pair_seeds!(pair)[..]],
+        )?;
 
-            // Deduct from protocol revenue reserve
-            pair.protocol_revenue_reserve0 = pair.protocol_revenue_reserve0
-                .checked_sub(amount0)
-                .ok_or(ErrorCode::DebtMathOverflow)?;
-        }
-
-        if amount1 > 0 {
-            transfer_from_vault_to_vault(
-                pair.to_account_info(),
-                ctx.accounts.reserve1_vault.to_account_info(),
-                ctx.accounts.authority_token1_account.to_account_info(),
-                ctx.accounts.token1_mint.to_account_info(),
-                match ctx.accounts.token1_mint.to_account_info().owner == ctx.accounts.token_program.key {
-                    true => ctx.accounts.token_program.to_account_info(),
-                    false => ctx.accounts.token_2022_program.to_account_info(),
-                },
-                amount1,
-                ctx.accounts.token1_mint.decimals,
-                &[&generate_gamm_pair_seeds!(pair)[..]],
-            )?;
-
-            // Deduct from protocol revenue reserve
-            pair.protocol_revenue_reserve1 = pair.protocol_revenue_reserve1
-                .checked_sub(amount1)
-                .ok_or(ErrorCode::DebtMathOverflow)?;
-        }
+        transfer_from_vault_to_vault(
+            pair.to_account_info(),
+            ctx.accounts.reserve1_vault.to_account_info(),
+            ctx.accounts.authority_token1_account.to_account_info(),
+            ctx.accounts.token1_mint.to_account_info(),
+            match ctx.accounts.token1_mint.to_account_info().owner == ctx.accounts.token_program.key {
+                true => ctx.accounts.token_program.to_account_info(),
+                false => ctx.accounts.token_2022_program.to_account_info(),
+            },
+            claimable_amount1,
+            ctx.accounts.token1_mint.decimals,
+            &[&generate_gamm_pair_seeds!(pair)[..]],
+        )?;
 
         Ok(())
     }

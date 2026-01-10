@@ -56,6 +56,12 @@ pub enum ErrorCode {
     #[msg("Insufficient liquidity")]
     InsufficientLiquidity,
 
+    #[msg("Insufficient cash reserve0")]
+    InsufficientCashReserve0,
+
+    #[msg("Insufficient cash reserve1")]
+    InsufficientCashReserve1,
+
     #[msg("Arithmetic overflow")]
     Overflow,
 
@@ -95,6 +101,15 @@ pub enum ErrorCode {
     #[msg("Math overflow during reserve calculation.")]
     ReserveOverflow,
 
+    #[msg("Math underflow during reserve calculation.")]
+    ReserveUnderflow,
+
+    #[msg("Math underflow during cash reserve calculation.")]
+    CashReserveUnderflow,
+
+    #[msg("Math overflow during cash reserve calculation.")]
+    CashReserveOverflow,
+
     #[msg("Math overflow during denominator calculation.")]
     DenominatorOverflow,
 
@@ -112,6 +127,9 @@ pub enum ErrorCode {
 
     #[msg("Math overflow during supply calculation")]
     SupplyOverflow,
+
+    #[msg("Math underflow during supply calculation")]
+    SupplyUnderflow,
 
     #[msg("Math overflow during debt calculation")]
     DebtMathOverflow,
