@@ -13,6 +13,15 @@ pub struct VaultBumps {
     pub collateral1: u8,
 }
 
+/// Tracks exponential moving averages (EMAs) for the last observed price.
+/// - `symmetric`: standard two-way EMA (exponential price growth and decay)
+/// - `directional`: one-way bottom-up asymmetric EMA (exponential price growth, but snaps instantly on price drops)
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default)]
+pub struct LastPriceEMA {
+    pub symmetric: u64,
+    pub directional: u64,
+}
+
 #[account]
 pub struct Pair {
     // Token addresses
@@ -36,8 +45,8 @@ pub struct Pair {
     pub protocol_revenue_reserve1: u64,
     
     // Price tracking
-    pub last_price0_ema: u64,
-    pub last_price1_ema: u64,
+    pub last_price0_ema: LastPriceEMA,
+    pub last_price1_ema: LastPriceEMA,
     pub last_update: i64,
     
     // Rates
@@ -103,8 +112,14 @@ impl Pair {
             protocol_revenue_reserve1: 0,
             total_supply: MIN_LIQUIDITY,
 
-            last_price0_ema: 0,
-            last_price1_ema: 0,
+            last_price0_ema: LastPriceEMA {
+                symmetric: 0,
+                directional: 0,
+            },
+            last_price1_ema: LastPriceEMA {
+                symmetric: 0,
+                directional: 0,
+            },
             last_rate0: RateModel::bps_to_nad(INITIAL_RATE_BPS),
             last_rate1: RateModel::bps_to_nad(INITIAL_RATE_BPS),
 
@@ -166,10 +181,52 @@ impl Pair {
         } else {
             let spot_price = self.spot_price0_nad();
             compute_ema(
-                self.last_price0_ema, 
+                self.last_price0_ema.symmetric, 
                 self.last_update, 
                 spot_price, 
                 self.half_life
+            )
+        }
+    }
+
+    pub fn ema_price1_nad(&self) -> u64 {
+        if self.reserve1 == 0 {
+            0
+        } else {
+            let spot_price = self.spot_price1_nad();
+            compute_ema(
+                self.last_price1_ema.symmetric, 
+                self.last_update, 
+                spot_price, 
+                self.half_life
+            )
+        }
+    }
+
+    pub fn directional_ema_price0_nad(&self) -> u64 {
+        if self.reserve0 == 0 {
+            0
+        } else {
+            let spot_price = self.spot_price0_nad();
+            compute_ema(
+                self.last_price0_ema.directional, 
+                self.last_update, 
+                spot_price, 
+                DIRECTIONAL_EMA_HALF_LIFE
+            )
+        }
+    }
+
+    pub fn directional_ema_price1_nad(&self) -> u64 {
+        if self.reserve1 == 0 {
+            0
+        } else {
+            let spot_price = self.spot_price1_nad();
+            compute_ema(
+                self.last_price1_ema.directional, 
+                self.last_update, 
+                spot_price, 
+                DIRECTIONAL_EMA_HALF_LIFE
             )
         }
     }
@@ -194,20 +251,6 @@ impl Pair {
         ))
     }
 
-    pub fn ema_price1_nad(&self) -> u64 {
-        if self.reserve1 == 0 {
-            0
-        } else {
-            let spot_price = self.spot_price1_nad();
-            compute_ema(
-                self.last_price1_ema, 
-                self.last_update, 
-                spot_price, 
-                self.half_life
-            )
-        }
-    }
-
     pub fn is_initialized(&self) -> bool {
         self.reserve0 > 0 && self.reserve1 > 0 && self.total_supply > 0
     }
@@ -224,20 +267,25 @@ impl Pair {
     /// - The liquidation collateral factor in BPS (max_allowed_cf_bps - LTV_BUFFER_BPS)
     /// 
     /// If `fixed_cf_bps` is `Some`, uses the fixed collateral factor instead of dynamic calculation.
+    /// 
+    /// Computes collateral limits using directional and symmetric EMAs:
+    /// directional EMA replaces raw spot price in divergence logic,
+    /// enabling one_way_ema / two_way_ema comparisons rather than raw_spot/ema. 
+    /// This provides more front-running resistance by capturing quick price drops, while still smoothing upward movements.
     pub fn get_max_debt_and_cf_bps_for_collateral(&self, pair: &Pair, collateral_token: &Pubkey, collateral_amount: u64) -> Result<(u64, u16, u16)> {
         let (
             collateral_ema_price,
-            collateral_spot_price,
+            directional_ema_price,
             debt_amm_reserve,
         ) = match collateral_token == &pair.token0 {
-            true => (pair.ema_price0_nad(), pair.spot_price0_nad(), pair.reserve1),
-            false => (pair.ema_price1_nad(), pair.spot_price1_nad(), pair.reserve0),
+            true => (pair.ema_price0_nad(), pair.directional_ema_price0_nad(), pair.reserve1),
+            false => (pair.ema_price1_nad(), pair.directional_ema_price1_nad(), pair.reserve0),
         };
 
         pessimistic_max_debt(
             collateral_amount,
             collateral_ema_price,
-            collateral_spot_price,
+            directional_ema_price,
             debt_amm_reserve,
             pair.fixed_cf_bps,
         )
@@ -264,19 +312,38 @@ impl Pair {
             // Update oracles
             let time_elapsed = current_time - self.last_update;
             if time_elapsed > 0 {
+                let spot_price0 = self.spot_price0_nad();
+                let spot_price1 = self.spot_price1_nad();
+
                 // Update price EMAs
-                self.last_price0_ema = compute_ema(
-                    self.last_price0_ema,
+                self.last_price0_ema.symmetric = compute_ema(
+                    self.last_price0_ema.symmetric,
                     self.last_update,
-                    if self.reserve0 > 0 { ((self.reserve1 as u128 * NAD as u128) / self.reserve0 as u128) as u64 } else { 0 },
+                    spot_price0,
                     self.half_life
                 );
-                self.last_price1_ema = compute_ema(
-                    self.last_price1_ema,
+                self.last_price1_ema.symmetric = compute_ema(
+                    self.last_price1_ema.symmetric,
                     self.last_update,
-                    if self.reserve1 > 0 { ((self.reserve0 as u128 * NAD as u128) / self.reserve1 as u128) as u64 } else { 0 },
+                    spot_price1,
                     self.half_life
                 );
+
+                let new_ema0 = compute_ema(
+                    self.last_price0_ema.directional,
+                    self.last_update,
+                    spot_price0,
+                    DIRECTIONAL_EMA_HALF_LIFE
+                );
+                self.last_price0_ema.directional = if spot_price0 < new_ema0 { spot_price0 } else { new_ema0 };
+                
+                let new_ema1 = compute_ema(
+                    self.last_price1_ema.directional,
+                    self.last_update,
+                    spot_price1,
+                    DIRECTIONAL_EMA_HALF_LIFE
+                );
+                self.last_price1_ema.directional = if spot_price1 < new_ema1 { spot_price1 } else { new_ema1 };
                 
                 // Calculate utilization rates
                 let (util0, util1) = if self.reserve0 > 0 {
@@ -349,8 +416,8 @@ impl Pair {
 
                 emit!(UpdatePairEvent {
                     metadata: EventMetadata::new(Pubkey::default(), pair_key),
-                    price0_ema: self.last_price0_ema,
-                    price1_ema: self.last_price1_ema,
+                    price0_ema: self.last_price0_ema.symmetric,
+                    price1_ema: self.last_price1_ema.symmetric,
                     rate0: self.last_rate0,
                     rate1: self.last_rate1,
                     accrued_interest0: total_interest0,
