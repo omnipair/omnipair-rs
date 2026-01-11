@@ -233,8 +233,8 @@ impl Pair {
             debt_total,
             
         ) = match collateral_token == &pair.token0 {
-            true => (pair.ema_price0_nad(), pair.spot_price0_nad(), pair.total_collateral0, pair.reserve1, pair.total_debt1),
-            false => (pair.ema_price1_nad(), pair.spot_price1_nad(), pair.total_collateral1, pair.reserve0, pair.total_debt0),
+            true => (pair.ema_price0_nad(), pair.spot_price0_nad(), pair.reserve0, pair.reserve1, pair.total_debt1),
+            false => (pair.ema_price1_nad(), pair.spot_price1_nad(), pair.reserve1, pair.reserve0, pair.total_debt0),
         };
 
         pessimistic_max_debt(
