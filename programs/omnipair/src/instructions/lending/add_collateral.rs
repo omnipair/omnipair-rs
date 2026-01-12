@@ -171,7 +171,7 @@ impl<'info> AddCollateral<'info> {
         } else {
             user_position.collateral1
         };
-        let (_, max_allowed_cf_bps, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount)?;
+        let (_, _, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount)?;
         user_position.set_applied_min_cf_for_debt_token(&debt_token, &pair, liquidation_cf_bps);
 
         // Emit collateral adjustment event

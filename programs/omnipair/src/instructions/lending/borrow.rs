@@ -62,7 +62,7 @@ impl<'info> CommonAdjustDebt<'info> {
             true => user_position.collateral0,
             false => user_position.collateral1,
         };
-        let (borrow_limit, max_allowed_cf_bps, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount)?;
+        let (borrow_limit, _, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount)?;
         let is_max_borrow = args.amount == u64::MAX;
         let remaining_borrow_limit = borrow_limit.checked_sub(user_debt).ok_or(ErrorCode::DebtMathOverflow)?;
         let borrow_amount = if is_max_borrow { remaining_borrow_limit } else { args.amount };
