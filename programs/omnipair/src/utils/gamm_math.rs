@@ -52,6 +52,7 @@ impl CPCurve {
         let amount_in = (amount_out as u128)
             .checked_mul(reserve_in as u128)
             .ok_or(ErrorCode::OutputAmountOverflow)?
+            // TODO: Use ceil_div instead of floor to round in favor of the protocol.
             .checked_div(denominator)
             .ok_or(ErrorCode::OutputAmountOverflow)?
             .try_into()
