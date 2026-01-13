@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::errors::ErrorCode;
+use crate::utils::math::ceil_div;
 use std::cmp::min;
 
 const NAD_U128: u128 = NAD as u128;
@@ -49,11 +50,10 @@ impl CPCurve {
         let denominator = (reserve_out as u128)
             .checked_sub(amount_out as u128)
             .ok_or(ErrorCode::DenominatorOverflow)?;
-        let amount_in = (amount_out as u128)
+        let numerator = (amount_out as u128)
             .checked_mul(reserve_in as u128)
-            .ok_or(ErrorCode::OutputAmountOverflow)?
-            // TODO: Use ceil_div instead of floor to round in favor of the protocol.
-            .checked_div(denominator)
+            .ok_or(ErrorCode::OutputAmountOverflow)?;
+        let amount_in = ceil_div(numerator, denominator)
             .ok_or(ErrorCode::OutputAmountOverflow)?
             .try_into()
             .map_err(|_| ErrorCode::OutputAmountOverflow)?;
