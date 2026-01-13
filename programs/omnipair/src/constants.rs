@@ -20,6 +20,12 @@ pub const FLASHLOAN_FEE_BPS: u16 = 5; // 0.05%
 pub const LIQUIDATION_INCENTIVE_BPS: u16 = 300; // 3% liquidation incentive for caller
 #[constant]
 pub const PAIR_CREATION_FEE_LAMPORTS: u64 = 200_000_000; // 0.2 SOL
+// 3log2(100) = 19.93 secs (with 400ms slot time, this is ~50 slots)
+#[constant]
+pub const DIRECTIONAL_EMA_HALF_LIFE: u64 = 3; // 3 seconds
+/// The nominal slot duration in milliseconds.
+#[constant]
+pub const TARGET_MS_PER_SLOT: u64 = 400;
 
 
 // EMA constants
