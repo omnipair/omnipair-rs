@@ -20,7 +20,7 @@ use anchor_spl::metadata::{
 };
 use anchor_lang::solana_program::program_pack::Pack;
 use crate::state::{
-    pair::{Pair, VaultBumps},
+    pair::{Pair, VaultBumps, LastPriceEMA},
     rate_model::RateModel,
     futarchy_authority::FutarchyAuthority,
 };
@@ -268,7 +268,7 @@ impl<'info> InitializeAndBootstrap<'info> {
     }
 
     pub fn handle_initialize(ctx: Context<Self>, args: InitializeAndBootstrapArgs) -> Result<()> {
-        let current_time = Clock::get()?.unix_timestamp;
+        let current_slot = Clock::get()?.slot;
         let pair_key = ctx.accounts.pair.key();
         let pair = &mut ctx.accounts.pair;
         
@@ -348,7 +348,7 @@ impl<'info> InitializeAndBootstrap<'info> {
             swap_fee_bps,
             half_life,
             fixed_cf_bps,
-            current_time,
+            current_slot,
             params_hash,
             version,
             ctx.bumps.pair,
@@ -503,8 +503,14 @@ impl<'info> InitializeAndBootstrap<'info> {
             .ok_or(ErrorCode::SupplyOverflow)?;
 
         // Initialize EMA prices based on initial liquidity
-        pair.last_price0_ema = pair.spot_price0_nad();
-        pair.last_price1_ema = pair.spot_price1_nad();
+        pair.last_price0_ema = LastPriceEMA {
+            symmetric: pair.spot_price0_nad(),
+            directional: pair.spot_price0_nad(),
+        };
+        pair.last_price1_ema = LastPriceEMA {
+            symmetric: pair.spot_price1_nad(),
+            directional: pair.spot_price1_nad(),
+        };
 
         let deployer_lp_balance = liquidity;
         let deployer_token0_amount = (deployer_lp_balance as u128)
