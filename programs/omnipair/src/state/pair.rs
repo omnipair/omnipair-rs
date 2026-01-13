@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::utils::gamm_math::pessimistic_max_debt;
-use crate::utils::math::compute_ema;
+use crate::utils::math::{compute_ema, slots_to_secs};
 use crate::state::RateModel;
 use crate::events::{UpdatePairEvent, EventMetadata};
 
@@ -47,7 +47,7 @@ pub struct Pair {
     // Price tracking
     pub last_price0_ema: LastPriceEMA,
     pub last_price1_ema: LastPriceEMA,
-    pub last_update: i64,
+    pub last_update: u64,
     
     // Rates
     pub last_rate0: u64,
@@ -86,7 +86,7 @@ impl Pair {
         swap_fee_bps: u16,
         half_life: u64,
         fixed_cf_bps: Option<u16>,
-        current_time: i64,
+        current_slot: u64,
         params_hash: [u8; 32],
         version: u8,
         bump: u8,
@@ -104,7 +104,7 @@ impl Pair {
             swap_fee_bps,
             half_life,
             fixed_cf_bps,
-            last_update: current_time,
+            last_update: current_slot,
 
             reserve0: 0,
             reserve1: 0,
@@ -232,8 +232,8 @@ impl Pair {
     }
 
     pub fn get_rates(&self, rate_model: &Account<RateModel>) -> Result<(u64, u64)> {
-        let current_time = Clock::get()?.unix_timestamp;
-        let time_elapsed = current_time - self.last_update;
+        let current_slot = Clock::get()?.slot;
+        let time_elapsed = current_slot - self.last_update;
 
         let (util0, util1) = if self.reserve0 > 0 {
             (
@@ -306,11 +306,11 @@ impl Pair {
     }
 
     pub fn update(&mut self, rate_model: &Account<RateModel>, futarchy_authority: &crate::state::FutarchyAuthority, pair_key: Pubkey) -> Result<()> {
-        let current_time = Clock::get()?.unix_timestamp;
+        let current_slot = Clock::get()?.slot;
         
-        if current_time > self.last_update {
+        if current_slot > self.last_update {
             // Update oracles
-            let time_elapsed = current_time - self.last_update;
+            let time_elapsed = slots_to_secs(self.last_update, current_slot).unwrap();
             if time_elapsed > 0 {
                 let spot_price0 = self.spot_price0_nad();
                 let spot_price1 = self.spot_price1_nad();
@@ -429,7 +429,7 @@ impl Pair {
                 });
             }
             
-            self.last_update = current_time;
+            self.last_update = current_slot;
         }
         
         Ok(())

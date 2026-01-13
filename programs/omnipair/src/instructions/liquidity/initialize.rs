@@ -268,7 +268,7 @@ impl<'info> InitializeAndBootstrap<'info> {
     }
 
     pub fn handle_initialize(ctx: Context<Self>, args: InitializeAndBootstrapArgs) -> Result<()> {
-        let current_time = Clock::get()?.unix_timestamp;
+        let current_slot = Clock::get()?.slot;
         let pair_key = ctx.accounts.pair.key();
         let pair = &mut ctx.accounts.pair;
         
@@ -348,7 +348,7 @@ impl<'info> InitializeAndBootstrap<'info> {
             swap_fee_bps,
             half_life,
             fixed_cf_bps,
-            current_time,
+            current_slot,
             params_hash,
             version,
             ctx.bumps.pair,

@@ -1,10 +1,17 @@
 use crate::constants::*;
 use anchor_lang::prelude::{Clock, *};
 
-pub fn compute_ema(last_ema: u64, last_update: i64, input: u64, half_life: u64) -> u64 {
-    let current_time = Clock::get().unwrap().unix_timestamp;
-    
-    let dt = (current_time - last_update) as u64;
+/// Approximates the elapsed time in seconds between two slots, 
+/// based on the target milliseconds per slot.
+pub fn slots_to_secs(start_slot: u64, end_slot: u64) -> Option<u64> {
+    end_slot
+        .checked_sub(start_slot)?
+        .checked_mul(TARGET_MS_PER_SLOT)?
+        .checked_div(1000)
+}
+
+pub fn compute_ema(last_ema: u64, last_update: u64, input: u64, half_life: u64) -> u64 {
+    let dt = slots_to_secs(last_update, Clock::get().unwrap().slot).unwrap();
     
     if dt > 0 && half_life > 0 {
         // Calculate exp_time in NAD scale
