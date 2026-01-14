@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::errors::ErrorCode;
 use crate::utils::gamm_math::pessimistic_max_debt;
-use crate::utils::math::{compute_ema, slots_to_secs, ceil_div};
+use crate::utils::math::{compute_ema, slots_to_ms, ceil_div};
 use crate::state::RateModel;
 use crate::events::{UpdatePairEvent, EventMetadata};
 
@@ -213,7 +213,7 @@ impl Pair {
                 self.last_price0_ema.directional, 
                 self.last_update, 
                 spot_price, 
-                DIRECTIONAL_EMA_HALF_LIFE
+                DIRECTIONAL_EMA_HALF_LIFE_MS
             )
         }
     }
@@ -227,14 +227,14 @@ impl Pair {
                 self.last_price1_ema.directional, 
                 self.last_update, 
                 spot_price, 
-                DIRECTIONAL_EMA_HALF_LIFE
+                DIRECTIONAL_EMA_HALF_LIFE_MS
             )
         }
     }
 
     pub fn get_rates(&self, rate_model: &Account<RateModel>) -> Result<(u64, u64)> {
         let current_slot = Clock::get()?.slot;
-        let time_elapsed = current_slot - self.last_update;
+        let time_elapsed = slots_to_ms(self.last_update, current_slot).unwrap_or(0);
 
         let (util0, util1) = if self.reserve0 > 0 {
             (
@@ -247,8 +247,8 @@ impl Pair {
 
         
         Ok((
-            rate_model.calculate_rate(self.last_rate0, time_elapsed as u64, util0).0, 
-            rate_model.calculate_rate(self.last_rate1, time_elapsed as u64, util1).0
+            rate_model.calculate_rate(self.last_rate0, time_elapsed, util0).0, 
+            rate_model.calculate_rate(self.last_rate1, time_elapsed, util1).0
         ))
     }
 
@@ -316,7 +316,7 @@ impl Pair {
         
         if current_slot > self.last_update {
             // Update oracles
-            let time_elapsed = slots_to_secs(self.last_update, current_slot).unwrap();
+            let time_elapsed = slots_to_ms(self.last_update, current_slot).unwrap();
             if time_elapsed > 0 {
                 let spot_price0 = self.spot_price0_nad();
                 let spot_price1 = self.spot_price1_nad();
@@ -339,7 +339,7 @@ impl Pair {
                     self.last_price0_ema.directional,
                     self.last_update,
                     spot_price0,
-                    DIRECTIONAL_EMA_HALF_LIFE
+                    DIRECTIONAL_EMA_HALF_LIFE_MS
                 );
                 self.last_price0_ema.directional = if spot_price0 < new_ema0 { spot_price0 } else { new_ema0 };
                 
@@ -347,7 +347,7 @@ impl Pair {
                     self.last_price1_ema.directional,
                     self.last_update,
                     spot_price1,
-                    DIRECTIONAL_EMA_HALF_LIFE
+                    DIRECTIONAL_EMA_HALF_LIFE_MS
                 );
                 self.last_price1_ema.directional = if spot_price1 < new_ema1 { spot_price1 } else { new_ema1 };
                 
@@ -364,12 +364,12 @@ impl Pair {
                 // Calculate new rates
                 let (new_rate0, integral0) = rate_model.calculate_rate(
                     self.last_rate0, 
-                    time_elapsed as u64, 
+                    time_elapsed, 
                     util0
                 );
                 let (new_rate1, integral1) = rate_model.calculate_rate(
                     self.last_rate1, 
-                    time_elapsed as u64, 
+                    time_elapsed, 
                     util1
                 );
                 
