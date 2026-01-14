@@ -313,14 +313,17 @@ impl Pair {
 
     pub fn update(&mut self, rate_model: &Account<RateModel>, futarchy_authority: &crate::state::FutarchyAuthority, pair_key: Pubkey) -> Result<()> {
         let current_slot = Clock::get()?.slot;
+        let spot_price0 = self.spot_price0_nad();
+        let spot_price1 = self.spot_price1_nad();
+
+        // Always update directional EMAs, even within the same slot
+        self.last_price0_ema.directional = self.last_price0_ema.directional.min(spot_price0);
+        self.last_price1_ema.directional = self.last_price1_ema.directional.min(spot_price1);
         
         if current_slot > self.last_update {
             // Update oracles
             let time_elapsed = slots_to_ms(self.last_update, current_slot).unwrap();
             if time_elapsed > 0 {
-                let spot_price0 = self.spot_price0_nad();
-                let spot_price1 = self.spot_price1_nad();
-
                 // Update price EMAs
                 self.last_price0_ema.symmetric = compute_ema(
                     self.last_price0_ema.symmetric,
