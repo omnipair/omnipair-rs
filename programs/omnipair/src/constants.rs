@@ -17,8 +17,6 @@ pub const LTV_BUFFER_BPS: u16 = 500; // 5% buffer between borrow limit and liqui
 #[constant]
 pub const FLASHLOAN_FEE_BPS: u16 = 5; // 0.05%
 #[constant]
-pub const LIQUIDATION_INCENTIVE_BPS: u16 = 300; // 3% liquidation incentive for caller
-#[constant]
 pub const LIQUIDATION_PENALTY_BPS: u16 = 500; // 5% liquidation penalty on collateral
 #[constant]
 pub const PAIR_CREATION_FEE_LAMPORTS: u64 = 200_000_000; // 0.2 SOL
