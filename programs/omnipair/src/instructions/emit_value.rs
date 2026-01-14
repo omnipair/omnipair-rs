@@ -3,6 +3,7 @@ use crate::state::{Pair, UserPosition, RateModel, FutarchyAuthority};
 use std::fmt;
 use crate::errors::ErrorCode;
 use crate::constants::*;
+use crate::utils::gamm_math::{CPCurve, construct_virtual_reserves_at_pessimistic_price};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
 pub enum OptionalUint {
@@ -88,6 +89,7 @@ pub enum UserPositionViewKind {
     UserDebtUtilizationBps,
     UserLiquidationPrice,
     UserDebtWithInterest,
+    UserIsLiquidatable,
 }
 impl fmt::Display for UserPositionViewKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -98,6 +100,7 @@ impl fmt::Display for UserPositionViewKind {
             UserPositionViewKind::UserDebtUtilizationBps => write!(f, "UserDebtUtilizationBps"),
             UserPositionViewKind::UserLiquidationPrice => write!(f, "UserLiquidationPrice"),
             UserPositionViewKind::UserDebtWithInterest => write!(f, "UserDebtWithInterest"),
+            UserPositionViewKind::UserIsLiquidatable => write!(f, "UserIsLiquidatable"),
         }
     }
 }
@@ -229,6 +232,56 @@ impl ViewUserPositionData<'_> {
                 OptionalUint::from_u64(user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares).unwrap()),
                 OptionalUint::from_u64(user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares).unwrap())
             ),
+            UserPositionViewKind::UserIsLiquidatable => {
+                // Check liquidatability for both directions using price impact
+                // Returns (is_liquidatable_with_token0_collateral, is_liquidatable_with_token1_collateral)
+                
+                // Token0 as collateral, Token1 as debt
+                let is_liquidatable_0 = {
+                    let user_debt = user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares).unwrap_or(0);
+                    let user_collateral = user_position.collateral0;
+                    let liquidation_cf = user_position.get_liquidation_cf_bps(&pair, &pair.token1).unwrap_or(0);
+                    
+                    if user_debt == 0 || user_collateral == 0 {
+                        0u64
+                    } else {
+                        let (x_virt, y_virt) = construct_virtual_reserves_at_pessimistic_price(
+                            pair.reserve0, pair.reserve1, pair.ema_price0_nad(), pair.ema_price0_nad()
+                        ).unwrap_or((pair.reserve0, pair.reserve1));
+                        
+                        let collateral_value = CPCurve::calculate_amount_out(y_virt, x_virt, user_collateral).unwrap_or(0);
+                        let borrow_limit = (collateral_value as u128)
+                            .saturating_mul(liquidation_cf as u128)
+                            .checked_div(BPS_DENOMINATOR as u128).unwrap_or(0);
+                        
+                        if (user_debt as u128) >= borrow_limit { 1 } else { 0 }
+                    }
+                };
+                
+                // Token1 as collateral, Token0 as debt
+                let is_liquidatable_1 = {
+                    let user_debt = user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares).unwrap_or(0);
+                    let user_collateral = user_position.collateral1;
+                    let liquidation_cf = user_position.get_liquidation_cf_bps(&pair, &pair.token0).unwrap_or(0);
+                    
+                    if user_debt == 0 || user_collateral == 0 {
+                        0u64
+                    } else {
+                        let (x_virt, y_virt) = construct_virtual_reserves_at_pessimistic_price(
+                            pair.reserve1, pair.reserve0, pair.ema_price1_nad(), pair.ema_price1_nad()
+                        ).unwrap_or((pair.reserve1, pair.reserve0));
+                        
+                        let collateral_value = CPCurve::calculate_amount_out(y_virt, x_virt, user_collateral).unwrap_or(0);
+                        let borrow_limit = (collateral_value as u128)
+                            .saturating_mul(liquidation_cf as u128)
+                            .checked_div(BPS_DENOMINATOR as u128).unwrap_or(0);
+                        
+                        if (user_debt as u128) >= borrow_limit { 1 } else { 0 }
+                    }
+                };
+                
+                (OptionalUint::from_u64(is_liquidatable_0), OptionalUint::from_u64(is_liquidatable_1))
+            },
         };
 
         msg!("{}: {:?}", getter, value);
