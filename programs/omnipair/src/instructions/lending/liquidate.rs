@@ -11,7 +11,11 @@ use crate::{
     errors::ErrorCode,
     events::{UserPositionLiquidatedEvent, EventMetadata},
     state::user_position::UserPosition,
-    utils::{token::{transfer_from_vault_to_user, transfer_from_vault_to_vault}, math::ceil_div},
+    utils::{
+        token::{transfer_from_vault_to_user, transfer_from_vault_to_vault}, 
+        math::ceil_div,
+        gamm_math::{CPCurve, construct_virtual_reserves_at_pessimistic_price},
+    },
     generate_gamm_pair_seeds,
 };
 
@@ -169,40 +173,53 @@ impl<'info> Liquidate<'info> {
         let liquidation_cf_bps = user_position.get_liquidation_cf_bps(pair, &debt_token)?;
         let k0 = pair.k(); // k before liquidation
 
-        // Compute debt
-
-        let (user_debt, collateral_amount, collateral_price_nad) = match is_collateral_token0 {
+        let (
+            user_debt, 
+            debt_reserve, 
+            user_collateral, 
+            collateral_reserve, 
+            collateral_ema_nad
+        )  = match is_collateral_token0 {
             true => (
                 // collateral is token0, debt is token1
                 user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
-                user_position.collateral0 as u128, 
-                pair.ema_price0_nad() as u128
+                pair.reserve1, 
+                user_position.collateral0, 
+                pair.reserve0, 
+                pair.ema_price0_nad()
             ),
             false => (
                 // collateral is token1, debt is token0
-                user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?, 
-                user_position.collateral1 as u128, 
-                pair.ema_price1_nad() as u128
+                user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
+                pair.reserve0,
+                user_position.collateral1, 
+                pair.reserve1, 
+                pair.ema_price1_nad()
             ),
         };
 
-        let collateral_value = collateral_amount
-        .checked_mul(collateral_price_nad).ok_or(ErrorCode::DebtMathOverflow)?
-        .checked_div(NAD as u128).ok_or(ErrorCode::DebtMathOverflow)?;
+        // Construct virtual reserves at pessimistic price
+        let (x_virt, y_virt) = construct_virtual_reserves_at_pessimistic_price(
+            collateral_reserve, debt_reserve, collateral_ema_nad, collateral_ema_nad
+        )?;
 
-        // Compute borrow limit using fixed liquidation CF
-        let borrow_limit = collateral_value
-        .checked_mul(liquidation_cf_bps as u128).ok_or(ErrorCode::DebtMathOverflow)?
-        .checked_div(BPS_DENOMINATOR as u128).ok_or(ErrorCode::DebtMathOverflow)?;
+        // Collateral value with impact: debt coverable by selling all collateral
+        let collateral_value_with_impact = CPCurve::calculate_amount_out(y_virt, x_virt, user_collateral)?;
+        
+        // Borrow limit = collateral_value * liquidation_cf
+        let borrow_limit = (collateral_value_with_impact as u128)
+            .checked_mul(liquidation_cf_bps as u128).ok_or(ErrorCode::DebtMathOverflow)?
+            .checked_div(BPS_DENOMINATOR as u128).ok_or(ErrorCode::DebtMathOverflow)?;
 
-        // Check if position is undercollateralized
+        // Position is liquidatable if debt >= borrow_limit
         require_gte!(user_debt as u128, borrow_limit, ErrorCode::NotUndercollateralized);
-
+ 
         // Health Factor (HF) < 1: undercollateralized (liquidatable)
         // collateral_value > user_debt > borrow_limit: position can be liquidated partially
         // user_debt > collateral_value: insolvent (bad debt, collateral can't cover principal)
         // If insolvent, repay all debt; else, repay a portion using close factor (partial liquidation)
-        let is_insolvent = user_debt as u128 > collateral_value;
+        let is_insolvent = user_debt > collateral_value_with_impact;
+
         let debt_to_repay: u64 = if is_insolvent {
             user_debt
         } else {
@@ -213,22 +230,12 @@ impl<'info> Liquidate<'info> {
             ).ok_or(ErrorCode::DebtMathOverflow)?;
             core::cmp::min(user_debt, partial as u64)
         };
-
-        // collateral_amount_to_seize = debt_to_repay * NAD / collateral_price
-        let collateral_amount_to_seize = ceil_div(
-            (debt_to_repay as u128)
-                .checked_mul(NAD as u128).ok_or(ErrorCode::DebtMathOverflow)?,
-            collateral_price_nad
-        ).ok_or(ErrorCode::DebtMathOverflow)?;
-
-        let collateral_amount_to_seize_u64: u64 = collateral_amount_to_seize
-            .try_into()
-            .map_err(|_| ErrorCode::DebtMathOverflow)?;
+        
+        // Calculate collateral to seize with price impact: Δx = Δy * x / (y - Δy)
+        let collateral_amount_to_seize_u64 = CPCurve::calculate_amount_in(x_virt, y_virt, debt_to_repay)?;
 
         // Clamp to what user actually has
-        let collateral_final = core::cmp::min(collateral_amount_to_seize_u64,
-            if is_collateral_token0 { user_position.collateral0 } else { user_position.collateral1 }
-        );
+        let collateral_final = core::cmp::min(collateral_amount_to_seize_u64, user_collateral);
 
         let collateral_token = pair.get_collateral_token(&debt_token);
         let collateral_amount_pre_liquidation = match collateral_token == pair.token0 {
@@ -317,7 +324,7 @@ impl<'info> Liquidate<'info> {
             debt0_liquidated: if is_collateral_token0 { 0 } else { debt_to_repay },
             debt1_liquidated: if is_collateral_token0 { debt_to_repay } else { 0 },
             collateral_price: if is_collateral_token0 { pair.ema_price0_nad() } else { pair.ema_price1_nad() },
-            shortfall: if is_insolvent { (user_debt as u128).checked_sub(collateral_value).unwrap() } else { 0 },
+            shortfall: if is_insolvent { (user_debt as u128).saturating_sub(collateral_value_with_impact as u128) } else { 0 },
             liquidation_bonus_applied: caller_incentive,
             k0: k0,
             k1: pair.k(),
