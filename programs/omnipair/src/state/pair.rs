@@ -276,7 +276,7 @@ impl Pair {
     pub fn get_max_debt_and_cf_bps_for_collateral(&self, pair: &Pair, collateral_token: &Pubkey, collateral_amount: u64) -> Result<(u64, u16, u16)> {
         let (
             collateral_ema_price,
-            directional_ema_price,
+            collateral_directional_ema_price,
             collateral_amm_reserve,
             debt_amm_reserve,
             debt_total,
@@ -289,7 +289,7 @@ impl Pair {
         pessimistic_max_debt(
             collateral_amount,
             collateral_ema_price,
-            directional_ema_price,
+            collateral_directional_ema_price, // will jump down immediately to a new low, but rise gradually in ~ 50 slots (~20 seconds)
             collateral_amm_reserve,
             debt_amm_reserve,
             debt_total,
