@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use std::cmp::min;
 use anchor_spl::{
     token::{Token, TokenAccount, Mint},
     token_interface::{Token2022},
@@ -228,14 +229,21 @@ impl<'info> Liquidate<'info> {
                     .checked_mul(CLOSE_FACTOR_BPS as u128).ok_or(ErrorCode::DebtMathOverflow)?,
                 BPS_DENOMINATOR as u128
             ).ok_or(ErrorCode::DebtMathOverflow)?;
-            core::cmp::min(user_debt, partial as u64)
+            min(user_debt, partial as u64)
         };
         
-        // Calculate collateral to seize with price impact: Δx = Δy * x / (y - Δy)
-        let collateral_amount_to_seize_u64 = CPCurve::calculate_amount_in(x_virt, y_virt, debt_to_repay)?;
+        // Calculate base collateral to seize with price impact: Δx = Δy * x / (y - Δy)
+        let collateral_base = CPCurve::calculate_amount_in(x_virt, y_virt, debt_to_repay)?;
+
+        // Add liquidation penalty on top (paid by borrower, benefits LPs)
+        // total_seized = base * (1 + LIQUIDATION_PENALTY_BPS / BPS)
+        let collateral_with_penalty = (collateral_base as u128)
+            .checked_mul((BPS_DENOMINATOR + LIQUIDATION_PENALTY_BPS) as u128).ok_or(ErrorCode::DebtMathOverflow)?
+            .checked_div(BPS_DENOMINATOR as u128).ok_or(ErrorCode::DebtMathOverflow)?;
 
         // Clamp to what user actually has
-        let collateral_final = core::cmp::min(collateral_amount_to_seize_u64, user_collateral);
+        let collateral_final: u64 = min(collateral_with_penalty, user_collateral as u128)
+            .try_into().map_err(|_| ErrorCode::DebtMathOverflow)?;
 
         let collateral_token = pair.get_collateral_token(&debt_token);
         let collateral_amount_pre_liquidation = match collateral_token == pair.token0 {
@@ -248,11 +256,13 @@ impl<'info> Liquidate<'info> {
             .ok_or(ErrorCode::DebtMathOverflow)?;
         let (_, _, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount_post_liquidation)?;
 
-        let caller_incentive = (collateral_final as u128)
+        // Liquidator incentive from base amount (not from penalty)
+        let caller_incentive: u64 = (collateral_base as u128)
             .checked_mul(LIQUIDATION_INCENTIVE_BPS as u128).ok_or(ErrorCode::DebtMathOverflow)?
-            .checked_div(BPS_DENOMINATOR as u128).ok_or(ErrorCode::DebtMathOverflow)?.try_into().map_err(|_| ErrorCode::DebtMathOverflow)?;
+            .checked_div(BPS_DENOMINATOR as u128).ok_or(ErrorCode::DebtMathOverflow)?
+            .try_into().map_err(|_| ErrorCode::DebtMathOverflow)?;
         
-        // Remaining collateral goes to reserves (after incentive)
+        // Remaining collateral goes to reserves (LPs get base + penalty - incentive)
         let collateral_to_reserves = collateral_final
             .checked_sub(caller_incentive)
             .ok_or(ErrorCode::DebtMathOverflow)?;
