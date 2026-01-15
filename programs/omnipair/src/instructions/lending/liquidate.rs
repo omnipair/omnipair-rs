@@ -13,7 +13,7 @@ use crate::{
     events::{UserPositionLiquidatedEvent, EventMetadata},
     state::user_position::UserPosition,
     utils::{
-        token::transfer_from_vault_to_vault, 
+        token::{transfer_from_vault_to_user, transfer_from_vault_to_vault}, 
         math::ceil_div,
         gamm_math::{CPCurve, construct_virtual_reserves_at_pessimistic_price},
     },
@@ -139,6 +139,7 @@ impl<'info> Liquidate<'info> {
     pub fn handle_liquidate(ctx: Context<Self>) -> Result<()> {
         let Liquidate {
             collateral_vault,
+            caller_token_account,
             collateral_token_mint,
             reserve_vault,
             position_owner,
@@ -255,8 +256,16 @@ impl<'info> Liquidate<'info> {
             .ok_or(ErrorCode::DebtMathOverflow)?;
         let (_, _, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount_post_liquidation)?;
 
-        // All seized collateral (base + penalty) goes to reserves (LPs)
-        let collateral_to_reserves = collateral_final;
+        // Liquidator incentive from base amount (not from penalty)
+        let caller_incentive: u64 = (collateral_base as u128)
+            .checked_mul(LIQUIDATION_INCENTIVE_BPS as u128).ok_or(ErrorCode::DebtMathOverflow)?
+            .checked_div(BPS_DENOMINATOR as u128).ok_or(ErrorCode::DebtMathOverflow)?
+            .try_into().map_err(|_| ErrorCode::DebtMathOverflow)?;
+        
+        // Remaining collateral goes to reserves (LPs get base + penalty - incentive)
+        let collateral_to_reserves = collateral_final
+            .checked_sub(caller_incentive)
+            .ok_or(ErrorCode::DebtMathOverflow)?;
 
         if is_insolvent {
             user_position.writeoff_debt(pair, &debt_token)?;
@@ -265,7 +274,24 @@ impl<'info> Liquidate<'info> {
         }
         user_position.set_applied_min_cf_for_debt_token(&debt_token, &pair, liquidation_cf_bps);
 
-        // Transfer all seized collateral from collateral vault to reserve vault (LPs)
+        // Transfer liquidation incentive to caller from collateral vault
+        if caller_incentive > 0 {
+            transfer_from_vault_to_user(
+                pair.to_account_info(),
+                collateral_vault.to_account_info(),
+                caller_token_account.to_account_info(),
+                collateral_token_mint.to_account_info(),
+                match collateral_token_mint.to_account_info().owner == token_program.key {
+                    true => token_program.to_account_info(),
+                    false => token_2022_program.to_account_info(),
+                },
+                caller_incentive,
+                collateral_token_mint.decimals,
+                &[&generate_gamm_pair_seeds!(pair)[..]],
+            )?;
+        }
+
+        // Transfer remaining collateral from collateral vault to reserve vault
         transfer_from_vault_to_vault(
             pair.to_account_info(),
             collateral_vault.to_account_info(),
@@ -309,7 +335,7 @@ impl<'info> Liquidate<'info> {
             debt1_liquidated: if is_collateral_token0 { debt_to_repay } else { 0 },
             collateral_price: if is_collateral_token0 { pair.ema_price0_nad() } else { pair.ema_price1_nad() },
             shortfall: if is_insolvent { (user_debt as u128).saturating_sub(collateral_value_with_impact as u128) } else { 0 },
-            liquidation_bonus_applied: collateral_final.saturating_sub(collateral_base),
+            liquidation_bonus_applied: caller_incentive,
             k0: k0,
             k1: pair.k(),
         });
