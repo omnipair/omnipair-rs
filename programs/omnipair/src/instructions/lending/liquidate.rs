@@ -237,9 +237,12 @@ impl<'info> Liquidate<'info> {
 
         // Add liquidation penalty on top (paid by borrower, benefits LPs)
         // total_seized = base * (1 + LIQUIDATION_PENALTY_BPS / BPS)
-        let collateral_with_penalty = (collateral_base as u128)
-            .checked_mul((BPS_DENOMINATOR + LIQUIDATION_PENALTY_BPS) as u128).ok_or(ErrorCode::DebtMathOverflow)?
-            .checked_div(BPS_DENOMINATOR as u128).ok_or(ErrorCode::DebtMathOverflow)?;
+        let collateral_with_penalty = ceil_div(
+            (collateral_base as u128)
+                .checked_mul((BPS_DENOMINATOR + LIQUIDATION_PENALTY_BPS) as u128)
+                .ok_or(ErrorCode::DebtMathOverflow)?,
+            BPS_DENOMINATOR as u128
+        ).ok_or(ErrorCode::DebtMathOverflow)?;
 
         // Clamp to what user actually has
         let collateral_final: u64 = min(collateral_with_penalty, user_collateral as u128)
