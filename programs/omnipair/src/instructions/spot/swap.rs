@@ -234,7 +234,13 @@ impl<'info> Swap<'info> {
         let new_reserve_out = reserve_out.checked_sub(amount_out).ok_or(ErrorCode::Overflow)?;
 
         require_gte!(amount_out, min_amount_out, ErrorCode::InsufficientOutputAmount);
+        // 1. r_cash >= r_out
+        match is_token0_in {
+            true => require_gte!(pair.cash_reserve1, amount_out, ErrorCode::InsufficientCashReserve1),
+            false => require_gte!(pair.cash_reserve0, amount_out, ErrorCode::InsufficientCashReserve0),
+        }
 
+        // Update reserves
         match is_token0_in {
             true => {
                 pair.reserve0 = new_reserve_in;
@@ -250,13 +256,8 @@ impl<'info> Swap<'info> {
             }
         }
 
-        // 1. x * y >= last_k
+        // 2. x * y >= last_k
         require_gte!((pair.reserve0 as u128).checked_mul(pair.reserve1 as u128).ok_or(ErrorCode::Overflow)?, last_k, ErrorCode::BrokenInvariant);
-        // 2. r_cash >= r_out
-        match is_token0_in {
-            true => require_gte!(pair.cash_reserve1, amount_out, ErrorCode::InsufficientCashReserve1),
-            false => require_gte!(pair.cash_reserve0, amount_out, ErrorCode::InsufficientCashReserve0),
-        }
 
         // Transfer tokens
         transfer_from_user_to_vault(
