@@ -78,10 +78,10 @@ impl<'info> CommonAdjustDebt<'info> {
             ErrorCode::BorrowingPowerExceeded
         );
 
-        // enforce r_cash >= r_debt_out
+        // r_cash >= r_debt_out
         match is_token0 {
-            true => require_gte!(pair.cash_reserve0, new_debt, ErrorCode::InsufficientCashReserve0),
-            false => require_gte!(pair.cash_reserve1, new_debt, ErrorCode::InsufficientCashReserve1)
+            true => require_gte!(pair.cash_reserve0, borrow_amount, ErrorCode::InsufficientCashReserve0),
+            false => require_gte!(pair.cash_reserve1, borrow_amount, ErrorCode::InsufficientCashReserve1)
         };
 
         // Transfer tokens from vault to user
