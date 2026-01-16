@@ -1,10 +1,15 @@
 use crate::constants::*;
 use anchor_lang::prelude::{Clock, *};
 
-pub fn compute_ema(last_ema: u64, last_update: i64, input: u64, half_life: u64) -> u64 {
-    let current_time = Clock::get().unwrap().unix_timestamp;
-    
-    let dt = (current_time - last_update) as u64;
+/// Approximates the elapsed time in milliseconds between two slots.
+pub fn slots_to_ms(start_slot: u64, end_slot: u64) -> Option<u64> {
+    end_slot
+        .checked_sub(start_slot)?
+        .checked_mul(TARGET_MS_PER_SLOT)
+}
+
+pub fn compute_ema(last_ema: u64, last_update: u64, input: u64, half_life: u64) -> u64 {
+    let dt = slots_to_ms(last_update, Clock::get().unwrap().slot).unwrap();
     
     if dt > 0 && half_life > 0 {
         // Calculate exp_time in NAD scale
@@ -157,4 +162,12 @@ pub fn normalize_two_values_to_nad(
     normalize_two_values_to_scale(a, a_decimals, b, NAD_DECIMALS)
 }
 
-        
+/// Ceiling division: rounds up to the nearest integer
+/// Formula: ceil(a / b) = (a + b - 1) / b
+/// Returns None on overflow
+pub fn ceil_div(a: u128, b: u128) -> Option<u128> {
+    if b == 0 {
+        return None;
+    }
+    a.checked_add(b - 1)?.checked_div(b)
+}

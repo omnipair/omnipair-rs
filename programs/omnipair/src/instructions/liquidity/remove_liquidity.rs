@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::errors::ErrorCode;
 use crate::constants::*;
+use crate::utils::math::ceil_div;
 use crate::utils::token::{transfer_from_vault_to_user, token_burn};
 use crate::generate_gamm_pair_seeds;
 use crate::liquidity::common::AdjustLiquidity;
@@ -55,22 +56,37 @@ impl<'info> AdjustLiquidity<'info> {
             ..
         } = ctx.accounts;
 
-        // Calculate amounts to remove
+        // Calculate amounts to remove (before fee)
         let total_supply = pair.total_supply;
-        let amount0_out = (args.liquidity_in as u128)
+        let amount0_gross: u64 = (args.liquidity_in as u128)
             .checked_mul(pair.reserve0 as u128)
             .ok_or(ErrorCode::LiquidityMathOverflow)?
             .checked_div(total_supply as u128)
             .ok_or(ErrorCode::LiquidityMathOverflow)?
             .try_into()
             .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
-        let amount1_out = (args.liquidity_in as u128)
+        let amount1_gross: u64 = (args.liquidity_in as u128)
             .checked_mul(pair.reserve1 as u128)
             .ok_or(ErrorCode::LiquidityMathOverflow)?
             .checked_div(total_supply as u128)
             .ok_or(ErrorCode::LiquidityMathOverflow)?
             .try_into()
             .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
+
+        // Apply withdrawal fee (1%) - fee remains in reserves for remaining LPs
+        let fee0 = ceil_div(
+            (amount0_gross as u128).checked_mul(LIQUIDITY_WITHDRAWAL_FEE_BPS as u128)
+                .ok_or(ErrorCode::LiquidityMathOverflow)?,
+            BPS_DENOMINATOR as u128
+        ).ok_or(ErrorCode::LiquidityMathOverflow)? as u64;
+        let fee1 = ceil_div(
+            (amount1_gross as u128).checked_mul(LIQUIDITY_WITHDRAWAL_FEE_BPS as u128)
+                .ok_or(ErrorCode::LiquidityMathOverflow)?,
+            BPS_DENOMINATOR as u128
+        ).ok_or(ErrorCode::LiquidityMathOverflow)? as u64;
+
+        let amount0_out = amount0_gross.checked_sub(fee0).ok_or(ErrorCode::LiquidityMathOverflow)?;
+        let amount1_out = amount1_gross.checked_sub(fee1).ok_or(ErrorCode::LiquidityMathOverflow)?;
 
         // Check if amounts are sufficient
         require!(

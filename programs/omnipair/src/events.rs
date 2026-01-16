@@ -4,7 +4,7 @@ use anchor_lang::prelude::*;
 pub struct EventMetadata {
     pub signer: Pubkey,
     pub pair: Pubkey,
-    pub timestamp: i64,
+    pub slot: u64,
 }
 
 impl EventMetadata {
@@ -12,7 +12,7 @@ impl EventMetadata {
         Self {
             signer,
             pair,
-            timestamp: Clock::get().unwrap().unix_timestamp,
+            slot: Clock::get().unwrap().slot,
         }
     }
 }

@@ -10,6 +10,8 @@ use crate::{
     errors::ErrorCode,
     events::*,
     utils::token::{transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault},
+    utils::gamm_math::CPCurve,
+    utils::math::ceil_div,
     generate_gamm_pair_seeds,
 };
 
@@ -179,18 +181,18 @@ impl<'info> Swap<'info> {
         let is_token0_in = user_token_in_account.mint == pair.token0;
 
         // Swap fee = LP fee + Futarchy fee
-        let swap_fee = (amount_in as u128)
+        let swap_fee = ceil_div((amount_in as u128)
             .checked_mul(pair.swap_fee_bps as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)?
-            .checked_div(BPS_DENOMINATOR as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)? as u64;
+            .ok_or(ErrorCode::FeeMathOverflow)?,
+            BPS_DENOMINATOR as u128,
+        ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
 
         // Calculate futarchy fee portion of the swap fee
-        let futarchy_fee = (swap_fee as u128)
+        let futarchy_fee = ceil_div((swap_fee as u128)
             .checked_mul(futarchy_authority.revenue_share.swap_bps as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)?
-            .checked_div(BPS_DENOMINATOR as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)? as u64;
+            .ok_or(ErrorCode::FeeMathOverflow)?,
+            BPS_DENOMINATOR as u128,
+        ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
 
         // Transfer futarchy fee to authority immediately if non-zero
         if futarchy_fee > 0 {
@@ -216,16 +218,7 @@ impl<'info> Swap<'info> {
         let reserve_out = if is_token0_in { pair.reserve1 } else { pair.reserve0 };
 
         // Δy = (Δx * y) / (x + Δx)
-        let denominator = (reserve_in as u128)
-            .checked_add(amount_in_after_swap_fee as u128)
-            .ok_or(ErrorCode::DenominatorOverflow)?;
-        let amount_out = (amount_in_after_swap_fee as u128)
-            .checked_mul(reserve_out as u128)
-            .ok_or(ErrorCode::OutputAmountOverflow)?
-            .checked_div(denominator)
-            .ok_or(ErrorCode::OutputAmountOverflow)?
-            .try_into()
-            .map_err(|_| ErrorCode::OutputAmountOverflow)?;
+        let amount_out = CPCurve::calculate_amount_out(reserve_in, reserve_out, amount_in_after_swap_fee)?;
 
         // Calculate the amount in with the LP portion of the fee:
         // amount_in_with_lp_fee = amount_in - swap_fee + lp_fee = amount_in - futarchy_fee

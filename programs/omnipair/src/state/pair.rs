@@ -1,7 +1,8 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
+use crate::errors::ErrorCode;
 use crate::utils::gamm_math::pessimistic_max_debt;
-use crate::utils::math::compute_ema;
+use crate::utils::math::{compute_ema, slots_to_ms, ceil_div};
 use crate::state::RateModel;
 use crate::events::{UpdatePairEvent, EventMetadata};
 
@@ -11,6 +12,15 @@ pub struct VaultBumps {
     pub reserve1: u8,
     pub collateral0: u8,
     pub collateral1: u8,
+}
+
+/// Tracks exponential moving averages (EMAs) for the last observed price.
+/// - `symmetric`: standard two-way EMA (exponential price growth and decay)
+/// - `directional`: one-way bottom-up asymmetric EMA (exponential price growth, but snaps instantly on price drops)
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default)]
+pub struct LastPriceEMA {
+    pub symmetric: u64,
+    pub directional: u64,
 }
 
 #[account]
@@ -35,9 +45,9 @@ pub struct Pair {
     pub cash_reserve1: u64,
     
     // Price tracking
-    pub last_price0_ema: u64,
-    pub last_price1_ema: u64,
-    pub last_update: i64,
+    pub last_price0_ema: LastPriceEMA,
+    pub last_price1_ema: LastPriceEMA,
+    pub last_update: u64,
     
     // Rates
     pub last_rate0: u64,
@@ -76,7 +86,7 @@ impl Pair {
         swap_fee_bps: u16,
         half_life: u64,
         fixed_cf_bps: Option<u16>,
-        current_time: i64,
+        current_slot: u64,
         params_hash: [u8; 32],
         version: u8,
         bump: u8,
@@ -94,7 +104,7 @@ impl Pair {
             swap_fee_bps,
             half_life,
             fixed_cf_bps,
-            last_update: current_time,
+            last_update: current_slot,
 
             reserve0: 0,
             reserve1: 0,
@@ -102,8 +112,14 @@ impl Pair {
             cash_reserve1: 0,
             total_supply: MIN_LIQUIDITY,
 
-            last_price0_ema: 0,
-            last_price1_ema: 0,
+            last_price0_ema: LastPriceEMA {
+                symmetric: 0,
+                directional: 0,
+            },
+            last_price1_ema: LastPriceEMA {
+                symmetric: 0,
+                directional: 0,
+            },
             last_rate0: RateModel::bps_to_nad(INITIAL_RATE_BPS),
             last_rate1: RateModel::bps_to_nad(INITIAL_RATE_BPS),
 
@@ -165,7 +181,7 @@ impl Pair {
         } else {
             let spot_price = self.spot_price0_nad();
             compute_ema(
-                self.last_price0_ema, 
+                self.last_price0_ema.symmetric, 
                 self.last_update, 
                 spot_price, 
                 self.half_life
@@ -173,9 +189,51 @@ impl Pair {
         }
     }
 
+    pub fn ema_price1_nad(&self) -> u64 {
+        if self.reserve1 == 0 {
+            0
+        } else {
+            let spot_price = self.spot_price1_nad();
+            compute_ema(
+                self.last_price1_ema.symmetric, 
+                self.last_update, 
+                spot_price, 
+                self.half_life
+            )
+        }
+    }
+
+    pub fn directional_ema_price0_nad(&self) -> u64 {
+        if self.reserve0 == 0 {
+            0
+        } else {
+            let spot_price = self.spot_price0_nad();
+            compute_ema(
+                self.last_price0_ema.directional, 
+                self.last_update, 
+                spot_price, 
+                DIRECTIONAL_EMA_HALF_LIFE_MS
+            )
+        }
+    }
+
+    pub fn directional_ema_price1_nad(&self) -> u64 {
+        if self.reserve1 == 0 {
+            0
+        } else {
+            let spot_price = self.spot_price1_nad();
+            compute_ema(
+                self.last_price1_ema.directional, 
+                self.last_update, 
+                spot_price, 
+                DIRECTIONAL_EMA_HALF_LIFE_MS
+            )
+        }
+    }
+
     pub fn get_rates(&self, rate_model: &Account<RateModel>) -> Result<(u64, u64)> {
-        let current_time = Clock::get()?.unix_timestamp;
-        let time_elapsed = current_time - self.last_update;
+        let current_slot = Clock::get()?.slot;
+        let time_elapsed = slots_to_ms(self.last_update, current_slot).unwrap_or(0);
 
         let (util0, util1) = if self.reserve0 > 0 {
             (
@@ -188,23 +246,9 @@ impl Pair {
 
         
         Ok((
-            rate_model.calculate_rate(self.last_rate0, time_elapsed as u64, util0).0, 
-            rate_model.calculate_rate(self.last_rate1, time_elapsed as u64, util1).0
+            rate_model.calculate_rate(self.last_rate0, time_elapsed, util0).0, 
+            rate_model.calculate_rate(self.last_rate1, time_elapsed, util1).0
         ))
-    }
-
-    pub fn ema_price1_nad(&self) -> u64 {
-        if self.reserve1 == 0 {
-            0
-        } else {
-            let spot_price = self.spot_price1_nad();
-            compute_ema(
-                self.last_price1_ema, 
-                self.last_update, 
-                spot_price, 
-                self.half_life
-            )
-        }
     }
 
     pub fn is_initialized(&self) -> bool {
@@ -223,21 +267,31 @@ impl Pair {
     /// - The liquidation collateral factor in BPS (max_allowed_cf_bps - LTV_BUFFER_BPS)
     /// 
     /// If `fixed_cf_bps` is `Some`, uses the fixed collateral factor instead of dynamic calculation.
+    /// 
+    /// Computes collateral limits using directional and symmetric EMAs:
+    /// directional EMA replaces raw spot price in divergence logic,
+    /// enabling one_way_ema / two_way_ema comparisons rather than raw_spot/ema. 
+    /// This provides more front-running resistance by capturing quick price drops, while still smoothing upward movements.
     pub fn get_max_debt_and_cf_bps_for_collateral(&self, pair: &Pair, collateral_token: &Pubkey, collateral_amount: u64) -> Result<(u64, u16, u16)> {
         let (
             collateral_ema_price,
-            collateral_spot_price,
+            collateral_directional_ema_price,
+            collateral_amm_reserve,
             debt_amm_reserve,
+            debt_total,
+            
         ) = match collateral_token == &pair.token0 {
-            true => (pair.ema_price0_nad(), pair.spot_price0_nad(), pair.reserve1),
-            false => (pair.ema_price1_nad(), pair.spot_price1_nad(), pair.reserve0),
+            true => (pair.ema_price0_nad(), pair.directional_ema_price0_nad(), pair.reserve0, pair.reserve1, pair.total_debt1),
+            false => (pair.ema_price1_nad(), pair.directional_ema_price1_nad(), pair.reserve1, pair.reserve0, pair.total_debt0),
         };
 
         pessimistic_max_debt(
             collateral_amount,
             collateral_ema_price,
-            collateral_spot_price,
+            collateral_directional_ema_price, // will jump down immediately to a new low, but rise gradually in ~ 50 slots (~20 seconds)
+            collateral_amm_reserve,
             debt_amm_reserve,
+            debt_total,
             pair.fixed_cf_bps,
         )
     }
@@ -257,25 +311,47 @@ impl Pair {
     }
 
     pub fn update(&mut self, rate_model: &Account<RateModel>, futarchy_authority: &crate::state::FutarchyAuthority, pair_key: Pubkey) -> Result<()> {
-        let current_time = Clock::get()?.unix_timestamp;
+        let current_slot = Clock::get()?.slot;
+        let spot_price0 = self.spot_price0_nad();
+        let spot_price1 = self.spot_price1_nad();
+
+        // Always update directional EMAs, even within the same slot
+        self.last_price0_ema.directional = self.last_price0_ema.directional.min(spot_price0);
+        self.last_price1_ema.directional = self.last_price1_ema.directional.min(spot_price1);
         
-        if current_time > self.last_update {
+        if current_slot > self.last_update {
             // Update oracles
-            let time_elapsed = current_time - self.last_update;
+            let time_elapsed = slots_to_ms(self.last_update, current_slot).unwrap();
             if time_elapsed > 0 {
                 // Update price EMAs
-                self.last_price0_ema = compute_ema(
-                    self.last_price0_ema,
+                self.last_price0_ema.symmetric = compute_ema(
+                    self.last_price0_ema.symmetric,
                     self.last_update,
-                    if self.reserve0 > 0 { ((self.reserve1 as u128 * NAD as u128) / self.reserve0 as u128) as u64 } else { 0 },
+                    spot_price0,
                     self.half_life
                 );
-                self.last_price1_ema = compute_ema(
-                    self.last_price1_ema,
+                self.last_price1_ema.symmetric = compute_ema(
+                    self.last_price1_ema.symmetric,
                     self.last_update,
-                    if self.reserve1 > 0 { ((self.reserve0 as u128 * NAD as u128) / self.reserve1 as u128) as u64 } else { 0 },
+                    spot_price1,
                     self.half_life
                 );
+
+                let new_ema0 = compute_ema(
+                    self.last_price0_ema.directional,
+                    self.last_update,
+                    spot_price0,
+                    DIRECTIONAL_EMA_HALF_LIFE_MS
+                );
+                self.last_price0_ema.directional = if spot_price0 < new_ema0 { spot_price0 } else { new_ema0 };
+                
+                let new_ema1 = compute_ema(
+                    self.last_price1_ema.directional,
+                    self.last_update,
+                    spot_price1,
+                    DIRECTIONAL_EMA_HALF_LIFE_MS
+                );
+                self.last_price1_ema.directional = if spot_price1 < new_ema1 { spot_price1 } else { new_ema1 };
                 
                 // Calculate utilization rates
                 let (util0, util1) = if self.reserve0 > 0 {
@@ -290,12 +366,12 @@ impl Pair {
                 // Calculate new rates
                 let (new_rate0, integral0) = rate_model.calculate_rate(
                     self.last_rate0, 
-                    time_elapsed as u64, 
+                    time_elapsed, 
                     util0
                 );
                 let (new_rate1, integral1) = rate_model.calculate_rate(
                     self.last_rate1, 
-                    time_elapsed as u64, 
+                    time_elapsed, 
                     util1
                 );
                 
@@ -304,15 +380,15 @@ impl Pair {
                 self.last_rate1 = new_rate1;
                 
                 // Calculate and apply interest
-                let total_interest0 = (self.total_debt0 as u128 * integral0 as u128) / NAD as u128;
-                let total_interest1 = (self.total_debt1 as u128 * integral1 as u128) / NAD as u128;
+                let total_interest0 = ceil_div(self.total_debt0 as u128 * integral0 as u128, NAD as u128).ok_or(ErrorCode::DebtMathOverflow)?;
+                let total_interest1 = ceil_div(self.total_debt1 as u128 * integral1 as u128, NAD as u128).ok_or(ErrorCode::DebtMathOverflow)?;
 
                 // Calculate protocol fee as an extra fee on top of interest (not a share of interest)
                 // Borrowers pay: interest + protocol_fee
                 // LPs receive: interest (full amount)
                 // Protocol receives: protocol_fee (extra fee charged to borrowers)
-                let protocol_fee0: u64 = ((total_interest0 as u128 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
-                let protocol_fee1: u64 = ((total_interest1 as u128 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
+                let protocol_fee0: u64 = ((total_interest0 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
+                let protocol_fee1: u64 = ((total_interest1 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
                 let lp_share0 = total_interest0 as u64;
                 let lp_share1 = total_interest1 as u64;
 
@@ -356,8 +432,8 @@ impl Pair {
 
                 emit!(UpdatePairEvent {
                     metadata: EventMetadata::new(Pubkey::default(), pair_key),
-                    price0_ema: self.last_price0_ema,
-                    price1_ema: self.last_price1_ema,
+                    price0_ema: self.last_price0_ema.symmetric,
+                    price1_ema: self.last_price1_ema.symmetric,
                     rate0: self.last_rate0,
                     rate1: self.last_rate1,
                     accrued_interest0: total_interest0,
@@ -369,7 +445,7 @@ impl Pair {
                 });
             }
             
-            self.last_update = current_time;
+            self.last_update = current_slot;
         }
         
         Ok(())

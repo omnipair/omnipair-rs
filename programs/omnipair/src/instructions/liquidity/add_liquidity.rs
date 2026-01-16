@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use crate::errors::ErrorCode;
 use crate::constants::*;
 use crate::utils::token::{transfer_from_user_to_vault, token_mint_to};
+use crate::utils::math::ceil_div;
 use crate::generate_gamm_pair_seeds;
 use crate::liquidity::common::{AdjustLiquidity, AddLiquidityArgs};
 use crate::events::{MintEvent, UserLiquidityPositionUpdatedEvent, EventMetadata};
@@ -69,20 +70,18 @@ impl<'info> AdjustLiquidity<'info> {
         );
 
         // Calculate exact amounts to transfer based on liquidity minted
-        // amount_used = (liquidity * reserve) / total_supply
-        let amount0_used: u64 = (liquidity as u128)
-            .checked_mul(pair.reserve0 as u128)
-            .ok_or(ErrorCode::LiquidityMathOverflow)?
-            .checked_div(total_supply as u128)
-            .ok_or(ErrorCode::LiquidityMathOverflow)?
+        // amount_used = ceil(liquidity * reserve / total_supply) - round up to favor protocol
+        let amount0_used: u64 = ceil_div(
+            (liquidity as u128).checked_mul(pair.reserve0 as u128).ok_or(ErrorCode::LiquidityMathOverflow)?,
+            total_supply as u128
+        ).ok_or(ErrorCode::LiquidityMathOverflow)?
             .try_into()
             .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
         
-        let amount1_used: u64 = (liquidity as u128)
-            .checked_mul(pair.reserve1 as u128)
-            .ok_or(ErrorCode::LiquidityMathOverflow)?
-            .checked_div(total_supply as u128)
-            .ok_or(ErrorCode::LiquidityMathOverflow)?
+        let amount1_used: u64 = ceil_div(
+            (liquidity as u128).checked_mul(pair.reserve1 as u128).ok_or(ErrorCode::LiquidityMathOverflow)?,
+            total_supply as u128
+        ).ok_or(ErrorCode::LiquidityMathOverflow)?
             .try_into()
             .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
 

@@ -13,7 +13,7 @@ use crate::{
     constants::*,
     errors::ErrorCode,
     events::*,
-    utils::token::transfer_from_vault_to_user,
+    utils::{token::transfer_from_vault_to_user, math::ceil_div},
     generate_gamm_pair_seeds,
 };
 
@@ -170,17 +170,17 @@ impl<'info> Flashloan<'info> {
         let FlashloanArgs { amount0, amount1, data } = args;
 
         // Calculate fees (5 bps = 0.05%)
-        let fee0 = (amount0 as u128)
+        let fee0 = ceil_div((amount0 as u128)
             .checked_mul(FLASHLOAN_FEE_BPS as u128)
-            .unwrap()
-            .checked_div(BPS_DENOMINATOR as u128)
-            .unwrap() as u64;
+            .ok_or(ErrorCode::FeeMathOverflow)?,
+            BPS_DENOMINATOR as u128,
+        ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
         
-        let fee1 = (amount1 as u128)
+        let fee1 = ceil_div((amount1 as u128)
             .checked_mul(FLASHLOAN_FEE_BPS as u128)
-            .unwrap()
-            .checked_div(BPS_DENOMINATOR as u128)
-            .unwrap() as u64;
+            .ok_or(ErrorCode::FeeMathOverflow)?,
+            BPS_DENOMINATOR as u128,
+        ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
 
         // Record balances before the flash loan
         reserve0_vault.reload()?;
