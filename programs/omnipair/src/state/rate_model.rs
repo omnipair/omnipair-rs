@@ -4,7 +4,7 @@ use crate::utils::math::*;
 
 #[account]
 pub struct RateModel {
-    /// exp_rate: NAD/second (k_real = exp_rate / NAD)
+    /// exp_rate: NAD/millisecond (k_real = exp_rate / NAD)
     pub exp_rate: u64,
     /// utilization band edges (NAD-scaled: 0..NAD)
     pub target_util_start: u64,
@@ -13,11 +13,11 @@ pub struct RateModel {
 
 impl RateModel {
     pub fn new() -> Self {
-        const SECONDS_PER_HOUR: u64 = 3_600;
+        const MS_PER_DAY: u64 = 86_400_000;
         Self {
-            // For production you likely want ln(2)/day; for testing we use 1 hour.
-            // exp_rate: NATURAL_LOG_OF_TWO_NAD / SECONDS_PER_DAY,
-            exp_rate: NATURAL_LOG_OF_TWO_NAD / SECONDS_PER_HOUR,
+            // For production you we want ln(2)/day; for testing we use 1 hour.
+            // exp_rate: NATURAL_LOG_OF_TWO_NAD / MS_PER_DAY,
+            exp_rate: NATURAL_LOG_OF_TWO_NAD / MS_PER_DAY,
             target_util_start: Self::bps_to_nad(TARGET_UTIL_START_BPS),
             target_util_end:   Self::bps_to_nad(TARGET_UTIL_END_BPS),
         }
@@ -33,7 +33,7 @@ impl RateModel {
         }
 
         // constants & helpers
-        let exp_rate = self.exp_rate as u128;                     // NAD/sec
+        let exp_rate = self.exp_rate as u128;                     // NAD/ms
         let x        = exp_rate.saturating_mul(dt);               // NAD (k*dt in NAD units)
         let gd       = taylor_exp(-(x as i64), NAD, TAYLOR_TERMS) as u128; // NAD ≈ e^{-(x/NAD)}
 
@@ -52,7 +52,7 @@ impl RateModel {
             // ∫ r dt = (r1 - r0) / k_real = (r1 - r0) * NAD / exp_rate, then / YEAR
             let numer    = curr.saturating_sub(last).saturating_mul(NAD as u128);
             let integral_pre = numer / exp_rate;
-            let integral = ceil_div(integral_pre, SECONDS_PER_YEAR as u128).unwrap_or(integral_pre / (SECONDS_PER_YEAR as u128));
+            let integral = ceil_div(integral_pre, MILLISECONDS_PER_YEAR as u128).unwrap_or(integral_pre / (MILLISECONDS_PER_YEAR as u128));
             return (curr.min(u64::MAX as u128) as u64, integral.min(u64::MAX as u128) as u64);
         }
 
@@ -66,13 +66,13 @@ impl RateModel {
                 // ∫ = (r0 - r1) * NAD / exp_rate, then / YEAR
                 let numer    = last.saturating_sub(curr).saturating_mul(NAD as u128);
                 let integral_pre = numer / exp_rate;
-                let integral = ceil_div(integral_pre, SECONDS_PER_YEAR as u128).unwrap_or(integral_pre / (SECONDS_PER_YEAR as u128));
+                let integral = ceil_div(integral_pre, MILLISECONDS_PER_YEAR as u128).unwrap_or(integral_pre / (MILLISECONDS_PER_YEAR as u128));
                 return (curr.min(u64::MAX as u128) as u64, integral.min(u64::MAX as u128) as u64);
             } else {
                 // Hit MIN during window → split: exponential down to MIN, then flat MIN
                 if last <= min_nad {
-                    let integral = ceil_div(min_nad.saturating_mul(dt), SECONDS_PER_YEAR as u128)
-                        .unwrap_or(min_nad.saturating_mul(dt) / (SECONDS_PER_YEAR as u128));
+                    let integral = ceil_div(min_nad.saturating_mul(dt), MILLISECONDS_PER_YEAR as u128)
+                        .unwrap_or(min_nad.saturating_mul(dt) / (MILLISECONDS_PER_YEAR as u128));
                     return (min_nad.min(u64::MAX as u128) as u64, integral.min(u64::MAX as u128) as u64);
                 }
                 let t_to_min = Self::time_to_reach_closed_form(last, min_nad, exp_rate, /*up=*/false)
@@ -83,15 +83,15 @@ impl RateModel {
                     .unwrap_or(last.saturating_sub(min_nad).saturating_mul(NAD as u128) / exp_rate);
                 // flat tail: MIN * (dt - t*)
                 let flat_part = min_nad.saturating_mul(dt.saturating_sub(t_to_min));
-                let integral  = ceil_div(exp_part + flat_part, SECONDS_PER_YEAR as u128)
-                    .unwrap_or((exp_part + flat_part) / (SECONDS_PER_YEAR as u128));
+                let integral  = ceil_div(exp_part + flat_part, MILLISECONDS_PER_YEAR as u128)
+                    .unwrap_or((exp_part + flat_part) / (MILLISECONDS_PER_YEAR as u128));
                 return (min_nad.min(u64::MAX as u128) as u64, integral.min(u64::MAX as u128) as u64);
             }
         }
 
         // Middle band: flat
-        let integral = ceil_div(last.saturating_mul(dt), SECONDS_PER_YEAR as u128)
-            .unwrap_or(last.saturating_mul(dt) / (SECONDS_PER_YEAR as u128));
+        let integral = ceil_div(last.saturating_mul(dt), MILLISECONDS_PER_YEAR as u128)
+            .unwrap_or(last.saturating_mul(dt) / (MILLISECONDS_PER_YEAR as u128));
         (last.min(u64::MAX as u128) as u64, integral.min(u64::MAX as u128) as u64)
     }
 
@@ -99,19 +99,19 @@ impl RateModel {
     /// up=false : r(t) = r0 * e^{-k t} <= target  ⇒  t = ln(r0/target) / k = ln(r0/target) * NAD / exp_rate
     /// Since ln_ratio is already NAD-scaled, t = ln_ratio / exp_rate (no extra NAD multiplier needed)
     #[inline]
-    fn time_to_reach_closed_form(r0: u128, target: u128, exp_rate_nad_per_s: u128, up: bool) -> u128 {
+    fn time_to_reach_closed_form(r0: u128, target: u128, exp_rate: u128, up: bool) -> u128 {
         if up {
             // Not used now (no max cap), but kept for parity.
             if target <= r0 { return 0; }
             let ratio_nad = (target.saturating_mul(NAD as u128)) / r0.max(1);
             let ln_ratio  = Self::ln_nad(ratio_nad as u64);  // NAD (signed)
-            let t = ln_ratio / (exp_rate_nad_per_s as i128);
+            let t = ln_ratio / (exp_rate as i128);
             if t <= 0 { 0 } else { t as u128 }
         } else {
             if r0 <= target { return 0; }
             let ratio_nad = (r0.saturating_mul(NAD as u128)) / target.max(1);
             let ln_ratio  = Self::ln_nad(ratio_nad as u64);  // NAD (signed)
-            let t = ln_ratio / (exp_rate_nad_per_s as i128);
+            let t = ln_ratio / (exp_rate as i128);
             if t <= 0 { 0 } else { t as u128 }
         }
     }

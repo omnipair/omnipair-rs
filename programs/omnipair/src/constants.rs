@@ -17,20 +17,24 @@ pub const LTV_BUFFER_BPS: u16 = 500; // 5% buffer between borrow limit and liqui
 #[constant]
 pub const FLASHLOAN_FEE_BPS: u16 = 5; // 0.05%
 #[constant]
-pub const LIQUIDATION_INCENTIVE_BPS: u16 = 300; // 3% liquidation incentive for caller
+pub const LIQUIDATION_INCENTIVE_BPS: u16 = 50; // 0.5% liquidation incentive for caller
+#[constant]
+pub const LIQUIDATION_PENALTY_BPS: u16 = 300; // 3% total liquidation penalty (0.5% to liquidator, 2.5% to LPs)
+#[constant]
+pub const LIQUIDITY_WITHDRAWAL_FEE_BPS: u16 = 100; // 1% fee on liquidity withdrawal (goes to remaining LPs)
 #[constant]
 pub const PAIR_CREATION_FEE_LAMPORTS: u64 = 200_000_000; // 0.2 SOL
 // 3log2(100) = 19.93 secs (with 400ms slot time, this is ~50 slots)
 #[constant]
-pub const DIRECTIONAL_EMA_HALF_LIFE: u64 = 3; // 3 seconds
+pub const DIRECTIONAL_EMA_HALF_LIFE_MS: u64 = 3_000; // 3 seconds
 /// The nominal slot duration in milliseconds.
 #[constant]
 pub const TARGET_MS_PER_SLOT: u64 = 400;
 
 
-// EMA constants
-pub const MIN_HALF_LIFE: u64 = 1 * 60; // 1 minute
-pub const MAX_HALF_LIFE: u64 = 12 * 60 * 60; // 12 hours
+// EMA constants (in milliseconds)
+pub const MIN_HALF_LIFE_MS: u64 = 1 * 60 * 1_000; // 1 minute
+pub const MAX_HALF_LIFE_MS: u64 = 12 * 60 * 60 * 1_000; // 12 hours
 pub const TAYLOR_TERMS: u64 = 5;
 pub const NATURAL_LOG_OF_TWO_NAD: u64 = 693_147_180; // ln(2) scaled by NAD
 
@@ -42,7 +46,7 @@ pub const MIN_RATE_BPS: u64 = 100;      // 1%
 // Default IRM constants
 pub const TARGET_UTIL_START_BPS: u64 = 5_000; // 50%
 pub const TARGET_UTIL_END_BPS: u64 = 8_500; // 85%
-pub const SECONDS_PER_YEAR: u64 = 31_536_000;
+pub const MILLISECONDS_PER_YEAR: u64 = 31_536_000_000; // 31,536,000 seconds * 1000
 
 // Global Seeds for deterministic PDAs
 #[constant]
