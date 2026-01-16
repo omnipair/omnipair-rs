@@ -121,6 +121,8 @@ impl<'info> AdjustLiquidity<'info> {
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
         
+        // liqudity additions equally increase both virtual and cash reserves
+        // r_virtual + (amount) = r_cash + (amount) + r_debt
         // Update reserves
         pair.reserve0 = pair.reserve0
             .checked_add(amount0_used)
@@ -131,6 +133,14 @@ impl<'info> AdjustLiquidity<'info> {
         pair.total_supply = pair.total_supply
             .checked_add(liquidity)
             .ok_or(ErrorCode::SupplyOverflow)?;
+
+        // Update cash reserves
+        pair.cash_reserve0 = pair.cash_reserve0
+            .checked_add(amount0_used)
+            .ok_or(ErrorCode::ReserveOverflow)?;
+        pair.cash_reserve1 = pair.cash_reserve1
+            .checked_add(amount1_used)
+            .ok_or(ErrorCode::ReserveOverflow)?;
         
         user_lp_token_account.reload()?;
         let user_lp_balance = user_lp_token_account.amount;

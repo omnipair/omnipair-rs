@@ -11,7 +11,7 @@ use crate::{
     constants::*,
     errors::ErrorCode,
     events::{UserPositionLiquidatedEvent, EventMetadata},
-    state::user_position::UserPosition,
+    state::user_position::{UserPosition, DebtDecreaseReason},
     utils::{
         token::{transfer_from_vault_to_user, transfer_from_vault_to_vault}, 
         math::ceil_div,
@@ -174,6 +174,7 @@ impl<'info> Liquidate<'info> {
         let liquidation_cf_bps = user_position.get_liquidation_cf_bps(pair, &debt_token)?;
         let k0 = pair.k(); // k before liquidation
 
+        // Compute debt
         let (
             user_debt, 
             debt_reserve, 
@@ -270,11 +271,8 @@ impl<'info> Liquidate<'info> {
             .checked_sub(caller_incentive)
             .ok_or(ErrorCode::DebtMathOverflow)?;
 
-        if is_insolvent {
-            user_position.writeoff_debt(pair, &debt_token)?;
-        } else {
-            user_position.decrease_debt(pair, &debt_token, debt_to_repay)?;
-        }
+
+        user_position.decrease_debt(pair, &debt_token, debt_to_repay, DebtDecreaseReason::WriteOff)?;
         user_position.set_applied_min_cf_for_debt_token(&debt_token, &pair, liquidation_cf_bps);
 
         // Transfer liquidation incentive to caller from collateral vault
@@ -317,14 +315,14 @@ impl<'info> Liquidate<'info> {
                 pair.total_collateral0 = pair.total_collateral0.checked_sub(collateral_final).unwrap();
                 // Add remaining collateral (after incentive) to reserves
                 pair.reserve0 = pair.reserve0.checked_add(collateral_to_reserves).unwrap();
-                pair.reserve1 = pair.reserve1.saturating_sub(debt_to_repay);
+                pair.cash_reserve0 = pair.cash_reserve0.saturating_add(collateral_to_reserves);
             }
             false => {
                 user_position.collateral1 = user_position.collateral1.checked_sub(collateral_final).unwrap();
                 pair.total_collateral1 = pair.total_collateral1.checked_sub(collateral_final).unwrap();
                 // Add remaining collateral (after incentive) to reserves
                 pair.reserve1 = pair.reserve1.checked_add(collateral_to_reserves).unwrap();
-                pair.reserve0 = pair.reserve0.saturating_sub(debt_to_repay);
+                pair.cash_reserve1 = pair.cash_reserve1.saturating_add(collateral_to_reserves);
             }
         }
 

@@ -4,6 +4,7 @@ use crate::{
     events::{AdjustDebtEvent, UserPositionUpdatedEvent, EventMetadata},
     utils::token::transfer_from_user_to_vault,
     instructions::lending::common::{CommonAdjustDebt, AdjustDebtArgs},
+    state::user_position::DebtDecreaseReason,
 };
 
 impl<'info> CommonAdjustDebt<'info> {
@@ -88,40 +89,8 @@ impl<'info> CommonAdjustDebt<'info> {
             reserve_token_mint.decimals,
         )?;
 
-        
         // Update debt
-        match is_token0 {
-            true => {
-                let shares = if is_repay_all {
-                    user_position.debt0_shares
-                } else {
-                    debt_to_repay
-                    .checked_mul(pair.total_debt0_shares)
-                    .unwrap()
-                    .checked_div(pair.total_debt0)
-                    .unwrap()
-                };
-                    
-                pair.total_debt0_shares = pair.total_debt0_shares.checked_sub(shares).unwrap();
-                pair.total_debt0 = pair.total_debt0.checked_sub(debt_to_repay).unwrap();
-                user_position.debt0_shares = user_position.debt0_shares.checked_sub(shares).unwrap();
-            },
-            false => {
-                let shares = if is_repay_all {
-                    user_position.debt1_shares
-                } else {
-                    debt_to_repay
-                    .checked_mul(pair.total_debt1_shares)
-                    .unwrap()
-                    .checked_div(pair.total_debt1)
-                    .unwrap()
-                };
-                pair.total_debt1_shares = pair.total_debt1_shares.checked_sub(shares).unwrap();
-                pair.total_debt1 = pair.total_debt1.checked_sub(debt_to_repay).unwrap();
-                user_position.debt1_shares = user_position.debt1_shares.checked_sub(shares).unwrap();
-            }
-        }
-        
+        user_position.decrease_debt(pair, &reserve_token_mint.key(), debt_to_repay, DebtDecreaseReason::Repayment)?;
 
         // Emit event
         let (amount0, amount1) = if user_reserve_token_account.mint == pair.token0 {

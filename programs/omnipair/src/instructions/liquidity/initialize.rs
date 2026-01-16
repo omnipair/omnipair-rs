@@ -502,6 +502,10 @@ impl<'info> InitializeAndBootstrap<'info> {
             .checked_add(liquidity)
             .ok_or(ErrorCode::SupplyOverflow)?;
 
+        // Update cash reserves (initial state, r_debt = 0 => r_cash = r_virtual)
+        pair.cash_reserve0 = pair.reserve0;
+        pair.cash_reserve1 = pair.reserve1;
+
         // Initialize EMA prices based on initial liquidity
         pair.last_price0_ema = LastPriceEMA {
             symmetric: pair.spot_price0_nad(),

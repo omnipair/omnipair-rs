@@ -37,13 +37,12 @@ pub struct Pair {
     // Fixed collateral factor (BPS). If Some, use this instead of dynamic CF
     pub fixed_cf_bps: Option<u16>,
     
-    // Reserves
+    // Virtual Reserves (r_virtual = r_cash + r_debt)
     pub reserve0: u64,
     pub reserve1: u64,
-
-    // Protocol revenue reserves
-    pub protocol_revenue_reserve0: u64,
-    pub protocol_revenue_reserve1: u64,
+    // Cash Reserves (r_cash)
+    pub cash_reserve0: u64,
+    pub cash_reserve1: u64,
     
     // Price tracking
     pub last_price0_ema: LastPriceEMA,
@@ -54,7 +53,7 @@ pub struct Pair {
     pub last_rate0: u64,
     pub last_rate1: u64,
     
-    // Debt tracking
+    // Debt tracking (r_debt)
     pub total_debt0: u64,
     pub total_debt1: u64,
     pub total_debt0_shares: u64,
@@ -109,8 +108,8 @@ impl Pair {
 
             reserve0: 0,
             reserve1: 0,
-            protocol_revenue_reserve0: 0,
-            protocol_revenue_reserve1: 0,
+            cash_reserve0: 0,
+            cash_reserve1: 0,
             total_supply: MIN_LIQUIDITY,
 
             last_price0_ema: LastPriceEMA {
@@ -393,10 +392,6 @@ impl Pair {
                 let lp_share0 = total_interest0 as u64;
                 let lp_share1 = total_interest1 as u64;
 
-                // update protocol revenue reserves (tracks extra fees charged to borrowers)
-                self.protocol_revenue_reserve0 += protocol_fee0;
-                self.protocol_revenue_reserve1 += protocol_fee1;
-
                 // Total amount borrowers owe = interest + protocol_fee (extra fee)
                 let total_borrower_cost0 = total_interest0.checked_add(protocol_fee0 as u128).expect("Interest overflow");
                 let total_borrower_cost1 = total_interest1.checked_add(protocol_fee1 as u128).expect("Interest overflow");
@@ -409,19 +404,31 @@ impl Pair {
                     .checked_add(u64::try_from(total_borrower_cost1).expect("Interest overflow"))
                     .expect("Total debt1 overflow");
 
-                // TODO: review this    
-                // this applies accrued interest as instant liquidity by appending it to the reserves
-                // it applies positive price impact to assets that may be borrowed
-                // this can lead to: 
-                // 1. virtually pumping up collateral prices without real buying pressure (assuming no arbitrage)
-                // 2. lower virtual utilization rates
-                // 3. these changes will affect spot & ema prices
-                // 4. affecting borrowing power and effective collateral factor
-                // 5. affecting liquidation thresholds
-                // 6. affecting the amount of debt that can be borrowed
-                // 7. affecting the amount of interest that is earned
-                self.reserve0 += lp_share0;
-                self.reserve1 += lp_share1;
+                // The change in virtual reserves (ΔV) depends on accounted cash availability (r_cash, where r_cash >= 0):
+                // 1. Always add lp_share to virtual reserves.
+                // 2. Only add the "uncovered" portion of protocol_fee to virtual reserves.
+                //
+                // This ensures the state ΔR_virtual = ΔR_cash + ΔR_debt holds, where:
+                // L: r_virtual + lp_share + (protocol_fee - cash_covered_fee)
+                // R: (r_cash - cash_covered_fee) + (r_debt + lp_share + protocol_fee)
+                // where:
+                // cash_covered_fee = min(protocol_fee, cash_reserve)
+                // Realized protocol fees is the reserve token balance - accounted cash reserve (r_actual - r_cash)
+
+                // 1. Calculate the portion of the fee covered by cash reserves (r_cash)
+                let cash_covered_fee0 = protocol_fee0.min(self.cash_reserve0);
+                let cash_covered_fee1 = protocol_fee1.min(self.cash_reserve1);
+
+                // 2. Update virtual reserves
+                // ΔV = lp_share + (protocol_fee - cash_covered_fee)
+                self.reserve0 = self.reserve0.saturating_add(lp_share0 + (protocol_fee0 - cash_covered_fee0)); // won't underflow because protocol_fee0 <= cash_covered_fee
+                self.reserve1 = self.reserve1.saturating_add(lp_share1 + (protocol_fee1 - cash_covered_fee1));
+
+                // 3. Update physical cash reserves
+                // Cash reserves are reduced by the amount we can afford to take (as r_cash can't go below zero), 
+                // Any uncovered fee remains in virtual reserves, so LP's gets the claim on the uncovered fee
+                self.cash_reserve0 -= cash_covered_fee0; // won't underflow because cash_covered_fee <= cash_reserve
+                self.cash_reserve1 -= cash_covered_fee1;
 
                 emit!(UpdatePairEvent {
                     metadata: EventMetadata::new(Pubkey::default(), pair_key),
@@ -431,8 +438,8 @@ impl Pair {
                     rate1: self.last_rate1,
                     accrued_interest0: total_interest0,
                     accrued_interest1: total_interest1,
-                    protocol_revenue_reserve0: self.protocol_revenue_reserve0,
-                    protocol_revenue_reserve1: self.protocol_revenue_reserve1,
+                    cash_reserve0: self.cash_reserve0, 
+                    cash_reserve1: self.cash_reserve1,
                     reserve0_after_interest: self.reserve0,
                     reserve1_after_interest: self.reserve1,
                 });

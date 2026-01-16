@@ -45,8 +45,9 @@ impl<'info> CommonAdjustDebt<'info> {
         } = ctx.accounts;
         let pair = &mut ctx.accounts.pair;
         let debt_token_vault = &ctx.accounts.reserve_vault;
+        let is_token0 = user_reserve_token_account.mint == pair.token0;
 
-        let user_debt = match user_reserve_token_account.mint == pair.token0 {
+        let user_debt = match is_token0 {
             true => user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
             false => user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
         };
@@ -76,8 +77,12 @@ impl<'info> CommonAdjustDebt<'info> {
             new_debt,
             ErrorCode::BorrowingPowerExceeded
         );
-        
-        let is_token0 = user_reserve_token_account.mint == pair.token0;
+
+        // r_cash >= r_debt_out
+        match is_token0 {
+            true => require_gte!(pair.cash_reserve0, borrow_amount, ErrorCode::InsufficientCashReserve0),
+            false => require_gte!(pair.cash_reserve1, borrow_amount, ErrorCode::InsufficientCashReserve1)
+        };
 
         // Transfer tokens from vault to user
         transfer_from_vault_to_user(
