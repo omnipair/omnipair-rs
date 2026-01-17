@@ -235,16 +235,15 @@ impl Pair {
         let current_slot = Clock::get()?.slot;
         let time_elapsed = slots_to_ms(self.last_update, current_slot).unwrap_or(0);
 
-        let (util0, util1) = if self.reserve0 > 0 {
-            (
-                ((self.total_debt0 as u128 * NAD as u128) / self.reserve0 as u128) as u64, 
-                ((self.total_debt1 as u128 * NAD as u128) / self.reserve1 as u128) as u64
-            )
-        } else {
-            (0, 0)
+        let util0 = match self.reserve0 {
+            0 => 0,
+            _ => ((self.total_debt0 as u128 * NAD as u128) / self.reserve0 as u128) as u64,
+        };
+        let util1 = match self.reserve1 {
+            0 => 0,
+            _ => ((self.total_debt1 as u128 * NAD as u128) / self.reserve1 as u128) as u64,
         };
 
-        
         Ok((
             rate_model.calculate_rate(self.last_rate0, time_elapsed, util0).0, 
             rate_model.calculate_rate(self.last_rate1, time_elapsed, util1).0
@@ -354,13 +353,13 @@ impl Pair {
                 self.last_price1_ema.directional = if spot_price1 < new_ema1 { spot_price1 } else { new_ema1 };
                 
                 // Calculate utilization rates
-                let (util0, util1) = if self.reserve0 > 0 {
-                    (
-                        ((self.total_debt0 as u128 * NAD as u128) / self.reserve0 as u128) as u64, 
-                        ((self.total_debt1 as u128 * NAD as u128) / self.reserve1 as u128) as u64
-                    )
-                } else {
-                    (0, 0)
+                let util0 = match self.reserve0 {
+                    0 => 0,
+                    _ => ((self.total_debt0 as u128 * NAD as u128) / self.reserve0 as u128) as u64,
+                };
+                let util1 = match self.reserve1 {
+                    0 => 0,
+                    _ => ((self.total_debt1 as u128 * NAD as u128) / self.reserve1 as u128) as u64,
                 };
                 
                 // Calculate new rates

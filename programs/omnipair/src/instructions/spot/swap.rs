@@ -195,23 +195,6 @@ impl<'info> Swap<'info> {
             BPS_DENOMINATOR as u128,
         ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
 
-        // Transfer futarchy fee to authority immediately if non-zero
-        if futarchy_fee > 0 {
-            transfer_from_vault_to_vault(
-                pair.to_account_info(),
-                token_in_vault.to_account_info(),
-                authority_token_in_account.to_account_info(),
-                token_in_mint.to_account_info(),
-                match token_in_mint.to_account_info().owner == token_program.key {
-                    true => token_program.to_account_info(),
-                    false => token_2022_program.to_account_info(),
-                },
-                futarchy_fee,
-                token_in_mint.decimals,
-                &[&generate_gamm_pair_seeds!(pair)[..]],
-            )?;
-        }
-
         // amount_in_after_swap_fee = amount_in - swap_fee
         let amount_in_after_swap_fee = amount_in.checked_sub(swap_fee).ok_or(ErrorCode::FeeMathOverflow)?;
 
@@ -254,6 +237,7 @@ impl<'info> Swap<'info> {
         require_gte!((pair.reserve0 as u128).checked_mul(pair.reserve1 as u128).ok_or(ErrorCode::Overflow)?, last_k, ErrorCode::BrokenInvariant);
 
         // Transfer tokens
+        // First: Transfer user's input tokens into the vault
         transfer_from_user_to_vault(
             user.to_account_info(),
             user_token_in_account.to_account_info(),
@@ -267,6 +251,24 @@ impl<'info> Swap<'info> {
             token_in_mint.decimals,
         )?;
 
+        // Second: Transfer futarchy fee from vault to authority (after user deposit ensures sufficient balance)
+        if futarchy_fee > 0 {
+            transfer_from_vault_to_vault(
+                pair.to_account_info(),
+                token_in_vault.to_account_info(),
+                authority_token_in_account.to_account_info(),
+                token_in_mint.to_account_info(),
+                match token_in_mint.to_account_info().owner == token_program.key {
+                    true => token_program.to_account_info(),
+                    false => token_2022_program.to_account_info(),
+                },
+                futarchy_fee,
+                token_in_mint.decimals,
+                &[&generate_gamm_pair_seeds!(pair)[..]],
+            )?;
+        }
+
+        // Third: Transfer output tokens to user
         transfer_from_vault_to_user(
             pair.to_account_info(),
             token_out_vault.to_account_info(),
