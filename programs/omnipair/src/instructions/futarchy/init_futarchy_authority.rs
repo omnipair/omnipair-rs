@@ -40,6 +40,10 @@ pub struct InitFutarchyAuthority<'info> {
 
 impl<'info> InitFutarchyAuthority<'info> {
     pub fn handle_init(ctx: Context<Self>, args: InitFutarchyAuthorityArgs) -> Result<()> {
+        // Validate protocol fees are within bounds
+        require_gte!(BPS_DENOMINATOR, args.swap_bps, ErrorCode::InvalidSwapFeeBps);
+        require_gte!(BPS_DENOMINATOR, args.interest_bps, ErrorCode::InvalidInterestFeeBps);
+
         // Validate percentages sum to 100%
         let total_percentage = args.futarchy_treasury_bps
             .checked_add(args.buybacks_vault_bps)

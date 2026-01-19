@@ -11,6 +11,9 @@ pub enum ErrorCode {
     #[msg("Invalid swap fee bps")]
     InvalidSwapFeeBps,
 
+    #[msg("Invalid interest fee bps")]
+    InvalidInterestFeeBps,
+
     #[msg("Invalid half life")]
     InvalidHalfLife,
 
