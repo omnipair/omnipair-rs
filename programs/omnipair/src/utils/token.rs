@@ -188,6 +188,9 @@ pub fn token_mint_to<'a>(
     amount: u64,
     signer_seeds: &[&[&[u8]]],
 ) -> Result<()> {
+    if amount == 0 {
+        return Ok(());
+    }
     token_2022::mint_to(
         CpiContext::new_with_signer(
             token_program,
@@ -210,6 +213,9 @@ pub fn token_burn<'a>(
     amount: u64,
     signer_seeds: &[&[&[u8]]],
 ) -> Result<()> {
+    if amount == 0 {
+        return Ok(());
+    }
     token_2022::burn(
         CpiContext::new_with_signer(
             token_program.to_account_info(),
