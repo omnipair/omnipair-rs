@@ -142,8 +142,8 @@ impl Pair {
         self.reserve0 as u128 * self.reserve1 as u128
     }
 
-    pub fn get_collateral_token(&self, collateral_token_mint: &Pubkey) -> Pubkey {
-       self.get_token_y(collateral_token_mint)
+    pub fn get_collateral_token(&self, debt_token_mint: &Pubkey) -> Pubkey {
+       self.get_token_y(debt_token_mint)
     }
 
     pub fn get_debt_token(&self, debt_token_mint: &Pubkey) -> Pubkey {
