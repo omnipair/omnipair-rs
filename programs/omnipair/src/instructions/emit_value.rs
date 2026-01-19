@@ -145,6 +145,7 @@ impl ViewPairData<'_> {
         let pair_key = ctx.accounts.pair.key();
         let mut pair = ctx.accounts.pair.clone().into_inner();
         
+        // update pair to get updated rates, interest, debt, etc.
         pair.update(&ctx.accounts.rate_model, &ctx.accounts.futarchy_authority, pair_key)?;
 
         let value: (OptionalUint, OptionalUint) = match getter {
@@ -180,6 +181,7 @@ impl ViewUserPositionData<'_> {
         let mut pair = ctx.accounts.pair.clone().into_inner();
         let user_position = &ctx.accounts.user_position;
 
+        // update pair to get updated rates, interest, debt, etc.
         pair.update(&ctx.accounts.rate_model, &ctx.accounts.futarchy_authority, pair_key)?;
 
         let value: (OptionalUint, OptionalUint) = match getter {
