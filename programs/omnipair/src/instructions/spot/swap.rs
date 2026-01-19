@@ -28,7 +28,7 @@ pub struct Swap<'info> {
     #[account(
         mut,
         seeds = [PAIR_SEED_PREFIX, pair.token0.as_ref(), pair.token1.as_ref(), pair.params_hash.as_ref()],
-        bump
+        bump = pair.bump
     )]
     // Box used to avoid Access violation in stack frame... error
     pub pair: Box<Account<'info, Pair>>,
@@ -41,7 +41,7 @@ pub struct Swap<'info> {
 
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
-        bump
+        bump = futarchy_authority.bump
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
     
