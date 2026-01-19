@@ -109,8 +109,10 @@ impl fmt::Display for UserPositionViewKind {
 
 #[derive(Accounts)]
 pub struct ViewPairData<'info> {
-    #[account(mut)]
     pub pair: Account<'info, Pair>,
+    #[account(
+        address = pair.rate_model @ ErrorCode::InvalidRateModel
+    )]
     pub rate_model: Account<'info, RateModel>,
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
@@ -121,10 +123,14 @@ pub struct ViewPairData<'info> {
 
 #[derive(Accounts)]
 pub struct ViewUserPositionData<'info> {
-    #[account(mut)]
     pub pair: Account<'info, Pair>,
-    #[account(mut)]
+    #[account(
+        constraint = user_position.pair == pair.key() @ ErrorCode::InvalidPair
+    )]
     pub user_position: Account<'info, UserPosition>,
+    #[account(
+        address = pair.rate_model @ ErrorCode::InvalidRateModel
+    )]
     pub rate_model: Account<'info, RateModel>,
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
@@ -135,9 +141,10 @@ pub struct ViewUserPositionData<'info> {
 
 impl ViewPairData<'_> {
     pub fn handle_view_data(ctx: Context<Self>, getter: PairViewKind, args: EmitValueArgs) -> Result<()> {
-        let pair = &mut ctx.accounts.pair;
-
-        let pair_key = pair.to_account_info().key();
+        // Create a copy of the pair state to perform simulated update without modifying the actual account
+        let pair_key = ctx.accounts.pair.key();
+        let mut pair = ctx.accounts.pair.clone().into_inner();
+        
         pair.update(&ctx.accounts.rate_model, &ctx.accounts.futarchy_authority, pair_key)?;
 
         let value: (OptionalUint, OptionalUint) = match getter {
@@ -168,11 +175,11 @@ impl ViewPairData<'_> {
 
 impl ViewUserPositionData<'_> {
     pub fn handle_view_data(ctx: Context<Self>, getter: UserPositionViewKind) -> Result<()> {
-        let pair = &mut ctx.accounts.pair;
+        // Create a copy of the pair state to perform simulated update without modifying the actual account
+        let pair_key = ctx.accounts.pair.key();
+        let mut pair = ctx.accounts.pair.clone().into_inner();
         let user_position = &ctx.accounts.user_position;
 
-        // update pair to get updated rates, interest, debt, etc.
-        let pair_key = pair.to_account_info().key();
         pair.update(&ctx.accounts.rate_model, &ctx.accounts.futarchy_authority, pair_key)?;
 
         let value: (OptionalUint, OptionalUint) = match getter {

@@ -199,4 +199,10 @@ pub enum ErrorCode {
 
     #[msg("Invalid token order")]
     InvalidTokenOrder,
+
+    #[msg("Invalid rate model - rate_model does not match pair.rate_model")]
+    InvalidRateModel,
+
+    #[msg("Invalid pair - pair does not match user_position.pair")]
+    InvalidPair,
 }
