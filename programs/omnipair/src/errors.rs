@@ -20,9 +20,6 @@ pub enum ErrorCode {
     #[msg("Invalid argument")]
     InvalidArgument,
     
-    #[msg("Insufficient collateral")]
-    InsufficientCollateral,
-
     #[msg("Amount cannot be zero")]
     AmountZero,
 
@@ -113,9 +110,6 @@ pub enum ErrorCode {
     #[msg("Math underflow during cash reserve calculation.")]
     CashReserveUnderflow,
 
-    #[msg("Math overflow during cash reserve calculation.")]
-    CashReserveOverflow,
-
     #[msg("Math overflow during denominator calculation.")]
     DenominatorOverflow,
 
@@ -184,12 +178,6 @@ pub enum ErrorCode {
 
     #[msg("Wrong LP decimals")]
     WrongLpDecimals,
-    
-    #[msg("Invalid vault - token_in_vault must be owned by the pair")]
-    InvalidVaultIn,
-    
-    #[msg("Invalid vault - token_out_vault must be owned by the pair")]
-    InvalidVaultOut,
     
     #[msg("Invalid vault - token_in_vault and token_out_vault must be different")]
     InvalidVaultSameAccount,
