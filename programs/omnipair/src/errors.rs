@@ -199,4 +199,7 @@ pub enum ErrorCode {
 
     #[msg("Invalid token order")]
     InvalidTokenOrder,
+
+    #[msg("Invalid utilization bounds - must satisfy: MIN <= start < end <= MAX")]
+    InvalidUtilBounds,
 }

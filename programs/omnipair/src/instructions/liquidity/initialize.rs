@@ -40,6 +40,8 @@ pub struct InitializeAndBootstrapArgs {
     pub swap_fee_bps: u16,
     pub half_life: u64,
     pub fixed_cf_bps: Option<u16>,
+    pub target_util_start_bps: Option<u64>, // utilization lower bound (defaults to 50%)
+    pub target_util_end_bps: Option<u64>,   // utilization upper bound (defaults to 85%)
     pub params_hash: [u8; 32],
     pub version: u8,
 
@@ -202,6 +204,8 @@ impl<'info> InitializeAndBootstrap<'info> {
             swap_fee_bps, 
             half_life,
             fixed_cf_bps,
+            target_util_start_bps,
+            target_util_end_bps,
             params_hash,
             amount0_in,
             amount1_in,
@@ -227,13 +231,20 @@ impl<'info> InitializeAndBootstrap<'info> {
             require_gte!(*cf_bps, 100, ErrorCode::InvalidArgument); // fixed_cf_bps >= 1% (100 bps) minimum
         }
 
+        // validate utilization bounds if provided (both must be provided together, or neither)
+        let util_start = target_util_start_bps.unwrap_or(TARGET_UTIL_START_BPS);
+        let util_end = target_util_end_bps.unwrap_or(TARGET_UTIL_END_BPS);
+        require!(RateModel::validate_util_bounds(util_start, util_end), ErrorCode::InvalidUtilBounds);
+
         // Verify params_hash matches the computed hash
-        // SHA256(VERSION || swap_fee_bps || half_life || fixed_cf_bps)
+        // SHA256(VERSION || swap_fee_bps || half_life || fixed_cf_bps || target_util_start_bps || target_util_end_bps)
         let mut hash_data = Vec::new();
         hash_data.extend_from_slice(&VERSION.to_le_bytes());
         hash_data.extend_from_slice(&swap_fee_bps.to_le_bytes());
         hash_data.extend_from_slice(&half_life.to_le_bytes());
         hash_data.extend_from_slice(&fixed_cf_bps.unwrap_or(0).to_le_bytes());
+        hash_data.extend_from_slice(&target_util_start_bps.unwrap_or(0).to_le_bytes());
+        hash_data.extend_from_slice(&target_util_end_bps.unwrap_or(0).to_le_bytes());
         let computed_hash = hash(&hash_data).to_bytes();
         let hashes_match = computed_hash.iter().zip(params_hash.iter()).all(|(a, b)| a == b);
         require!(hashes_match, ErrorCode::InvalidParamsHash);
@@ -261,12 +272,6 @@ impl<'info> InitializeAndBootstrap<'info> {
         Ok(())
     }
 
-    pub fn handle_create_rate_model(&mut self) -> Result<()> {
-        let rate_model = &mut self.rate_model;
-        rate_model.set_inner(RateModel::new());
-        Ok(())
-    }
-
     pub fn handle_initialize(ctx: Context<Self>, args: InitializeAndBootstrapArgs) -> Result<()> {
         let current_slot = Clock::get()?.slot;
         let pair_key = ctx.accounts.pair.key();
@@ -276,6 +281,8 @@ impl<'info> InitializeAndBootstrap<'info> {
             swap_fee_bps, 
             half_life, 
             fixed_cf_bps,
+            target_util_start_bps,
+            target_util_end_bps,
             params_hash,
             version,
             amount0_in,
@@ -327,8 +334,10 @@ impl<'info> InitializeAndBootstrap<'info> {
             ctx.accounts.lp_mint.key(),
         );
 
-        // Initialize rate model
-        ctx.accounts.rate_model.set_inner(RateModel::new());
+        // Initialize rate model with optional custom utilization bounds
+        let util_start = target_util_start_bps.unwrap_or(TARGET_UTIL_START_BPS);
+        let util_end = target_util_end_bps.unwrap_or(TARGET_UTIL_END_BPS);
+        ctx.accounts.rate_model.set_inner(RateModel::new(util_start, util_end));
 
         // Initialize pair (before LP mint is initialized, but we store the key)
         let vault_bumps = VaultBumps {

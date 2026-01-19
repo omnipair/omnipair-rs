@@ -12,15 +12,26 @@ pub struct RateModel {
 }
 
 impl RateModel {
-    pub fn new() -> Self {
-        const MS_PER_DAY: u64 = 86_400_000;
+    /// Creates a new RateModel with custom utilization bounds (in bps)
+    /// target_util_start_bps: lower bound of optimal utilization range
+    /// target_util_end_bps: upper bound of optimal utilization range
+    pub fn new(target_util_start_bps: u64, target_util_end_bps: u64) -> Self {
         Self {
-            // For production you we want ln(2)/day; for testing we use 1 hour.
-            // exp_rate: NATURAL_LOG_OF_TWO_NAD / MS_PER_DAY,
             exp_rate: NATURAL_LOG_OF_TWO_NAD / MS_PER_DAY,
-            target_util_start: Self::bps_to_nad(TARGET_UTIL_START_BPS),
-            target_util_end:   Self::bps_to_nad(TARGET_UTIL_END_BPS),
+            target_util_start: Self::bps_to_nad(target_util_start_bps),
+            target_util_end:   Self::bps_to_nad(target_util_end_bps),
         }
+    }
+
+    /// Validates that utilization bounds are valid:
+    /// - start < end
+    /// - both within [100, 10000] bps
+    /// - start >= MIN_TARGET_UTIL_BPS (e.g., 1%)
+    /// - end <= MAX_TARGET_UTIL_BPS (e.g., 100%)
+    pub fn validate_util_bounds(start_bps: u64, end_bps: u64) -> bool {
+        start_bps < end_bps 
+            && start_bps >= MIN_TARGET_UTIL_BPS 
+            && end_bps <= MAX_TARGET_UTIL_BPS
     }
 
     /// Returns (current_rate_NAD, integral_NAD) where:
