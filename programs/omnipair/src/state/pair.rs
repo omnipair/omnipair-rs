@@ -6,7 +6,7 @@ use crate::utils::math::{compute_ema, slots_to_ms, ceil_div};
 use crate::state::RateModel;
 use crate::events::{UpdatePairEvent, EventMetadata};
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct VaultBumps {
     pub reserve0: u8,
     pub reserve1: u8,
@@ -17,13 +17,14 @@ pub struct VaultBumps {
 /// Tracks exponential moving averages (EMAs) for the last observed price.
 /// - `symmetric`: standard two-way EMA (exponential price growth and decay)
 /// - `directional`: one-way bottom-up asymmetric EMA (exponential price growth, but snaps instantly on price drops)
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct LastPriceEMA {
     pub symmetric: u64,
     pub directional: u64,
 }
 
 #[account]
+#[derive(InitSpace)]
 pub struct Pair {
     // Token addresses
     pub token0: Pubkey,
