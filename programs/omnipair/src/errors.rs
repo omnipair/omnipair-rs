@@ -53,6 +53,9 @@ pub enum ErrorCode {
     #[msg("Insufficient output amount")]
     InsufficientOutputAmount,
 
+    #[msg("Output amount below minimum requested (slippage exceeded)")]
+    SlippageExceeded,
+
     #[msg("Insufficient liquidity")]
     InsufficientLiquidity,
 
@@ -73,6 +76,9 @@ pub enum ErrorCode {
 
     #[msg("Insufficient amount")]
     InsufficientAmount,
+
+    #[msg("User balance insufficient to cover requested amount")]
+    InsufficientBalance,
 
     #[msg("Insufficient debt")]
     InsufficientDebt,

@@ -478,7 +478,7 @@ impl<'info> InitializeAndBootstrap<'info> {
 
         require!(
             liquidity >= min_liquidity_out,
-            ErrorCode::InsufficientLiquidity
+            ErrorCode::SlippageExceeded
         );
         
         // Mint LP tokens to deployer

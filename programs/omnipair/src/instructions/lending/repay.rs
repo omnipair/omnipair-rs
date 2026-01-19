@@ -25,7 +25,7 @@ impl<'info> CommonAdjustDebt<'info> {
         require_gte!(
             self.user_reserve_token_account.amount,
             debt_to_repay,
-            ErrorCode::InsufficientAmount
+            ErrorCode::InsufficientBalance
         );
 
         // Check user debt >= debt to repay
