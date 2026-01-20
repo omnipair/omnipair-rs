@@ -145,7 +145,7 @@ impl ViewPairData<'_> {
             PairViewKind::EmaPrice1Nad => (OptionalUint::from_u64(pair.ema_price1_nad()), OptionalUint::OptionalU64(None)),
             PairViewKind::SpotPrice0Nad => (OptionalUint::from_u64(pair.spot_price0_nad()), OptionalUint::OptionalU64(None)),
             PairViewKind::SpotPrice1Nad => (OptionalUint::from_u64(pair.spot_price1_nad()), OptionalUint::OptionalU64(None)),
-            PairViewKind::K => (OptionalUint::from_u64(pair.k() as u64), OptionalUint::OptionalU64(None)),
+            PairViewKind::K => (OptionalUint::from_u128(pair.k()), OptionalUint::OptionalU128(None)),
             PairViewKind::GetRates => {
                 let (rate0, rate1) = pair.get_rates(&ctx.accounts.rate_model).unwrap();
                 (OptionalUint::from_u64(rate0), OptionalUint::from_u64(rate1))

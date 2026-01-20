@@ -12,10 +12,8 @@ pub fn compute_ema(last_ema: u64, last_update: u64, input: u64, half_life: u64) 
     let dt = slots_to_ms(last_update, Clock::get().unwrap().slot).unwrap();
     
     if dt > 0 && half_life > 0 {
-        // Calculate exp_time in NAD scale
-        let exp_time = (half_life as u128 * NAD as u128) / NATURAL_LOG_OF_TWO_NAD as u128;
         // Calculate x in NAD scale
-        let x = (dt as u128 * NAD as u128) / exp_time;
+        let x = (dt as u128 * NATURAL_LOG_OF_TWO_NAD as u128) / half_life as u128;
         let alpha = taylor_exp(-(x as i64), NAD, TAYLOR_TERMS);
         
         let result = ((input as u128 * (NAD - alpha) as u128 + last_ema as u128 * alpha as u128) / NAD as u128) as u64;
