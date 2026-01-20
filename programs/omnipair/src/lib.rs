@@ -48,6 +48,14 @@ pub mod omnipair {
         InitFutarchyAuthority::handle_init(ctx, args)
     }
 
+    pub fn update_futarchy_authority(ctx: Context<UpdateFutarchyAuthority>, args: UpdateFutarchyAuthorityArgs) -> Result<()> {
+        UpdateFutarchyAuthority::handle_update(ctx, args)
+    }
+
+    pub fn update_protocol_revenue(ctx: Context<UpdateProtocolRevenue>, args: UpdateProtocolRevenueArgs) -> Result<()> {
+        UpdateProtocolRevenue::handle_update(ctx, args)
+    }
+
     pub fn distribute_tokens(ctx: Context<DistributeTokens>, args: DistributeTokensArgs) -> Result<()> {
         DistributeTokens::handle_distribute(ctx, args)
     }
