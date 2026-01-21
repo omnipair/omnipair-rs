@@ -48,6 +48,12 @@ pub const TARGET_UTIL_START_BPS: u64 = 5_000; // 50%
 pub const TARGET_UTIL_END_BPS: u64 = 8_500; // 85%
 pub const MILLISECONDS_PER_YEAR: u64 = 31_536_000_000; // 31,536,000 seconds * 1000
 
+// Rate model constants
+pub const MS_PER_DAY: u64 = 86_400_000;
+// Utilization bounds (configurable per pool within these limits)
+pub const MIN_TARGET_UTIL_BPS: u64 = 100;  // 1% minimum for target_util_start
+pub const MAX_TARGET_UTIL_BPS: u64 = 10_000;  // 100% maximum for target_util_end
+
 // Global Seeds for deterministic PDAs
 #[constant]
 pub const PAIR_SEED_PREFIX: &[u8] = b"gamm_pair";

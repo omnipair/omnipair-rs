@@ -208,4 +208,7 @@ pub enum ErrorCode {
 
     #[msg("Invalid pair - pair does not match user_position.pair")]
     InvalidPair,
+
+    #[msg("Invalid utilization bounds - must satisfy: MIN <= start < end <= MAX")]
+    InvalidUtilBounds,
 }
