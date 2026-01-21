@@ -146,12 +146,12 @@ impl Pair {
        self.get_token_y(debt_token_mint)
     }
 
-    pub fn get_debt_token(&self, debt_token_mint: &Pubkey) -> Pubkey {
-        self.get_token_y(debt_token_mint)
+    pub fn get_debt_token(&self, collateral_token_mint: &Pubkey) -> Pubkey {
+        self.get_token_y(collateral_token_mint)
     }
 
-    pub fn get_token_y(&self, token_y: &Pubkey) -> Pubkey {
-        match *token_y == self.token0 {
+    pub fn get_token_y(&self, token_x: &Pubkey) -> Pubkey {
+        match *token_x == self.token0 {
             true => self.token1,
             false => self.token0,
         }
