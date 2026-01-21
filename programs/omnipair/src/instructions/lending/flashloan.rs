@@ -13,7 +13,7 @@ use crate::{
     constants::*,
     errors::ErrorCode,
     events::*,
-    utils::{token::transfer_from_vault_to_user, math::ceil_div},
+    utils::{token::{transfer_from_vault_to_user, sync_native_if_wsol}, math::ceil_div},
     generate_gamm_pair_seeds,
 };
 
@@ -181,6 +181,10 @@ impl<'info> Flashloan<'info> {
             .ok_or(ErrorCode::FeeMathOverflow)?,
             BPS_DENOMINATOR as u128,
         ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
+
+        // Sync native SOL for WSOL vaults before recording balances
+        sync_native_if_wsol(&pair.token0, &reserve0_vault.to_account_info(), &token_program.to_account_info())?;
+        sync_native_if_wsol(&pair.token1, &reserve1_vault.to_account_info(), &token_program.to_account_info())?;
 
         // Record balances before the flash loan
         reserve0_vault.reload()?;

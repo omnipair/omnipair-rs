@@ -11,6 +11,9 @@ pub enum ErrorCode {
     #[msg("Invalid swap fee bps")]
     InvalidSwapFeeBps,
 
+    #[msg("Invalid interest fee bps")]
+    InvalidInterestFeeBps,
+
     #[msg("Invalid half life")]
     InvalidHalfLife,
 
@@ -199,6 +202,12 @@ pub enum ErrorCode {
 
     #[msg("Invalid token order")]
     InvalidTokenOrder,
+
+    #[msg("Invalid rate model - rate_model does not match pair.rate_model")]
+    InvalidRateModel,
+
+    #[msg("Invalid pair - pair does not match user_position.pair")]
+    InvalidPair,
 
     #[msg("Invalid utilization bounds - must satisfy: MIN <= start < end <= MAX")]
     InvalidUtilBounds,

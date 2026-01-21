@@ -2,7 +2,7 @@
 /// https://github.com/raydium-io/raydium-cp-swap/blob/master/programs/cp-swap/src/utils/token.rs
 /// Handles token transfers and minting with support for old token program and spl_token_2022
 use crate::errors::ErrorCode;
-use anchor_lang::{prelude::*, system_program};
+use anchor_lang::{prelude::*, system_program, solana_program::program::invoke};
 use anchor_spl::{
     token::{self, Token, TokenAccount},
     token_2022::{
@@ -21,6 +21,29 @@ use anchor_spl::{
         InitializeAccount3, Mint,
     },
 };
+
+/// Syncs native SOL balance for a WSOL token account if the mint is the native mint.
+/// This ensures the token account's `amount` field reflects any native SOL that was
+/// sent directly to the account.
+pub fn sync_native_if_wsol<'a>(
+    mint: &Pubkey,
+    token_account: &AccountInfo<'a>,
+    token_program: &AccountInfo<'a>,
+) -> Result<()> {
+    if *mint == spl_token::native_mint::id() {
+        invoke(
+            &spl_token::instruction::sync_native(
+                token_program.key,
+                token_account.key,
+            )?,
+            &[
+                token_program.clone(),
+                token_account.clone(),
+            ],
+        )?;
+    }
+    Ok(())
+}
 
 pub fn transfer_from_user_to_vault<'a>(
     authority: AccountInfo<'a>,
