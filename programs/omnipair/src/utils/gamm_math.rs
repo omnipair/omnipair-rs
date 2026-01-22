@@ -120,14 +120,14 @@ fn calculate_utilized_collateral_with_impact(
     current_total_debt: u64, 
     collateral_amm_reserve: u64, 
     debt_amm_reserve: u64,
-    collateral_spot_price_nad: u64,
+    collateral_directional_ema_price_nad: u64,
     collateral_ema_price_nad: u64,
 ) -> Result<u64> {
     let (x_virt, y_virt) = construct_virtual_reserves_at_pessimistic_price(
         collateral_amm_reserve,
         debt_amm_reserve,
         collateral_ema_price_nad,
-        collateral_spot_price_nad,
+        collateral_directional_ema_price_nad,
     )?;
     
     CPCurve::calculate_amount_in(x_virt, y_virt, current_total_debt)
@@ -135,20 +135,20 @@ fn calculate_utilized_collateral_with_impact(
 
 /// Calculates the pool's max total debt capacity given utilized + user collateral.
 /// Includes price impact from the constant product curve.
-/// Uses virtual reserves at min(spot, ema) price to prevent manipulation.
+/// Uses virtual reserves at min(directional_ema, ema) price to prevent manipulation.
 fn calculate_max_allowed_total_debt(
     utilized_collateral: u64, 
     user_collateral_amount: u64, 
     collateral_amm_reserve: u64, 
     debt_amm_reserve: u64,
-    collateral_spot_price_nad: u64,
+    collateral_directional_ema_price_nad: u64,
     collateral_ema_price_nad: u64,
 ) -> Result<u64> {
     let (x_virt, y_virt) = construct_virtual_reserves_at_pessimistic_price(
         collateral_amm_reserve,
         debt_amm_reserve,
-        collateral_ema_price_nad ,
-        collateral_spot_price_nad,
+        collateral_ema_price_nad,
+        collateral_directional_ema_price_nad,
     )?;
     
     let total_collateral_amount = utilized_collateral.checked_add(user_collateral_amount).ok_or(ErrorCode::Overflow)?;
@@ -158,14 +158,16 @@ fn calculate_max_allowed_total_debt(
 /// Maximum borrowable amount of tokenY using either a fixed CF or an impact-aware CF
 ///
 /// Inputs:
-/// - collateral_amount: X
-/// - collateral_ema_price_scaled: P_ema (NAD-scaled, Y/X)
-/// - collateral_directional_ema_price_scaled: P_directional_ema (NAD-scaled, Y/X) [~50 slots far from spot price, closer to ema price]
-/// - debt_amm_reserve: R1 (raw Y units) - only used for dynamic CF calculation
+/// - collateral_amount: X (raw collateral units)
+/// - collateral_ema_price_nad: P_ema (NAD-scaled, Y/X)
+/// - collateral_directional_ema_price_nad: P_directional_ema (NAD-scaled, Y/X) [~50 slots lagging behind inflated spot price]
+/// - collateral_amm_reserve: R0 (raw X units)
+/// - debt_amm_reserve: R1 (raw Y units)
+/// - total_debt: existing total debt (raw Y units)
 /// - fixed_cf_bps: Optional fixed collateral factor. If Some, uses this directly instead of AMM-based CF
 ///
 /// Returns:
-/// - final_borrow_limit (NAD-scaled Y)
+/// - final_borrow_limit (raw Y units)
 /// - max_allowed_cf_bps (liquidation_cf_bps * 95%)
 /// - liquidation_cf_bps 
 pub fn pessimistic_max_debt(
@@ -186,7 +188,7 @@ pub fn pessimistic_max_debt(
     }
 
     // Collateral Value (V) in debt token (Y) = Collateral Amount (X) * Collateral EMA Price (P_ema) / NAD
-    // V = X * P_ema / NAD  (NAD-scaled Y)
+    // V = X * P_ema / NAD  (raw Y units)
     let collateral_value = (collateral_amount as u128)
         .saturating_mul(collateral_ema_price_nad as u128)
         .checked_div(NAD_U128)

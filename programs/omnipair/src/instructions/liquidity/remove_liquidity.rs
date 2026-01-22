@@ -29,7 +29,7 @@ impl<'info> AdjustLiquidity<'info> {
 
         require!(*liquidity_in > 0, ErrorCode::AmountZero);
         require!(*liquidity_in <= pair.total_supply, ErrorCode::InsufficientLiquidity);
-        require!(user_lp_token_account.amount >= *liquidity_in, ErrorCode::InsufficientLiquidity);
+        require!(user_lp_token_account.amount >= *liquidity_in, ErrorCode::InsufficientBalance);
         
         Ok(())
     }
@@ -76,26 +76,26 @@ impl<'info> AdjustLiquidity<'info> {
         // Apply withdrawal fee (1%) - fee remains in reserves for remaining LPs
         let fee0 = ceil_div(
             (amount0_gross as u128).checked_mul(LIQUIDITY_WITHDRAWAL_FEE_BPS as u128)
-                .ok_or(ErrorCode::LiquidityMathOverflow)?,
+                .ok_or(ErrorCode::FeeMathOverflow)?,
             BPS_DENOMINATOR as u128
-        ).ok_or(ErrorCode::LiquidityMathOverflow)? as u64;
+        ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
         let fee1 = ceil_div(
             (amount1_gross as u128).checked_mul(LIQUIDITY_WITHDRAWAL_FEE_BPS as u128)
-                .ok_or(ErrorCode::LiquidityMathOverflow)?,
+                .ok_or(ErrorCode::FeeMathOverflow)?,
             BPS_DENOMINATOR as u128
-        ).ok_or(ErrorCode::LiquidityMathOverflow)? as u64;
+        ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
 
         let amount0_out = amount0_gross.checked_sub(fee0).ok_or(ErrorCode::LiquidityMathOverflow)?;
         let amount1_out = amount1_gross.checked_sub(fee1).ok_or(ErrorCode::LiquidityMathOverflow)?;
 
-        // Check if amounts are sufficient
+        // Check if amounts meet minimum (slippage protection)
         require!(
             amount0_out >= args.min_amount0_out,
-            ErrorCode::InsufficientLiquidity
+            ErrorCode::SlippageExceeded
         );
         require!(
             amount1_out >= args.min_amount1_out,
-            ErrorCode::InsufficientLiquidity
+            ErrorCode::SlippageExceeded
         );
 
         // Ensure sufficient cash reserves: (internally accounted instead of relying on token account balance for deciding liquidity availability)

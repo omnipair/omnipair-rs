@@ -40,7 +40,7 @@ pub struct Flashloan<'info> {
     #[account(
         mut,
         seeds = [PAIR_SEED_PREFIX, pair.token0.as_ref(), pair.token1.as_ref(), pair.params_hash.as_ref()],
-        bump
+        bump = pair.bump
     )]
     pub pair: Account<'info, Pair>,
 
@@ -52,7 +52,7 @@ pub struct Flashloan<'info> {
 
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
-        bump
+        bump = futarchy_authority.bump
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
     

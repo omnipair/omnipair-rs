@@ -3,6 +3,7 @@ use crate::constants::*;
 use crate::utils::math::*;
 
 #[account]
+#[derive(InitSpace)]
 pub struct RateModel {
     /// exp_rate: NAD/millisecond (k_real = exp_rate / NAD)
     pub exp_rate: u64,

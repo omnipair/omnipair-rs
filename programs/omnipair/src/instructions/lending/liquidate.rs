@@ -31,7 +31,7 @@ pub struct Liquidate<'info> {
             pair.token1.as_ref(),
             pair.params_hash.as_ref()
         ],
-        bump
+        bump = pair.bump
     )]
     pub pair: Account<'info, Pair>,
 
@@ -42,7 +42,7 @@ pub struct Liquidate<'info> {
             pair.key().as_ref(),
             position_owner.key().as_ref()
         ],
-        bump
+        bump = user_position.bump
     )]
     pub user_position: Account<'info, UserPosition>,
 
@@ -54,7 +54,7 @@ pub struct Liquidate<'info> {
 
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
-        bump
+        bump = futarchy_authority.bump
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
 

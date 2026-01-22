@@ -3,20 +3,20 @@ use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::errors::ErrorCode;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace)]
 pub struct RevenueShare {
     pub swap_bps: u16,
     pub interest_bps: u16,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace)]
 pub struct RevenueRecipients {
     pub futarchy_treasury: Pubkey,
     pub buybacks_vault: Pubkey,
     pub team_treasury: Pubkey,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace)]
 pub struct RevenueDistribution {
     pub futarchy_treasury_bps: u16,
     pub buybacks_vault_bps: u16,
@@ -33,7 +33,7 @@ impl RevenueDistribution {
 }
 
 #[account]
-#[derive(Debug)]
+#[derive(Debug, InitSpace)]
 pub struct FutarchyAuthority {
     pub version: u8,
     pub authority: Pubkey,

@@ -80,7 +80,7 @@ pub struct InitializeAndBootstrap<'info> {
 
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
-        bump
+        bump = futarchy_authority.bump
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
 
@@ -487,7 +487,7 @@ impl<'info> InitializeAndBootstrap<'info> {
 
         require!(
             liquidity >= min_liquidity_out,
-            ErrorCode::InsufficientLiquidity
+            ErrorCode::SlippageExceeded
         );
         
         // Mint LP tokens to deployer

@@ -12,6 +12,7 @@ pub enum DebtDecreaseReason {
 }
 
 #[account]
+#[derive(InitSpace)]
 pub struct UserPosition {
     // User and pair info
     pub owner: Pubkey,             // who owns this position

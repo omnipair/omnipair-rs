@@ -30,7 +30,7 @@ pub struct CommonAdjustCollateral<'info> {
             pair.token1.as_ref(),
             pair.params_hash.as_ref()
         ],
-        bump
+        bump = pair.bump
     )]
     pub pair: Account<'info, Pair>,
 
@@ -43,7 +43,7 @@ pub struct CommonAdjustCollateral<'info> {
             pair.key().as_ref(),
             user.key().as_ref()
         ],
-        bump
+        bump = user_position.bump
     )]
     pub user_position: Account<'info, UserPosition>,
 
@@ -55,7 +55,7 @@ pub struct CommonAdjustCollateral<'info> {
 
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
-        bump
+        bump = futarchy_authority.bump
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
 
@@ -114,7 +114,7 @@ pub struct CommonAdjustDebt<'info> {
             pair.token1.as_ref(),
             pair.params_hash.as_ref()
         ],
-        bump
+        bump = pair.bump
     )]
     pub pair: Account<'info, Pair>,
 
@@ -127,7 +127,7 @@ pub struct CommonAdjustDebt<'info> {
             pair.key().as_ref(),
             user.key().as_ref()
         ],
-        bump
+        bump = user_position.bump
     )]
     pub user_position: Account<'info, UserPosition>,
 
@@ -139,7 +139,7 @@ pub struct CommonAdjustDebt<'info> {
 
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
-        bump
+        bump = futarchy_authority.bump
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
 

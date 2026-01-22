@@ -63,10 +63,10 @@ impl<'info> AdjustLiquidity<'info> {
                 liquidity0.min(liquidity1).try_into().map_err(|_| ErrorCode::LiquidityConversionOverflow)?
             };
         
-        // Check if liquidity is sufficient
+        // Check if liquidity meets minimum (slippage protection)
         require!(
             liquidity >= args.min_liquidity_out,
-            ErrorCode::InsufficientLiquidity
+            ErrorCode::SlippageExceeded
         );
 
         // Calculate exact amounts to transfer based on liquidity minted

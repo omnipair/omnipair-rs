@@ -116,7 +116,7 @@ pub struct ViewPairData<'info> {
     pub rate_model: Account<'info, RateModel>,
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
-        bump
+        bump = futarchy_authority.bump
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
 }
@@ -134,7 +134,7 @@ pub struct ViewUserPositionData<'info> {
     pub rate_model: Account<'info, RateModel>,
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
-        bump
+        bump = futarchy_authority.bump
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
 }

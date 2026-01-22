@@ -28,7 +28,7 @@ pub struct Swap<'info> {
     #[account(
         mut,
         seeds = [PAIR_SEED_PREFIX, pair.token0.as_ref(), pair.token1.as_ref(), pair.params_hash.as_ref()],
-        bump
+        bump = pair.bump
     )]
     // Box used to avoid Access violation in stack frame... error
     pub pair: Box<Account<'info, Pair>>,
@@ -41,7 +41,7 @@ pub struct Swap<'info> {
 
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
-        bump
+        bump = futarchy_authority.bump
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
     
@@ -109,7 +109,7 @@ impl<'info> Swap<'info> {
         let amount_in = args.amount_in;
 
         require!(amount_in > 0, ErrorCode::AmountZero);
-        require_gte!(self.user_token_in_account.amount, amount_in, ErrorCode::InsufficientAmount0In);
+        require_gte!(self.user_token_in_account.amount, amount_in, ErrorCode::InsufficientBalance);
         
         // Ensure token_in_vault and token_out_vault are different accounts
         require_keys_neq!(
@@ -210,7 +210,7 @@ impl<'info> Swap<'info> {
         let new_reserve_in = reserve_in.checked_add(amount_in_with_lp_fee).ok_or(ErrorCode::Overflow)?;
         let new_reserve_out = reserve_out.checked_sub(amount_out).ok_or(ErrorCode::Overflow)?;
 
-        require_gte!(amount_out, min_amount_out, ErrorCode::InsufficientOutputAmount);
+        require_gte!(amount_out, min_amount_out, ErrorCode::SlippageExceeded);
         // 1. r_cash >= r_out
         match is_token0_in {
             true => require_gte!(pair.cash_reserve1, amount_out, ErrorCode::InsufficientCashReserve1),
