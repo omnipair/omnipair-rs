@@ -262,10 +262,13 @@ impl<'info> Liquidate<'info> {
         let (_, _, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount_post_liquidation)?;
 
         // Liquidator incentive from base amount (not from penalty)
-        let caller_incentive: u64 = (collateral_base as u128)
-            .checked_mul(LIQUIDATION_INCENTIVE_BPS as u128).ok_or(ErrorCode::DebtMathOverflow)?
-            .checked_div(BPS_DENOMINATOR as u128).ok_or(ErrorCode::DebtMathOverflow)?
-            .try_into().map_err(|_| ErrorCode::DebtMathOverflow)?;
+        let caller_incentive: u64 = min(
+            (collateral_base as u128)
+                .checked_mul(LIQUIDATION_INCENTIVE_BPS as u128).ok_or(ErrorCode::DebtMathOverflow)?
+                .checked_div(BPS_DENOMINATOR as u128).ok_or(ErrorCode::DebtMathOverflow)?
+                .try_into().map_err(|_| ErrorCode::DebtMathOverflow)?,
+            collateral_final
+        );
         
         // Remaining collateral goes to reserves (LPs get base + penalty - incentive)
         let collateral_to_reserves = collateral_final
