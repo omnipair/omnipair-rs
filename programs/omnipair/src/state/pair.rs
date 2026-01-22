@@ -56,8 +56,8 @@ pub struct Pair {
     // Debt tracking (r_debt)
     pub total_debt0: u64,
     pub total_debt1: u64,
-    pub total_debt0_shares: u64,
-    pub total_debt1_shares: u64,
+    pub total_debt0_shares: u128,
+    pub total_debt1_shares: u128,
     
     // LP liquidity tracking
     pub total_supply: u64,

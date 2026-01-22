@@ -231,16 +231,16 @@ impl<'info> Liquidate<'info> {
         // Calculate shares to writeoff first
         // For partial liquidation: ceil(user_debt_shares * CLOSE_FACTOR_BPS / BPS_DENOMINATOR)
         // For insolvent positions: all user debt shares
-        let shares_to_writeoff: u64 = match is_insolvent {
+        let shares_to_writeoff: u128 = match is_insolvent {
             true => user_debt_shares,
             false => {
                 // ceiled division to avoid edge case where small shares never get fully written off
                 let partial_shares = ceil_div(
-                    (user_debt_shares as u128)
+                    user_debt_shares
                         .checked_mul(CLOSE_FACTOR_BPS as u128).ok_or(ErrorCode::DebtMathOverflow)?,
                     BPS_DENOMINATOR as u128
                 ).ok_or(ErrorCode::DebtMathOverflow)?;
-                min(user_debt_shares, partial_shares as u64) // clamped to user's shares
+                min(user_debt_shares, partial_shares) // clamped to user's shares
             }
         };
 
@@ -248,9 +248,9 @@ impl<'info> Liquidate<'info> {
             true => 0,
             false => {
                 let debt = ceil_div(
-                    (shares_to_writeoff as u128)
+                    shares_to_writeoff
                         .checked_mul(total_debt as u128).ok_or(ErrorCode::DebtMathOverflow)?,
-                    total_debt_shares as u128
+                    total_debt_shares
                 ).ok_or(ErrorCode::DebtMathOverflow)?;
                 min(user_debt, debt as u64) // clamped to user's debt
             }

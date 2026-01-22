@@ -10,7 +10,7 @@ pub enum DebtDecreaseReason {
     /// Repayment: calculate shares from amount
     Repayment,
     /// WriteOff: expects exact debt shares to be written off
-    WriteOff(u64),
+    WriteOff(u128),
 }
 
 #[account]
@@ -26,8 +26,8 @@ pub struct UserPosition {
     pub collateral1: u64,          // token1 collateral amount
     
     // Debt tracking
-    pub debt0_shares: u64,         // debt shares for token0
-    pub debt1_shares: u64,         // debt shares for token1
+    pub debt0_shares: u128,         // debt shares for token0
+    pub debt1_shares: u128,         // debt shares for token1
 
     // PDA bump
     pub bump: u8,
@@ -61,23 +61,31 @@ impl UserPosition {
         }
     }
 
+    /// With 10^6 scaling, the first borrow of 1 unit creates 1,000,000 shares,
+    /// making subsequent rounding errors negligible (<0.0001% instead of potentially >10%).
     pub fn increase_debt(&mut self, pair: &mut Pair, debt_token: &Pubkey, amount: u64) -> Result<()> {
         match *debt_token == pair.token0 {
             true => {
                 if pair.total_debt0_shares == 0 {
-                    pair.total_debt0_shares = amount;
-                    self.debt0_shares = amount;
+                    // Scale initial debt share exchange rate by 10^6
+                    let shares = amount
+                        .checked_mul(DEBT_SHARE_SCALE)
+                        .ok_or(ErrorCode::DebtShareMathOverflow)?
+                        .try_into()
+                        .map_err(|_| ErrorCode::DebtShareMathOverflow)?;
+                    pair.total_debt0_shares = shares;
+                    self.debt0_shares = shares;
                 } else {
                     let shares = ceil_div(
                         (amount as u128)
-                            .checked_mul(pair.total_debt0_shares as u128)
+                            .checked_mul(pair.total_debt0_shares)
                             .ok_or(ErrorCode::DebtShareMathOverflow)?,
                         pair.total_debt0 as u128
                     )
                     .ok_or(ErrorCode::DebtShareDivisionOverflow)?
                     .try_into()
                     .map_err(|_| ErrorCode::DebtShareDivisionOverflow)?;
-                    pair.total_debt0_shares = pair.total_debt0_shares.saturating_add(shares);
+                    pair.total_debt0_shares = pair.total_debt0_shares.saturating_add(shares as u128);
                     self.debt0_shares = self.debt0_shares.saturating_add(shares);
                 }
                 pair.total_debt0 = pair.total_debt0.saturating_add(amount);
@@ -85,18 +93,22 @@ impl UserPosition {
             }
             false => {
                 if pair.total_debt1_shares == 0 {
-                    pair.total_debt1_shares = amount;
-                    self.debt1_shares = amount;
+                    // Scale initial debt share exchange rate by 10^6
+                    let shares = amount
+                        .checked_mul(DEBT_SHARE_SCALE)
+                        .ok_or(ErrorCode::DebtShareMathOverflow)?
+                        .try_into()
+                        .map_err(|_| ErrorCode::DebtShareMathOverflow)?;
+                    pair.total_debt1_shares = shares as u128;
+                    self.debt1_shares = shares;
                 } else {
                     let shares = ceil_div(
                         (amount as u128)
-                            .checked_mul(pair.total_debt1_shares as u128)
+                            .checked_mul(pair.total_debt1_shares)
                             .ok_or(ErrorCode::DebtShareMathOverflow)?,
                         pair.total_debt1 as u128
                     )
-                    .ok_or(ErrorCode::DebtShareDivisionOverflow)?
-                    .try_into()
-                    .map_err(|_| ErrorCode::DebtShareDivisionOverflow)?;
+                    .ok_or(ErrorCode::DebtShareDivisionOverflow)?;
                     pair.total_debt1_shares = pair.total_debt1_shares.saturating_add(shares);
                     self.debt1_shares = self.debt1_shares.saturating_add(shares);
                 }
@@ -133,12 +145,10 @@ impl UserPosition {
                 let shares = match reason {
                     DebtDecreaseReason::WriteOff(exact_shares) => exact_shares.min(self.debt0_shares),
                     DebtDecreaseReason::Repayment => (amount as u128)
-                        .checked_mul(pair.total_debt0_shares as u128)
+                        .checked_mul(pair.total_debt0_shares)
                         .ok_or(ErrorCode::DebtShareMathOverflow)?
                         .checked_div(pair.total_debt0 as u128)
                         .ok_or(ErrorCode::DebtShareDivisionOverflow)?
-                        .try_into()
-                        .map_err(|_| ErrorCode::DebtShareDivisionOverflow)?
                 };
                 self.debt0_shares = self.debt0_shares.saturating_sub(shares);
                 pair.total_debt0_shares = pair.total_debt0_shares.saturating_sub(shares);
@@ -154,12 +164,10 @@ impl UserPosition {
                 let shares = match reason {
                     DebtDecreaseReason::WriteOff(exact_shares) => exact_shares.min(self.debt1_shares),
                     DebtDecreaseReason::Repayment => (amount as u128)
-                        .checked_mul(pair.total_debt1_shares as u128)
+                        .checked_mul(pair.total_debt1_shares)
                         .ok_or(ErrorCode::DebtShareMathOverflow)?
                         .checked_div(pair.total_debt1 as u128)
                         .ok_or(ErrorCode::DebtShareDivisionOverflow)?
-                        .try_into()
-                        .map_err(|_| ErrorCode::DebtShareDivisionOverflow)?
                 };
                 self.debt1_shares = self.debt1_shares.saturating_sub(shares);
                 pair.total_debt1_shares = pair.total_debt1_shares.saturating_sub(shares);
@@ -173,14 +181,14 @@ impl UserPosition {
         Ok(())
     }
 
-    pub fn calculate_debt0(&self, total_debt0: u64, total_debt0_shares: u64) -> Result<u64> {
+    pub fn calculate_debt0(&self, total_debt0: u64, total_debt0_shares: u128) -> Result<u64> {
         match total_debt0_shares {
             0 => Ok(0),
             _ => Ok(ceil_div(
-                (self.debt0_shares as u128)
+                self.debt0_shares
                     .checked_mul(total_debt0 as u128)
                     .ok_or(ErrorCode::DebtMathOverflow)?,
-                total_debt0_shares as u128
+                total_debt0_shares
             )
             .ok_or(ErrorCode::DebtShareDivisionOverflow)?
             .try_into()
@@ -188,14 +196,14 @@ impl UserPosition {
         }
     }
 
-    pub fn calculate_debt1(&self, total_debt1: u64, total_debt1_shares: u64) -> Result<u64> {
+    pub fn calculate_debt1(&self, total_debt1: u64, total_debt1_shares: u128) -> Result<u64> {
         match total_debt1_shares {
             0 => Ok(0),
             _ => Ok(ceil_div(
-                (self.debt1_shares as u128)
+                self.debt1_shares
                     .checked_mul(total_debt1 as u128)
                     .ok_or(ErrorCode::DebtMathOverflow)?,
-                total_debt1_shares as u128
+                total_debt1_shares
             )
             .ok_or(ErrorCode::DebtShareDivisionOverflow)?
             .try_into()
