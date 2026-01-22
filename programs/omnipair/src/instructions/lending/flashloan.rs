@@ -119,10 +119,10 @@ impl<'info> Flashloan<'info> {
             ErrorCode::AmountZero
         );
         
-        // Ensure loan amounts doesn't exceed available reserves
+        // Ensure loan amounts doesn't exceed available cash reserves
         if args.amount0 > 0 {
             require_gte!(
-                self.pair.reserve0,
+                self.pair.cash_reserve0,
                 args.amount0,
                 ErrorCode::BorrowExceedsReserve
             );
@@ -130,7 +130,7 @@ impl<'info> Flashloan<'info> {
         
         if args.amount1 > 0 {
             require_gte!(
-                self.pair.reserve1,
+                self.pair.cash_reserve1,
                 args.amount1,
                 ErrorCode::BorrowExceedsReserve
             );
