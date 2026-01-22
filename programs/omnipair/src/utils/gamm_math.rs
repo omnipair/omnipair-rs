@@ -144,6 +144,7 @@ fn calculate_max_allowed_total_debt(
     collateral_directional_ema_price_nad: u64,
     collateral_ema_price_nad: u64,
 ) -> Result<u64> {
+    // x_virt is collateral virtual reserve, y_virt is debt virtual reserve
     let (x_virt, y_virt) = construct_virtual_reserves_at_pessimistic_price(
         collateral_amm_reserve,
         debt_amm_reserve,
@@ -152,7 +153,7 @@ fn calculate_max_allowed_total_debt(
     )?;
     
     let total_collateral_amount = utilized_collateral.checked_add(user_collateral_amount).ok_or(ErrorCode::Overflow)?;
-    CPCurve::calculate_amount_out(y_virt, x_virt, total_collateral_amount)
+    CPCurve::calculate_amount_out(x_virt, y_virt, total_collateral_amount)
 }
 
 /// Maximum borrowable amount of tokenY using either a fixed CF or an impact-aware CF
