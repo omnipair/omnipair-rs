@@ -254,12 +254,11 @@ impl ViewUserPositionData<'_> {
                     if user_debt == 0 || user_collateral == 0 {
                         0u64
                     } else {
-                        // x_virt is collateral virtual reserve, y_virt is debt virtual reserve
-                        let (x_virt, y_virt) = construct_virtual_reserves_at_pessimistic_price(
+                        let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
                             pair.reserve0, pair.reserve1, pair.ema_price0_nad(), pair.directional_ema_price0_nad()
                         ).unwrap_or((pair.reserve0, pair.reserve1));
                         
-                        let collateral_value = CPCurve::calculate_amount_out(x_virt, y_virt, user_collateral).unwrap_or(0);
+                        let collateral_value = CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, user_collateral).unwrap_or(0);
                         let borrow_limit = (collateral_value as u128)
                             .saturating_mul(liquidation_cf as u128)
                             .checked_div(BPS_DENOMINATOR as u128).unwrap_or(0);
@@ -277,12 +276,11 @@ impl ViewUserPositionData<'_> {
                     if user_debt == 0 || user_collateral == 0 {
                         0u64
                     } else {
-                        // x_virt is collateral virtual reserve, y_virt is debt virtual reserve
-                        let (x_virt, y_virt) = construct_virtual_reserves_at_pessimistic_price(
+                        let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
                             pair.reserve1, pair.reserve0, pair.ema_price1_nad(), pair.directional_ema_price1_nad()
                         ).unwrap_or((pair.reserve1, pair.reserve0));
                         
-                        let collateral_value = CPCurve::calculate_amount_out(x_virt, y_virt, user_collateral).unwrap_or(0);
+                        let collateral_value = CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, user_collateral).unwrap_or(0);
                         let borrow_limit = (collateral_value as u128)
                             .saturating_mul(liquidation_cf as u128)
                             .checked_div(BPS_DENOMINATOR as u128).unwrap_or(0);

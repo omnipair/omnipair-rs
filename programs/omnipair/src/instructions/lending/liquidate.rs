@@ -200,14 +200,13 @@ impl<'info> Liquidate<'info> {
             ),
         };
 
-        // x_virt is collateral virtual reserve, y_virt is debt virtual reserve
         // Construct virtual reserves at pessimistic price
-        let (x_virt, y_virt) = construct_virtual_reserves_at_pessimistic_price(
+        let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
             collateral_reserve, debt_reserve, collateral_ema_nad, collateral_ema_nad
         )?;
 
         // Collateral value with impact: debt coverable by selling all collateral
-        let collateral_value_with_impact = CPCurve::calculate_amount_out(x_virt, y_virt, user_collateral)?;
+        let collateral_value_with_impact = CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, user_collateral)?;
         
         // Borrow limit = collateral_value * liquidation_cf
         let borrow_limit = (collateral_value_with_impact as u128)
@@ -235,7 +234,7 @@ impl<'info> Liquidate<'info> {
         };
         
         // Calculate base collateral to seize with price impact: Δx = Δy * x / (y - Δy)
-        let collateral_base = CPCurve::calculate_amount_in(x_virt, y_virt, debt_to_repay)?;
+        let collateral_base = CPCurve::calculate_amount_in(collateral_ema_reserve, debt_ema_reserve, debt_to_repay)?;
 
         // Add liquidation penalty on top (paid by borrower, benefits LPs)
         // total_seized = base * (1 + LIQUIDATION_PENALTY_BPS / BPS)

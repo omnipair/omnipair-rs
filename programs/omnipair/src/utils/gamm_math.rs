@@ -62,8 +62,8 @@ impl CPCurve {
 }
 
 /// Constructs virtual reserves at pessimistic price = min(P_directional_ema, P_symmetric_ema) from spot reserves
-/// x_virt = sqrt(k / P_pessimistic), y_virt = sqrt(k * P_pessimistic)
-/// x_virt = sqrt(k * NAD / P_pessimistic), y_virt = sqrt(k * P_pessimistic / NAD)
+/// - x_virt  = sqrt(k / P_pessimistic) [`collateral_ema_reserve`]
+/// - y_virt = sqrt(k * P_pessimistic) [`debt_ema_reserve`]
 pub fn construct_virtual_reserves_at_pessimistic_price(
     collateral_spot_reserve: u64,
     debt_spot_reserve: u64,
@@ -91,7 +91,7 @@ pub fn construct_virtual_reserves_at_pessimistic_price(
         .checked_div(pessimistic_price)
         .ok_or(ErrorCode::DenominatorOverflow)?;
     // sqrt(k * NAD / P_pessimistic)
-    let x_virt = x_virt_squared
+    let collateral_ema_reserve = x_virt_squared
         .sqrt()
         .ok_or(ErrorCode::Overflow)?
         .try_into()
@@ -104,13 +104,13 @@ pub fn construct_virtual_reserves_at_pessimistic_price(
         .checked_div(NAD_U128)
         .ok_or(ErrorCode::DenominatorOverflow)?;
     // sqrt(k * P_pessimistic / NAD)
-    let y_virt = y_virt_squared
+    let debt_ema_reserve = y_virt_squared
         .sqrt()
         .ok_or(ErrorCode::Overflow)?
         .try_into()
         .map_err(|_| ErrorCode::Overflow)?;
     
-    Ok((x_virt, y_virt))
+    Ok((collateral_ema_reserve, debt_ema_reserve))
 }
 
 /// Calculates collateral (X) needed to repay a given debt (Y) via AMM swap.
@@ -123,14 +123,14 @@ fn calculate_utilized_collateral_with_impact(
     collateral_directional_ema_price_nad: u64,
     collateral_ema_price_nad: u64,
 ) -> Result<u64> {
-    let (x_virt, y_virt) = construct_virtual_reserves_at_pessimistic_price(
+    let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
         collateral_amm_reserve,
         debt_amm_reserve,
         collateral_ema_price_nad,
         collateral_directional_ema_price_nad,
     )?;
     
-    CPCurve::calculate_amount_in(x_virt, y_virt, current_total_debt)
+    CPCurve::calculate_amount_in(collateral_ema_reserve, debt_ema_reserve, current_total_debt)
 }
 
 /// Calculates the pool's max total debt capacity given utilized + user collateral.
@@ -144,8 +144,7 @@ fn calculate_max_allowed_total_debt(
     collateral_directional_ema_price_nad: u64,
     collateral_ema_price_nad: u64,
 ) -> Result<u64> {
-    // x_virt is collateral virtual reserve, y_virt is debt virtual reserve
-    let (x_virt, y_virt) = construct_virtual_reserves_at_pessimistic_price(
+    let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
         collateral_amm_reserve,
         debt_amm_reserve,
         collateral_ema_price_nad,
@@ -153,7 +152,7 @@ fn calculate_max_allowed_total_debt(
     )?;
     
     let total_collateral_amount = utilized_collateral.checked_add(user_collateral_amount).ok_or(ErrorCode::Overflow)?;
-    CPCurve::calculate_amount_out(x_virt, y_virt, total_collateral_amount)
+    CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, total_collateral_amount)
 }
 
 /// Maximum borrowable amount of tokenY using either a fixed CF or an impact-aware CF
@@ -568,16 +567,16 @@ mod tests {
         let p_spot_nad = (625 * NAD) / 800;
         let p_ema_nad = NAD / 2;
         
-        let (x_virt, y_virt) = construct_virtual_reserves_at_pessimistic_price(
+        let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
             x_spot, y_spot, p_ema_nad, p_spot_nad
         ).unwrap();
         
         // Virtual reserves at P_safe=min(0.78125, 0.5)=0.5 → (1000 NAD, 500 NAD)
-        assert_eq!((x_virt, y_virt), (1000 * NAD, 500 * NAD));
+        assert_eq!((collateral_ema_reserve, debt_ema_reserve), (1000 * NAD, 500 * NAD));
         
         // Invariant: k preserved
         let k_spot = x_spot as u128 * y_spot as u128;
-        let k_virt = x_virt as u128 * y_virt as u128;
+        let k_virt = collateral_ema_reserve as u128 * debt_ema_reserve as u128;
         assert_eq!(k_spot, k_virt);
     }
 
