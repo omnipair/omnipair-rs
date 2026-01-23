@@ -68,11 +68,9 @@ impl UserPosition {
             true => {
                 if pair.total_debt0_shares == 0 {
                     // Scale initial debt share exchange rate by 10^6
-                    let shares = amount
-                        .checked_mul(DEBT_SHARE_SCALE)
-                        .ok_or(ErrorCode::DebtShareMathOverflow)?
-                        .try_into()
-                        .map_err(|_| ErrorCode::DebtShareMathOverflow)?;
+                    let shares = (amount as u128)
+                        .checked_mul(DEBT_SHARE_SCALE as u128)
+                        .ok_or(ErrorCode::DebtShareMathOverflow)?;
                     pair.total_debt0_shares = shares;
                     self.debt0_shares = shares;
                 } else {
@@ -82,10 +80,8 @@ impl UserPosition {
                             .ok_or(ErrorCode::DebtShareMathOverflow)?,
                         pair.total_debt0 as u128
                     )
-                    .ok_or(ErrorCode::DebtShareDivisionOverflow)?
-                    .try_into()
-                    .map_err(|_| ErrorCode::DebtShareDivisionOverflow)?;
-                    pair.total_debt0_shares = pair.total_debt0_shares.saturating_add(shares as u128);
+                    .ok_or(ErrorCode::DebtShareDivisionOverflow)?;
+                    pair.total_debt0_shares = pair.total_debt0_shares.saturating_add(shares);
                     self.debt0_shares = self.debt0_shares.saturating_add(shares);
                 }
                 pair.total_debt0 = pair.total_debt0.saturating_add(amount);
@@ -94,12 +90,10 @@ impl UserPosition {
             false => {
                 if pair.total_debt1_shares == 0 {
                     // Scale initial debt share exchange rate by 10^6
-                    let shares = amount
-                        .checked_mul(DEBT_SHARE_SCALE)
-                        .ok_or(ErrorCode::DebtShareMathOverflow)?
-                        .try_into()
-                        .map_err(|_| ErrorCode::DebtShareMathOverflow)?;
-                    pair.total_debt1_shares = shares as u128;
+                    let shares = (amount as u128)
+                        .checked_mul(DEBT_SHARE_SCALE as u128)
+                        .ok_or(ErrorCode::DebtShareMathOverflow)?;
+                    pair.total_debt1_shares = shares;
                     self.debt1_shares = shares;
                 } else {
                     let shares = ceil_div(
