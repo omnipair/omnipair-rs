@@ -43,6 +43,9 @@ pub const MIN_LIQUIDITY: u64 = 1_000; // 10^3
 pub const INITIAL_RATE_BPS: u64 = 200; // 2%
 pub const MIN_RATE_BPS: u64 = 100;      // 1%
 
+/// Debt share scaling factor for increased precision floor in rounded division.
+pub const DEBT_SHARE_SCALE: u64 = 1_000_000; // 10^6
+
 // Default IRM constants
 pub const TARGET_UTIL_START_BPS: u64 = 5_000; // 50%
 pub const TARGET_UTIL_END_BPS: u64 = 8_500; // 85%
