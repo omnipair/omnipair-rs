@@ -221,7 +221,7 @@ impl<'info> InitializeAndBootstrap<'info> {
 
         // validate pool parameters
         require_eq!(*version, VERSION, ErrorCode::InvalidVersion);
-        require_gte!(BPS_DENOMINATOR, *swap_fee_bps, ErrorCode::InvalidSwapFeeBps); // 0 <= swap_fee_bps <= 100%
+        require_gte!(BPS_DENOMINATOR / 2, *swap_fee_bps, ErrorCode::InvalidSwapFeeBps); // 0 <= swap_fee_bps <= 50%
         require_gte!(*half_life, MIN_HALF_LIFE_MS, ErrorCode::InvalidHalfLife); // half_life >= 1 minute
         require_gte!(MAX_HALF_LIFE_MS, *half_life, ErrorCode::InvalidHalfLife); // half_life <= 12 hours
 
