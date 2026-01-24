@@ -244,14 +244,15 @@ impl<'info> Liquidate<'info> {
             }
         };
 
+        // Use floor division for debt to ensure shares drain faster than debt.
+        // This prevents orphaned user shares when total_debt hits 0 first (ceil/ceil problem).
+        // Instead, total_shares hits 0 first, leaving orphaned debt which the sync reset safely clears.
         let debt_to_writeoff: u64 = match total_debt_shares == 0 {
             true => 0,
             false => {
-                let debt = ceil_div(
-                    shares_to_writeoff
-                        .checked_mul(total_debt as u128).ok_or(ErrorCode::DebtMathOverflow)?,
-                    total_debt_shares
-                ).ok_or(ErrorCode::DebtMathOverflow)?;
+                let debt = shares_to_writeoff
+                    .checked_mul(total_debt as u128).ok_or(ErrorCode::DebtMathOverflow)?
+                    .checked_div(total_debt_shares).ok_or(ErrorCode::DebtMathOverflow)?;
                 min(user_debt, debt as u64) // clamped to user's debt
             }
         };

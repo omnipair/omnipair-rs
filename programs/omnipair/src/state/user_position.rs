@@ -154,6 +154,12 @@ impl UserPosition {
                     // r_virtual can't reach zero during write off
                     DebtDecreaseReason::WriteOff(_) => pair.reserve0 = pair.reserve0.checked_sub(amount).unwrap_or(1),
                 };
+                // Sync debt and shares: if either debt or shares reaches 0, reset both to avoid orphaned state
+                if pair.total_debt0 == 0 || pair.total_debt0_shares == 0 {
+                    pair.total_debt0 = 0;
+                    pair.total_debt0_shares = 0;
+                    self.debt0_shares = 0;
+                }
             }
             false => {
                 let shares = match reason {
@@ -171,6 +177,12 @@ impl UserPosition {
                     DebtDecreaseReason::Repayment => pair.cash_reserve1 = pair.cash_reserve1.saturating_add(amount),
                     DebtDecreaseReason::WriteOff(_) => pair.reserve1 = pair.reserve1.checked_sub(amount).unwrap_or(1),
                 };
+                // Sync debt and shares: if either debt or shares reaches 0, reset both to avoid orphaned state
+                if pair.total_debt1 == 0 || pair.total_debt1_shares == 0 {
+                    pair.total_debt1 = 0;
+                    pair.total_debt1_shares = 0;
+                    self.debt1_shares = 0;
+                }
             }
         }
         Ok(())
