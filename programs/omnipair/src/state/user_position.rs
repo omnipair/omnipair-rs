@@ -146,7 +146,7 @@ impl UserPosition {
                         .ok_or(ErrorCode::DebtShareDivisionOverflow)?
                 };
                 self.debt0_shares = self.debt0_shares.saturating_sub(shares);
-                pair.total_debt0_shares = pair.total_debt0_shares.saturating_sub(shares);
+                pair.total_debt0_shares = pair.total_debt0_shares.saturating_sub(shares.min(self.debt0_shares));
                 pair.total_debt0 = pair.total_debt0.saturating_sub(amount);
                 // if debt is repaid, add the amount to the cash reserve (avoid adding to cash reserve if debt is written off)
                 match reason {
@@ -169,7 +169,7 @@ impl UserPosition {
                         .ok_or(ErrorCode::DebtShareDivisionOverflow)?
                 };
                 self.debt1_shares = self.debt1_shares.saturating_sub(shares);
-                pair.total_debt1_shares = pair.total_debt1_shares.saturating_sub(shares);
+                pair.total_debt1_shares = pair.total_debt1_shares.saturating_sub(shares.min(self.debt1_shares));
                 pair.total_debt1 = pair.total_debt1.saturating_sub(amount);
                 match reason {
                     DebtDecreaseReason::Repayment => pair.cash_reserve1 = pair.cash_reserve1.saturating_add(amount),
