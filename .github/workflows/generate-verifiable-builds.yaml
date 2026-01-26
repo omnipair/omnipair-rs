@@ -7,8 +7,9 @@ on:
       - main
 
 env:
-  ANCHOR_VERSION: '0.31.1'
-  SOLANA_VERSION: '1.18.18'
+  # Using versions compatible with ellipsislabs Docker images
+  ANCHOR_VERSION: '0.29.0'
+  SOLANA_VERSION: '1.17.31'
 
 jobs:
   generate-verifiable-omnipair:
