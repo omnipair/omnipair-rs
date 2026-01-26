@@ -14,50 +14,42 @@ jobs:
   generate-verifiable-omnipair:
     runs-on: ubuntu-22.04
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Get build info
         id: info
         run: |
           SHA=$(git rev-parse HEAD)
           SHORT_SHA=$(git rev-parse --short HEAD)
-          # Try to get tag, fallback to commit
           TAG=$(git describe --tags --exact-match 2>/dev/null || echo "dev-${SHORT_SHA}")
           echo "sha=$SHA" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-      - name: Setup Anchor
-        uses: metadaoproject/setup-anchor@v3
+      - uses: metadaoproject/anchor-verifiable-build@v0.4
         with:
+          program: omnipair
           anchor-version: ${{ env.ANCHOR_VERSION }}
           solana-cli-version: ${{ env.SOLANA_VERSION }}
+          features: 'production'
+        env:
+          GIT_REV: ${{ steps.info.outputs.sha }}
+          GIT_RELEASE: ${{ steps.info.outputs.tag }}
 
-      - name: Build verifiable (production)
+      - name: List build artifacts
         run: |
-          anchor build --verifiable -p omnipair \
-            --env GIT_REV=${{ steps.info.outputs.sha }} \
-            --env GIT_RELEASE=${{ steps.info.outputs.tag }} \
-            -- --features "production"
+          ls -la target/deploy/ || echo "target/deploy does not exist"
+          ls -la target/idl/ || echo "target/idl does not exist"
 
       - name: Verify security.txt embedded
         run: |
           echo "Checking security.txt in binary..."
           strings target/deploy/omnipair.so | grep -E "(source_release|source_revision)" || true
 
-      - name: Create verifiable-builds directory
-        run: mkdir -p verifiable-builds
+      - run: git pull --rebase
 
-      - name: Copy build artifacts
-        run: |
-          cp target/deploy/omnipair.so ./verifiable-builds/
-          cp target/idl/omnipair.json ./verifiable-builds/
-
-      - name: Pull latest changes
-        run: git pull --rebase
+      - run: mkdir -p verifiable-builds && cp target/deploy/omnipair.so ./verifiable-builds/
 
       - name: Commit verifiable build
         uses: EndBug/add-and-commit@v9

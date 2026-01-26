@@ -168,23 +168,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Anchor
-        uses: metadaoproject/setup-anchor@v3
+      - uses: metadaoproject/anchor-verifiable-build@v0.4
         with:
+          program: omnipair
           anchor-version: ${{ env.ANCHOR_VERSION }}
           solana-cli-version: ${{ env.SOLANA_VERSION }}
+          features: 'production'
+        env:
+          GIT_REV: ${{ needs.prepare-release.outputs.sha }}
+          GIT_RELEASE: ${{ needs.prepare-release.outputs.tag }}
 
-      - name: Build verifiable (production)
+      - name: List build artifacts
         run: |
-          echo "============================================"
-          echo "Building Omnipair ${{ needs.prepare-release.outputs.tag }}"
-          echo "Commit: ${{ needs.prepare-release.outputs.sha }}"
-          echo "Features: production"
-          echo "============================================"
-          anchor build --verifiable -p omnipair \
-            --env GIT_REV=${{ needs.prepare-release.outputs.sha }} \
-            --env GIT_RELEASE=${{ needs.prepare-release.outputs.tag }} \
-            -- --features "production"
+          ls -la target/deploy/ || echo "target/deploy does not exist"
+          ls -la target/idl/ || echo "target/idl does not exist"
 
       - name: Verify security.txt
         run: |
