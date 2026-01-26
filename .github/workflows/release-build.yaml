@@ -175,16 +175,16 @@ jobs:
           solana-cli-version: ${{ env.SOLANA_VERSION }}
 
       - name: Build verifiable (production)
-        env:
-          GIT_REV: ${{ needs.prepare-release.outputs.sha }}
-          GIT_RELEASE: ${{ needs.prepare-release.outputs.tag }}
         run: |
           echo "============================================"
           echo "Building Omnipair ${{ needs.prepare-release.outputs.tag }}"
-          echo "Commit: $GIT_REV"
+          echo "Commit: ${{ needs.prepare-release.outputs.sha }}"
           echo "Features: production"
           echo "============================================"
-          anchor build --verifiable -p omnipair -- --features "production"
+          anchor build --verifiable -p omnipair \
+            --env GIT_REV=${{ needs.prepare-release.outputs.sha }} \
+            --env GIT_RELEASE=${{ needs.prepare-release.outputs.tag }} \
+            -- --features "production"
 
       - name: Verify security.txt
         run: |
