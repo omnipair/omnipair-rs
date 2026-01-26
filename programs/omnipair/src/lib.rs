@@ -12,6 +12,41 @@ pub use instructions::*;
 pub use utils::account::*;
 pub use instructions::emit_value::{EmitValueArgs, PairViewKind, UserPositionViewKind, ViewPairData, ViewUserPositionData};
 
+#[cfg(not(feature = "no-entrypoint"))]
+use solana_security_txt::security_txt;
+
+#[cfg(not(feature = "no-entrypoint"))]
+security_txt! {
+    name: "Omnipair",
+    project_url: "https://omnipair.fi",
+    contacts: "email:security@omnipair.fi,telegram:rustfully",
+    encryption: "
+    -----BEGIN PGP PUBLIC KEY BLOCK-----
+    Comment: User ID:	elrakabawi <muhammed@omnipair.fi>
+    Comment: Fingerprint:	211A 6E45 DF9C FED4 D274  C2AE 022F C8B7 FB82 0E26
+
+
+    mDMEaXYfpBYJKwYBBAHaRw8BAQdAuJGsO1bf97ftK3AXLBGoGMVNsKfYEgbgFbTL
+    XM61dt20IWVscmFrYWJhd2kgPG11aGFtbWVkQG9tbmlwYWlyLmZpPoivBBMWCgBX
+    GxSAAAAAAAQADm1hbnUyLDIuNSsxLjExLDIsMQIbAwULCQgHAgIiAgYVCgkICwIE
+    FgIDAQIeBwIXgBYhBCEabkXfnP7U0nTCrgIvyLf7gg4mBQJpdihJAAoJEAIvyLf7
+    gg4mxfYBAPCkQftSqGfV5sxCRDNgWrgbwv0MIFN/PVVUMIvkJ/gFAQC6/sYGZrPK
+    ebn6YVuRXB8fdUZdhN0jP/0NM0WPl350B7g4BGl2H6QSCisGAQQBl1UBBQEBB0B9
+    TA7UtvyyduFFA9XzGdoI6+kX9//N0T8IdFAwYAPMSwMBCAeIlAQYFgoAPBsUgAAA
+    AAAEAA5tYW51MiwyLjUrMS4xMSwyLDECGwwWIQQhGm5F35z+1NJ0wq4CL8i3+4IO
+    JgUCaXYoTwAKCRACL8i3+4IOJsXTAQC0gR5fZXblXez9LuJGWTQgZGhbm7a/jquS
+    DsC4cr6QOAD/eCbtxLgkh0XOvmCfdzeYezEAKATL+7g1Nyq2lPSmKQM=
+    =pIZY
+    -----END PGP PUBLIC KEY BLOCK-----
+    ",
+    source_code: "https://github.com/omnipair/omnipair-rs",
+    source_release: env!("GIT_RELEASE"),
+    source_revision: env!("GIT_REV"),
+    auditors: "Offside Labs, Ackee",
+    policy: "https://omnipair.fi/security",
+    acknowledgements: "Hurricane @ Offside Labs & Juan (github.com/0xjuaan) @ Obsidian Audits"
+}
+
 declare_id!("Bd9Uhf5S8yzfop8cG9oqRs6jVcLtu8B4cb2gvRmtbNzk");
 
 pub mod deployer {

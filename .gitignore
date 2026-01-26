@@ -6,8 +6,9 @@ node_modules
 test-ledger
 .yarn
 .env
-wallet-keypair.json
-deployer-keypair.json
-testnet-keypair.json
-program-keypair.json
 docker-target
+
+# Keypairs (never commit private keys)
+*-keypair.json
+mockTokens/*.json
+!mockTokens/*_metadata.json
