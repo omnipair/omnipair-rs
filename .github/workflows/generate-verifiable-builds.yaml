@@ -37,11 +37,11 @@ jobs:
           solana-cli-version: ${{ env.SOLANA_VERSION }}
 
       - name: Build verifiable (production)
-        env:
-          GIT_REV: ${{ steps.info.outputs.sha }}
-          GIT_RELEASE: ${{ steps.info.outputs.tag }}
         run: |
-          anchor build --verifiable -p omnipair -- --features "production"
+          anchor build --verifiable -p omnipair \
+            --env GIT_REV=${{ steps.info.outputs.sha }} \
+            --env GIT_RELEASE=${{ steps.info.outputs.tag }} \
+            -- --features "production"
 
       - name: Verify security.txt embedded
         run: |
