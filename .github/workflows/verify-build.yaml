@@ -27,10 +27,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Solana
-        run: |
-          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
-          echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+      - name: Setup Anchor
+        uses: metadaoproject/setup-anchor@v3
+        with:
+          anchor-version: ${{ env.ANCHOR_VERSION }}
+          solana-cli-version: ${{ env.SOLANA_VERSION }}
 
       - name: Cache Cargo registry
         uses: actions/cache@v4
@@ -46,7 +47,7 @@ jobs:
         id: cache-solana-verify
         with:
           path: ~/.cargo/bin/solana-verify
-          key: cargo-${{ runner.os }}-solana-verify-v0.2
+          key: cargo-${{ runner.os }}-solana-verify-v0.3
 
       - name: Install solana-verify
         if: steps.cache-solana-verify.outputs.cache-hit != 'true'
