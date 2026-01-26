@@ -47,7 +47,7 @@ jobs:
         id: cache-solana-verify
         with:
           path: ~/.cargo/bin/solana-verify
-          key: cargo-${{ runner.os }}-solana-verify-v0.2
+          key: cargo-${{ runner.os }}-solana-verify-v0.3
 
       - name: Install solana-verify
         if: steps.cache-solana-verify.outputs.cache-hit != 'true'

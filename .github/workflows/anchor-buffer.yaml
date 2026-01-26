@@ -30,11 +30,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Anchor
-        uses: metadaoproject/setup-anchor@v3
-        with:
-          solana-cli-version: ${{ env.SOLANA_VERSION }}
-          anchor-version: ${{ env.ANCHOR_VERSION }}
+      - name: Install Solana
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
+          echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
       - name: Setup deployer keypair
         run: |

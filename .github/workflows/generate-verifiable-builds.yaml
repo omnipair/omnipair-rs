@@ -8,56 +8,61 @@ on:
 
 env:
   ANCHOR_VERSION: '0.31.1'
-  SOLANA_VERSION: '1.18.18'
+
+permissions:
+  contents: write
 
 jobs:
   generate-verifiable-omnipair:
     runs-on: ubuntu-22.04
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Get build info
         id: info
         run: |
           SHA=$(git rev-parse HEAD)
           SHORT_SHA=$(git rev-parse --short HEAD)
-          # Try to get tag, fallback to commit
           TAG=$(git describe --tags --exact-match 2>/dev/null || echo "dev-${SHORT_SHA}")
           echo "sha=$SHA" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-      - name: Setup Anchor
-        uses: metadaoproject/setup-anchor@v3
-        with:
-          anchor-version: ${{ env.ANCHOR_VERSION }}
-          solana-cli-version: ${{ env.SOLANA_VERSION }}
+      - name: Install Anchor CLI
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor --tag v${{ env.ANCHOR_VERSION }} anchor-cli --locked
+          anchor --version
 
-      - name: Build verifiable (production)
+      - name: Build verifiable
         run: |
           anchor build --verifiable -p omnipair \
-            --env GIT_REV=${{ steps.info.outputs.sha }} \
-            --env GIT_RELEASE=${{ steps.info.outputs.tag }} \
+            -e GIT_REV=${{ steps.info.outputs.sha }} \
+            -e GIT_RELEASE=${{ steps.info.outputs.tag }} \
             -- --features "production"
+
+      - name: List build artifacts
+        run: |
+          echo "=== target/verifiable ==="
+          ls -la target/verifiable/ || echo "target/verifiable does not exist"
+          echo "=== target/deploy ==="
+          ls -la target/deploy/ || echo "target/deploy does not exist"
+          echo "=== target/idl ==="
+          ls -la target/idl/ || echo "target/idl does not exist"
 
       - name: Verify security.txt embedded
         run: |
-          echo "Checking security.txt in binary..."
-          strings target/deploy/omnipair.so | grep -E "(source_release|source_revision)" || true
+          SO_FILE=$(find target -name "omnipair.so" | head -1)
+          echo "Found: $SO_FILE"
+          strings "$SO_FILE" | grep -E "(source_release|source_revision)" || true
 
-      - name: Create verifiable-builds directory
-        run: mkdir -p verifiable-builds
+      - run: git pull --rebase
 
       - name: Copy build artifacts
         run: |
-          cp target/deploy/omnipair.so ./verifiable-builds/
-          cp target/idl/omnipair.json ./verifiable-builds/
-
-      - name: Pull latest changes
-        run: git pull --rebase
+          mkdir -p verifiable-builds
+          SO_FILE=$(find target -name "omnipair.so" | head -1)
+          cp "$SO_FILE" ./verifiable-builds/
 
       - name: Commit verifiable build
         uses: EndBug/add-and-commit@v9
