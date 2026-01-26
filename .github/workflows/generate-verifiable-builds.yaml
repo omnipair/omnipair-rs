@@ -28,6 +28,9 @@ jobs:
           echo "sha=$SHA" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
+      - name: Remove Cargo.lock (incompatible version format)
+        run: rm -f Cargo.lock
+
       - uses: metadaoproject/anchor-verifiable-build@v0.4
         with:
           program: omnipair
