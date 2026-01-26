@@ -9,6 +9,9 @@ on:
 env:
   ANCHOR_VERSION: '0.31.1'
 
+permissions:
+  contents: write
+
 jobs:
   generate-verifiable-omnipair:
     runs-on: ubuntu-22.04
