@@ -3,39 +3,94 @@ name: Deploy Buffer
 on:
   workflow_dispatch:
     inputs:
-      program_name:
-        description: 'Program name'
+      network:
+        description: 'Network to deploy to'
         required: true
-        type: string
-      program_id:
-        description: 'Program ID'
-        required: true
-        type: string
+        type: choice
+        options:
+          - devnet
+          - mainnet-beta
       rpc_url:
-        description: 'RPC URL'
-        required: true
+        description: 'Custom RPC URL (optional, uses default if empty)'
+        required: false
         type: string
+      priority_fee:
+        description: 'Priority fee in micro-lamports'
+        required: false
+        default: '100'
 
+env:
+  ANCHOR_VERSION: '0.31.1'
+  SOLANA_VERSION: '1.18.18'
 
 jobs:
   deploy-buffer:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
-      - uses: metadaoproject/setup-anchor@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Anchor
+        uses: metadaoproject/setup-anchor@v3
         with:
-          solana-cli-version: '1.18.18'
-          anchor-version: '0.29.0'
-      - run: echo "$DEPLOYER_KEYPAIR" > deployer-keypair.json && chmod 600 deployer-keypair.json
-        shell: bash
+          solana-cli-version: ${{ env.SOLANA_VERSION }}
+          anchor-version: ${{ env.ANCHOR_VERSION }}
+
+      - name: Setup deployer keypair
+        run: |
+          echo "$DEPLOYER_KEYPAIR" > deployer-keypair.json
+          chmod 600 deployer-keypair.json
         env:
           DEPLOYER_KEYPAIR: ${{ secrets.DEPLOYER_KEYPAIR }}
-      - run: solana-keygen new -s -o buffer-keypair --no-bip39-passphrase
-        shell: bash
+
+      - name: Generate buffer keypair
+        run: solana-keygen new -s -o buffer-keypair.json --no-bip39-passphrase
+
+      - name: Verify verifiable build exists
+        run: |
+          if [ ! -f ./verifiable-builds/omnipair.so ]; then
+            echo "Error: verifiable-builds/omnipair.so not found"
+            echo "Run the 'generate-verifiable-builds' workflow first"
+            exit 1
+          fi
+          echo "Found verifiable build:"
+          ls -la ./verifiable-builds/omnipair.so
+
+      - name: Determine RPC URL
+        id: rpc
+        run: |
+          if [ -n "${{ inputs.rpc_url }}" ]; then
+            echo "url=${{ inputs.rpc_url }}" >> $GITHUB_OUTPUT
+          elif [ "${{ inputs.network }}" = "mainnet-beta" ]; then
+            echo "url=https://api.mainnet-beta.solana.com" >> $GITHUB_OUTPUT
+          else
+            echo "url=https://api.devnet.solana.com" >> $GITHUB_OUTPUT
+          fi
+
       - name: Deploy Buffer
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 30
           max_attempts: 10
           shell: bash
-          command: solana program write-buffer --max-sign-attempts 50 --with-compute-unit-price 100 --use-rpc --buffer ./buffer-keypair ./verifiable-builds/${{ inputs.program_name }}.so -u $NETWORK
+          command: |
+            solana program write-buffer \
+              --keypair deployer-keypair.json \
+              --buffer buffer-keypair.json \
+              --max-sign-attempts 50 \
+              --with-compute-unit-price ${{ inputs.priority_fee }} \
+              --use-rpc \
+              ./verifiable-builds/omnipair.so \
+              -u ${{ steps.rpc.outputs.url }}
+
+      - name: Get buffer address
+        run: |
+          BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
+          echo "============================================"
+          echo "Buffer deployed successfully!"
+          echo "Buffer Address: $BUFFER_ADDRESS"
+          echo "Network: ${{ inputs.network }}"
+          echo "============================================"
+          echo ""
+          echo "To upgrade the program, run:"
+          echo "solana program deploy --buffer $BUFFER_ADDRESS --program-id <PROGRAM_ID>"

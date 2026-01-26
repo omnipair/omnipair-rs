@@ -40,7 +40,7 @@ security_txt! {
     -----END PGP PUBLIC KEY BLOCK-----
     ",
     source_code: "https://github.com/omnipair/omnipair-rs",
-    source_release: env!("GIT_REV_NAME"),
+    source_release: env!("GIT_RELEASE"),
     source_revision: env!("GIT_REV"),
     auditors: "Offside Labs, Ackee",
     policy: "https://omnipair.fi/security",
