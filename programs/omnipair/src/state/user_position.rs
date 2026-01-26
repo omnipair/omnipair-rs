@@ -138,15 +138,15 @@ impl UserPosition {
         match *debt_token == pair.token0 {
             true => {
                 let shares = match reason {
-                    DebtDecreaseReason::WriteOff(exact_shares) => exact_shares.min(self.debt0_shares),
+                    DebtDecreaseReason::WriteOff(exact_shares) => exact_shares,
                     DebtDecreaseReason::Repayment => (amount as u128)
                         .checked_mul(pair.total_debt0_shares)
                         .ok_or(ErrorCode::DebtShareMathOverflow)?
                         .checked_div(pair.total_debt0 as u128)
                         .ok_or(ErrorCode::DebtShareDivisionOverflow)?
-                };
+                }.min(self.debt0_shares);
                 self.debt0_shares = self.debt0_shares.saturating_sub(shares);
-                pair.total_debt0_shares = pair.total_debt0_shares.saturating_sub(shares.min(self.debt0_shares));
+                pair.total_debt0_shares = pair.total_debt0_shares.saturating_sub(shares);
                 pair.total_debt0 = pair.total_debt0.saturating_sub(amount);
                 // if debt is repaid, add the amount to the cash reserve (avoid adding to cash reserve if debt is written off)
                 match reason {
@@ -161,15 +161,15 @@ impl UserPosition {
             }
             false => {
                 let shares = match reason {
-                    DebtDecreaseReason::WriteOff(exact_shares) => exact_shares.min(self.debt1_shares),
+                    DebtDecreaseReason::WriteOff(exact_shares) => exact_shares,
                     DebtDecreaseReason::Repayment => (amount as u128)
                         .checked_mul(pair.total_debt1_shares)
                         .ok_or(ErrorCode::DebtShareMathOverflow)?
                         .checked_div(pair.total_debt1 as u128)
                         .ok_or(ErrorCode::DebtShareDivisionOverflow)?
-                };
+                }.min(self.debt1_shares);
                 self.debt1_shares = self.debt1_shares.saturating_sub(shares);
-                pair.total_debt1_shares = pair.total_debt1_shares.saturating_sub(shares.min(self.debt1_shares));
+                pair.total_debt1_shares = pair.total_debt1_shares.saturating_sub(shares);
                 pair.total_debt1 = pair.total_debt1.saturating_sub(amount);
                 match reason {
                     DebtDecreaseReason::Repayment => pair.cash_reserve1 = pair.cash_reserve1.saturating_add(amount),
