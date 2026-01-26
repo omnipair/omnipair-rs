@@ -28,11 +28,19 @@ jobs:
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-      - name: Setup Anchor
-        uses: metadaoproject/setup-anchor@v3
-        with:
-          anchor-version: ${{ env.ANCHOR_VERSION }}
-          solana-cli-version: ${{ env.SOLANA_VERSION }}
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
+          echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Install Anchor CLI
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor --tag v${{ env.ANCHOR_VERSION }} anchor-cli --locked
+
+      - name: Verify installations
+        run: |
+          solana --version
+          anchor --version
 
       - name: Build verifiable
         run: |
@@ -57,5 +65,6 @@ jobs:
           name: omnipair-${{ steps.info.outputs.short_sha }}
           path: |
             target/deploy/omnipair.so
+            target/verifiable/omnipair.so
             target/idl/omnipair.json
           retention-days: 90
