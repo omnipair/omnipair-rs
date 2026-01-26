@@ -8,9 +8,7 @@ on:
 
 env:
   ANCHOR_VERSION: '0.31.1'
-
-permissions:
-  contents: write
+  SOLANA_VERSION: '1.18.18'
 
 jobs:
   generate-verifiable-omnipair:
@@ -27,12 +25,14 @@ jobs:
           SHORT_SHA=$(git rev-parse --short HEAD)
           TAG=$(git describe --tags --exact-match 2>/dev/null || echo "dev-${SHORT_SHA}")
           echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-      - name: Install Anchor CLI
-        run: |
-          cargo install --git https://github.com/coral-xyz/anchor --tag v${{ env.ANCHOR_VERSION }} anchor-cli --locked
-          anchor --version
+      - name: Setup Anchor
+        uses: metadaoproject/setup-anchor@v3
+        with:
+          anchor-version: ${{ env.ANCHOR_VERSION }}
+          solana-cli-version: ${{ env.SOLANA_VERSION }}
 
       - name: Build verifiable
         run: |
@@ -41,32 +41,21 @@ jobs:
             -e GIT_RELEASE=${{ steps.info.outputs.tag }} \
             -- --features "production"
 
-      - name: List build artifacts
-        run: |
-          echo "=== target/verifiable ==="
-          ls -la target/verifiable/ || echo "target/verifiable does not exist"
-          echo "=== target/deploy ==="
-          ls -la target/deploy/ || echo "target/deploy does not exist"
-          echo "=== target/idl ==="
-          ls -la target/idl/ || echo "target/idl does not exist"
-
       - name: Verify security.txt embedded
         run: |
           SO_FILE=$(find target -name "omnipair.so" | head -1)
           echo "Found: $SO_FILE"
+          echo "=== Build Info ==="
+          echo "Tag: ${{ steps.info.outputs.tag }}"
+          echo "Commit: ${{ steps.info.outputs.sha }}"
+          echo "=== Security.txt ==="
           strings "$SO_FILE" | grep -E "(source_release|source_revision)" || true
 
-      - run: git pull --rebase
-
-      - name: Copy build artifacts
-        run: |
-          mkdir -p verifiable-builds
-          SO_FILE=$(find target -name "omnipair.so" | head -1)
-          cp "$SO_FILE" ./verifiable-builds/
-
-      - name: Commit verifiable build
-        uses: EndBug/add-and-commit@v9
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
         with:
-          default_author: github_actions
-          message: 'chore: update omnipair verifiable build (${{ steps.info.outputs.tag }})'
-          add: 'verifiable-builds/*'
+          name: omnipair-${{ steps.info.outputs.short_sha }}
+          path: |
+            target/deploy/omnipair.so
+            target/idl/omnipair.json
+          retention-days: 90
