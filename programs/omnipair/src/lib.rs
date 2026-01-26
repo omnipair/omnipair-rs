@@ -47,7 +47,7 @@ security_txt! {
     acknowledgements: "Hurricane @ Offside Labs & Juan (github.com/0xjuaan) @ Obsidian Audits"
 }
 
-declare_id!("Bd9Uhf5S8yzfop8cG9oqRs6jVcLtu8B4cb2gvRmtbNzk");
+declare_id!("omniSVEL3cY36TYhunvJC6vBXxbJrqrn7JhDrXUTerb");
 
 pub mod deployer {
     use super::{pubkey, Pubkey};
