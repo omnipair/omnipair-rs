@@ -15,12 +15,12 @@ pub struct RemoveLiquidityInstructionAccounts {
     pub pair: solana_pubkey::Pubkey,
     pub rate_model: solana_pubkey::Pubkey,
     pub futarchy_authority: solana_pubkey::Pubkey,
-    pub token0_vault: solana_pubkey::Pubkey,
-    pub token1_vault: solana_pubkey::Pubkey,
+    pub reserve0_vault: solana_pubkey::Pubkey,
+    pub reserve1_vault: solana_pubkey::Pubkey,
     pub user_token0_account: solana_pubkey::Pubkey,
     pub user_token1_account: solana_pubkey::Pubkey,
-    pub token0_vault_mint: solana_pubkey::Pubkey,
-    pub token1_vault_mint: solana_pubkey::Pubkey,
+    pub token0_mint: solana_pubkey::Pubkey,
+    pub token1_mint: solana_pubkey::Pubkey,
     pub lp_mint: solana_pubkey::Pubkey,
     pub user_lp_token_account: solana_pubkey::Pubkey,
     pub user: solana_pubkey::Pubkey,
@@ -40,12 +40,12 @@ impl carbon_core::deserialize::ArrangeAccounts for RemoveLiquidity {
         let pair = next_account(&mut iter)?;
         let rate_model = next_account(&mut iter)?;
         let futarchy_authority = next_account(&mut iter)?;
-        let token0_vault = next_account(&mut iter)?;
-        let token1_vault = next_account(&mut iter)?;
+        let reserve0_vault = next_account(&mut iter)?;
+        let reserve1_vault = next_account(&mut iter)?;
         let user_token0_account = next_account(&mut iter)?;
         let user_token1_account = next_account(&mut iter)?;
-        let token0_vault_mint = next_account(&mut iter)?;
-        let token1_vault_mint = next_account(&mut iter)?;
+        let token0_mint = next_account(&mut iter)?;
+        let token1_mint = next_account(&mut iter)?;
         let lp_mint = next_account(&mut iter)?;
         let user_lp_token_account = next_account(&mut iter)?;
         let user = next_account(&mut iter)?;
@@ -60,12 +60,12 @@ impl carbon_core::deserialize::ArrangeAccounts for RemoveLiquidity {
             pair,
             rate_model,
             futarchy_authority,
-            token0_vault,
-            token1_vault,
+            reserve0_vault,
+            reserve1_vault,
             user_token0_account,
             user_token1_account,
-            token0_vault_mint,
-            token1_vault_mint,
+            token0_mint,
+            token1_mint,
             lp_mint,
             user_lp_token_account,
             user,

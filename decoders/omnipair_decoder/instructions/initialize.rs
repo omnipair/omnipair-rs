@@ -21,8 +21,10 @@ pub struct InitializeInstructionAccounts {
     pub lp_mint: solana_pubkey::Pubkey,
     pub lp_token_metadata: solana_pubkey::Pubkey,
     pub deployer_lp_token_account: solana_pubkey::Pubkey,
-    pub token0_vault: solana_pubkey::Pubkey,
-    pub token1_vault: solana_pubkey::Pubkey,
+    pub reserve0_vault: solana_pubkey::Pubkey,
+    pub reserve1_vault: solana_pubkey::Pubkey,
+    pub collateral0_vault: solana_pubkey::Pubkey,
+    pub collateral1_vault: solana_pubkey::Pubkey,
     pub deployer_token0_account: solana_pubkey::Pubkey,
     pub deployer_token1_account: solana_pubkey::Pubkey,
     pub authority_wsol_account: solana_pubkey::Pubkey,
@@ -50,8 +52,10 @@ impl carbon_core::deserialize::ArrangeAccounts for Initialize {
         let lp_mint = next_account(&mut iter)?;
         let lp_token_metadata = next_account(&mut iter)?;
         let deployer_lp_token_account = next_account(&mut iter)?;
-        let token0_vault = next_account(&mut iter)?;
-        let token1_vault = next_account(&mut iter)?;
+        let reserve0_vault = next_account(&mut iter)?;
+        let reserve1_vault = next_account(&mut iter)?;
+        let collateral0_vault = next_account(&mut iter)?;
+        let collateral1_vault = next_account(&mut iter)?;
         let deployer_token0_account = next_account(&mut iter)?;
         let deployer_token1_account = next_account(&mut iter)?;
         let authority_wsol_account = next_account(&mut iter)?;
@@ -74,8 +78,10 @@ impl carbon_core::deserialize::ArrangeAccounts for Initialize {
             lp_mint,
             lp_token_metadata,
             deployer_lp_token_account,
-            token0_vault,
-            token1_vault,
+            reserve0_vault,
+            reserve1_vault,
+            collateral0_vault,
+            collateral1_vault,
             deployer_token0_account,
             deployer_token1_account,
             authority_wsol_account,

@@ -16,6 +16,8 @@ pub mod remove_collateral;
 pub mod remove_liquidity;
 pub mod repay;
 pub mod swap;
+pub mod update_futarchy_authority;
+pub mod update_protocol_revenue;
 pub mod view_pair_data;
 pub mod view_user_position_data;
 pub mod adjust_collateral_event;
@@ -47,6 +49,8 @@ pub enum OmnipairInstruction {
     RemoveLiquidity(remove_liquidity::RemoveLiquidity),
     Repay(repay::Repay),
     Swap(swap::Swap),
+    UpdateFutarchyAuthority(update_futarchy_authority::UpdateFutarchyAuthority),
+    UpdateProtocolRevenue(update_protocol_revenue::UpdateProtocolRevenue),
     ViewPairData(view_pair_data::ViewPairData),
     ViewUserPositionData(view_user_position_data::ViewUserPositionData),
     AdjustCollateralEvent(adjust_collateral_event::AdjustCollateralEvent),
@@ -85,6 +89,8 @@ impl<'a> carbon_core::instruction::InstructionDecoder<'a> for OmnipairDecoder {
             OmnipairInstruction::RemoveLiquidity => remove_liquidity::RemoveLiquidity,
             OmnipairInstruction::Repay => repay::Repay,
             OmnipairInstruction::Swap => swap::Swap,
+            OmnipairInstruction::UpdateFutarchyAuthority => update_futarchy_authority::UpdateFutarchyAuthority,
+            OmnipairInstruction::UpdateProtocolRevenue => update_protocol_revenue::UpdateProtocolRevenue,
             OmnipairInstruction::ViewPairData => view_pair_data::ViewPairData,
             OmnipairInstruction::ViewUserPositionData => view_user_position_data::ViewUserPositionData,
             OmnipairInstruction::AdjustCollateralEvent => adjust_collateral_event::AdjustCollateralEvent,

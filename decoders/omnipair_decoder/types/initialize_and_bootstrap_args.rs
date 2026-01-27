@@ -8,6 +8,8 @@ pub struct InitializeAndBootstrapArgs {
     pub swap_fee_bps: u16,
     pub half_life: u64,
     pub fixed_cf_bps: Option<u16>,
+    pub target_util_start_bps: Option<u64>,
+    pub target_util_end_bps: Option<u64>,
     pub params_hash: [u8; 32],
     pub version: u8,
     pub amount0_in: u64,

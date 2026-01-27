@@ -11,6 +11,7 @@ pub enum UserPositionViewKind {
     UserDebtUtilizationBps,
     UserLiquidationPrice,
     UserDebtWithInterest,
+    UserIsLiquidatable,
 }
 
 

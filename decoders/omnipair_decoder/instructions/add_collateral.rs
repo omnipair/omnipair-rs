@@ -7,7 +7,7 @@ use carbon_core::{CarbonDeserialize, borsh, account_utils::next_account};
 #[derive(CarbonDeserialize, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Hash)]
 #[carbon(discriminator = "0x7f52792aa1b0f9ce")]
 pub struct AddCollateral{
-    pub args: AdjustPositionArgs,
+    pub args: AdjustCollateralArgs,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash, serde::Serialize, serde::Deserialize)]
