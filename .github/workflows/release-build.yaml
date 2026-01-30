@@ -415,4 +415,4 @@ jobs:
       - name: Publish to crates.io
         if: steps.check-crate.outputs.skip != 'true'
         working-directory: decoders/omnipair-decoder
-        run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}
+        run: cargo publish --allow-dirty --token ${{ secrets.CRATES_IO_TOKEN }}
