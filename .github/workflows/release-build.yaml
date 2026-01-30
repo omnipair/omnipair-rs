@@ -265,8 +265,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Update npm to latest (required for OIDC trusted publishing)
+        run: npm install -g npm@latest && npm --version
 
       - name: Download IDL and types artifact
         uses: actions/download-artifact@v4
@@ -310,7 +313,7 @@ jobs:
       - name: Publish to npm
         if: steps.check-npm.outputs.skip != 'true'
         working-directory: packages/program-interface
-        run: npm publish --access public --provenance
+        run: npm publish --access public
 
   # Publish Rust decoder to crates.io
   publish-crate:
