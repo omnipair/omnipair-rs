@@ -313,7 +313,14 @@ jobs:
       - name: Publish to npm
         if: steps.check-npm.outputs.skip != 'true'
         working-directory: packages/program-interface
-        run: npm publish --access public
+        run: |
+          VERSION="${{ needs.prepare-release.outputs.version }}"
+          # Use 'next' tag for prereleases (rc, alpha, beta), 'latest' for stable
+          if [[ "$VERSION" == *"-"* ]]; then
+            npm publish --access public --tag next
+          else
+            npm publish --access public
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
