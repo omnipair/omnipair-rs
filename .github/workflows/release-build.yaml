@@ -239,3 +239,139 @@ jobs:
             target/idl/omnipair.json
           generate_release_notes: true
           make_latest: true
+
+  # Publish TypeScript package to npm (using OIDC Trusted Publishing)
+  publish-npm:
+    needs: [prepare-release, build-and-release]
+    if: needs.prepare-release.outputs.should_release == 'true'
+    runs-on: ubuntu-22.04
+    continue-on-error: true  # Don't fail the whole release if npm publish fails
+    permissions:
+      id-token: write   # Required for npm OIDC authentication
+      contents: read
+    defaults:
+      run:
+        working-directory: packages/program-interface
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Setup Anchor
+        uses: metadaoproject/setup-anchor@v3
+        with:
+          anchor-version: ${{ env.ANCHOR_VERSION }}
+          solana-cli-version: ${{ env.SOLANA_VERSION }}
+
+      - name: Build Anchor (generate IDL & types)
+        run: anchor build
+        working-directory: ${{ github.workspace }}
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Update package version
+        run: npm version ${{ needs.prepare-release.outputs.version }} --no-git-tag-version
+
+      - name: Build package
+        run: npm run build
+
+      - name: Check if version already published
+        id: check-npm
+        run: |
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          VERSION="${{ needs.prepare-release.outputs.version }}"
+          if npm view "${PACKAGE_NAME}@${VERSION}" version 2>/dev/null; then
+            echo "Version ${VERSION} already published to npm, skipping"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Version ${VERSION} not found on npm, will publish"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish to npm
+        if: steps.check-npm.outputs.skip != 'true'
+        run: npm publish --access public --provenance
+
+  # Publish Rust decoder to crates.io
+  publish-crate:
+    needs: [prepare-release, build-and-release]
+    if: needs.prepare-release.outputs.should_release == 'true'
+    runs-on: ubuntu-22.04
+    continue-on-error: true  # Don't fail the whole release if crate publish fails
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Anchor
+        uses: metadaoproject/setup-anchor@v3
+        with:
+          anchor-version: ${{ env.ANCHOR_VERSION }}
+          solana-cli-version: ${{ env.SOLANA_VERSION }}
+
+      - name: Install carbon-cli
+        run: npm install -g @sevenlabs-hq/carbon-cli
+
+      - name: Build Anchor (generate IDL)
+        run: anchor build
+
+      - name: Generate decoder from IDL
+        run: |
+          # Generate to temp directory
+          mkdir -p temp-decoder
+          carbon-cli parse \
+            --idl target/idl/omnipair.json \
+            --out-dir ./temp-decoder \
+            --yes 2>/dev/null || carbon-cli parse \
+            --idl target/idl/omnipair.json \
+            --out-dir ./temp-decoder < /dev/null
+          
+          # Copy only the generated folders (preserve our custom lib.rs)
+          cp -r temp-decoder/omnipair_decoder/accounts/* decoders/omnipair-decoder/src/accounts/
+          cp -r temp-decoder/omnipair_decoder/instructions/* decoders/omnipair-decoder/src/instructions/
+          cp -r temp-decoder/omnipair_decoder/types/* decoders/omnipair-decoder/src/types/
+          
+          # Cleanup
+          rm -rf temp-decoder
+
+      - name: Update crate version
+        working-directory: decoders/omnipair-decoder
+        run: |
+          sed -i 's/^version = ".*"/version = "${{ needs.prepare-release.outputs.version }}"/' Cargo.toml
+          cat Cargo.toml
+
+      - name: Verify crate builds
+        working-directory: decoders/omnipair-decoder
+        run: cargo build --release
+
+      - name: Check if version already published
+        id: check-crate
+        working-directory: decoders/omnipair-decoder
+        run: |
+          CRATE_NAME=$(grep '^name' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          VERSION="${{ needs.prepare-release.outputs.version }}"
+          if cargo search "${CRATE_NAME}" --limit 1 | grep -q "^${CRATE_NAME} = \"${VERSION}\""; then
+            echo "Version ${VERSION} already published to crates.io, skipping"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Version ${VERSION} not found on crates.io, will publish"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish to crates.io
+        if: steps.check-crate.outputs.skip != 'true'
+        working-directory: decoders/omnipair-decoder
+        run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}

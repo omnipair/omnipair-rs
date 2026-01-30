@@ -1,14 +1,20 @@
- 
-use carbon_core::account::AccountDecoder; 
+use carbon_core::account::AccountDecoder;
 use carbon_core::deserialize::CarbonDeserialize;
- 
 
-use super::OmnipairDecoder; 
-pub mod futarchy_authority; 
-pub mod pair; 
-pub mod rate_model; 
-pub mod user_position; 
+use crate::OmnipairDecoder;
 
+pub mod futarchy_authority;
+pub mod pair;
+pub mod rate_model;
+pub mod user_position;
+
+pub use futarchy_authority::FutarchyAuthority;
+pub use pair::Pair;
+pub use rate_model::RateModel;
+pub use user_position::UserPosition;
+
+/// All account types for the Omnipair program
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OmnipairAccount { 
         FutarchyAuthority(futarchy_authority::FutarchyAuthority), 
         Pair(pair::Pair), 

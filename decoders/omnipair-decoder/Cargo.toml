@@ -1,0 +1,23 @@
+[package]
+name = "omnipair-decoder"
+version = "0.0.0"
+edition = "2021"
+description = "Carbon decoder for Omnipair - Solana oracleless spot and margin money market protocol"
+license = "MIT"
+repository = "https://github.com/omnipair/omnipair-rs"
+homepage = "https://omnipair.fi"
+documentation = "https://docs.rs/omnipair-decoder"
+keywords = ["solana", "carbon", "decoder", "omnipair", "defi"]
+categories = ["cryptography::cryptocurrencies", "parsing"]
+readme = "README.md"
+
+[dependencies]
+carbon-core = "0.4"
+solana-pubkey = "2.0"
+solana-account = "2.0"
+solana-instruction = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+borsh = "1.5"
+
+[features]
+default = []
