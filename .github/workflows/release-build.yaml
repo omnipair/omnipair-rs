@@ -240,6 +240,15 @@ jobs:
           generate_release_notes: true
           make_latest: true
 
+      - name: Upload IDL and types as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: idl-and-types
+          path: |
+            target/idl/omnipair.json
+            target/types/omnipair.ts
+          retention-days: 1
+
   # Publish TypeScript package to npm (using OIDC Trusted Publishing)
   publish-npm:
     needs: [prepare-release, build-and-release]
@@ -249,9 +258,6 @@ jobs:
     permissions:
       id-token: write   # Required for npm OIDC authentication
       contents: read
-    defaults:
-      run:
-        working-directory: packages/program-interface
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -262,27 +268,34 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Setup Anchor
-        uses: metadaoproject/setup-anchor@v3
+      - name: Download IDL and types artifact
+        uses: actions/download-artifact@v4
         with:
-          anchor-version: ${{ env.ANCHOR_VERSION }}
-          solana-cli-version: ${{ env.SOLANA_VERSION }}
+          name: idl-and-types
+          path: ./
 
-      - name: Build Anchor (generate IDL & types)
-        run: anchor build
-        working-directory: ${{ github.workspace }}
+      - name: Verify IDL downloaded
+        run: |
+          echo "Downloaded artifacts:"
+          find . -name "*.json" -o -name "*.ts" | head -20
+          ls -la target/idl/ || echo "IDL not in expected location"
+          ls -la target/types/ || echo "Types not in expected location"
 
       - name: Install dependencies
+        working-directory: packages/program-interface
         run: npm install
 
       - name: Update package version
+        working-directory: packages/program-interface
         run: npm version ${{ needs.prepare-release.outputs.version }} --no-git-tag-version
 
       - name: Build package
+        working-directory: packages/program-interface
         run: npm run build
 
       - name: Check if version already published
         id: check-npm
+        working-directory: packages/program-interface
         run: |
           PACKAGE_NAME=$(node -p "require('./package.json').name")
           VERSION="${{ needs.prepare-release.outputs.version }}"
@@ -296,6 +309,7 @@ jobs:
 
       - name: Publish to npm
         if: steps.check-npm.outputs.skip != 'true'
+        working-directory: packages/program-interface
         run: npm publish --access public --provenance
 
   # Publish Rust decoder to crates.io
@@ -316,17 +330,20 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Setup Anchor
-        uses: metadaoproject/setup-anchor@v3
+      - name: Download IDL artifact
+        uses: actions/download-artifact@v4
         with:
-          anchor-version: ${{ env.ANCHOR_VERSION }}
-          solana-cli-version: ${{ env.SOLANA_VERSION }}
+          name: idl-and-types
+          path: ./
+
+      - name: Verify IDL downloaded
+        run: |
+          echo "Downloaded artifacts:"
+          find . -name "omnipair.json" | head -5
+          ls -la target/idl/ || echo "IDL not found"
 
       - name: Install carbon-cli
         run: npm install -g @sevenlabs-hq/carbon-cli
-
-      - name: Build Anchor (generate IDL)
-        run: anchor build
 
       - name: Generate decoder from IDL
         run: |
@@ -334,15 +351,27 @@ jobs:
           mkdir -p temp-decoder
           carbon-cli parse \
             --idl target/idl/omnipair.json \
-            --out-dir ./temp-decoder \
-            --yes 2>/dev/null || carbon-cli parse \
-            --idl target/idl/omnipair.json \
-            --out-dir ./temp-decoder < /dev/null
+            --out-dir ./temp-decoder
           
-          # Copy only the generated folders (preserve our custom lib.rs)
-          cp -r temp-decoder/omnipair_decoder/accounts/* decoders/omnipair-decoder/src/accounts/
-          cp -r temp-decoder/omnipair_decoder/instructions/* decoders/omnipair-decoder/src/instructions/
-          cp -r temp-decoder/omnipair_decoder/types/* decoders/omnipair-decoder/src/types/
+          # Show what was generated
+          echo "Generated structure:"
+          ls -la temp-decoder/
+          ls -la temp-decoder/src/ || ls -la temp-decoder/omnipair_decoder/ || echo "Unexpected structure"
+          
+          # Copy generated folders (new carbon-cli outputs to src/ directly)
+          if [ -d "temp-decoder/src" ]; then
+            cp -r temp-decoder/src/accounts/* decoders/omnipair-decoder/src/accounts/
+            cp -r temp-decoder/src/instructions/* decoders/omnipair-decoder/src/instructions/
+            cp -r temp-decoder/src/types/* decoders/omnipair-decoder/src/types/
+            cp -r temp-decoder/src/events/* decoders/omnipair-decoder/src/events/ 2>/dev/null || true
+          elif [ -d "temp-decoder/omnipair_decoder" ]; then
+            cp -r temp-decoder/omnipair_decoder/accounts/* decoders/omnipair-decoder/src/accounts/
+            cp -r temp-decoder/omnipair_decoder/instructions/* decoders/omnipair-decoder/src/instructions/
+            cp -r temp-decoder/omnipair_decoder/types/* decoders/omnipair-decoder/src/types/
+          else
+            echo "ERROR: Unexpected output structure from carbon-cli"
+            exit 1
+          fi
           
           # Cleanup
           rm -rf temp-decoder
