@@ -272,14 +272,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: idl-and-types
-          path: ./
+          path: target/
 
       - name: Verify IDL downloaded
         run: |
           echo "Downloaded artifacts:"
-          find . -name "*.json" -o -name "*.ts" | head -20
-          ls -la target/idl/ || echo "IDL not in expected location"
-          ls -la target/types/ || echo "Types not in expected location"
+          ls -laR target/
+          test -f target/idl/omnipair.json && echo "IDL found!" || echo "IDL NOT found!"
+          test -f target/types/omnipair.ts && echo "Types found!" || echo "Types NOT found!"
 
       - name: Install dependencies
         working-directory: packages/program-interface
@@ -334,13 +334,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: idl-and-types
-          path: ./
+          path: target/
 
       - name: Verify IDL downloaded
         run: |
           echo "Downloaded artifacts:"
-          find . -name "omnipair.json" | head -5
-          ls -la target/idl/ || echo "IDL not found"
+          ls -laR target/
+          test -f target/idl/omnipair.json && echo "IDL found!" || echo "IDL NOT found!"
 
       - name: Install carbon-cli
         run: npm install -g @sevenlabs-hq/carbon-cli
