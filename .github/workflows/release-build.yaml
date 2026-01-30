@@ -314,6 +314,8 @@ jobs:
         if: steps.check-npm.outputs.skip != 'true'
         working-directory: packages/program-interface
         run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # Publish Rust decoder to crates.io
   publish-crate:
