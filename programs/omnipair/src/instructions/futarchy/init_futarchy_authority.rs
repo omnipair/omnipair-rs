@@ -34,7 +34,7 @@ pub struct InitFutarchyAuthority<'info> {
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
 
-    /// The program's executable data account (contains upgrade authority)
+    /// CHECK: Safe - PDA derivation enforced by seeds, owner validated in handle_init
     #[account(
         seeds = [crate::ID.as_ref()],
         bump,
