@@ -49,20 +49,6 @@ security_txt! {
 
 declare_id!("omniSVEL3cY36TYhunvJC6vBXxbJrqrn7JhDrXUTerb");
 
-pub mod deployer {
-    use super::{pubkey, Pubkey};
-    
-    #[cfg(feature = "development")]
-    pub const ID: Pubkey = pubkey!("C7GKpfqQyBoFR6S13DECwBjdi7aCQKbbeKjXm4Jt5Hds");
-    
-    #[cfg(feature = "production")]
-    pub const ID: Pubkey = pubkey!("8tF4uYMBXqGhCUGRZL3AmPqRzbX8JJ1TpYnY3uJKN4kt");
-    
-    // Default to development if no feature is specified
-    #[cfg(not(any(feature = "development", feature = "production")))]
-    pub const ID: Pubkey = pubkey!("C7GKpfqQyBoFR6S13DECwBjdi7aCQKbbeKjXm4Jt5Hds");
-}
-
 #[program]
 pub mod omnipair {
     use super::*;
