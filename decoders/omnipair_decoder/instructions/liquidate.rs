@@ -17,7 +17,6 @@ pub struct LiquidateInstructionAccounts {
     pub collateral_vault: solana_pubkey::Pubkey,
     pub caller_token_account: solana_pubkey::Pubkey,
     pub collateral_token_mint: solana_pubkey::Pubkey,
-    pub reserve_vault: solana_pubkey::Pubkey,
     pub position_owner: solana_pubkey::Pubkey,
     pub payer: solana_pubkey::Pubkey,
     pub token_program: solana_pubkey::Pubkey,
@@ -39,7 +38,6 @@ impl carbon_core::deserialize::ArrangeAccounts for Liquidate {
         let collateral_vault = next_account(&mut iter)?;
         let caller_token_account = next_account(&mut iter)?;
         let collateral_token_mint = next_account(&mut iter)?;
-        let reserve_vault = next_account(&mut iter)?;
         let position_owner = next_account(&mut iter)?;
         let payer = next_account(&mut iter)?;
         let token_program = next_account(&mut iter)?;
@@ -56,7 +54,6 @@ impl carbon_core::deserialize::ArrangeAccounts for Liquidate {
             collateral_vault,
             caller_token_account,
             collateral_token_mint,
-            reserve_vault,
             position_owner,
             payer,
             token_program,
