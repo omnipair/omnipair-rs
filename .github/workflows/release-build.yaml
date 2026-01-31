@@ -239,3 +239,180 @@ jobs:
             target/idl/omnipair.json
           generate_release_notes: true
           make_latest: true
+
+      - name: Upload IDL and types as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: idl-and-types
+          path: |
+            target/idl/omnipair.json
+            target/types/omnipair.ts
+          retention-days: 1
+
+  # Publish TypeScript package to npm (using OIDC Trusted Publishing)
+  publish-npm:
+    needs: [prepare-release, build-and-release]
+    if: needs.prepare-release.outputs.should_release == 'true'
+    runs-on: ubuntu-22.04
+    continue-on-error: true  # Don't fail the whole release if npm publish fails
+    permissions:
+      id-token: write   # Required for npm OIDC authentication
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Update npm to latest (required for OIDC trusted publishing)
+        run: npm install -g npm@latest && npm --version
+
+      - name: Download IDL and types artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: idl-and-types
+          path: target/
+
+      - name: Verify IDL downloaded
+        run: |
+          echo "Downloaded artifacts:"
+          ls -laR target/
+          test -f target/idl/omnipair.json && echo "IDL found!" || echo "IDL NOT found!"
+          test -f target/types/omnipair.ts && echo "Types found!" || echo "Types NOT found!"
+
+      - name: Install dependencies
+        working-directory: packages/program-interface
+        run: npm install
+
+      - name: Update package version
+        working-directory: packages/program-interface
+        run: npm version ${{ needs.prepare-release.outputs.version }} --no-git-tag-version
+
+      - name: Build package
+        working-directory: packages/program-interface
+        run: npm run build
+
+      - name: Check if version already published
+        id: check-npm
+        working-directory: packages/program-interface
+        run: |
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          VERSION="${{ needs.prepare-release.outputs.version }}"
+          if npm view "${PACKAGE_NAME}@${VERSION}" version 2>/dev/null; then
+            echo "Version ${VERSION} already published to npm, skipping"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Version ${VERSION} not found on npm, will publish"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish to npm
+        if: steps.check-npm.outputs.skip != 'true'
+        working-directory: packages/program-interface
+        run: |
+          VERSION="${{ needs.prepare-release.outputs.version }}"
+          # Use 'next' tag for prereleases (rc, alpha, beta), 'latest' for stable
+          if [[ "$VERSION" == *"-"* ]]; then
+            npm publish --access public --tag next
+          else
+            npm publish --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Publish Rust decoder to crates.io
+  publish-crate:
+    needs: [prepare-release, build-and-release]
+    if: needs.prepare-release.outputs.should_release == 'true'
+    runs-on: ubuntu-22.04
+    continue-on-error: true  # Don't fail the whole release if crate publish fails
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Download IDL artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: idl-and-types
+          path: target/
+
+      - name: Verify IDL downloaded
+        run: |
+          echo "Downloaded artifacts:"
+          ls -laR target/
+          test -f target/idl/omnipair.json && echo "IDL found!" || echo "IDL NOT found!"
+
+      - name: Install carbon-cli
+        run: npm install -g @sevenlabs-hq/carbon-cli
+
+      - name: Generate decoder from IDL
+        run: |
+          # Generate to temp directory
+          mkdir -p temp-decoder
+          carbon-cli parse \
+            --idl target/idl/omnipair.json \
+            --out-dir ./temp-decoder
+          
+          # Show what was generated
+          echo "Generated structure:"
+          ls -la temp-decoder/
+          ls -la temp-decoder/src/ || ls -la temp-decoder/omnipair_decoder/ || echo "Unexpected structure"
+          
+          # Copy generated folders (new carbon-cli outputs to src/ directly)
+          if [ -d "temp-decoder/src" ]; then
+            cp -r temp-decoder/src/accounts/* decoders/omnipair-decoder/src/accounts/
+            cp -r temp-decoder/src/instructions/* decoders/omnipair-decoder/src/instructions/
+            cp -r temp-decoder/src/types/* decoders/omnipair-decoder/src/types/
+            cp -r temp-decoder/src/events/* decoders/omnipair-decoder/src/events/ 2>/dev/null || true
+          elif [ -d "temp-decoder/omnipair_decoder" ]; then
+            cp -r temp-decoder/omnipair_decoder/accounts/* decoders/omnipair-decoder/src/accounts/
+            cp -r temp-decoder/omnipair_decoder/instructions/* decoders/omnipair-decoder/src/instructions/
+            cp -r temp-decoder/omnipair_decoder/types/* decoders/omnipair-decoder/src/types/
+          else
+            echo "ERROR: Unexpected output structure from carbon-cli"
+            exit 1
+          fi
+          
+          # Cleanup
+          rm -rf temp-decoder
+
+      - name: Update crate version
+        working-directory: decoders/omnipair-decoder
+        run: |
+          sed -i 's/^version = ".*"/version = "${{ needs.prepare-release.outputs.version }}"/' Cargo.toml
+          cat Cargo.toml
+
+      - name: Verify crate builds
+        working-directory: decoders/omnipair-decoder
+        run: cargo build --release
+
+      - name: Check if version already published
+        id: check-crate
+        working-directory: decoders/omnipair-decoder
+        run: |
+          CRATE_NAME=$(grep '^name' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          VERSION="${{ needs.prepare-release.outputs.version }}"
+          if cargo search "${CRATE_NAME}" --limit 1 | grep -q "^${CRATE_NAME} = \"${VERSION}\""; then
+            echo "Version ${VERSION} already published to crates.io, skipping"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Version ${VERSION} not found on crates.io, will publish"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish to crates.io
+        if: steps.check-crate.outputs.skip != 'true'
+        working-directory: decoders/omnipair-decoder
+        run: cargo publish --allow-dirty --token ${{ secrets.CRATES_IO_TOKEN }}

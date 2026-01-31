@@ -1,0 +1,61 @@
+{
+  "name": "@omnipair/program-interface",
+  "version": "0.0.0",
+  "description": "Omnipair program IDL, TypeScript types, and constants",
+  "license": "MIT",
+  "author": "Omnipair <security@omnipair.fi>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/omnipair/omnipair-rs.git",
+    "directory": "packages/program-interface"
+  },
+  "homepage": "https://omnipair.fi",
+  "keywords": [
+    "solana",
+    "anchor",
+    "omnipair",
+    "defi",
+    "amm",
+    "lending"
+  ],
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./idl": {
+      "import": "./dist/idl.js",
+      "types": "./dist/idl.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "prepare-idl": "node scripts/prepare.js",
+    "build": "npm run prepare-idl && tsc",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": ">=0.30.0",
+    "@solana/web3.js": "^1.95.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "@coral-xyz/anchor": ">=0.30.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
