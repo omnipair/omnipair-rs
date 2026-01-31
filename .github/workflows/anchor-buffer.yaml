@@ -1,4 +1,9 @@
-name: Deploy Buffer
+name: Manual Buffer Deploy
+
+# Standalone buffer deployment for edge cases
+# - When you need to redeploy a buffer (e.g., expired or failed Squads transaction)
+# - When deploying from a specific release artifact
+# - When the automated release workflow buffer step failed
 
 on:
   workflow_dispatch:
@@ -10,17 +15,32 @@ on:
         options:
           - devnet
           - mainnet-beta
-      rpc_url:
-        description: 'Custom RPC URL (optional, uses default if empty)'
+        default: mainnet-beta
+      source:
+        description: 'Binary source'
+        required: true
+        type: choice
+        options:
+          - release  # Download from GitHub release
+          - artifact # Download from workflow artifact
+          - local    # Use verifiable-builds/omnipair.so in repo
+        default: release
+      release_tag:
+        description: 'Release tag to use (for source=release, e.g., v0.1.0)'
         required: false
-        type: string
+      artifact_name:
+        description: 'Artifact name (for source=artifact)'
+        required: false
       priority_fee:
         description: 'Priority fee in micro-lamports'
         required: false
-        default: '100'
+        default: '50000'
+      transfer_to_squads:
+        description: 'Transfer buffer authority to Squads vault'
+        type: boolean
+        default: true
 
 env:
-  ANCHOR_VERSION: '0.31.1'
   SOLANA_VERSION: '1.18.18'
 
 jobs:
@@ -30,43 +50,87 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Solana
+      - name: Install Solana CLI
         run: |
           sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
           echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
       - name: Setup deployer keypair
         run: |
-          echo "$DEPLOYER_KEYPAIR" > deployer-keypair.json
+          echo "${{ secrets.DEPLOYER_KEYPAIR }}" > deployer-keypair.json
           chmod 600 deployer-keypair.json
-        env:
-          DEPLOYER_KEYPAIR: ${{ secrets.DEPLOYER_KEYPAIR }}
 
-      - name: Generate buffer keypair
-        run: solana-keygen new -s -o buffer-keypair.json --no-bip39-passphrase
-
-      - name: Verify verifiable build exists
+      - name: Download from GitHub Release
+        if: inputs.source == 'release'
         run: |
-          if [ ! -f ./verifiable-builds/omnipair.so ]; then
+          TAG="${{ inputs.release_tag }}"
+          if [ -z "$TAG" ]; then
+            # Get latest release tag
+            TAG=$(gh release list --limit 1 --json tagName -q '.[0].tagName')
+            echo "Using latest release: $TAG"
+          fi
+          
+          mkdir -p ./build
+          gh release download "$TAG" -p "omnipair.so" -D ./build
+          echo "Downloaded omnipair.so from release $TAG"
+          ls -la ./build/
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Download from Workflow Artifact
+        if: inputs.source == 'artifact'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ./build
+
+      - name: Use local binary
+        if: inputs.source == 'local'
+        run: |
+          mkdir -p ./build
+          if [ -f "./verifiable-builds/omnipair.so" ]; then
+            cp ./verifiable-builds/omnipair.so ./build/
+          else
             echo "Error: verifiable-builds/omnipair.so not found"
-            echo "Run the 'generate-verifiable-builds' workflow first"
             exit 1
           fi
-          echo "Found verifiable build:"
-          ls -la ./verifiable-builds/omnipair.so
+
+      - name: Verify binary exists
+        run: |
+          if [ ! -f "./build/omnipair.so" ]; then
+            echo "Error: omnipair.so not found in ./build/"
+            ls -la ./build/ || echo "build directory doesn't exist"
+            exit 1
+          fi
+          echo "Binary found:"
+          ls -la ./build/omnipair.so
 
       - name: Determine RPC URL
         id: rpc
         run: |
-          if [ -n "${{ inputs.rpc_url }}" ]; then
-            echo "url=${{ inputs.rpc_url }}" >> $GITHUB_OUTPUT
-          elif [ "${{ inputs.network }}" = "mainnet-beta" ]; then
-            echo "url=https://api.mainnet-beta.solana.com" >> $GITHUB_OUTPUT
+          if [ "${{ inputs.network }}" = "mainnet-beta" ]; then
+            RPC="${{ vars.MAINNET_RPC_URL }}"
+            if [ -z "$RPC" ]; then
+              RPC="https://api.mainnet-beta.solana.com"
+            fi
           else
-            echo "url=https://api.devnet.solana.com" >> $GITHUB_OUTPUT
+            RPC="https://api.devnet.solana.com"
           fi
+          echo "url=$RPC" >> $GITHUB_OUTPUT
+          echo "Using RPC: $RPC"
 
-      - name: Deploy Buffer
+      - name: Check deployer balance
+        run: |
+          solana balance deployer-keypair.json -u ${{ steps.rpc.outputs.url }}
+
+      - name: Generate buffer keypair
+        run: |
+          solana-keygen new -s -o buffer-keypair.json --no-bip39-passphrase
+          BUFFER_PUBKEY=$(solana-keygen pubkey buffer-keypair.json)
+          echo "Generated buffer keypair: $BUFFER_PUBKEY"
+
+      - name: Deploy buffer
+        id: buffer
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 30
@@ -79,17 +143,76 @@ jobs:
               --max-sign-attempts 50 \
               --with-compute-unit-price ${{ inputs.priority_fee }} \
               --use-rpc \
-              ./verifiable-builds/omnipair.so \
+              ./build/omnipair.so \
               -u ${{ steps.rpc.outputs.url }}
+            
+            BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
+            echo "address=$BUFFER_ADDRESS" >> $GITHUB_OUTPUT
 
-      - name: Get buffer address
+      - name: Transfer authority to Squads
+        if: inputs.transfer_to_squads == true && inputs.network == 'mainnet-beta'
         run: |
           BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
+          SQUADS_VAULT="${{ vars.SQUADS_VAULT_ADDRESS }}"
+          
+          if [ -z "$SQUADS_VAULT" ]; then
+            echo "Warning: SQUADS_VAULT_ADDRESS not configured, skipping transfer"
+            exit 0
+          fi
+          
+          solana program set-buffer-authority \
+            "$BUFFER_ADDRESS" \
+            --new-buffer-authority "$SQUADS_VAULT" \
+            --keypair deployer-keypair.json \
+            -u ${{ steps.rpc.outputs.url }}
+          
+          echo "Buffer authority transferred to: $SQUADS_VAULT"
+
+      - name: Output results
+        run: |
+          BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
+          PROGRAM_ID="${{ vars.PROGRAM_ID }}"
+          SQUADS_MULTISIG="${{ vars.SQUADS_MULTISIG_ADDRESS }}"
+          
           echo "============================================"
-          echo "Buffer deployed successfully!"
-          echo "Buffer Address: $BUFFER_ADDRESS"
-          echo "Network: ${{ inputs.network }}"
+          echo "🚀 BUFFER DEPLOYED SUCCESSFULLY"
           echo "============================================"
           echo ""
-          echo "To upgrade the program, run:"
-          echo "solana program deploy --buffer $BUFFER_ADDRESS --program-id <PROGRAM_ID>"
+          echo "Buffer Address: $BUFFER_ADDRESS"
+          echo "Network: ${{ inputs.network }}"
+          echo "Source: ${{ inputs.source }}"
+          if [ "${{ inputs.source }}" = "release" ]; then
+            echo "Release Tag: ${{ inputs.release_tag || 'latest' }}"
+          fi
+          echo ""
+          
+          if [ "${{ inputs.transfer_to_squads }}" = "true" ] && [ "${{ inputs.network }}" = "mainnet-beta" ]; then
+            echo "============================================"
+            echo "📋 SQUADS UPGRADE INSTRUCTIONS"
+            echo "============================================"
+            echo ""
+            echo "1. Go to Squads: https://v4.squads.so/squads/$SQUADS_MULTISIG/programs"
+            echo ""
+            echo "2. Click 'Upgrade' on program: $PROGRAM_ID"
+            echo ""
+            echo "3. Enter buffer address: $BUFFER_ADDRESS"
+            echo ""
+            echo "4. Submit and have team members sign"
+            echo ""
+          else
+            echo "============================================"
+            echo "📋 DIRECT UPGRADE COMMAND"
+            echo "============================================"
+            echo ""
+            echo "solana program deploy \\"
+            echo "  --buffer $BUFFER_ADDRESS \\"
+            echo "  --program-id $PROGRAM_ID \\"
+            echo "  --upgrade-authority <YOUR_KEYPAIR> \\"
+            echo "  -u ${{ steps.rpc.outputs.url }}"
+            echo ""
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f deployer-keypair.json buffer-keypair.json
