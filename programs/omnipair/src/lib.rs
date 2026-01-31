@@ -44,7 +44,7 @@ security_txt! {
     source_revision: env!("GIT_REV"),
     auditors: "Offside Labs, Ackee",
     policy: "https://omnipair.fi/security",
-    acknowledgements: "Hurricane @ Offside Labs & Juan (github.com/0xjuaan) @ Obsidian Audits"
+    acknowledgements: "Gongyu Shi (Offside Labs) & Sirius Xie (Offside Labs) & Juan (Obsidian Audits)"
 }
 
 declare_id!("omniSVEL3cY36TYhunvJC6vBXxbJrqrn7JhDrXUTerb");
