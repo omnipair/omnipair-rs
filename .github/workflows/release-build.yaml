@@ -409,13 +409,11 @@ jobs:
           echo "NEXT STEPS (Squads Multisig)"
           echo "============================================"
           echo ""
-          echo "1. Go to Squads: https://v4.squads.so/squads/$SQUADS_MULTISIG/programs"
+          echo "1. Go to Squads: https://app.squads.so/squads/$SQUADS_MULTISIG/developer/programs/$PROGRAM_ID"
           echo ""
-          echo "2. Click 'Upgrade' on the Omnipair program"
+          echo "2. Click 'Upgrade' and enter buffer address: $BUFFER_ADDRESS"
           echo ""
-          echo "3. Use buffer address: $BUFFER_ADDRESS"
-          echo ""
-          echo "4. Team members sign and execute the transaction"
+          echo "3. Team members sign and execute the transaction"
 
       - name: Cleanup keypairs
         if: always()
