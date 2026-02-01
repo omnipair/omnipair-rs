@@ -13,6 +13,9 @@ import * as dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
+// BPF Loader Upgradeable Program ID
+const BPF_LOADER_UPGRADEABLE_ID = new PublicKey('BPFLoaderUpgradeab1e11111111111111111111111');
+
 async function main() {
     console.log('Starting futarchy authority initialization...');
     
@@ -115,11 +118,18 @@ async function main() {
             }
         }
         
+        // Derive program data address (PDA of the program ID under BPF Loader Upgradeable)
+        const [programDataAddress] = PublicKey.findProgramAddressSync(
+            [program.programId.toBuffer()],
+            BPF_LOADER_UPGRADEABLE_ID
+        );
+        console.log('Program Data Address:', programDataAddress.toBase58());
+
         const futarchyTx = await program.methods
             .initFutarchyAuthority({
                 authority: DEPLOYER_KEYPAIR.publicKey,
-                swapBps: 100, // 10% swap fee
-                interestBps: 100, // 10% interest fee
+                swapBps: 100, // 1% swap fee (100 basis points)
+                interestBps: 100, // 1% interest fee (100 basis points)
                 futarchyTreasury: futarchyTreasury,
                 futarchyTreasuryBps: 3000, // 30%
                 buybacksVault: buybacksVault,
@@ -130,6 +140,7 @@ async function main() {
             .accounts({
                 deployer: DEPLOYER_KEYPAIR.publicKey,
                 futarchyAuthority: futarchyAuthorityPda,
+                programData: programDataAddress,
                 systemProgram: SystemProgram.programId,
             })
             .signers([DEPLOYER_KEYPAIR])

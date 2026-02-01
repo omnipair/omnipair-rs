@@ -27,6 +27,10 @@ on:
           - minor
           - major
         default: auto
+      verify_only:
+        description: 'Only run verification (skip build/release)'
+        type: boolean
+        default: false
 
 env:
   ANCHOR_VERSION: '0.31.1'
@@ -36,7 +40,7 @@ jobs:
   # Determine if we should release and what version
   prepare-release:
     if: |
-      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.verify_only != 'true') ||
       github.event.pull_request.merged == true
     runs-on: ubuntu-22.04
     outputs:
@@ -162,11 +166,40 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
+    outputs:
+      final_sha: ${{ steps.bump-version.outputs.sha }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bump version in Cargo.toml
+        id: bump-version
+        run: |
+          VERSION="${{ needs.prepare-release.outputs.version }}"
+          echo "Updating version to $VERSION"
+          
+          # Update omnipair Cargo.toml
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" programs/omnipair/Cargo.toml
+          
+          # Update package.json if exists
+          if [ -f "packages/program-interface/package.json" ]; then
+            sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" packages/program-interface/package.json
+          fi
+          
+          # Commit version bump
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add programs/omnipair/Cargo.toml packages/program-interface/package.json 2>/dev/null || true
+          git commit -m "chore: bump version to $VERSION [skip ci]" || echo "No changes to commit"
+          git push origin HEAD:main
+          
+          # Output the new SHA
+          NEW_SHA=$(git rev-parse HEAD)
+          echo "sha=$NEW_SHA" >> $GITHUB_OUTPUT
+          echo "New SHA after version bump: $NEW_SHA"
 
       - name: Install Solana CLI
         run: |
@@ -185,7 +218,7 @@ jobs:
       - name: Build verifiable
         run: |
           anchor build --verifiable -p omnipair \
-            -e GIT_REV=${{ needs.prepare-release.outputs.sha }} \
+            -e GIT_REV=${{ steps.bump-version.outputs.sha }} \
             -e GIT_RELEASE=${{ needs.prepare-release.outputs.tag }} \
             -- --features "production"
 
@@ -208,37 +241,14 @@ jobs:
           git tag -a ${{ needs.prepare-release.outputs.tag }} -m "Release ${{ needs.prepare-release.outputs.tag }}"
           git push origin ${{ needs.prepare-release.outputs.tag }}
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ needs.prepare-release.outputs.tag }}
-          name: Omnipair ${{ needs.prepare-release.outputs.tag }}
-          body: |
-            ## Omnipair ${{ needs.prepare-release.outputs.tag }}
-            
-            **Commit:** `${{ needs.prepare-release.outputs.sha }}`
-            **Bump:** `${{ needs.prepare-release.outputs.bump_type }}`
-            
-            ### Verifiable Build
-            This release was built using:
-            - Anchor: ${{ env.ANCHOR_VERSION }}
-            - Solana: ${{ env.SOLANA_VERSION }}
-            - Features: `production`
-            
-            To verify this build:
-            ```bash
-            git checkout ${{ needs.prepare-release.outputs.tag }}
-            anchor build --verifiable -p omnipair \
-              -e GIT_REV=${{ needs.prepare-release.outputs.sha }} \
-              -e GIT_RELEASE=${{ needs.prepare-release.outputs.tag }} \
-              -- --features "production"
-            ```
-          files: |
-            target/deploy/omnipair.so
+          name: omnipair-build-${{ needs.prepare-release.outputs.tag }}
+          path: |
             target/verifiable/omnipair.so
             target/idl/omnipair.json
-          generate_release_notes: true
-          make_latest: true
+          retention-days: 90
 
       - name: Upload IDL and types as artifact
         uses: actions/upload-artifact@v4
@@ -249,14 +259,177 @@ jobs:
             target/types/omnipair.ts
           retention-days: 1
 
-  # Publish TypeScript package to npm (using OIDC Trusted Publishing)
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare-release.outputs.tag }}
+          name: Omnipair ${{ needs.prepare-release.outputs.tag }}
+          body: |
+            ## Omnipair ${{ needs.prepare-release.outputs.tag }}
+            
+            **Commit:** `${{ steps.bump-version.outputs.sha }}`
+            **Bump:** `${{ needs.prepare-release.outputs.bump_type }}`
+            
+            ### Verifiable Build
+            This release was built using:
+            - Anchor: ${{ env.ANCHOR_VERSION }}
+            - Solana: ${{ env.SOLANA_VERSION }}
+            - Features: `production`
+            
+            To verify this build:
+            ```bash
+            solana-verify verify-from-repo \
+              --remote \
+              --program-id ${{ vars.PROGRAM_ID }} \
+              https://github.com/${{ github.repository }} \
+              --commit-hash ${{ steps.bump-version.outputs.sha }} \
+              --library-name omnipair \
+              --bpf-flag "features=production"
+            ```
+          files: |
+            target/verifiable/omnipair.so
+            target/idl/omnipair.json
+          generate_release_notes: true
+          make_latest: true
+
+  # Deploy buffer and transfer to Squads multisig
+  deploy-buffer:
+    needs: [prepare-release, build-and-release]
+    if: needs.prepare-release.outputs.should_release == 'true'
+    runs-on: ubuntu-22.04
+    outputs:
+      buffer_address: ${{ steps.buffer.outputs.address }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: omnipair-build-${{ needs.prepare-release.outputs.tag }}
+          path: ./artifacts
+
+      - name: Locate binary
+        id: locate
+        run: |
+          SO_FILE=$(find ./artifacts -name "omnipair.so" | head -1)
+          if [ -z "$SO_FILE" ]; then
+            echo "Error: omnipair.so not found in artifacts"
+            ls -laR ./artifacts/
+            exit 1
+          fi
+          echo "so_path=$SO_FILE" >> $GITHUB_OUTPUT
+          echo "Found binary: $SO_FILE"
+
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
+          echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Setup deployer keypair
+        run: |
+          echo "${{ secrets.DEPLOYER_KEYPAIR }}" > deployer-keypair.json
+          chmod 600 deployer-keypair.json
+
+      - name: Check deployer balance
+        run: |
+          solana balance deployer-keypair.json -u ${{ vars.MAINNET_RPC_URL || 'https://api.mainnet-beta.solana.com' }}
+
+      - name: Generate buffer keypair
+        run: |
+          solana-keygen new -s -o buffer-keypair.json --no-bip39-passphrase
+          BUFFER_PUBKEY=$(solana-keygen pubkey buffer-keypair.json)
+          echo "Generated buffer keypair: $BUFFER_PUBKEY"
+
+      - name: Deploy buffer
+        id: buffer
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 30
+          max_attempts: 10
+          shell: bash
+          command: |
+            RPC_URL="${{ vars.MAINNET_RPC_URL }}"
+            if [ -z "$RPC_URL" ]; then
+              RPC_URL="https://api.mainnet-beta.solana.com"
+            fi
+            
+            solana program write-buffer \
+              --keypair deployer-keypair.json \
+              --buffer buffer-keypair.json \
+              --max-sign-attempts 50 \
+              --with-compute-unit-price 50000 \
+              --use-rpc \
+              ${{ steps.locate.outputs.so_path }} \
+              -u "$RPC_URL"
+            
+            BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
+            echo "address=$BUFFER_ADDRESS" >> $GITHUB_OUTPUT
+            echo "Buffer deployed: $BUFFER_ADDRESS"
+
+      - name: Transfer buffer authority to Squads
+        run: |
+          RPC_URL="${{ vars.MAINNET_RPC_URL }}"
+          if [ -z "$RPC_URL" ]; then
+            RPC_URL="https://api.mainnet-beta.solana.com"
+          fi
+          
+          BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
+          SQUADS_VAULT="${{ vars.SQUADS_VAULT_ADDRESS }}"
+          
+          if [ -z "$SQUADS_VAULT" ]; then
+            echo "Warning: SQUADS_VAULT_ADDRESS not set, skipping authority transfer"
+            exit 0
+          fi
+          
+          solana program set-buffer-authority \
+            "$BUFFER_ADDRESS" \
+            --new-buffer-authority "$SQUADS_VAULT" \
+            --keypair deployer-keypair.json \
+            -u "$RPC_URL"
+          
+          echo "Buffer authority transferred to Squads vault: $SQUADS_VAULT"
+
+      - name: Output upgrade instructions
+        run: |
+          BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
+          PROGRAM_ID="${{ vars.PROGRAM_ID }}"
+          SQUADS_MULTISIG="${{ vars.SQUADS_MULTISIG_ADDRESS }}"
+          
+          echo "============================================"
+          echo "BUFFER DEPLOYED - READY FOR UPGRADE"
+          echo "============================================"
+          echo ""
+          echo "Buffer Address: $BUFFER_ADDRESS"
+          echo "Program ID: $PROGRAM_ID"
+          echo "Release Tag: ${{ needs.prepare-release.outputs.tag }}"
+          echo "Commit SHA: ${{ needs.build-and-release.outputs.final_sha }}"
+          echo ""
+          echo "============================================"
+          echo "NEXT STEPS (Squads Multisig)"
+          echo "============================================"
+          echo ""
+          echo "1. Go to Squads: https://v4.squads.so/squads/$SQUADS_MULTISIG/programs"
+          echo ""
+          echo "2. Click 'Upgrade' on the Omnipair program"
+          echo ""
+          echo "3. Use buffer address: $BUFFER_ADDRESS"
+          echo ""
+          echo "4. Team members sign and execute the transaction"
+
+      - name: Cleanup keypairs
+        if: always()
+        run: |
+          rm -f deployer-keypair.json buffer-keypair.json
+
+  # Publish TypeScript package to npm
   publish-npm:
     needs: [prepare-release, build-and-release]
     if: needs.prepare-release.outputs.should_release == 'true'
     runs-on: ubuntu-22.04
-    continue-on-error: true  # Don't fail the whole release if npm publish fails
+    continue-on-error: true
     permissions:
-      id-token: write   # Required for npm OIDC authentication
+      id-token: write
       contents: read
     steps:
       - name: Checkout code
@@ -268,7 +441,7 @@ jobs:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Update npm to latest (required for OIDC trusted publishing)
+      - name: Update npm to latest
         run: npm install -g npm@latest && npm --version
 
       - name: Download IDL and types artifact
@@ -315,7 +488,6 @@ jobs:
         working-directory: packages/program-interface
         run: |
           VERSION="${{ needs.prepare-release.outputs.version }}"
-          # Use 'next' tag for prereleases (rc, alpha, beta), 'latest' for stable
           if [[ "$VERSION" == *"-"* ]]; then
             npm publish --access public --tag next
           else
@@ -329,7 +501,7 @@ jobs:
     needs: [prepare-release, build-and-release]
     if: needs.prepare-release.outputs.should_release == 'true'
     runs-on: ubuntu-22.04
-    continue-on-error: true  # Don't fail the whole release if crate publish fails
+    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -359,18 +531,15 @@ jobs:
 
       - name: Generate decoder from IDL
         run: |
-          # Generate to temp directory
           mkdir -p temp-decoder
           carbon-cli parse \
             --idl target/idl/omnipair.json \
             --out-dir ./temp-decoder
           
-          # Show what was generated
           echo "Generated structure:"
           ls -la temp-decoder/
           ls -la temp-decoder/src/ || ls -la temp-decoder/omnipair_decoder/ || echo "Unexpected structure"
           
-          # Copy generated folders (new carbon-cli outputs to src/ directly)
           if [ -d "temp-decoder/src" ]; then
             cp -r temp-decoder/src/accounts/* decoders/omnipair-decoder/src/accounts/
             cp -r temp-decoder/src/instructions/* decoders/omnipair-decoder/src/instructions/
@@ -385,7 +554,6 @@ jobs:
             exit 1
           fi
           
-          # Cleanup
           rm -rf temp-decoder
 
       - name: Update crate version
@@ -416,3 +584,64 @@ jobs:
         if: steps.check-crate.outputs.skip != 'true'
         working-directory: decoders/omnipair-decoder
         run: cargo publish --allow-dirty --token ${{ secrets.CRATES_IO_TOKEN }}
+
+  # Manual verification job - run after Squads upgrade is executed
+  verify-release:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.verify_only == 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
+          echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Install solana-verify
+        run: cargo install solana-verify
+
+      - name: Get verification parameters
+        id: params
+        run: |
+          TAG="${{ github.event.inputs.version }}"
+          if [ -z "$TAG" ]; then
+            TAG=$(git describe --tags --abbrev=0)
+          else
+            TAG="v$TAG"
+          fi
+          
+          SHA=$(git rev-list -n 1 "$TAG" 2>/dev/null || git rev-parse HEAD)
+          
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "Will verify tag: $TAG at commit: $SHA"
+
+      - name: Verify from repository
+        run: |
+          RPC_URL="${{ vars.MAINNET_RPC_URL }}"
+          if [ -z "$RPC_URL" ]; then
+            RPC_URL="https://api.mainnet-beta.solana.com"
+          fi
+          
+          solana-verify verify-from-repo \
+            --remote \
+            --program-id ${{ vars.PROGRAM_ID }} \
+            https://github.com/${{ github.repository }} \
+            --commit-hash ${{ steps.params.outputs.sha }} \
+            --library-name omnipair \
+            --bpf-flag "features=production" \
+            -u "$RPC_URL"
+
+      - name: Submit to OtterSec registry
+        if: success()
+        run: |
+          echo "Submitting verification to OtterSec..."
+          solana-verify remote submit-job \
+            --program-id ${{ vars.PROGRAM_ID }} \
+            https://github.com/${{ github.repository }} \
+            --commit-hash ${{ steps.params.outputs.sha }} \
+            --library-name omnipair \
+            --bpf-flag "features=production"

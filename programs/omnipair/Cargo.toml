@@ -35,6 +35,7 @@ num-traits = "0.2.19"
 uint = "0.9.1"
 bytemuck = { version = "1.4.0", features = ["derive", "min_const_generics"] }
 arrayref = { version = "0.3.6" }
+bincode = "1.3"
 
 [dev-dependencies]
 quickcheck = "0.9"

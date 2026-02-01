@@ -1,4 +1,6 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::bpf_loader_upgradeable::UpgradeableLoaderState;
+use bincode::Options;
 use crate::state::futarchy_authority::FutarchyAuthority;
 use crate::constants::{FUTARCHY_AUTHORITY_SEED_PREFIX, BPS_DENOMINATOR};
 use crate::utils::account::get_size_with_discriminator;
@@ -20,10 +22,7 @@ pub struct InitFutarchyAuthorityArgs {
 
 #[derive(Accounts)]
 pub struct InitFutarchyAuthority<'info> {
-    #[account(
-        mut,
-        address = crate::deployer::ID @ ErrorCode::InvalidDeployer
-    )]
+    #[account(mut)]
     pub deployer: Signer<'info>,
 
     #[account(
@@ -35,11 +34,54 @@ pub struct InitFutarchyAuthority<'info> {
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
 
+    /// CHECK: Safe - PDA derivation enforced by seeds, owner validated in handle_init
+    #[account(
+        seeds = [crate::ID.as_ref()],
+        bump,
+        seeds::program = anchor_lang::solana_program::bpf_loader_upgradeable::ID
+    )]
+    pub program_data: AccountInfo<'info>,
+
     pub system_program: Program<'info, System>,
 }
 
 impl<'info> InitFutarchyAuthority<'info> {
     pub fn handle_init(ctx: Context<Self>, args: InitFutarchyAuthorityArgs) -> Result<()> {
+        // Validate deployer is the program's upgrade authority
+        let program_data = &ctx.accounts.program_data;
+        
+        // Explicit owner check - ensures program_data is owned by BPF Loader Upgradeable
+        require_keys_eq!(
+            *program_data.owner,
+            anchor_lang::solana_program::bpf_loader_upgradeable::ID,
+            ErrorCode::InvalidDeployer
+        );
+        
+        let data = program_data.try_borrow_data()?;
+        
+        // Deserialize using Solana's UpgradeableLoaderState type
+        // Use allow_trailing_bytes() because ProgramData accounts may have padding
+        let loader_state: UpgradeableLoaderState = bincode::DefaultOptions::new()
+            .with_fixint_encoding()
+            .allow_trailing_bytes()
+            .deserialize(&data)
+            .map_err(|_| ErrorCode::InvalidDeployer)?;
+        
+        // Extract upgrade authority from ProgramData variant
+        let upgrade_authority = match loader_state {
+            UpgradeableLoaderState::ProgramData { upgrade_authority_address, .. } => {
+                // If upgrade_authority_address is None, program is immutable
+                upgrade_authority_address.ok_or(ErrorCode::InvalidDeployer)?
+            }
+            _ => return Err(ErrorCode::InvalidDeployer.into()),
+        };
+        
+        require_keys_eq!(
+            ctx.accounts.deployer.key(),
+            upgrade_authority,
+            ErrorCode::InvalidDeployer
+        );
+
         // Validate protocol fees are within bounds
         require_gte!(BPS_DENOMINATOR, args.swap_bps, ErrorCode::InvalidSwapFeeBps);
         require_gte!(BPS_DENOMINATOR, args.interest_bps, ErrorCode::InvalidInterestFeeBps);
