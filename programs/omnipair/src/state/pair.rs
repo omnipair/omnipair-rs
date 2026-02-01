@@ -92,6 +92,7 @@ impl Pair {
         version: u8,
         bump: u8,
         vault_bumps: VaultBumps,
+        initial_rate: u64, // NAD-scaled initial rate from rate model
     ) -> Self {
         Self {
             token0,
@@ -121,8 +122,8 @@ impl Pair {
                 symmetric: 0,
                 directional: 0,
             },
-            last_rate0: RateModel::bps_to_nad(INITIAL_RATE_BPS),
-            last_rate1: RateModel::bps_to_nad(INITIAL_RATE_BPS),
+            last_rate0: initial_rate,
+            last_rate1: initial_rate,
 
             total_debt0: 0,
             total_debt1: 0,

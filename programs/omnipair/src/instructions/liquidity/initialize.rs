@@ -40,8 +40,15 @@ pub struct InitializeAndBootstrapArgs {
     pub swap_fee_bps: u16,
     pub half_life: u64,
     pub fixed_cf_bps: Option<u16>,
+    
+    // Interest rate controller parameters (all optional, use defaults if None)
     pub target_util_start_bps: Option<u64>, // utilization lower bound (defaults to 50%)
     pub target_util_end_bps: Option<u64>,   // utilization upper bound (defaults to 85%)
+    pub rate_half_life_ms: Option<u64>,     // rate adjustment speed (defaults to 1 day)
+    pub min_rate_bps: Option<u64>,          // rate floor (defaults to 1%)
+    pub max_rate_bps: Option<u64>,          // rate ceiling (defaults to 500%, 0 = no cap)
+    pub initial_rate_bps: Option<u64>,      // starting rate (defaults to 2%)
+    
     pub params_hash: [u8; 32],
     pub version: u8,
 
@@ -206,6 +213,10 @@ impl<'info> InitializeAndBootstrap<'info> {
             fixed_cf_bps,
             target_util_start_bps,
             target_util_end_bps,
+            rate_half_life_ms,
+            min_rate_bps,
+            max_rate_bps,
+            initial_rate_bps,
             params_hash,
             amount0_in,
             amount1_in,
@@ -236,8 +247,19 @@ impl<'info> InitializeAndBootstrap<'info> {
         let util_end = target_util_end_bps.unwrap_or(TARGET_UTIL_END_BPS);
         require!(RateModel::validate_util_bounds(util_start, util_end), ErrorCode::InvalidUtilBounds);
 
+        // Validate interest rate controller parameters
+        let rate_hl = rate_half_life_ms.unwrap_or(DEFAULT_RATE_HALF_LIFE_MS);
+        let min_rate = min_rate_bps.unwrap_or(DEFAULT_MIN_RATE_BPS);
+        let max_rate = max_rate_bps.unwrap_or(DEFAULT_MAX_RATE_BPS);
+        let init_rate = initial_rate_bps.unwrap_or(DEFAULT_INITIAL_RATE_BPS);
+        require!(
+            RateModel::validate_rate_params(rate_hl, min_rate, max_rate, init_rate),
+            ErrorCode::InvalidRateParams
+        );
+
         // Verify params_hash matches the computed hash
-        // SHA256(VERSION || swap_fee_bps || half_life || fixed_cf_bps || target_util_start_bps || target_util_end_bps)
+        // SHA256(VERSION || swap_fee_bps || half_life || fixed_cf_bps || target_util_start_bps || target_util_end_bps 
+        //        || rate_half_life_ms || min_rate_bps || max_rate_bps || initial_rate_bps)
         let mut hash_data = Vec::new();
         hash_data.extend_from_slice(&VERSION.to_le_bytes());
         hash_data.extend_from_slice(&swap_fee_bps.to_le_bytes());
@@ -245,6 +267,10 @@ impl<'info> InitializeAndBootstrap<'info> {
         hash_data.extend_from_slice(&fixed_cf_bps.unwrap_or(0).to_le_bytes());
         hash_data.extend_from_slice(&target_util_start_bps.unwrap_or(0).to_le_bytes());
         hash_data.extend_from_slice(&target_util_end_bps.unwrap_or(0).to_le_bytes());
+        hash_data.extend_from_slice(&rate_half_life_ms.unwrap_or(0).to_le_bytes());
+        hash_data.extend_from_slice(&min_rate_bps.unwrap_or(0).to_le_bytes());
+        hash_data.extend_from_slice(&max_rate_bps.unwrap_or(0).to_le_bytes());
+        hash_data.extend_from_slice(&initial_rate_bps.unwrap_or(0).to_le_bytes());
         let computed_hash = hash(&hash_data).to_bytes();
         let hashes_match = computed_hash.iter().zip(params_hash.iter()).all(|(a, b)| a == b);
         require!(hashes_match, ErrorCode::InvalidParamsHash);
@@ -283,6 +309,10 @@ impl<'info> InitializeAndBootstrap<'info> {
             fixed_cf_bps,
             target_util_start_bps,
             target_util_end_bps,
+            rate_half_life_ms,
+            min_rate_bps,
+            max_rate_bps,
+            initial_rate_bps,
             params_hash,
             version,
             amount0_in,
@@ -334,10 +364,22 @@ impl<'info> InitializeAndBootstrap<'info> {
             ctx.accounts.lp_mint.key(),
         );
 
-        // Initialize rate model with optional custom utilization bounds
+        // Initialize rate model with optional custom parameters
         let util_start = target_util_start_bps.unwrap_or(TARGET_UTIL_START_BPS);
         let util_end = target_util_end_bps.unwrap_or(TARGET_UTIL_END_BPS);
-        ctx.accounts.rate_model.set_inner(RateModel::new(util_start, util_end));
+        let rate_hl = rate_half_life_ms.unwrap_or(DEFAULT_RATE_HALF_LIFE_MS);
+        let min_rate = min_rate_bps.unwrap_or(DEFAULT_MIN_RATE_BPS);
+        let max_rate = max_rate_bps.unwrap_or(DEFAULT_MAX_RATE_BPS);
+        let init_rate = initial_rate_bps.unwrap_or(DEFAULT_INITIAL_RATE_BPS);
+        
+        ctx.accounts.rate_model.set_inner(RateModel::new(
+            util_start,
+            util_end,
+            rate_hl,
+            min_rate,
+            max_rate,
+            init_rate,
+        ));
 
         // Initialize pair (before LP mint is initialized, but we store the key)
         let vault_bumps = VaultBumps {
@@ -362,6 +404,7 @@ impl<'info> InitializeAndBootstrap<'info> {
             version,
             ctx.bumps.pair,
             vault_bumps,
+            ctx.accounts.rate_model.initial_rate, // Use rate model's configured initial rate (NAD-scaled)
         ));
 
         // Transfer tokens from deployer to vaults
