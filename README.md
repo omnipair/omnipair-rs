@@ -293,7 +293,7 @@ solana program set-buffer-authority <BUFFER_ADDRESS> \
   -u mainnet-beta
 
 # 4. Create upgrade proposal on Squads UI
-# https://v4.squads.so/squads/<MULTISIG_ADDRESS>/programs
+# https://app.squads.so/squads/<MULTISIG_ADDRESS>/developer/programs/<PROGRAM_ID>
 
 # 5. Team signs and executes
 

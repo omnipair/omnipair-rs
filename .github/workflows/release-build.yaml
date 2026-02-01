@@ -31,6 +31,10 @@ on:
         description: 'Only run verification (skip build/release)'
         type: boolean
         default: false
+      skip_buffer:
+        description: 'Skip buffer deployment (for non-program changes)'
+        type: boolean
+        default: false
 
 env:
   ANCHOR_VERSION: '0.31.1'
@@ -295,21 +299,46 @@ jobs:
   # Deploy buffer and transfer to Squads multisig
   deploy-buffer:
     needs: [prepare-release, build-and-release]
-    if: needs.prepare-release.outputs.should_release == 'true'
+    if: |
+      needs.prepare-release.outputs.should_release == 'true' &&
+      github.event.inputs.skip_buffer != 'true'
     runs-on: ubuntu-22.04
     outputs:
       buffer_address: ${{ steps.buffer.outputs.address }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if program changed
+        id: check-program
+        run: |
+          # For PR merges, check if program files changed
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -E '^programs/omnipair/' || true)
+            if [ -z "$CHANGED" ]; then
+              echo "No program changes detected, skipping buffer deployment"
+              echo "skip=true" >> $GITHUB_OUTPUT
+            else
+              echo "Program changes detected:"
+              echo "$CHANGED"
+              echo "skip=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            # Manual trigger - don't auto-skip
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Download build artifact
+        if: steps.check-program.outputs.skip != 'true'
         uses: actions/download-artifact@v4
         with:
           name: omnipair-build-${{ needs.prepare-release.outputs.tag }}
           path: ./artifacts
 
       - name: Locate binary
+        if: steps.check-program.outputs.skip != 'true'
         id: locate
         run: |
           SO_FILE=$(find ./artifacts -name "omnipair.so" | head -1)
@@ -322,26 +351,31 @@ jobs:
           echo "Found binary: $SO_FILE"
 
       - name: Install Solana CLI
+        if: steps.check-program.outputs.skip != 'true'
         run: |
           sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
           echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
       - name: Setup deployer keypair
+        if: steps.check-program.outputs.skip != 'true'
         run: |
           echo "${{ secrets.DEPLOYER_KEYPAIR }}" > deployer-keypair.json
           chmod 600 deployer-keypair.json
 
       - name: Check deployer balance
+        if: steps.check-program.outputs.skip != 'true'
         run: |
           solana balance deployer-keypair.json -u ${{ vars.MAINNET_RPC_URL || 'https://api.mainnet-beta.solana.com' }}
 
       - name: Generate buffer keypair
+        if: steps.check-program.outputs.skip != 'true'
         run: |
           solana-keygen new -s -o buffer-keypair.json --no-bip39-passphrase
           BUFFER_PUBKEY=$(solana-keygen pubkey buffer-keypair.json)
           echo "Generated buffer keypair: $BUFFER_PUBKEY"
 
       - name: Deploy buffer
+        if: steps.check-program.outputs.skip != 'true'
         id: buffer
         uses: nick-fields/retry@v3
         with:
@@ -368,6 +402,7 @@ jobs:
             echo "Buffer deployed: $BUFFER_ADDRESS"
 
       - name: Transfer buffer authority to Squads
+        if: steps.check-program.outputs.skip != 'true'
         run: |
           RPC_URL="${{ vars.MAINNET_RPC_URL }}"
           if [ -z "$RPC_URL" ]; then
@@ -391,6 +426,7 @@ jobs:
           echo "Buffer authority transferred to Squads vault: $SQUADS_VAULT"
 
       - name: Output upgrade instructions
+        if: steps.check-program.outputs.skip != 'true'
         run: |
           BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
           PROGRAM_ID="${{ vars.PROGRAM_ID }}"
@@ -409,16 +445,23 @@ jobs:
           echo "NEXT STEPS (Squads Multisig)"
           echo "============================================"
           echo ""
-          echo "1. Go to Squads: https://v4.squads.so/squads/$SQUADS_MULTISIG/programs"
+          echo "1. Go to Squads: https://app.squads.so/squads/$SQUADS_MULTISIG/developer/programs/$PROGRAM_ID"
           echo ""
-          echo "2. Click 'Upgrade' on the Omnipair program"
+          echo "2. Click 'Upgrade' and enter buffer address: $BUFFER_ADDRESS"
           echo ""
-          echo "3. Use buffer address: $BUFFER_ADDRESS"
-          echo ""
-          echo "4. Team members sign and execute the transaction"
+          echo "3. Team members sign and execute the transaction"
+
+      - name: Skip notice
+        if: steps.check-program.outputs.skip == 'true'
+        run: |
+          echo "============================================"
+          echo "BUFFER DEPLOYMENT SKIPPED"
+          echo "============================================"
+          echo "No changes detected in programs/omnipair/"
+          echo "Only npm/crate packages will be published."
 
       - name: Cleanup keypairs
-        if: always()
+        if: always() && steps.check-program.outputs.skip != 'true'
         run: |
           rm -f deployer-keypair.json buffer-keypair.json
 
