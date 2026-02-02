@@ -41,8 +41,6 @@ All TypeScript types generated from the IDL:
 
 ### Constants
 - `PROGRAM_ID` - The Omnipair program ID
-- `DEPLOYER_DEV` - Development deployer address
-- `DEPLOYER_PROD` - Production deployer address
 - `SEEDS` - PDA seed constants
 
 ### Utilities

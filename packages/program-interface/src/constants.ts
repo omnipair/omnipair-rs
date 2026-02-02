@@ -1,25 +1,18 @@
 import { PublicKey } from "@solana/web3.js";
 
-/**
- * Omnipair program ID (mainnet/devnet)
- */
-export const PROGRAM_ID = new PublicKey(
-  "omniSVEL3cY36TYhunvJC6vBXxbJrqrn7JhDrXUTerb"
-);
+/** Default Omnipair program ID (mainnet) when env is not set */
+const DEFAULT_PROGRAM_ID = "omniSVEL3cY36TYhunvJC6vBXxbJrqrn7JhDrXUTerb";
+
+function getProgramIdFromEnv(): string {
+  if (typeof process === "undefined" || !process.env) return DEFAULT_PROGRAM_ID;
+  return process.env.PROGRAM_ID ?? process.env.OMNIPAIR_PROGRAM_ID ?? DEFAULT_PROGRAM_ID;
+}
 
 /**
- * Development deployer address
+ * Omnipair program ID (mainnet/devnet).
+ * Reads from env PROGRAM_ID or OMNIPAIR_PROGRAM_ID, falls back to mainnet default.
  */
-export const DEPLOYER_DEV = new PublicKey(
-  "C7GKpfqQyBoFR6S13DECwBjdi7aCQKbbeKjXm4Jt5Hds"
-);
-
-/**
- * Production deployer address
- */
-export const DEPLOYER_PROD = new PublicKey(
-  "8tF4uYMBXqGhCUGRZL3AmPqRzbX8JJ1TpYnY3uJKN4kt"
-);
+export const PROGRAM_ID = new PublicKey(getProgramIdFromEnv());
 
 /**
  * PDA seeds used by the program
