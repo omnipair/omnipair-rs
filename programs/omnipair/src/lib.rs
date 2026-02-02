@@ -77,6 +77,10 @@ pub mod omnipair {
         UpdateProtocolRevenue::handle_update(ctx, args)
     }
 
+    pub fn update_revenue_recipients(ctx: Context<UpdateRevenueRecipients>, args: UpdateRevenueRecipientsArgs) -> Result<()> {
+        UpdateRevenueRecipients::handle_update(ctx, args)
+    }
+
     pub fn distribute_tokens(ctx: Context<DistributeTokens>, args: DistributeTokensArgs) -> Result<()> {
         DistributeTokens::handle_distribute(ctx, args)
     }
