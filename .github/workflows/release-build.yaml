@@ -235,6 +235,9 @@ jobs:
           solana --version
           anchor --version
 
+      - name: Clean target (fresh verifiable build)
+        run: cargo clean
+
       - name: Build verifiable
         run: |
           anchor build --verifiable -p omnipair \
