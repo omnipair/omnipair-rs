@@ -191,7 +191,7 @@ jobs:
             echo "SQUADS UPGRADE INSTRUCTIONS"
             echo "============================================"
             echo ""
-            echo "1. Go to Squads: https://v4.squads.so/squads/$SQUADS_MULTISIG/programs"
+            echo "1. Go to Squads: https://app.squads.so/squads/$SQUADS_MULTISIG/developer/programs/$PROGRAM_ID"
             echo ""
             echo "2. Click 'Upgrade' on program: $PROGRAM_ID"
             echo ""

@@ -142,27 +142,39 @@ This project uses automated CI/CD with GitHub Actions for releases and program u
 ### Release Flow Overview
 
 ```
-PR Merge to main
-       │
-       ▼
-┌──────────────────────┐
-│ 1. Version Bump      │  Automatic based on conventional commits
-│ 2. Verifiable Build  │  anchor build --verifiable --features production
-│ 3. Create Release    │  GitHub release with artifacts
-│ 4. Deploy Buffer     │  solana program write-buffer
-│ 5. Transfer to Squads│  Buffer authority → multisig vault
-│ 6. Publish npm       │  @omnipair/program-interface
-└──────────────────────┘
-       │
-       ▼
-┌──────────────────────┐
-│ MANUAL: Squads Sign  │  Team signs upgrade transaction
-└──────────────────────┘
-       │
-       ▼
-┌──────────────────────┐
-│ 7. Verify Release    │  solana-verify verify-from-repo
-└──────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                        AUTOMATIC (PR Merge)                         │
+├─────────────────────────────────────────────────────────────────────┤
+│  1. Version Bump      →  Based on conventional commits              │
+│  2. Verifiable Build  →  anchor build --verifiable --features prod  │
+│  3. Create Release    →  GitHub release with .so and IDL artifacts  │
+└─────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    MANUAL: Deploy Buffer (~8 SOL)                   │
+├─────────────────────────────────────────────────────────────────────┤
+│  4. Download from Release  →  Gets omnipair.so from GitHub          │
+│  5. Deploy Buffer          →  solana program write-buffer           │
+│  6. Transfer to Squads     →  Buffer authority → multisig           │
+└─────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      MANUAL: Squads Approval                        │
+├─────────────────────────────────────────────────────────────────────┤
+│  Team signs upgrade transaction on Squads UI                        │
+│  https://app.squads.so/squads/<MULTISIG>/developer/programs/<ID>    │
+└─────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                   MANUAL: Verify & Publish Packages                 │
+├─────────────────────────────────────────────────────────────────────┤
+│  7. Verify Release   →  solana-verify + OtterSec submission         │
+│  8. Publish npm      →  @omnipair/program-interface                 │
+│  9. Publish crate    →  omnipair-decoder on crates.io               │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Conventional Commits
@@ -180,30 +192,35 @@ Version bumps are automatic based on commit messages:
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `release-build.yaml` | PR merge to main | Full release: build, buffer, npm |
-| `anchor-buffer.yaml` | Manual | Standalone buffer deployment |
+| `release-build.yaml` | PR merge / Manual | Build, release, deploy, verify, publish |
+| `anchor-buffer.yaml` | Manual | Standalone buffer deployment (edge cases) |
 | `generate-verifiable-builds.yaml` | Push to main | Build artifacts without release |
 
 ### Manual Workflow Triggers
 
-**Create a Release** (if automatic didn't trigger):
+All manual triggers: **Actions → release-build → Run workflow**
+
+| Input | Purpose |
+|-------|---------|
+| `version` | Explicit version (e.g., `1.0.0`) |
+| `bump_type` | Auto/patch/minor/major bump |
+| `deploy_buffer` ✅ | Deploy buffer to Solana mainnet (~8 SOL) |
+| `verify_only` ✅ | Only verify on-chain program |
+| `publish_packages` ✅ | Verify + publish npm/crates.io |
+
+**Typical Upgrade Flow:**
 ```
-Actions → release-build → Run workflow
-  └── bump_type: patch/minor/major
+1. Merge PR           →  Auto creates release v0.4.0
+2. deploy_buffer ✅   →  Deploys buffer, transfers to Squads
+3. Team signs         →  Approve on Squads UI
+4. publish_packages ✅ →  Verify + publish packages
 ```
 
-**Verify After Squads Execution**:
-```
-Actions → release-build → Run workflow
-  └── verify_only: ✅ (checked)
-```
-
-**Deploy Buffer Manually** (edge cases):
+**Deploy Buffer Only** (edge cases):
 ```
 Actions → Manual Buffer Deploy → Run workflow
-  ├── network: mainnet-beta
-  ├── source: release
-  └── release_tag: v0.1.0
+  ├── source: release (from GitHub release)
+  └── release_tag: v0.4.0 (optional, defaults to latest)
 ```
 
 ---
@@ -262,10 +279,10 @@ The program upgrade authority is a Squads multisig. Upgrades require team approv
 ### Automated Flow (via CI)
 
 1. Merge PR to `main` with `feat:` or `fix:` commit
-2. CI builds verifiable binary and deploys buffer
-3. CI transfers buffer authority to Squads vault
-4. Team signs upgrade transaction on Squads UI
-5. Run verification workflow after execution
+2. CI builds verifiable binary and creates GitHub release
+3. **Manual:** Run workflow with `deploy_buffer` ✅ to deploy buffer
+4. **Manual:** Team signs upgrade transaction on Squads UI
+5. **Manual:** Run workflow with `publish_packages` ✅ to verify + publish
 
 ### Manual Upgrade Flow
 
@@ -293,7 +310,7 @@ solana program set-buffer-authority <BUFFER_ADDRESS> \
   -u mainnet-beta
 
 # 4. Create upgrade proposal on Squads UI
-# https://v4.squads.so/squads/<MULTISIG_ADDRESS>/programs
+# https://app.squads.so/squads/<MULTISIG_ADDRESS>/developer/programs/<PROGRAM_ID>
 
 # 5. Team signs and executes
 
@@ -321,8 +338,10 @@ solana program extend omniSVEL3cY36TYhunvJC6vBXxbJrqrn7JhDrXUTerb <ADDITIONAL_BY
 
 | Secret | Description |
 |--------|-------------|
-| `DEPLOYER_KEYPAIR` | JSON array of funded deployer wallet |
+| `DEPLOYER_KEYPAIR` | JSON array of funded deployer wallet (~8 SOL for buffer) |
 | `NPM_TOKEN` | npm access token for publishing |
+| `CRATES_IO_TOKEN` | crates.io API token for publishing decoder |
+| `GH_PAT` | GitHub PAT with repo write access (for version bump commits) |
 
 ### Required Variables
 
