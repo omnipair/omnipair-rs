@@ -67,7 +67,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Analyze commits and calculate version
         id: version
@@ -186,7 +186,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Bump version in Cargo.toml
         id: bump-version
@@ -453,11 +453,9 @@ jobs:
           echo ""
           echo "1. Go to Squads: https://app.squads.so/squads/$SQUADS_MULTISIG/developer/programs/$PROGRAM_ID"
           echo ""
-          echo "2. Click 'Upgrade' on the Omnipair program"
+          echo "2. Click 'Upgrade' and enter buffer address: $BUFFER_ADDRESS"
           echo ""
-          echo "3. Use buffer address: $BUFFER_ADDRESS"
-          echo ""
-          echo "4. Team members sign and execute the transaction"
+          echo "3. Team members sign and execute the transaction"
 
       - name: Cleanup keypairs
         if: always()

@@ -193,11 +193,9 @@ jobs:
             echo ""
             echo "1. Go to Squads: https://app.squads.so/squads/$SQUADS_MULTISIG/developer/programs/$PROGRAM_ID"
             echo ""
-            echo "2. Click 'Upgrade' on program: $PROGRAM_ID"
+            echo "2. Click 'Upgrade' and enter buffer address: $BUFFER_ADDRESS"
             echo ""
-            echo "3. Enter buffer address: $BUFFER_ADDRESS"
-            echo ""
-            echo "4. Submit and have team members sign"
+            echo "3. Team members sign and execute the transaction"
             echo ""
           else
             echo "============================================"
