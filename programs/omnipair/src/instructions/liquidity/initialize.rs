@@ -594,6 +594,11 @@ impl<'info> InitializeAndBootstrap<'info> {
             swap_fee_bps: pair.swap_fee_bps,
             half_life: pair.half_life,
             fixed_cf_bps: pair.fixed_cf_bps,
+            target_util_start_bps: target_util_start_bps.unwrap_or(0),
+            target_util_end_bps: target_util_end_bps.unwrap_or(0),
+            rate_half_life_ms: rate_half_life_ms.unwrap_or(0),
+            min_rate_bps: min_rate_bps.unwrap_or(0),
+            max_rate_bps: max_rate_bps.unwrap_or(0),
             params_hash: pair.params_hash,
             version: pair.version,
         });
