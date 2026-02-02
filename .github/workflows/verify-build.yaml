@@ -74,4 +74,5 @@ jobs:
             ${{ steps.cluster.outputs.flag }} \
             --program-id ${{ inputs.program_id }} \
             https://github.com/${{ github.repository }} \
-            --library-name omnipair
+            --library-name omnipair \
+            --bpf-flag "features=production"

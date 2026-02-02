@@ -9,12 +9,12 @@ skip-lint = false
 [programs.devnet]
 faucet = "3Ckfn1LMByoDfVpcDPf7nouk5nQAUm51Zkdf1oprQTAK"
 flashloan_receiver_example = "GmtswKBDrFZ9DfUfP7jbPFvbtuG7AJcX73SvoKWGxJbu"
-omnipair = "2h6oKUk4jcNQ81EzKvYVtzsyRpJwsz6J2pEeQTo1KsQB"
+omnipair = "omni6GVXb6Aqi2W1GG8vbUDg5NoauGhkrqY8kYZhkn8"
 
 [programs.localnet]
 faucet = "3Ckfn1LMByoDfVpcDPf7nouk5nQAUm51Zkdf1oprQTAK"
 flashloan_receiver_example = "GmtswKBDrFZ9DfUfP7jbPFvbtuG7AJcX73SvoKWGxJbu"
-omnipair = "2h6oKUk4jcNQ81EzKvYVtzsyRpJwsz6J2pEeQTo1KsQB"
+omnipair = "omni6GVXb6Aqi2W1GG8vbUDg5NoauGhkrqY8kYZhkn8"
 
 [programs.mainnet]
 omnipair = "3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd"
