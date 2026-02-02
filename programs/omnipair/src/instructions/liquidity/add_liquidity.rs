@@ -12,8 +12,16 @@ impl<'info> AdjustLiquidity<'info> {
         let AdjustLiquidity { 
             user_token0_account,
             user_token1_account,
+            futarchy_authority,
+            pair,
             .. 
         } = self;
+
+        // Check reduce-only mode (global or per-pair)
+        require!(
+            !futarchy_authority.is_reduce_only(pair.reduce_only),
+            ErrorCode::ReduceOnlyMode
+        );
 
         let AddLiquidityArgs { 
             amount0_in, 

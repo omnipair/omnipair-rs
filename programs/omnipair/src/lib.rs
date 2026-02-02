@@ -77,6 +77,10 @@ pub mod omnipair {
         UpdateProtocolRevenue::handle_update(ctx, args)
     }
 
+    pub fn update_revenue_recipients(ctx: Context<UpdateRevenueRecipients>, args: UpdateRevenueRecipientsArgs) -> Result<()> {
+        UpdateRevenueRecipients::handle_update(ctx, args)
+    }
+
     pub fn distribute_tokens(ctx: Context<DistributeTokens>, args: DistributeTokensArgs) -> Result<()> {
         DistributeTokens::handle_distribute(ctx, args)
     }
@@ -84,6 +88,14 @@ pub mod omnipair {
     #[access_control(ctx.accounts.update())]
     pub fn claim_protocol_fees(ctx: Context<ClaimProtocolFees>) -> Result<()> {
         ClaimProtocolFees::handle_claim(ctx)
+    }
+
+    pub fn set_global_reduce_only(ctx: Context<SetGlobalReduceOnly>, args: SetGlobalReduceOnlyArgs) -> Result<()> {
+        SetGlobalReduceOnly::handle_set_global_reduce_only(ctx, args)
+    }
+
+    pub fn set_pair_reduce_only(ctx: Context<SetPairReduceOnly>, args: SetPairReduceOnlyArgs) -> Result<()> {
+        SetPairReduceOnly::handle_set_pair_reduce_only(ctx, args)
     }
 
     // Pair instructions

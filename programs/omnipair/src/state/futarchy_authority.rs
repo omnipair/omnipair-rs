@@ -42,6 +42,9 @@ pub struct FutarchyAuthority {
     pub revenue_share: RevenueShare,
     pub revenue_distribution: RevenueDistribution,
 
+    /// Global reduce-only mode - when enabled, blocks borrowing and adding liquidity across all pairs
+    pub global_reduce_only: bool,
+
     pub bump: u8,
 }
 
@@ -53,6 +56,11 @@ impl FutarchyAuthority {
             return Err(ErrorCode::InvalidDistribution.into());
         }
         Ok(())
+    }
+
+    /// Check if reduce-only mode is active (either globally or for a specific pair)
+    pub fn is_reduce_only(&self, pair_reduce_only: bool) -> bool {
+        self.global_reduce_only || pair_reduce_only
     }
 
     pub fn initialize(
@@ -90,6 +98,7 @@ impl FutarchyAuthority {
             },
             revenue_share,
             revenue_distribution,
+            global_reduce_only: false,
             bump,
         })
     }

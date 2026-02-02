@@ -17,45 +17,29 @@ fn main() {
     }
 
     // Git revision: use env var if set, otherwise run git command
+    // Using std::env::var for runtime evaluation (more reliable in build scripts)
     println!("cargo:rerun-if-env-changed=GIT_REV");
-    let git_rev = std::option_env!("GIT_REV")
-        .map(String::from)
-        .unwrap_or_else(|| {
-            Command::new("git")
-                .args(["rev-parse", "HEAD"])
-                .output()
-                .ok()
-                .and_then(|o| String::from_utf8(o.stdout).ok())
-                .map(|s| s.trim().to_string())
-                .unwrap_or_else(|| "GIT_REV_MISSING".to_string())
-        });
+    let git_rev = std::env::var("GIT_REV").ok().unwrap_or_else(|| {
+        Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+            .unwrap_or_else(|| "GIT_REV_MISSING".to_string())
+    });
     println!("cargo:rustc-env=GIT_REV={}", git_rev);
     println!("cargo:warning=GIT_REV={}", git_rev);
 
-    // Git release name: use env var if set, otherwise try to get exact tag, fallback to describe
+    // Git release name: use env var if set, otherwise use Cargo.toml version
+    // This ensures verification builds match CI builds (both use the same version)
     println!("cargo:rerun-if-env-changed=GIT_RELEASE");
-    let git_release = std::option_env!("GIT_RELEASE")
-        .map(String::from)
-        .unwrap_or_else(|| {
-            // First try to get exact tag (for release builds)
-            Command::new("git")
-                .args(["describe", "--tags", "--exact-match"])
-                .output()
-                .ok()
-                .filter(|o| o.status.success())
-                .and_then(|o| String::from_utf8(o.stdout).ok())
-                .map(|s| s.trim().to_string())
-                // Fallback to describe with distance from tag (for dev builds)
-                .or_else(|| {
-                    Command::new("git")
-                        .args(["describe", "--tags", "--always"])
-                        .output()
-                        .ok()
-                        .and_then(|o| String::from_utf8(o.stdout).ok())
-                        .map(|s| s.trim().to_string())
-                })
-                .unwrap_or_else(|| "GIT_RELEASE_MISSING".to_string())
-        });
+    let git_release = std::env::var("GIT_RELEASE").ok().unwrap_or_else(|| {
+        // Use CARGO_PKG_VERSION from Cargo.toml as the source of truth
+        // This is deterministic and matches the version bumped before building
+        let version = std::env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "0.0.0".to_string());
+        format!("v{}", version)
+    });
     println!("cargo:rustc-env=GIT_RELEASE={}", git_release);
     println!("cargo:warning=GIT_RELEASE={}", git_release);
 

@@ -12,6 +12,7 @@ docker-target
 *-keypair.json
 mockTokens/*.json
 !mockTokens/*_metadata.json
+omni*.json
 
 # Package build artifacts
 packages/*/dist

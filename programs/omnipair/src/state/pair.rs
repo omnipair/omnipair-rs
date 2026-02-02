@@ -74,6 +74,9 @@ pub struct Pair {
     pub version: u8,
     pub bump: u8,
     pub vault_bumps: VaultBumps,
+
+    /// Per-pair reduce-only mode - when enabled, blocks borrowing and adding liquidity for this pair
+    pub reduce_only: bool,
 }
 
 impl Pair {
@@ -136,6 +139,7 @@ impl Pair {
             bump,
             // don't use default values for vault bumps
             vault_bumps,
+            reduce_only: false,
         }
     }
 

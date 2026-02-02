@@ -259,7 +259,7 @@ impl<'info> InitializeAndBootstrap<'info> {
 
         // Verify params_hash matches the computed hash
         // SHA256(VERSION || swap_fee_bps || half_life || fixed_cf_bps || target_util_start_bps || target_util_end_bps 
-        //        || rate_half_life_ms || min_rate_bps || max_rate_bps || initial_rate_bps)
+        //        || rate_half_life_ms || min_rate_bps || max_rate_bps)
         let mut hash_data = Vec::new();
         hash_data.extend_from_slice(&VERSION.to_le_bytes());
         hash_data.extend_from_slice(&swap_fee_bps.to_le_bytes());
@@ -270,7 +270,6 @@ impl<'info> InitializeAndBootstrap<'info> {
         hash_data.extend_from_slice(&rate_half_life_ms.unwrap_or(0).to_le_bytes());
         hash_data.extend_from_slice(&min_rate_bps.unwrap_or(0).to_le_bytes());
         hash_data.extend_from_slice(&max_rate_bps.unwrap_or(0).to_le_bytes());
-        hash_data.extend_from_slice(&initial_rate_bps.unwrap_or(0).to_le_bytes());
         let computed_hash = hash(&hash_data).to_bytes();
         let hashes_match = computed_hash.iter().zip(params_hash.iter()).all(|(a, b)| a == b);
         require!(hashes_match, ErrorCode::InvalidParamsHash);
