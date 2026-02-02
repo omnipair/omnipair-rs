@@ -40,8 +40,22 @@ pub const NATURAL_LOG_OF_TWO_NAD: u64 = 693_147_180; // ln(2) scaled by NAD
 
 // Pair constants
 pub const MIN_LIQUIDITY: u64 = 1_000; // 10^3
-pub const INITIAL_RATE_BPS: u64 = 200; // 2%
-pub const MIN_RATE_BPS: u64 = 100;      // 1%
+
+// Rate model configurable bounds
+pub const DEFAULT_INITIAL_RATE_BPS: u64 = 200;  // 2% default starting rate
+pub const DEFAULT_MIN_RATE_BPS: u64 = 100;      // 1% default floor
+pub const DEFAULT_MAX_RATE_BPS: u64 = 0;        // 0 = uncapped by default (no ceiling)
+
+// Rate bounds validation limits
+pub const MIN_ALLOWED_RATE_BPS: u64 = 0;        // Pools can set floor to 0%
+pub const MAX_ALLOWED_RATE_BPS: u64 = 100_000;  // Pools can set ceiling up to 1000%
+pub const MIN_INITIAL_RATE_BPS: u64 = 10;       // Initial rate must be at least 0.1%
+pub const MAX_INITIAL_RATE_BPS: u64 = 10_000;   // Initial rate cannot exceed 100%
+
+// Rate half-life bounds (controls adjustment speed)
+pub const DEFAULT_RATE_HALF_LIFE_MS: u64 = MS_PER_DAY;  // 1 day default (current behavior)
+pub const MIN_RATE_HALF_LIFE_MS: u64 = 1 * 60 * 60 * 1_000;  // 1 hour minimum (fastest adjustment)
+pub const MAX_RATE_HALF_LIFE_MS: u64 = 7 * 24 * 60 * 60 * 1_000;  // 7 days maximum (slowest adjustment)
 
 /// Debt share scaling factor for increased precision floor in rounded division.
 pub const DEBT_SHARE_SCALE: u64 = 1_000_000; // 10^6

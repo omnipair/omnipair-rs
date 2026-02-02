@@ -31,8 +31,12 @@ on:
         description: 'Only run verification (skip build/release)'
         type: boolean
         default: false
-      skip_buffer:
-        description: 'Skip buffer deployment (for non-program changes)'
+      deploy_buffer:
+        description: 'Deploy buffer to Solana mainnet (costs ~8 SOL)'
+        type: boolean
+        default: false
+      publish_packages:
+        description: 'Publish npm & crates.io packages (run after upgrade is live)'
         type: boolean
         default: false
 
@@ -43,9 +47,14 @@ env:
 jobs:
   # Determine if we should release and what version
   prepare-release:
+    # Only run for new releases (PR merge or manual with version/bump)
+    # Skip when just deploying buffer, verifying, or publishing
     if: |
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.verify_only != 'true') ||
-      github.event.pull_request.merged == true
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+      (github.event_name == 'workflow_dispatch' && 
+       github.event.inputs.verify_only != 'true' &&
+       github.event.inputs.deploy_buffer != 'true' &&
+       github.event.inputs.publish_packages != 'true')
     runs-on: ubuntu-22.04
     outputs:
       should_release: ${{ steps.version.outputs.should_release }}
@@ -296,54 +305,58 @@ jobs:
           generate_release_notes: true
           make_latest: true
 
-  # Deploy buffer and transfer to Squads multisig
+  # Deploy buffer and transfer to Squads multisig (manual trigger only)
   deploy-buffer:
-    needs: [prepare-release, build-and-release]
-    if: |
-      needs.prepare-release.outputs.should_release == 'true' &&
-      github.event.inputs.skip_buffer != 'true'
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_buffer == 'true'
     runs-on: ubuntu-22.04
     outputs:
       buffer_address: ${{ steps.buffer.outputs.address }}
+      release_tag: ${{ steps.release-info.outputs.tag }}
+      release_sha: ${{ steps.release-info.outputs.sha }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Check if program changed
-        id: check-program
+      - name: Get latest release info
+        id: release-info
         run: |
-          # For PR merges, check if program files changed
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -E '^programs/omnipair/' || true)
-            if [ -z "$CHANGED" ]; then
-              echo "No program changes detected, skipping buffer deployment"
-              echo "skip=true" >> $GITHUB_OUTPUT
-            else
-              echo "Program changes detected:"
-              echo "$CHANGED"
-              echo "skip=false" >> $GITHUB_OUTPUT
-            fi
+          # Get version from input or latest tag
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="v${{ github.event.inputs.version }}"
           else
-            # Manual trigger - don't auto-skip
-            echo "skip=false" >> $GITHUB_OUTPUT
+            TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           fi
+          
+          if [ -z "$TAG" ]; then
+            echo "Error: No release tag found. Create a release first."
+            exit 1
+          fi
+          
+          SHA=$(git rev-list -n 1 "$TAG" 2>/dev/null || git rev-parse HEAD)
+          VERSION="${TAG#v}"
+          
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using release: $TAG (commit: $SHA)"
 
-      - name: Download build artifact
-        if: steps.check-program.outputs.skip != 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: omnipair-build-${{ needs.prepare-release.outputs.tag }}
-          path: ./artifacts
+      - name: Download binary from release
+        run: |
+          mkdir -p ./artifacts
+          gh release download ${{ steps.release-info.outputs.tag }} \
+            --pattern "omnipair.so" \
+            --dir ./artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Locate binary
-        if: steps.check-program.outputs.skip != 'true'
         id: locate
         run: |
           SO_FILE=$(find ./artifacts -name "omnipair.so" | head -1)
           if [ -z "$SO_FILE" ]; then
-            echo "Error: omnipair.so not found in artifacts"
+            echo "Error: omnipair.so not found in release"
             ls -laR ./artifacts/
             exit 1
           fi
@@ -351,31 +364,26 @@ jobs:
           echo "Found binary: $SO_FILE"
 
       - name: Install Solana CLI
-        if: steps.check-program.outputs.skip != 'true'
         run: |
           sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
           echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
       - name: Setup deployer keypair
-        if: steps.check-program.outputs.skip != 'true'
         run: |
           echo "${{ secrets.DEPLOYER_KEYPAIR }}" > deployer-keypair.json
           chmod 600 deployer-keypair.json
 
       - name: Check deployer balance
-        if: steps.check-program.outputs.skip != 'true'
         run: |
           solana balance deployer-keypair.json -u ${{ vars.MAINNET_RPC_URL || 'https://api.mainnet-beta.solana.com' }}
 
       - name: Generate buffer keypair
-        if: steps.check-program.outputs.skip != 'true'
         run: |
           solana-keygen new -s -o buffer-keypair.json --no-bip39-passphrase
           BUFFER_PUBKEY=$(solana-keygen pubkey buffer-keypair.json)
           echo "Generated buffer keypair: $BUFFER_PUBKEY"
 
       - name: Deploy buffer
-        if: steps.check-program.outputs.skip != 'true'
         id: buffer
         uses: nick-fields/retry@v3
         with:
@@ -402,7 +410,6 @@ jobs:
             echo "Buffer deployed: $BUFFER_ADDRESS"
 
       - name: Transfer buffer authority to Squads
-        if: steps.check-program.outputs.skip != 'true'
         run: |
           RPC_URL="${{ vars.MAINNET_RPC_URL }}"
           if [ -z "$RPC_URL" ]; then
@@ -426,7 +433,6 @@ jobs:
           echo "Buffer authority transferred to Squads vault: $SQUADS_VAULT"
 
       - name: Output upgrade instructions
-        if: steps.check-program.outputs.skip != 'true'
         run: |
           BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
           PROGRAM_ID="${{ vars.PROGRAM_ID }}"
@@ -438,8 +444,8 @@ jobs:
           echo ""
           echo "Buffer Address: $BUFFER_ADDRESS"
           echo "Program ID: $PROGRAM_ID"
-          echo "Release Tag: ${{ needs.prepare-release.outputs.tag }}"
-          echo "Commit SHA: ${{ needs.build-and-release.outputs.final_sha }}"
+          echo "Release Tag: ${{ steps.release-info.outputs.tag }}"
+          echo "Commit SHA: ${{ steps.release-info.outputs.sha }}"
           echo ""
           echo "============================================"
           echo "NEXT STEPS (Squads Multisig)"
@@ -451,24 +457,17 @@ jobs:
           echo ""
           echo "3. Team members sign and execute the transaction"
 
-      - name: Skip notice
-        if: steps.check-program.outputs.skip == 'true'
-        run: |
-          echo "============================================"
-          echo "BUFFER DEPLOYMENT SKIPPED"
-          echo "============================================"
-          echo "No changes detected in programs/omnipair/"
-          echo "Only npm/crate packages will be published."
-
       - name: Cleanup keypairs
-        if: always() && steps.check-program.outputs.skip != 'true'
+        if: always()
         run: |
           rm -f deployer-keypair.json buffer-keypair.json
 
-  # Publish TypeScript package to npm
+  # Publish TypeScript package to npm (manual trigger only, after upgrade is live)
   publish-npm:
-    needs: [prepare-release, build-and-release]
-    if: needs.prepare-release.outputs.should_release == 'true'
+    needs: [verify-release]
+    if: |
+      github.event_name == 'workflow_dispatch' && 
+      github.event.inputs.publish_packages == 'true'
     runs-on: ubuntu-22.04
     continue-on-error: true
     permissions:
@@ -487,18 +486,20 @@ jobs:
       - name: Update npm to latest
         run: npm install -g npm@latest && npm --version
 
-      - name: Download IDL and types artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: idl-and-types
-          path: target/
+      - name: Download IDL from release
+        run: |
+          mkdir -p target/idl target/types
+          gh release download ${{ needs.verify-release.outputs.tag }} \
+            --pattern "omnipair.json" \
+            --dir target/idl
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Verify IDL downloaded
         run: |
           echo "Downloaded artifacts:"
           ls -laR target/
           test -f target/idl/omnipair.json && echo "IDL found!" || echo "IDL NOT found!"
-          test -f target/types/omnipair.ts && echo "Types found!" || echo "Types NOT found!"
 
       - name: Install dependencies
         working-directory: packages/program-interface
@@ -506,7 +507,7 @@ jobs:
 
       - name: Update package version
         working-directory: packages/program-interface
-        run: npm version ${{ needs.prepare-release.outputs.version }} --no-git-tag-version
+        run: npm version ${{ needs.verify-release.outputs.version }} --no-git-tag-version
 
       - name: Build package
         working-directory: packages/program-interface
@@ -517,7 +518,7 @@ jobs:
         working-directory: packages/program-interface
         run: |
           PACKAGE_NAME=$(node -p "require('./package.json').name")
-          VERSION="${{ needs.prepare-release.outputs.version }}"
+          VERSION="${{ needs.verify-release.outputs.version }}"
           if npm view "${PACKAGE_NAME}@${VERSION}" version 2>/dev/null; then
             echo "Version ${VERSION} already published to npm, skipping"
             echo "skip=true" >> $GITHUB_OUTPUT
@@ -530,7 +531,7 @@ jobs:
         if: steps.check-npm.outputs.skip != 'true'
         working-directory: packages/program-interface
         run: |
-          VERSION="${{ needs.prepare-release.outputs.version }}"
+          VERSION="${{ needs.verify-release.outputs.version }}"
           if [[ "$VERSION" == *"-"* ]]; then
             npm publish --access public --tag next
           else
@@ -539,10 +540,12 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-  # Publish Rust decoder to crates.io
+  # Publish Rust decoder to crates.io (manual trigger only, after upgrade is live)
   publish-crate:
-    needs: [prepare-release, build-and-release]
-    if: needs.prepare-release.outputs.should_release == 'true'
+    needs: [verify-release]
+    if: |
+      github.event_name == 'workflow_dispatch' && 
+      github.event.inputs.publish_packages == 'true'
     runs-on: ubuntu-22.04
     continue-on-error: true
     steps:
@@ -557,11 +560,14 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Download IDL artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: idl-and-types
-          path: target/
+      - name: Download IDL from release
+        run: |
+          mkdir -p target/idl
+          gh release download ${{ needs.verify-release.outputs.tag }} \
+            --pattern "omnipair.json" \
+            --dir target/idl
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Verify IDL downloaded
         run: |
@@ -602,7 +608,7 @@ jobs:
       - name: Update crate version
         working-directory: decoders/omnipair-decoder
         run: |
-          sed -i 's/^version = ".*"/version = "${{ needs.prepare-release.outputs.version }}"/' Cargo.toml
+          sed -i 's/^version = ".*"/version = "${{ needs.verify-release.outputs.version }}"/' Cargo.toml
           cat Cargo.toml
 
       - name: Verify crate builds
@@ -614,7 +620,7 @@ jobs:
         working-directory: decoders/omnipair-decoder
         run: |
           CRATE_NAME=$(grep '^name' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
-          VERSION="${{ needs.prepare-release.outputs.version }}"
+          VERSION="${{ needs.verify-release.outputs.version }}"
           if cargo search "${CRATE_NAME}" --limit 1 | grep -q "^${CRATE_NAME} = \"${VERSION}\""; then
             echo "Version ${VERSION} already published to crates.io, skipping"
             echo "skip=true" >> $GITHUB_OUTPUT
@@ -630,8 +636,14 @@ jobs:
 
   # Manual verification job - run after Squads upgrade is executed
   verify-release:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.verify_only == 'true'
+    if: |
+      github.event_name == 'workflow_dispatch' && 
+      (github.event.inputs.verify_only == 'true' || github.event.inputs.publish_packages == 'true')
     runs-on: ubuntu-22.04
+    outputs:
+      tag: ${{ steps.params.outputs.tag }}
+      sha: ${{ steps.params.outputs.sha }}
+      version: ${{ steps.params.outputs.version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -649,17 +661,18 @@ jobs:
       - name: Get verification parameters
         id: params
         run: |
-          TAG="${{ github.event.inputs.version }}"
-          if [ -z "$TAG" ]; then
-            TAG=$(git describe --tags --abbrev=0)
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="v${{ github.event.inputs.version }}"
           else
-            TAG="v$TAG"
+            TAG=$(git describe --tags --abbrev=0)
           fi
           
           SHA=$(git rev-list -n 1 "$TAG" 2>/dev/null || git rev-parse HEAD)
+          VERSION="${TAG#v}"
           
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Will verify tag: $TAG at commit: $SHA"
 
       - name: Verify from repository

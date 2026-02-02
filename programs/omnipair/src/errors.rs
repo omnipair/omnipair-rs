@@ -205,4 +205,7 @@ pub enum ErrorCode {
 
     #[msg("Invalid utilization bounds - must satisfy: MIN <= start < end <= MAX")]
     InvalidUtilBounds,
+
+    #[msg("Invalid rate parameters - check half_life_ms, min_rate_bps, max_rate_bps, initial_rate_bps bounds")]
+    InvalidRateParams,
 }
