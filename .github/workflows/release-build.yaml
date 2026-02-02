@@ -101,44 +101,51 @@ jobs:
               fi
             fi
           else
-            # PR merge - analyze commits in the PR
-            echo "Analyzing PR commits..."
+            # PR merge - skip release if no program changes (we build/release from programs/omnipair/)
+            echo "Checking for changes in programs/omnipair/..."
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} 2>/dev/null || true)
+            PROGRAM_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^programs/omnipair/' || true)
+            if [ -z "$PROGRAM_CHANGED" ]; then
+              echo "No changes in programs/omnipair/ - skipping release (no new program binary)"
+              SHOULD_RELEASE="false"
+            fi
             
-            # Get commits from the PR (between merge base and HEAD)
-            COMMITS=$(git log --format="%s" ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} 2>/dev/null || git log --format="%s" -10)
+            # Analyze commits in the PR (only if we might release)
+            if [ "$SHOULD_RELEASE" = "true" ]; then
+              echo "Analyzing PR commits..."
+              COMMITS=$(git log --format="%s" ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} 2>/dev/null || git log --format="%s" -10)
+              echo "Commits to analyze:"
+              echo "$COMMITS"
+            fi
             
-            echo "Commits to analyze:"
-            echo "$COMMITS"
-            
-            # Check for breaking changes (MAJOR)
-            if echo "$COMMITS" | grep -qiE "^(feat|fix|refactor|perf|build|ci|docs|style|test|chore)(\(.+\))?!:|BREAKING CHANGE:"; then
-              BUMP_TYPE="major"
-              echo "Found breaking change -> MAJOR bump"
-            # Check for features (MINOR)
-            elif echo "$COMMITS" | grep -qiE "^feat(\(.+\))?:"; then
-              BUMP_TYPE="minor"
-              echo "Found feature -> MINOR bump"
-            # Check for fixes (PATCH)
-            elif echo "$COMMITS" | grep -qiE "^fix(\(.+\))?:"; then
-              BUMP_TYPE="patch"
-              echo "Found fix -> PATCH bump"
-            # Check for perf (PATCH)
-            elif echo "$COMMITS" | grep -qiE "^perf(\(.+\))?:"; then
-              BUMP_TYPE="patch"
-              echo "Found perf -> PATCH bump"
-            else
-              # No conventional commit found - check for release label override
-              if ${{ contains(github.event.pull_request.labels.*.name, 'release:major') }}; then
+            # Check for breaking changes (MAJOR) - only when program changed
+            if [ "$SHOULD_RELEASE" = "true" ]; then
+              if echo "$COMMITS" | grep -qiE "^(feat|fix|refactor|perf|build|ci|docs|style|test|chore)(\(.+\))?!:|BREAKING CHANGE:"; then
                 BUMP_TYPE="major"
-              elif ${{ contains(github.event.pull_request.labels.*.name, 'release:minor') }}; then
+                echo "Found breaking change -> MAJOR bump"
+              elif echo "$COMMITS" | grep -qiE "^feat(\(.+\))?:"; then
                 BUMP_TYPE="minor"
-              elif ${{ contains(github.event.pull_request.labels.*.name, 'release:patch') }}; then
+                echo "Found feature -> MINOR bump"
+              elif echo "$COMMITS" | grep -qiE "^fix(\(.+\))?:"; then
                 BUMP_TYPE="patch"
-              elif ${{ contains(github.event.pull_request.labels.*.name, 'release') }}; then
+                echo "Found fix -> PATCH bump"
+              elif echo "$COMMITS" | grep -qiE "^perf(\(.+\))?:"; then
                 BUMP_TYPE="patch"
+                echo "Found perf -> PATCH bump"
               else
-                echo "No release-worthy commits found (chore, docs, style, refactor, test, ci)"
-                SHOULD_RELEASE="false"
+                # No conventional commit found - check for release label override
+                if ${{ contains(github.event.pull_request.labels.*.name, 'release:major') }}; then
+                  BUMP_TYPE="major"
+                elif ${{ contains(github.event.pull_request.labels.*.name, 'release:minor') }}; then
+                  BUMP_TYPE="minor"
+                elif ${{ contains(github.event.pull_request.labels.*.name, 'release:patch') }}; then
+                  BUMP_TYPE="patch"
+                elif ${{ contains(github.event.pull_request.labels.*.name, 'release') }}; then
+                  BUMP_TYPE="patch"
+                else
+                  echo "No release-worthy commits found (chore, docs, style, refactor, test, ci)"
+                  SHOULD_RELEASE="false"
+                fi
               fi
             fi
           fi
