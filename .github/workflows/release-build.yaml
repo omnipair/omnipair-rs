@@ -580,6 +580,9 @@ jobs:
       - name: Build package
         working-directory: packages/program-interface
         run: npm run build
+        env:
+          PROGRAM_ID: ${{ vars.PROGRAM_ID }}
+          OMNIPAIR_PROGRAM_ID: ${{ vars.PROGRAM_ID }}
 
       - name: Check if version already published
         id: check-npm
