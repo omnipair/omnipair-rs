@@ -462,6 +462,74 @@ jobs:
         run: |
           rm -f deployer-keypair.json buffer-keypair.json
 
+  # Manual verification job - run after Squads upgrade is executed
+  verify-release:
+    if: |
+      github.event_name == 'workflow_dispatch' && 
+      (github.event.inputs.verify_only == 'true' || github.event.inputs.publish_packages == 'true')
+    runs-on: ubuntu-22.04
+    outputs:
+      tag: ${{ steps.params.outputs.tag }}
+      sha: ${{ steps.params.outputs.sha }}
+      version: ${{ steps.params.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
+          echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Install solana-verify
+        run: cargo install solana-verify
+
+      - name: Get verification parameters
+        id: params
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="v${{ github.event.inputs.version }}"
+          else
+            TAG=$(git describe --tags --abbrev=0)
+          fi
+          
+          SHA=$(git rev-list -n 1 "$TAG" 2>/dev/null || git rev-parse HEAD)
+          VERSION="${TAG#v}"
+          
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Will verify tag: $TAG at commit: $SHA"
+
+      - name: Verify from repository
+        run: |
+          RPC_URL="${{ vars.MAINNET_RPC_URL }}"
+          if [ -z "$RPC_URL" ]; then
+            RPC_URL="https://api.mainnet-beta.solana.com"
+          fi
+          
+          solana-verify verify-from-repo \
+            --remote \
+            --program-id ${{ vars.PROGRAM_ID }} \
+            https://github.com/${{ github.repository }} \
+            --commit-hash ${{ steps.params.outputs.sha }} \
+            --library-name omnipair \
+            --bpf-flag "features=production" \
+            -u "$RPC_URL"
+
+      - name: Submit to OtterSec registry
+        if: success()
+        run: |
+          echo "Submitting verification to OtterSec..."
+          solana-verify remote submit-job \
+            --program-id ${{ vars.PROGRAM_ID }} \
+            https://github.com/${{ github.repository }} \
+            --commit-hash ${{ steps.params.outputs.sha }} \
+            --library-name omnipair \
+            --bpf-flag "features=production"
+
   # Publish TypeScript package to npm (manual trigger only, after upgrade is live)
   publish-npm:
     needs: [verify-release]
@@ -633,71 +701,3 @@ jobs:
         if: steps.check-crate.outputs.skip != 'true'
         working-directory: decoders/omnipair-decoder
         run: cargo publish --allow-dirty --token ${{ secrets.CRATES_IO_TOKEN }}
-
-  # Manual verification job - run after Squads upgrade is executed
-  verify-release:
-    if: |
-      github.event_name == 'workflow_dispatch' && 
-      (github.event.inputs.verify_only == 'true' || github.event.inputs.publish_packages == 'true')
-    runs-on: ubuntu-22.04
-    outputs:
-      tag: ${{ steps.params.outputs.tag }}
-      sha: ${{ steps.params.outputs.sha }}
-      version: ${{ steps.params.outputs.version }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install Solana CLI
-        run: |
-          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
-          echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
-
-      - name: Install solana-verify
-        run: cargo install solana-verify
-
-      - name: Get verification parameters
-        id: params
-        run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            TAG="v${{ github.event.inputs.version }}"
-          else
-            TAG=$(git describe --tags --abbrev=0)
-          fi
-          
-          SHA=$(git rev-list -n 1 "$TAG" 2>/dev/null || git rev-parse HEAD)
-          VERSION="${TAG#v}"
-          
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "sha=$SHA" >> $GITHUB_OUTPUT
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Will verify tag: $TAG at commit: $SHA"
-
-      - name: Verify from repository
-        run: |
-          RPC_URL="${{ vars.MAINNET_RPC_URL }}"
-          if [ -z "$RPC_URL" ]; then
-            RPC_URL="https://api.mainnet-beta.solana.com"
-          fi
-          
-          solana-verify verify-from-repo \
-            --remote \
-            --program-id ${{ vars.PROGRAM_ID }} \
-            https://github.com/${{ github.repository }} \
-            --commit-hash ${{ steps.params.outputs.sha }} \
-            --library-name omnipair \
-            --bpf-flag "features=production" \
-            -u "$RPC_URL"
-
-      - name: Submit to OtterSec registry
-        if: success()
-        run: |
-          echo "Submitting verification to OtterSec..."
-          solana-verify remote submit-job \
-            --program-id ${{ vars.PROGRAM_ID }} \
-            https://github.com/${{ github.repository }} \
-            --commit-hash ${{ steps.params.outputs.sha }} \
-            --library-name omnipair \
-            --bpf-flag "features=production"
