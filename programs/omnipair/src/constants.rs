@@ -55,7 +55,7 @@ pub const MAX_INITIAL_RATE_BPS: u64 = 10_000;   // Initial rate cannot exceed 10
 // Rate half-life bounds (controls adjustment speed)
 pub const DEFAULT_RATE_HALF_LIFE_MS: u64 = MS_PER_DAY;  // 1 day default (current behavior)
 pub const MIN_RATE_HALF_LIFE_MS: u64 = 1 * 60 * 60 * 1_000;  // 1 hour minimum (fastest adjustment)
-pub const MAX_RATE_HALF_LIFE_MS: u64 = 7 * 24 * 60 * 60 * 1_000;  // 7 days maximum (slowest adjustment)
+pub const MAX_RATE_HALF_LIFE_MS: u64 = 30 * 24 * 60 * 60 * 1_000;  // 30 days maximum (slowest adjustment)
 
 /// Debt share scaling factor for increased precision floor in rounded division.
 pub const DEBT_SHARE_SCALE: u64 = 1_000_000; // 10^6
