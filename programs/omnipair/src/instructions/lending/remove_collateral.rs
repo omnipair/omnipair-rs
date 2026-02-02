@@ -73,6 +73,16 @@ impl<'info> CommonAdjustCollateral<'info> {
         let is_collateral_token0 = collateral_token == self.pair.token0;
         let is_withdraw_all = args.amount == u64::MAX;
 
+        // Check reduce-only mode: if active, user must have zero debt to remove collateral
+        if self.futarchy_authority.is_reduce_only(self.pair.reduce_only) {
+            // Calculate user's debt for the opposite token
+            let debt = match is_collateral_token0 {
+                true => self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares)?,
+                false => self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares)?,
+            };
+            require!(debt == 0, ErrorCode::ReduceOnlyHasDebt);
+        }
+
         // Calculate maximum withdrawable amount
         let max_withdrawable = calculate_max_withdrawable(&self.pair, &self.user_position, is_collateral_token0)?;
         let withdraw_amount = if is_withdraw_all { max_withdrawable } else { *amount };

@@ -86,6 +86,14 @@ pub mod omnipair {
         ClaimProtocolFees::handle_claim(ctx)
     }
 
+    pub fn set_global_reduce_only(ctx: Context<SetGlobalReduceOnly>, args: SetGlobalReduceOnlyArgs) -> Result<()> {
+        SetGlobalReduceOnly::handle_set_global_reduce_only(ctx, args)
+    }
+
+    pub fn set_pair_reduce_only(ctx: Context<SetPairReduceOnly>, args: SetPairReduceOnlyArgs) -> Result<()> {
+        SetPairReduceOnly::handle_set_pair_reduce_only(ctx, args)
+    }
+
     // Pair instructions
     #[access_control(ctx.accounts.validate(&args))]
     pub fn initialize(ctx: Context<InitializeAndBootstrap>, args: InitializeAndBootstrapArgs) -> Result<()> {

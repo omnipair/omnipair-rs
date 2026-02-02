@@ -12,6 +12,12 @@ impl<'info> CommonAdjustDebt<'info> {
     pub fn validate_borrow(&self, args: &AdjustDebtArgs) -> Result<()> {
         let AdjustDebtArgs { amount: borrow_amount } = args;
         
+        // Check reduce-only mode (global or per-pair)
+        require!(
+            !self.futarchy_authority.is_reduce_only(self.pair.reduce_only),
+            ErrorCode::ReduceOnlyMode
+        );
+        
         require!(*borrow_amount > 0, ErrorCode::AmountZero);
         
         Ok(())

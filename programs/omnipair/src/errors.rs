@@ -208,4 +208,10 @@ pub enum ErrorCode {
 
     #[msg("Invalid rate parameters - check half_life_ms, min_rate_bps, max_rate_bps, initial_rate_bps bounds")]
     InvalidRateParams,
+
+    #[msg("Operation blocked: reduce-only mode is active")]
+    ReduceOnlyMode,
+
+    #[msg("Cannot remove collateral in reduce-only mode while debt exists")]
+    ReduceOnlyHasDebt,
 }
