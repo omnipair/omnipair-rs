@@ -20,11 +20,11 @@ omnipair = "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE"
 omnipair = "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE"
 
 [registry]
-url = "https://devnet.helius-rpc.com/?api-key=66a4060b-2453-49cd-bf7a-fa03546c97ec"
+url = "https://mainnet.helius-rpc.com/?api-key=30168341-6376-4364-98bd-e7bb7da3d5e1"
 
 [provider]
-cluster = "devnet"
-wallet = "testnet-keypair.json"
+cluster = "mainnet"
+wallet = "deployer-keypair.json"
 
 [workspace]
 members = ["programs/omnipair", "programs/faucet"]

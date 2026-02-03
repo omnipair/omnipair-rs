@@ -13,6 +13,8 @@ docker-target
 mockTokens/*.json
 !mockTokens/*_metadata.json
 omni*.json
+omni-local-build.md
+omnipair.so
 
 # Package build artifacts
 packages/*/dist
