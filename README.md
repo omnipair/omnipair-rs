@@ -194,7 +194,7 @@ Version bumps are automatic based on commit messages:
 |----------|---------|---------|
 | `release-build.yaml` | PR merge / Manual | Build, release, deploy, verify, publish |
 | `anchor-buffer.yaml` | Manual | Standalone buffer deployment (edge cases) |
-| `generate-verifiable-builds.yaml` | Push to main | Build artifacts without release |
+| `verify-build.yaml` | Manual | Verify on-chain program against source |
 
 ### Manual Workflow Triggers
 
@@ -347,10 +347,11 @@ solana program extend omniSVEL3cY36TYhunvJC6vBXxbJrqrn7JhDrXUTerb <ADDITIONAL_BY
 
 | Variable | Description |
 |----------|-------------|
-| `PROGRAM_ID` | `omniSVEL3cY36TYhunvJC6vBXxbJrqrn7JhDrXUTerb` |
 | `SQUADS_MULTISIG_ADDRESS` | Squads multisig address |
 | `SQUADS_VAULT_ADDRESS` | Squads vault PDA (buffer authority recipient) |
 | `MAINNET_RPC_URL` | (Optional) Custom RPC URL |
+
+> **Note:** `PROGRAM_ID` is automatically extracted from `programs/omnipair/src/lib.rs` (`declare_id!` macro).
 
 ### Finding Squads Vault Address
 
