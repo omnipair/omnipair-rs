@@ -47,7 +47,7 @@ security_txt! {
     acknowledgements: "Gongyu Shi (Offside Labs) & Sirius Xie (Offside Labs) & Juan (Obsidian Audits)"
 }
 
-declare_id!("omni6GVXb6Aqi2W1GG8vbUDg5NoauGhkrqY8kYZhkn8");
+declare_id!("omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE");
 
 #[program]
 pub mod omnipair {

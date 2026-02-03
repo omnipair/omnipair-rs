@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
 
 /** Default Omnipair program ID (mainnet) when env is not set */
-const DEFAULT_PROGRAM_ID = "omni6GVXb6Aqi2W1GG8vbUDg5NoauGhkrqY8kYZhkn8";
+const DEFAULT_PROGRAM_ID = "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE";
 
 function getProgramIdFromEnv(): string {
   if (typeof process === "undefined" || !process.env) return DEFAULT_PROGRAM_ID;
