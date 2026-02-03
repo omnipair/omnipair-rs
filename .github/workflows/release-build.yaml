@@ -310,6 +310,7 @@ jobs:
           files: |
             target/verifiable/omnipair.so
             target/idl/omnipair.json
+            target/types/omnipair.ts
           generate_release_notes: true
           make_latest: true
 
@@ -632,12 +633,15 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Download IDL from release
+      - name: Download IDL and types from release
         run: |
           mkdir -p target/idl target/types
           gh release download ${{ needs.verify-release.outputs.tag }} \
             --pattern "omnipair.json" \
             --dir target/idl
+          gh release download ${{ needs.verify-release.outputs.tag }} \
+            --pattern "omnipair.ts" \
+            --dir target/types
         env:
           GH_TOKEN: ${{ github.token }}
 
