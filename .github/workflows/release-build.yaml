@@ -653,7 +653,7 @@ jobs:
 
       - name: Update package version
         working-directory: packages/program-interface
-        run: npm version ${{ needs.verify-release.outputs.version }} --no-git-tag-version
+        run: npm version ${{ needs.verify-release.outputs.version }} --no-git-tag-version --allow-same-version
 
       - name: Build package
         working-directory: packages/program-interface
