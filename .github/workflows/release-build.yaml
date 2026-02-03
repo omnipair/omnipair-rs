@@ -195,6 +195,12 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
+      - name: Extract Program ID from source
+        run: |
+          PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+          echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
+          echo "Extracted Program ID: $PROGRAM_ID"
+
       - name: Bump version in Cargo.toml
         id: bump-version
         run: |
@@ -271,16 +277,8 @@ jobs:
           path: |
             target/verifiable/omnipair.so
             target/idl/omnipair.json
-          retention-days: 90
-
-      - name: Upload IDL and types as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: idl-and-types
-          path: |
-            target/idl/omnipair.json
             target/types/omnipair.ts
-          retention-days: 1
+          retention-days: 90
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -303,7 +301,7 @@ jobs:
             ```bash
             solana-verify verify-from-repo \
               --remote \
-              --program-id ${{ vars.PROGRAM_ID }} \
+              --program-id ${{ env.PROGRAM_ID }} \
               https://github.com/${{ github.repository }} \
               --commit-hash ${{ steps.bump-version.outputs.sha }} \
               --library-name omnipair \
@@ -328,6 +326,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Extract Program ID from source
+        run: |
+          PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+          echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
+          echo "Extracted Program ID: $PROGRAM_ID"
 
       - name: Get latest release info
         id: release-info
@@ -445,7 +449,7 @@ jobs:
       - name: Output upgrade instructions
         run: |
           BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
-          PROGRAM_ID="${{ vars.PROGRAM_ID }}"
+          PROGRAM_ID="${{ env.PROGRAM_ID }}"
           SQUADS_MULTISIG="${{ vars.SQUADS_MULTISIG_ADDRESS }}"
           
           echo "============================================"
@@ -488,6 +492,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Extract Program ID from source
+        run: |
+          PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+          echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
+          echo "Extracted Program ID: $PROGRAM_ID"
+
       - name: Install Solana CLI
         run: |
           sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
@@ -522,7 +532,7 @@ jobs:
           
           solana-verify verify-from-repo \
             --remote \
-            --program-id ${{ vars.PROGRAM_ID }} \
+            --program-id ${{ env.PROGRAM_ID }} \
             https://github.com/${{ github.repository }} \
             --commit-hash ${{ steps.params.outputs.sha }} \
             --library-name omnipair \
@@ -534,7 +544,7 @@ jobs:
         run: |
           echo "Submitting verification to OtterSec..."
           solana-verify remote submit-job \
-            --program-id ${{ vars.PROGRAM_ID }} \
+            --program-id ${{ env.PROGRAM_ID }} \
             https://github.com/${{ github.repository }} \
             --commit-hash ${{ steps.params.outputs.sha }} \
             --library-name omnipair \
@@ -555,14 +565,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Extract Program ID from source
+        run: |
+          PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+          echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
+          echo "Extracted Program ID: $PROGRAM_ID"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
           registry-url: 'https://registry.npmjs.org'
-
-      - name: Update npm to latest
-        run: npm install -g npm@latest && npm --version
 
       - name: Download IDL from release
         run: |
@@ -591,8 +604,8 @@ jobs:
         working-directory: packages/program-interface
         run: npm run build
         env:
-          PROGRAM_ID: ${{ vars.PROGRAM_ID }}
-          OMNIPAIR_PROGRAM_ID: ${{ vars.PROGRAM_ID }}
+          PROGRAM_ID: ${{ env.PROGRAM_ID }}
+          OMNIPAIR_PROGRAM_ID: ${{ env.PROGRAM_ID }}
 
       - name: Check if version already published
         id: check-npm

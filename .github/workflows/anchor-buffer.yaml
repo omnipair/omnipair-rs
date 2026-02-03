@@ -9,34 +9,34 @@ on:
   workflow_dispatch:
     inputs:
       network:
-        description: 'Network to deploy to'
-        required: true
+        description: 'Network (default: mainnet-beta)'
+        required: false
         type: choice
         options:
-          - devnet
           - mainnet-beta
+          - devnet
         default: mainnet-beta
       source:
-        description: 'Binary source'
-        required: true
+        description: 'Binary source (default: latest GitHub release)'
+        required: false
         type: choice
         options:
-          - release  # Download from GitHub release
-          - artifact # Download from workflow artifact
-          - local    # Use verifiable-builds/omnipair.so in repo
+          - release
+          - artifact
+          - local
         default: release
       release_tag:
-        description: 'Release tag to use (for source=release, e.g., v0.1.0)'
+        description: 'Release tag (leave empty for latest)'
         required: false
       artifact_name:
-        description: 'Artifact name (for source=artifact)'
+        description: 'Artifact name (only if source=artifact)'
         required: false
       priority_fee:
-        description: 'Priority fee in micro-lamports'
+        description: 'Priority fee in micro-lamports (default: 50000)'
         required: false
         default: '50000'
       transfer_to_squads:
-        description: 'Transfer buffer authority to Squads vault'
+        description: 'Transfer to Squads vault (default: true)'
         type: boolean
         default: true
 
@@ -49,6 +49,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Extract Program ID from source
+        run: |
+          PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+          echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
+          echo "Extracted Program ID: $PROGRAM_ID"
 
       - name: Install Solana CLI
         run: |
@@ -171,7 +177,7 @@ jobs:
       - name: Output results
         run: |
           BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
-          PROGRAM_ID="${{ vars.PROGRAM_ID }}"
+          PROGRAM_ID="${{ env.PROGRAM_ID }}"
           SQUADS_MULTISIG="${{ vars.SQUADS_MULTISIG_ADDRESS }}"
           
           echo "============================================"
