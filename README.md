@@ -74,8 +74,8 @@ See [security policy](https://omnipair.fi/security) for details.
 
 | Network | Program ID |
 |---------|------------|
-| Mainnet | `omniSVEL3cY36TYhunvJC6vBXxbJrqrn7JhDrXUTerb` |
-| Devnet | `omniSVEL3cY36TYhunvJC6vBXxbJrqrn7JhDrXUTerb` |
+| Mainnet | `omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE` |
+| Devnet | `omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE` |
 
 ## Quick Start
 
@@ -252,7 +252,7 @@ cargo install solana-verify
 # Verify from repository
 solana-verify verify-from-repo \
   --remote \
-  --program-id omniSVEL3cY36TYhunvJC6vBXxbJrqrn7JhDrXUTerb \
+  --program-id omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE \
   https://github.com/omnipair/omnipair-rs \
   --commit-hash <COMMIT_SHA> \
   --library-name omnipair \
@@ -263,7 +263,7 @@ solana-verify verify-from-repo \
 
 ```bash
 solana-verify remote submit-job \
-  --program-id omniSVEL3cY36TYhunvJC6vBXxbJrqrn7JhDrXUTerb \
+  --program-id omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE \
   https://github.com/omnipair/omnipair-rs \
   --commit-hash <COMMIT_SHA> \
   --library-name omnipair \
@@ -330,10 +330,10 @@ If the new binary is larger than allocated space:
 
 ```bash
 # Check current size
-solana program show omniSVEL3cY36TYhunvJC6vBXxbJrqrn7JhDrXUTerb
+solana program show omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE
 
 # Extend (requires upgrade authority - do via Squads)
-solana program extend omniSVEL3cY36TYhunvJC6vBXxbJrqrn7JhDrXUTerb <ADDITIONAL_BYTES>
+solana program extend omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE <ADDITIONAL_BYTES>
 ```
 
 ---
