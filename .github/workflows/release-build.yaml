@@ -305,7 +305,7 @@ jobs:
               https://github.com/${{ github.repository }} \
               --commit-hash ${{ steps.bump-version.outputs.sha }} \
               --library-name omnipair \
-              --bpf-flag "features=production"
+              -- --features production
             ```
           files: |
             target/verifiable/omnipair.so
@@ -539,8 +539,8 @@ jobs:
             https://github.com/${{ github.repository }} \
             --commit-hash ${{ steps.params.outputs.sha }} \
             --library-name omnipair \
-            --bpf-flag "features=production" \
-            -u "$RPC_URL"
+            -u "$RPC_URL" \
+            -- --features production
 
       - name: Submit to OtterSec registry
         if: success()
@@ -551,7 +551,7 @@ jobs:
             https://github.com/${{ github.repository }} \
             --commit-hash ${{ steps.params.outputs.sha }} \
             --library-name omnipair \
-            --bpf-flag "features=production"
+            -- --features production
 
   # Publish TypeScript package to npm (manual trigger only, after upgrade is live)
   publish-npm:
