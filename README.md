@@ -315,7 +315,13 @@ solana program set-buffer-authority <BUFFER_ADDRESS> \
 # 5. Team signs and executes
 
 # 6. Verify
-solana-verify verify-from-repo ...
+solana-verify verify-from-repo \
+  --remote \
+  -um \
+  --program-id <PROGRAM_ID> \
+  https://github.com/omnipair/omnipair-rs \
+  --library-name omnipair \
+  --bpf-flag "features=production"
 ```
 
 ### Extend Program Size (if needed)
