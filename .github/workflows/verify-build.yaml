@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       program_id:
-        description: 'Program ID to verify (optional - defaults to value from lib.rs)'
+        description: 'Program ID (leave empty to use value from lib.rs)'
         required: false
         type: string
       cluster:
-        description: 'Cluster to verify against'
-        required: true
+        description: 'Cluster (default: mainnet)'
+        required: false
         type: choice
         options:
           - mainnet
