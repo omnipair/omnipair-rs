@@ -540,25 +540,39 @@ jobs:
             RPC_URL="https://api.mainnet-beta.solana.com"
           fi
           
-          echo "n" | solana-verify verify-from-repo \
-            --remote \
+          COMMIT_HASH="${{ steps.params.outputs.sha }}"
+          VERSION="${{ steps.params.outputs.tag }}"
+          
+          # Build locally and compare with on-chain program
+          # Note: Using solanafoundation/anchor image to match the release build
+          # Pass GIT_REV and GIT_RELEASE env vars via --config to match the original build
+          solana-verify verify-from-repo \
+            --skip-prompt \
+            --base-image solanafoundation/anchor:v0.31.1 \
             --program-id ${{ env.PROGRAM_ID }} \
             https://github.com/${{ github.repository }} \
-            --commit-hash ${{ steps.params.outputs.sha }} \
+            --commit-hash "$COMMIT_HASH" \
             --library-name omnipair \
             -u "$RPC_URL" \
-            -- --features production
+            -- --features production \
+               --config "env.GIT_REV=\"${COMMIT_HASH}\"" \
+               --config "env.GIT_RELEASE=\"${VERSION}\""
 
       - name: Submit to OtterSec registry
         if: success()
         run: |
+          COMMIT_HASH="${{ steps.params.outputs.sha }}"
+          VERSION="${{ steps.params.outputs.tag }}"
+          
           echo "Submitting verification to OtterSec..."
           solana-verify remote submit-job \
             --program-id ${{ env.PROGRAM_ID }} \
             https://github.com/${{ github.repository }} \
-            --commit-hash ${{ steps.params.outputs.sha }} \
+            --commit-hash "$COMMIT_HASH" \
             --library-name omnipair \
-            -- --features production
+            -- --features production \
+               --config "env.GIT_REV=\"${COMMIT_HASH}\"" \
+               --config "env.GIT_RELEASE=\"${VERSION}\""
 
   # Publish TypeScript package to npm (manual trigger only, after upgrade is live)
   publish-npm:
