@@ -533,7 +533,30 @@ jobs:
           solana-keygen new --no-bip39-passphrase -s -o ~/.config/solana/id.json
           solana config set --url ${{ vars.MAINNET_RPC_URL || 'https://api.mainnet-beta.solana.com' }}
 
+      - name: Check if already verified
+        id: check-verified
+        run: |
+          RPC_URL="${{ vars.MAINNET_RPC_URL }}"
+          if [ -z "$RPC_URL" ]; then
+            RPC_URL="https://api.mainnet-beta.solana.com"
+          fi
+          
+          # Check OtterSec API for existing verification
+          PROGRAM_ID="${{ env.PROGRAM_ID }}"
+          RESPONSE=$(curl -s "https://verify.osec.io/status/${PROGRAM_ID}" || echo "{}")
+          
+          if echo "$RESPONSE" | grep -q '"is_verified":true'; then
+            VERIFIED_HASH=$(echo "$RESPONSE" | grep -oP '"on_chain_hash":"\K[^"]+' || echo "")
+            echo "Program is already verified on OtterSec registry"
+            echo "Verified hash: $VERIFIED_HASH"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Program not yet verified, proceeding with verification"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Verify from repository
+        if: steps.check-verified.outputs.skip != 'true'
         run: |
           RPC_URL="${{ vars.MAINNET_RPC_URL }}"
           if [ -z "$RPC_URL" ]; then
@@ -559,7 +582,7 @@ jobs:
                --config "env.GIT_RELEASE=\"${VERSION}\""
 
       - name: Submit to OtterSec registry
-        if: success()
+        if: success() && steps.check-verified.outputs.skip != 'true'
         run: |
           COMMIT_HASH="${{ steps.params.outputs.sha }}"
           VERSION="${{ steps.params.outputs.tag }}"
@@ -573,6 +596,14 @@ jobs:
             -- --features production \
                --config "env.GIT_REV=\"${COMMIT_HASH}\"" \
                --config "env.GIT_RELEASE=\"${VERSION}\""
+      
+      - name: Verification status
+        run: |
+          if [ "${{ steps.check-verified.outputs.skip }}" = "true" ]; then
+            echo "✅ Program was already verified - skipped re-verification"
+          else
+            echo "✅ Program verification completed successfully"
+          fi
 
   # Publish TypeScript package to npm (manual trigger only, after upgrade is live)
   publish-npm:
