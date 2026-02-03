@@ -533,7 +533,7 @@ jobs:
             RPC_URL="https://api.mainnet-beta.solana.com"
           fi
           
-          solana-verify verify-from-repo \
+          yes | solana-verify verify-from-repo \
             --remote \
             --program-id ${{ env.PROGRAM_ID }} \
             https://github.com/${{ github.repository }} \
