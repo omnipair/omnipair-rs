@@ -56,8 +56,17 @@ jobs:
           solana --version
           anchor --version
 
-      - name: Build project
-        run: anchor build
+      - name: Build verifiable (same Docker as release)
+        run: |
+          # Use --verifiable to match release build environment
+          # Only build omnipair program (skip workspace members like faucet)
+          anchor build --verifiable -p omnipair
+
+      - name: Copy binary for tests
+        run: |
+          # Tests expect binary in target/deploy/, verifiable outputs to target/verifiable/
+          mkdir -p target/deploy
+          cp target/verifiable/omnipair.so target/deploy/
 
       - name: Run tests
         run: anchor test --skip-local-validator
