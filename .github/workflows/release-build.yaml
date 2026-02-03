@@ -526,6 +526,13 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Will verify tag: $TAG at commit: $SHA"
 
+      - name: Setup Solana CLI config
+        run: |
+          # Create dummy keypair for solana-verify (won't be used for transactions)
+          mkdir -p ~/.config/solana
+          solana-keygen new --no-bip39-passphrase -s -o ~/.config/solana/id.json
+          solana config set --url ${{ vars.MAINNET_RPC_URL || 'https://api.mainnet-beta.solana.com' }}
+
       - name: Verify from repository
         run: |
           RPC_URL="${{ vars.MAINNET_RPC_URL }}"
