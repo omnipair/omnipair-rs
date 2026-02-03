@@ -499,17 +499,6 @@ jobs:
           echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
           echo "Extracted Program ID: $PROGRAM_ID"
 
-      - name: Install Solana CLI
-        run: |
-          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
-          echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
-
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libudev-dev
-
-      - name: Install solana-verify
-        run: cargo install solana-verify
-
       - name: Get verification parameters
         id: params
         run: |
@@ -527,22 +516,10 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Will verify tag: $TAG at commit: $SHA"
 
-      - name: Setup Solana CLI config
-        run: |
-          # Create dummy keypair for solana-verify (won't be used for transactions)
-          mkdir -p ~/.config/solana
-          solana-keygen new --no-bip39-passphrase -s -o ~/.config/solana/id.json
-          solana config set --url ${{ vars.MAINNET_RPC_URL || 'https://api.mainnet-beta.solana.com' }}
-
       - name: Check if already verified
         id: check-verified
         run: |
-          RPC_URL="${{ vars.MAINNET_RPC_URL }}"
-          if [ -z "$RPC_URL" ]; then
-            RPC_URL="https://api.mainnet-beta.solana.com"
-          fi
-          
-          # Check OtterSec API for existing verification
+          # Check OtterSec API for existing verification (no dependencies needed, just curl)
           PROGRAM_ID="${{ env.PROGRAM_ID }}"
           RESPONSE=$(curl -s "https://verify.osec.io/status/${PROGRAM_ID}" || echo "{}")
           
@@ -555,6 +532,28 @@ jobs:
             echo "Program not yet verified, proceeding with verification"
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Install Solana CLI
+        if: steps.check-verified.outputs.skip != 'true'
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
+          echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Install system dependencies
+        if: steps.check-verified.outputs.skip != 'true'
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
+
+      - name: Install solana-verify
+        if: steps.check-verified.outputs.skip != 'true'
+        run: cargo install solana-verify
+
+      - name: Setup Solana CLI config
+        if: steps.check-verified.outputs.skip != 'true'
+        run: |
+          # Create dummy keypair for solana-verify (won't be used for transactions)
+          mkdir -p ~/.config/solana
+          solana-keygen new --no-bip39-passphrase -s -o ~/.config/solana/id.json
+          solana config set --url ${{ vars.MAINNET_RPC_URL || 'https://api.mainnet-beta.solana.com' }}
 
       - name: Verify from repository
         if: steps.check-verified.outputs.skip != 'true'
