@@ -17,7 +17,6 @@ on:
         default: mainnet
 
 env:
-  ANCHOR_VERSION: '0.31.1'
   SOLANA_VERSION: '1.18.18'
 
 jobs:
@@ -41,11 +40,10 @@ jobs:
           fi
           echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
 
-      - name: Setup Anchor
-        uses: metadaoproject/setup-anchor@v3
-        with:
-          anchor-version: ${{ env.ANCHOR_VERSION }}
-          solana-cli-version: ${{ env.SOLANA_VERSION }}
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
+          echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
       - name: Cache Cargo registry
         uses: actions/cache@v4
