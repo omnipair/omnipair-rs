@@ -277,16 +277,8 @@ jobs:
           path: |
             target/verifiable/omnipair.so
             target/idl/omnipair.json
-          retention-days: 90
-
-      - name: Upload IDL and types as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: idl-and-types
-          path: |
-            target/idl/omnipair.json
             target/types/omnipair.ts
-          retention-days: 1
+          retention-days: 90
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -582,11 +574,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
           registry-url: 'https://registry.npmjs.org'
-
-      - name: Update npm to latest
-        run: npm install -g npm@latest && npm --version
 
       - name: Download IDL from release
         run: |
