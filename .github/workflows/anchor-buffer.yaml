@@ -50,6 +50,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Extract Program ID from source
+        run: |
+          PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+          echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
+          echo "Extracted Program ID: $PROGRAM_ID"
+
       - name: Install Solana CLI
         run: |
           sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
@@ -171,7 +177,7 @@ jobs:
       - name: Output results
         run: |
           BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
-          PROGRAM_ID="${{ vars.PROGRAM_ID }}"
+          PROGRAM_ID="${{ env.PROGRAM_ID }}"
           SQUADS_MULTISIG="${{ vars.SQUADS_MULTISIG_ADDRESS }}"
           
           echo "============================================"

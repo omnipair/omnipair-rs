@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       program_id:
-        description: 'On-chain Program ID to verify against'
-        required: true
+        description: 'Program ID to verify (optional - defaults to value from lib.rs)'
+        required: false
         type: string
       cluster:
         description: 'Cluster to verify against'
@@ -26,6 +26,20 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Determine Program ID
+        run: |
+          # Extract from source as default
+          EXTRACTED_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+          # Use input if provided, otherwise use extracted value
+          PROGRAM_ID="${{ inputs.program_id }}"
+          if [ -z "$PROGRAM_ID" ]; then
+            PROGRAM_ID="$EXTRACTED_ID"
+            echo "Using Program ID from lib.rs: $PROGRAM_ID"
+          else
+            echo "Using provided Program ID: $PROGRAM_ID"
+          fi
+          echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
 
       - name: Setup Anchor
         uses: metadaoproject/setup-anchor@v3
@@ -66,13 +80,13 @@ jobs:
         run: |
           echo "============================================"
           echo "Verifying omnipair against on-chain program"
-          echo "Program ID: ${{ inputs.program_id }}"
+          echo "Program ID: ${{ env.PROGRAM_ID }}"
           echo "Cluster: ${{ inputs.cluster }}"
           echo "============================================"
           solana-verify verify-from-repo \
             --remote \
             ${{ steps.cluster.outputs.flag }} \
-            --program-id ${{ inputs.program_id }} \
+            --program-id ${{ env.PROGRAM_ID }} \
             https://github.com/${{ github.repository }} \
             --library-name omnipair \
             --bpf-flag "features=production"
