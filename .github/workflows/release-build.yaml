@@ -745,22 +745,12 @@ jobs:
             --out-dir ./temp-decoder
           
           echo "Generated structure:"
-          ls -la temp-decoder/
-          ls -la temp-decoder/src/ || ls -la temp-decoder/omnipair_decoder/ || echo "Unexpected structure"
+          ls -la temp-decoder/omnipair_decoder/
           
-          if [ -d "temp-decoder/src" ]; then
-            cp -r temp-decoder/src/accounts/* decoders/omnipair-decoder/src/accounts/
-            cp -r temp-decoder/src/instructions/* decoders/omnipair-decoder/src/instructions/
-            cp -r temp-decoder/src/types/* decoders/omnipair-decoder/src/types/
-            cp -r temp-decoder/src/events/* decoders/omnipair-decoder/src/events/ 2>/dev/null || true
-          elif [ -d "temp-decoder/omnipair_decoder" ]; then
-            cp -r temp-decoder/omnipair_decoder/accounts/* decoders/omnipair-decoder/src/accounts/
-            cp -r temp-decoder/omnipair_decoder/instructions/* decoders/omnipair-decoder/src/instructions/
-            cp -r temp-decoder/omnipair_decoder/types/* decoders/omnipair-decoder/src/types/
-          else
-            echo "ERROR: Unexpected output structure from carbon-cli"
-            exit 1
-          fi
+          # Copy generated files (preserves custom graphql/, postgres/ subdirectories)
+          cp -r temp-decoder/omnipair_decoder/accounts/* decoders/omnipair-decoder/src/accounts/
+          cp -r temp-decoder/omnipair_decoder/instructions/* decoders/omnipair-decoder/src/instructions/
+          cp -r temp-decoder/omnipair_decoder/types/* decoders/omnipair-decoder/src/types/
           
           rm -rf temp-decoder
 

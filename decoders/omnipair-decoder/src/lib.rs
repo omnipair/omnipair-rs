@@ -6,6 +6,5 @@ pub const PROGRAM_ID: Pubkey = solana_pubkey::Pubkey::from_str_const("omnixgS8fn
 pub mod accounts;
 pub mod instructions;
 pub mod types;
-pub mod events;
 #[cfg(feature = "graphql")]
 pub mod graphql;
