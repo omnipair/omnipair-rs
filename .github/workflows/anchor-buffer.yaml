@@ -46,14 +46,19 @@ env:
 jobs:
   deploy-buffer:
     runs-on: ubuntu-22.04
+    outputs:
+      buffer_address: ${{ steps.buffer.outputs.address }}
+      program_id: ${{ steps.extract.outputs.program_id }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Extract Program ID from source
+        id: extract
         run: |
           PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
           echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
+          echo "program_id=$PROGRAM_ID" >> $GITHUB_OUTPUT
           echo "Extracted Program ID: $PROGRAM_ID"
 
       - name: Install Solana CLI
@@ -162,7 +167,7 @@ jobs:
           SQUADS_VAULT="${{ vars.SQUADS_VAULT_ADDRESS }}"
           
           if [ -z "$SQUADS_VAULT" ]; then
-            echo "Warning: SQUADS_VAULT_ADDRESS not configured, skipping transfer"
+            echo "::warning::SQUADS_VAULT_ADDRESS not configured, skipping authority transfer"
             exit 0
           fi
           
@@ -214,6 +219,31 @@ jobs:
             echo "  --upgrade-authority <YOUR_KEYPAIR> \\"
             echo "  -u ${{ steps.rpc.outputs.url }}"
             echo ""
+          fi
+
+      - name: Create summary
+        run: |
+          BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
+          PROGRAM_ID="${{ env.PROGRAM_ID }}"
+          SQUADS_MULTISIG="${{ vars.SQUADS_MULTISIG_ADDRESS }}"
+          
+          echo "## 🚀 Buffer Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Buffer Address** | \`$BUFFER_ADDRESS\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Program ID** | \`$PROGRAM_ID\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Network** | ${{ inputs.network }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Source** | ${{ inputs.source }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Priority Fee** | ${{ inputs.priority_fee }} micro-lamports |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ inputs.transfer_to_squads }}" = "true" ] && [ "${{ inputs.network }}" = "mainnet-beta" ]; then
+            echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "1. Go to [Squads Program Page](https://app.squads.so/squads/$SQUADS_MULTISIG/developer/programs/$PROGRAM_ID)" >> $GITHUB_STEP_SUMMARY
+            echo "2. Click **Upgrade** and enter buffer address: \`$BUFFER_ADDRESS\`" >> $GITHUB_STEP_SUMMARY
+            echo "3. Team members sign and execute the transaction" >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Cleanup
