@@ -227,13 +227,19 @@ impl RateModel {
             // Used when max_rate cap is configured
             if target <= r0 { return 0; }
             let ratio_nad = (target.saturating_mul(NAD as u128)) / r0.max(1);
-            let ln_ratio  = Self::ln_nad(ratio_nad as u64);  // NAD (signed)
+            // Safe conversion: if ratio exceeds u64::MAX, cap it (represents extreme rate ratio)
+            let ratio_nad_u64 = u64::try_from(ratio_nad).unwrap_or(u64::MAX);
+            if ratio_nad_u64 == 0 { return 0; }
+            let ln_ratio  = Self::ln_nad(ratio_nad_u64);  // NAD (signed)
             let t = ln_ratio / (exp_rate as i128);
             if t <= 0 { 0 } else { t as u128 }
         } else {
             if r0 <= target { return 0; }
             let ratio_nad = (r0.saturating_mul(NAD as u128)) / target.max(1);
-            let ln_ratio  = Self::ln_nad(ratio_nad as u64);  // NAD (signed)
+            // Safe conversion: if ratio exceeds u64::MAX, cap it (represents extreme rate ratio)
+            let ratio_nad_u64 = u64::try_from(ratio_nad).unwrap_or(u64::MAX);
+            if ratio_nad_u64 == 0 { return 0; }
+            let ln_ratio  = Self::ln_nad(ratio_nad_u64);  // NAD (signed)
             let t = ln_ratio / (exp_rate as i128);
             if t <= 0 { 0 } else { t as u128 }
         }
