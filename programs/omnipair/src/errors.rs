@@ -214,4 +214,7 @@ pub enum ErrorCode {
 
     #[msg("Cannot remove collateral in reduce-only mode while debt exists")]
     ReduceOnlyHasDebt,
+
+    #[msg("Invalid recipient - address does not match configured revenue recipient")]
+    InvalidRecipient,
 }

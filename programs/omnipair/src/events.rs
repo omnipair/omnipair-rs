@@ -156,3 +156,16 @@ pub struct FlashloanEvent {
     pub receiver: Pubkey,
     pub metadata: EventMetadata,
 }
+
+#[event]
+pub struct ClaimProtocolFeesEvent {
+    pub token0: Pubkey,
+    pub token1: Pubkey,
+    pub futarchy_treasury_amount0: u64,
+    pub futarchy_treasury_amount1: u64,
+    pub buybacks_vault_amount0: u64,
+    pub buybacks_vault_amount1: u64,
+    pub team_treasury_amount0: u64,
+    pub team_treasury_amount1: u64,
+    pub metadata: EventMetadata,
+}
