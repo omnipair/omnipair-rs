@@ -81,10 +81,8 @@ pub mod omnipair {
         UpdateRevenueRecipients::handle_update(ctx, args)
     }
 
-    pub fn distribute_tokens(ctx: Context<DistributeTokens>, args: DistributeTokensArgs) -> Result<()> {
-        DistributeTokens::handle_distribute(ctx, args)
-    }
-
+    /// Claims protocol fees from a pair and distributes directly to revenue recipients.
+    /// This instruction is permissionless - anyone can trigger fee distribution.
     #[access_control(ctx.accounts.update())]
     pub fn claim_protocol_fees(ctx: Context<ClaimProtocolFees>) -> Result<()> {
         ClaimProtocolFees::handle_claim(ctx)

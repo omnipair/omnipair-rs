@@ -9,10 +9,15 @@ pub struct RevenueShare {
     pub interest_bps: u16,
 }
 
+/// Revenue recipient wallet addresses (not ATAs).
+/// When claiming protocol fees, ATAs are derived from these wallet addresses for each token.
 #[derive(Clone, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace)]
 pub struct RevenueRecipients {
+    /// Wallet address for futarchy/DAO treasury (e.g., multisig or DAO authority)
     pub futarchy_treasury: Pubkey,
+    /// Wallet address for buybacks vault
     pub buybacks_vault: Pubkey,
+    /// Wallet address for team treasury
     pub team_treasury: Pubkey,
 }
 
