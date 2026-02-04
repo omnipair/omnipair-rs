@@ -32,21 +32,21 @@ pub struct ClaimProtocolFees<'info> {
         seeds = [PAIR_SEED_PREFIX, pair.token0.as_ref(), pair.token1.as_ref(), pair.params_hash.as_ref()],
         bump = pair.bump
     )]
-    pub pair: Account<'info, Pair>,
+    pub pair: Box<Account<'info, Pair>>,
 
     #[account(
         mut,
         address = pair.rate_model,
     )]
-    pub rate_model: Account<'info, RateModel>,
+    pub rate_model: Box<Account<'info, RateModel>>,
 
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
         bump = futarchy_authority.bump
     )]
-    pub futarchy_authority: Account<'info, FutarchyAuthority>,
+    pub futarchy_authority: Box<Account<'info, FutarchyAuthority>>,
 
-    // Reserve Vaults (source of fees)
+    // Reserve Vaults (source of fees) - boxed to reduce stack usage
     #[account(
         mut,
         seeds = [
@@ -56,7 +56,7 @@ pub struct ClaimProtocolFees<'info> {
         ],
         bump = pair.vault_bumps.reserve0
     )]
-    pub reserve0_vault: Account<'info, TokenAccount>,
+    pub reserve0_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -67,7 +67,7 @@ pub struct ClaimProtocolFees<'info> {
         ],
         bump = pair.vault_bumps.reserve1
     )]
-    pub reserve1_vault: Account<'info, TokenAccount>,
+    pub reserve1_vault: Box<Account<'info, TokenAccount>>,
 
     // Token Mints
     #[account(address = pair.token0)]
@@ -76,14 +76,14 @@ pub struct ClaimProtocolFees<'info> {
     #[account(address = pair.token1)]
     pub token1_mint: Box<Account<'info, Mint>>,
 
-    // Futarchy Treasury ATAs
+    // Futarchy Treasury ATAs (boxed to reduce stack usage)
     #[account(
         init_if_needed,
         payer = caller,
         associated_token::mint = token0_mint,
         associated_token::authority = futarchy_treasury,
     )]
-    pub futarchy_treasury_token0: Account<'info, TokenAccount>,
+    pub futarchy_treasury_token0: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -91,20 +91,20 @@ pub struct ClaimProtocolFees<'info> {
         associated_token::mint = token1_mint,
         associated_token::authority = futarchy_treasury,
     )]
-    pub futarchy_treasury_token1: Account<'info, TokenAccount>,
+    pub futarchy_treasury_token1: Box<Account<'info, TokenAccount>>,
 
     /// CHECK: Validated against futarchy_authority.recipients.futarchy_treasury
     #[account(address = futarchy_authority.recipients.futarchy_treasury @ ErrorCode::InvalidRecipient)]
     pub futarchy_treasury: AccountInfo<'info>,
 
-    // Buybacks Vault ATAs
+    // Buybacks Vault ATAs (boxed to reduce stack usage)
     #[account(
         init_if_needed,
         payer = caller,
         associated_token::mint = token0_mint,
         associated_token::authority = buybacks_vault,
     )]
-    pub buybacks_vault_token0: Account<'info, TokenAccount>,
+    pub buybacks_vault_token0: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -112,20 +112,20 @@ pub struct ClaimProtocolFees<'info> {
         associated_token::mint = token1_mint,
         associated_token::authority = buybacks_vault,
     )]
-    pub buybacks_vault_token1: Account<'info, TokenAccount>,
+    pub buybacks_vault_token1: Box<Account<'info, TokenAccount>>,
 
     /// CHECK: Validated against futarchy_authority.recipients.buybacks_vault
     #[account(address = futarchy_authority.recipients.buybacks_vault @ ErrorCode::InvalidRecipient)]
     pub buybacks_vault: AccountInfo<'info>,
 
-    // Team Treasury ATAs
+    // Team Treasury ATAs (boxed to reduce stack usage)
     #[account(
         init_if_needed,
         payer = caller,
         associated_token::mint = token0_mint,
         associated_token::authority = team_treasury,
     )]
-    pub team_treasury_token0: Account<'info, TokenAccount>,
+    pub team_treasury_token0: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -133,7 +133,7 @@ pub struct ClaimProtocolFees<'info> {
         associated_token::mint = token1_mint,
         associated_token::authority = team_treasury,
     )]
-    pub team_treasury_token1: Account<'info, TokenAccount>,
+    pub team_treasury_token1: Box<Account<'info, TokenAccount>>,
 
     /// CHECK: Validated against futarchy_authority.recipients.team_treasury
     #[account(address = futarchy_authority.recipients.team_treasury @ ErrorCode::InvalidRecipient)]
