@@ -558,7 +558,7 @@ jobs:
           echo "Deployer balance:"
           solana balance || echo "Could not check balance"
 
-      - name: Verify from repository
+      - name: Verify from repository (hash check)
         if: steps.check-verified.outputs.skip != 'true'
         run: |
           RPC_URL="${{ vars.MAINNET_RPC_URL }}"
@@ -571,7 +571,7 @@ jobs:
           
           # Build locally and compare with on-chain program
           # Note: Using solanafoundation/anchor image to match the release build
-          # Pass GIT_REV and GIT_RELEASE env vars via --config to match the original build
+          # --skip-prompt prevents attempting to upload verification data (we can't - multisig controls program)
           solana-verify verify-from-repo \
             --skip-prompt \
             --base-image solanafoundation/anchor:v0.31.1 \
@@ -584,25 +584,88 @@ jobs:
                --config "env.GIT_REV=\"${COMMIT_HASH}\"" \
                --config "env.GIT_RELEASE=\"${VERSION}\""
 
-      - name: Submit to OtterSec registry
+      - name: Export OtterSec PDA transaction for Squads
+        id: export-pda
         if: success() && steps.check-verified.outputs.skip != 'true'
         run: |
-          # Get the uploader's public key (the deployer keypair that uploaded verification data)
-          UPLOADER=$(solana address)
-          echo "Submitting verification to OtterSec registry..."
-          echo "Program ID: ${{ env.PROGRAM_ID }}"
-          echo "Uploader: $UPLOADER"
+          # Program is controlled by Squads multisig, so we cannot directly upload verification data.
+          # Export the PDA transaction for manual submission through Squads.
+          # See: https://solana.com/docs/programs/verified-builds#how-to-verify-your-program-when-its-controlled-by-a-multisig-like-squads
           
-          solana-verify remote submit-job \
+          COMMIT_HASH="${{ steps.params.outputs.sha }}"
+          VERSION="${{ steps.params.outputs.tag }}"
+          SQUADS_VAULT="${{ vars.SQUADS_VAULT_ADDRESS }}"
+          
+          if [ -z "$SQUADS_VAULT" ]; then
+            echo "::warning::SQUADS_VAULT_ADDRESS not set. Skipping PDA transaction export."
+            echo "To enable OtterSec verification, set the SQUADS_VAULT_ADDRESS repository variable."
+            exit 0
+          fi
+          
+          echo "Exporting PDA transaction for OtterSec verification..."
+          echo "Program ID: ${{ env.PROGRAM_ID }}"
+          echo "Uploader (Squads Vault): $SQUADS_VAULT"
+          echo "Commit: $COMMIT_HASH"
+          echo "Version: $VERSION"
+          
+          # Export the PDA transaction (includes --base-image so OtterSec uses correct build environment)
+          PDA_TX=$(solana-verify export-pda-tx \
+            https://github.com/${{ github.repository }} \
+            --base-image solanafoundation/anchor:v0.31.1 \
             --program-id ${{ env.PROGRAM_ID }} \
-            --uploader "$UPLOADER"
+            --uploader "$SQUADS_VAULT" \
+            --commit-hash "$COMMIT_HASH" \
+            --library-name omnipair \
+            --encoding base58 \
+            -- --features production \
+               --config "env.GIT_REV=\"${COMMIT_HASH}\"" \
+               --config "env.GIT_RELEASE=\"${VERSION}\"" 2>&1 | tail -1)
+          
+          echo ""
+          echo "=================================================="
+          echo "OTTERSEC VERIFICATION - SQUADS TRANSACTION"
+          echo "=================================================="
+          echo ""
+          echo "Base58 Transaction (submit via Squads):"
+          echo ""
+          echo "$PDA_TX"
+          echo ""
+          echo "=================================================="
+          echo ""
+          echo "NEXT STEPS:"
+          echo "1. Copy the base58 transaction above"
+          echo "2. Go to Squads: https://v4.squads.so/transactions"
+          echo "3. Import and submit the transaction"
+          echo "4. After approval, run:"
+          echo ""
+          echo "   solana-verify remote submit-job \\"
+          echo "     --program-id ${{ env.PROGRAM_ID }} \\"
+          echo "     --uploader $SQUADS_VAULT"
+          echo ""
+          echo "=================================================="
+          
+          # Save to step summary for easy access
+          echo "## OtterSec Verification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Base58 Transaction for Squads" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "$PDA_TX" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### After Squads Approval" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "solana-verify remote submit-job --program-id ${{ env.PROGRAM_ID }} --uploader $SQUADS_VAULT" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
       
       - name: Verification status
         run: |
           if [ "${{ steps.check-verified.outputs.skip }}" = "true" ]; then
             echo "✅ Program was already verified - skipped re-verification"
           else
-            echo "✅ Program verification completed successfully"
+            echo "✅ Program hash verification completed successfully"
+            echo "📋 See 'Export OtterSec PDA transaction for Squads' step for OtterSec registry instructions"
           fi
 
       - name: Cleanup keypair
