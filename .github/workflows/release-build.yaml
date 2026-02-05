@@ -587,18 +587,15 @@ jobs:
       - name: Submit to OtterSec registry
         if: success() && steps.check-verified.outputs.skip != 'true'
         run: |
-          COMMIT_HASH="${{ steps.params.outputs.sha }}"
-          VERSION="${{ steps.params.outputs.tag }}"
+          # Get the uploader's public key (the deployer keypair that uploaded verification data)
+          UPLOADER=$(solana address)
+          echo "Submitting verification to OtterSec registry..."
+          echo "Program ID: ${{ env.PROGRAM_ID }}"
+          echo "Uploader: $UPLOADER"
           
-          echo "Submitting verification to OtterSec..."
           solana-verify remote submit-job \
             --program-id ${{ env.PROGRAM_ID }} \
-            https://github.com/${{ github.repository }} \
-            --commit-hash "$COMMIT_HASH" \
-            --library-name omnipair \
-            -- --features production \
-               --config "env.GIT_REV=\"${COMMIT_HASH}\"" \
-               --config "env.GIT_RELEASE=\"${VERSION}\""
+            --uploader "$UPLOADER"
       
       - name: Verification status
         run: |
