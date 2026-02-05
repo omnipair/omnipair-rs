@@ -166,7 +166,8 @@ impl Pair {
         match self.reserve0 {
             0 => 0,
             _ => {
-                ((self.reserve1 as u128 * NAD as u128) / self.reserve0 as u128) as u64
+                let price = (self.reserve1 as u128 * NAD as u128) / self.reserve0 as u128;
+                u64::try_from(price).unwrap_or(u64::MAX)
             }
         }
     }
@@ -175,7 +176,8 @@ impl Pair {
         match self.reserve1 {
             0 => 0,
             _ => {
-                ((self.reserve0 as u128 * NAD as u128) / self.reserve1 as u128) as u64
+                let price = (self.reserve0 as u128 * NAD as u128) / self.reserve1 as u128;
+                u64::try_from(price).unwrap_or(u64::MAX)
             }
         }
     }
@@ -243,11 +245,17 @@ impl Pair {
 
         let util0 = match self.reserve0 {
             0 => 0,
-            _ => ((self.total_debt0 as u128 * NAD as u128) / self.reserve0 as u128) as u64,
+            _ => {
+                let util = (self.total_debt0 as u128 * NAD as u128) / self.reserve0 as u128;
+                u64::try_from(util).unwrap_or(u64::MAX)
+            }
         };
         let util1 = match self.reserve1 {
             0 => 0,
-            _ => ((self.total_debt1 as u128 * NAD as u128) / self.reserve1 as u128) as u64,
+            _ => {
+                let util = (self.total_debt1 as u128 * NAD as u128) / self.reserve1 as u128;
+                u64::try_from(util).unwrap_or(u64::MAX)
+            }
         };
 
         Ok((
@@ -361,11 +369,17 @@ impl Pair {
                 // Calculate utilization rates
                 let util0 = match self.reserve0 {
                     0 => 0,
-                    _ => ((self.total_debt0 as u128 * NAD as u128) / self.reserve0 as u128) as u64,
+                    _ => {
+                        let util = (self.total_debt0 as u128 * NAD as u128) / self.reserve0 as u128;
+                        u64::try_from(util).unwrap_or(u64::MAX)
+                    }
                 };
                 let util1 = match self.reserve1 {
                     0 => 0,
-                    _ => ((self.total_debt1 as u128 * NAD as u128) / self.reserve1 as u128) as u64,
+                    _ => {
+                        let util = (self.total_debt1 as u128 * NAD as u128) / self.reserve1 as u128;
+                        u64::try_from(util).unwrap_or(u64::MAX)
+                    }
                 };
                 
                 // Calculate new rates
@@ -392,10 +406,14 @@ impl Pair {
                 // Borrowers pay: interest + protocol_fee
                 // LPs receive: interest (full amount)
                 // Protocol receives: protocol_fee (extra fee charged to borrowers)
-                let protocol_fee0: u64 = ((total_interest0 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
-                let protocol_fee1: u64 = ((total_interest1 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128) as u64;
-                let lp_share0 = total_interest0 as u64;
-                let lp_share1 = total_interest1 as u64;
+                let protocol_fee0: u64 = u64::try_from(
+                    (total_interest0 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128
+                ).unwrap_or(u64::MAX);
+                let protocol_fee1: u64 = u64::try_from(
+                    (total_interest1 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128
+                ).unwrap_or(u64::MAX);
+                let lp_share0 = u64::try_from(total_interest0).unwrap_or(u64::MAX);
+                let lp_share1 = u64::try_from(total_interest1).unwrap_or(u64::MAX);
 
                 // Total amount borrowers owe = interest + protocol_fee (extra fee)
                 let total_borrower_cost0 = total_interest0.checked_add(protocol_fee0 as u128).expect("Interest overflow");

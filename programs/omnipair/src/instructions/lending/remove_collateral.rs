@@ -55,10 +55,13 @@ fn calculate_max_withdrawable(pair: &Pair, user_position: &UserPosition, is_coll
         collateral_price as u128
     ).ok_or(ErrorCode::DebtMathOverflow)?;
  
+    // If it exceeds u64::MAX, cap at u64::MAX so subtraction yields 0
+    let min_collateral_u64 = u64::try_from(min_collateral).unwrap_or(u64::MAX);
+
     // Calculate maximum withdrawable amount
     let max_withdrawable = user_collateral
-        .checked_sub(min_collateral as u64)
-        .ok_or(ErrorCode::DebtMathOverflow)?;
+        .checked_sub(min_collateral_u64)
+        .unwrap_or(0);
     
     Ok(max_withdrawable)
 }
