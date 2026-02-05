@@ -805,12 +805,30 @@ jobs:
             --out-dir ./temp-decoder
           
           echo "Generated structure:"
-          ls -la temp-decoder/omnipair_decoder/
+          ls -laR temp-decoder/
+          
+          # Find the decoder directory (may be temp-decoder/omnipair_decoder/ or temp-decoder/ directly)
+          if [ -d "temp-decoder/omnipair_decoder" ]; then
+            DECODER_DIR="temp-decoder/omnipair_decoder"
+          elif [ -d "temp-decoder/src" ]; then
+            DECODER_DIR="temp-decoder"
+          else
+            # Try to find accounts directory
+            DECODER_DIR=$(find temp-decoder -type d -name accounts -exec dirname {} \; | head -1)
+          fi
+          
+          echo "Using decoder directory: $DECODER_DIR"
           
           # Copy generated files (preserves custom graphql/, postgres/ subdirectories)
-          cp -r temp-decoder/omnipair_decoder/accounts/* decoders/omnipair-decoder/src/accounts/
-          cp -r temp-decoder/omnipair_decoder/instructions/* decoders/omnipair-decoder/src/instructions/
-          cp -r temp-decoder/omnipair_decoder/types/* decoders/omnipair-decoder/src/types/
+          if [ -d "$DECODER_DIR/accounts" ]; then
+            cp -r "$DECODER_DIR/accounts/"* decoders/omnipair-decoder/src/accounts/
+          fi
+          if [ -d "$DECODER_DIR/instructions" ]; then
+            cp -r "$DECODER_DIR/instructions/"* decoders/omnipair-decoder/src/instructions/
+          fi
+          if [ -d "$DECODER_DIR/types" ]; then
+            cp -r "$DECODER_DIR/types/"* decoders/omnipair-decoder/src/types/
+          fi
           
           rm -rf temp-decoder
 
