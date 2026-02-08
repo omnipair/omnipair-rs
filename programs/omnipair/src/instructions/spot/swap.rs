@@ -2,14 +2,13 @@ use anchor_lang::prelude::*;
 use anchor_spl::{
     token::{Token, TokenAccount, Mint},
     token_interface::{Token2022},
-    associated_token::AssociatedToken,
 };
 use crate::{
     state::*,
     constants::*,
     errors::ErrorCode,
     events::*,
-    utils::token::{transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault},
+    utils::token::{transfer_from_user_to_vault, transfer_from_vault_to_user},
     utils::gamm_math::CPCurve,
     utils::math::ceil_div,
     generate_gamm_pair_seeds,
@@ -87,21 +86,11 @@ pub struct Swap<'info> {
         constraint = token_out_mint.key() == pair.token0 || token_out_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
     pub token_out_mint: Box<Account<'info, Mint>>,
-
-    #[account(
-        init_if_needed,
-        payer = user,
-        associated_token::mint = token_in_mint,
-        associated_token::authority = futarchy_authority,
-    )]
-    pub authority_token_in_account: Account<'info, TokenAccount>,
     
     #[account(mut)]
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-    pub system_program: Program<'info, System>,
 }
 
 impl<'info> Swap<'info> {
@@ -171,13 +160,13 @@ impl<'info> Swap<'info> {
             token_out_vault,
             user_token_in_account,
             user_token_out_account,
-            authority_token_in_account,
             token_in_mint,
             token_out_mint,
             token_program,
             token_2022_program,
             user,
-            ..        } = ctx.accounts;
+            ..
+        } = ctx.accounts;
         let last_k = (pair.reserve0 as u128).checked_mul(pair.reserve1 as u128).ok_or(ErrorCode::InvariantOverflow)?;
         let is_token0_in = user_token_in_account.mint == pair.token0;
 
@@ -251,24 +240,7 @@ impl<'info> Swap<'info> {
             token_in_mint.decimals,
         )?;
 
-        // Second: Transfer futarchy fee from vault to authority (after user deposit ensures sufficient balance)
-        if futarchy_fee > 0 {
-            transfer_from_vault_to_vault(
-                pair.to_account_info(),
-                token_in_vault.to_account_info(),
-                authority_token_in_account.to_account_info(),
-                token_in_mint.to_account_info(),
-                match token_in_mint.to_account_info().owner == token_program.key {
-                    true => token_program.to_account_info(),
-                    false => token_2022_program.to_account_info(),
-                },
-                futarchy_fee,
-                token_in_mint.decimals,
-                &[&generate_gamm_pair_seeds!(pair)[..]],
-            )?;
-        }
-
-        // Third: Transfer output tokens to user
+        // Second: Transfer output tokens to user
         transfer_from_vault_to_user(
             pair.to_account_info(),
             token_out_vault.to_account_info(),
