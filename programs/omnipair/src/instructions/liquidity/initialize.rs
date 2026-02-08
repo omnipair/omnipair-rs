@@ -621,6 +621,8 @@ impl<'info> InitializeAndBootstrap<'info> {
             token0_amount: deployer_token0_amount,
             token1_amount: deployer_token1_amount,
             lp_amount: deployer_lp_balance,
+            cash_reserve0: pair.cash_reserve0,
+            cash_reserve1: pair.cash_reserve1,
             token0_mint: pair.token0,
             token1_mint: pair.token1,
             lp_mint: ctx.accounts.lp_mint.key(),

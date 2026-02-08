@@ -92,6 +92,8 @@ pub struct UserLiquidityPositionUpdatedEvent {
     pub token0_amount: u64,
     pub token1_amount: u64,
     pub lp_amount: u64,
+    pub cash_reserve0: u64,
+    pub cash_reserve1: u64,
     pub token0_mint: Pubkey,
     pub token1_mint: Pubkey,
     pub lp_mint: Pubkey,
