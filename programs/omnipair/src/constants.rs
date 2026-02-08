@@ -39,36 +39,54 @@ pub const TAYLOR_TERMS: u64 = 5;
 pub const NATURAL_LOG_OF_TWO_NAD: u64 = 693_147_180; // ln(2) scaled by NAD
 
 // Pair constants
+#[constant]
 pub const MIN_LIQUIDITY: u64 = 1_000; // 10^3
 
 // Rate model configurable bounds
+#[constant]
 pub const DEFAULT_INITIAL_RATE_BPS: u64 = 200;  // 2% default starting rate
+#[constant]
 pub const DEFAULT_MIN_RATE_BPS: u64 = 100;      // 1% default floor
+#[constant]
 pub const DEFAULT_MAX_RATE_BPS: u64 = 0;        // 0 = uncapped by default (no ceiling)
 
 // Rate bounds validation limits
+#[constant]
 pub const MIN_ALLOWED_RATE_BPS: u64 = 0;        // Pools can set floor to 0%
+#[constant]
 pub const MAX_ALLOWED_RATE_BPS: u64 = 100_000;  // Pools can set ceiling up to 1000%
+#[constant]
 pub const MIN_INITIAL_RATE_BPS: u64 = 10;       // Initial rate must be at least 0.1%
+#[constant]
 pub const MAX_INITIAL_RATE_BPS: u64 = 10_000;   // Initial rate cannot exceed 100%
 
 // Rate half-life bounds (controls adjustment speed)
+#[constant]
 pub const DEFAULT_RATE_HALF_LIFE_MS: u64 = MS_PER_DAY;  // 1 day default (current behavior)
+#[constant]
 pub const MIN_RATE_HALF_LIFE_MS: u64 = 1 * 60 * 60 * 1_000;  // 1 hour minimum (fastest adjustment)
+#[constant]
 pub const MAX_RATE_HALF_LIFE_MS: u64 = 30 * 24 * 60 * 60 * 1_000;  // 30 days maximum (slowest adjustment)
 
 /// Debt share scaling factor for increased precision floor in rounded division.
+#[constant]
 pub const DEBT_SHARE_SCALE: u64 = 1_000_000; // 10^6
 
 // Default IRM constants
+#[constant]
 pub const TARGET_UTIL_START_BPS: u64 = 5_000; // 50%
+#[constant]
 pub const TARGET_UTIL_END_BPS: u64 = 8_500; // 85%
+#[constant]
 pub const MILLISECONDS_PER_YEAR: u64 = 31_536_000_000; // 31,536,000 seconds * 1000
 
 // Rate model constants
+#[constant]
 pub const MS_PER_DAY: u64 = 86_400_000;
 // Utilization bounds (configurable per pool within these limits)
+#[constant]
 pub const MIN_TARGET_UTIL_BPS: u64 = 100;  // 1% minimum for target_util_start
+#[constant]
 pub const MAX_TARGET_UTIL_BPS: u64 = 10_000;  // 100% maximum for target_util_end
 
 // Global Seeds for deterministic PDAs

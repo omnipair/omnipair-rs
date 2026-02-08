@@ -188,13 +188,19 @@ pub struct InitializeAndBootstrap<'info> {
     )]
     pub deployer_token1_account: Box<Account<'info, TokenAccount>>,
 
+    /// CHECK: Validated against futarchy_authority.recipients.team_treasury
+    #[account(
+        address = futarchy_authority.recipients.team_treasury @ ErrorCode::InvalidRecipient,
+    )]
+    pub team_treasury: AccountInfo<'info>,
+
     #[account(
         mut,
-        constraint = authority_wsol_account.mint == spl_token::native_mint::id(),
-        constraint = authority_wsol_account.owner == futarchy_authority.key() @ ErrorCode::InvalidFutarchyAuthority,
-        constraint = *authority_wsol_account.to_account_info().owner == token_program.key() @ ErrorCode::InvalidTokenProgram,
-      )]
-      pub authority_wsol_account: Box<Account<'info, TokenAccount>>,
+        constraint = team_treasury_wsol_account.mint == spl_token::native_mint::id(),
+        constraint = team_treasury_wsol_account.owner == futarchy_authority.recipients.team_treasury @ ErrorCode::InvalidRecipient,
+        constraint = *team_treasury_wsol_account.to_account_info().owner == token_program.key() @ ErrorCode::InvalidTokenProgram,
+    )]
+    pub team_treasury_wsol_account: Box<Account<'info, TokenAccount>>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
@@ -322,16 +328,16 @@ impl<'info> InitializeAndBootstrap<'info> {
             lp_uri,
         } = args;
 
-        // Collect pair creation fee from deployer to futarchy authority
+        // Collect pair creation fee from deployer to team treasury
         invoke(
             &system_instruction::transfer(
                 ctx.accounts.deployer.key,
-                &ctx.accounts.authority_wsol_account.key(),
+                &ctx.accounts.team_treasury_wsol_account.key(),
                 PAIR_CREATION_FEE_LAMPORTS,
             ),
             &[
                 ctx.accounts.deployer.to_account_info(),
-                ctx.accounts.authority_wsol_account.to_account_info(),
+                ctx.accounts.team_treasury_wsol_account.to_account_info(),
                 ctx.accounts.system_program.to_account_info(),
             ],
         )?;
@@ -339,11 +345,11 @@ impl<'info> InitializeAndBootstrap<'info> {
         invoke(
             &spl_token::instruction::sync_native(
                 ctx.accounts.token_program.key,
-                &ctx.accounts.authority_wsol_account.key(),
+                &ctx.accounts.team_treasury_wsol_account.key(),
             )?,
             &[
                 ctx.accounts.token_program.to_account_info(),
-                ctx.accounts.authority_wsol_account.to_account_info(),
+                ctx.accounts.team_treasury_wsol_account.to_account_info(),
             ],
         )?;
         
@@ -615,6 +621,8 @@ impl<'info> InitializeAndBootstrap<'info> {
             token0_amount: deployer_token0_amount,
             token1_amount: deployer_token1_amount,
             lp_amount: deployer_lp_balance,
+            cash_reserve0: pair.cash_reserve0,
+            cash_reserve1: pair.cash_reserve1,
             token0_mint: pair.token0,
             token1_mint: pair.token1,
             lp_mint: ctx.accounts.lp_mint.key(),

@@ -63,7 +63,6 @@ impl<'info> CommonAdjustDebt<'info> {
         // To prevent bad debt, we compute a pessimistic collateral factor:
         // CF_pessimistic = min(CF_base, P_spot / P_EMA * CF_base)
         // This ensures the solvency invariant: P_spot >= P_EMA * CF
-        // TODO: Δprice needs an EMA, because spot price can be manipulated to match EMA to bypass this check
         let collateral_token = pair.get_collateral_token(&debt_token_vault.mint);
         let collateral_amount = match collateral_token == pair.token0 {
             true => user_position.collateral0,

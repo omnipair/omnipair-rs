@@ -181,6 +181,8 @@ impl<'info> AdjustLiquidity<'info> {
             token0_amount: user_token0_amount,
             token1_amount: user_token1_amount,
             lp_amount: user_lp_balance,
+            cash_reserve0: pair.cash_reserve0,
+            cash_reserve1: pair.cash_reserve1,
             token0_mint: pair.token0,
             token1_mint: pair.token1,
             lp_mint: lp_mint.key(),
