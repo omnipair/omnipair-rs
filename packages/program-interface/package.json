@@ -1,6 +1,6 @@
 {
   "name": "@omnipair/program-interface",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "Omnipair program IDL, TypeScript types, and constants",
   "license": "MIT",
   "author": "Omnipair <security@omnipair.fi>",
