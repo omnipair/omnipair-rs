@@ -659,6 +659,43 @@ jobs:
           echo "solana-verify remote submit-job --program-id ${{ env.PROGRAM_ID }} --uploader $SQUADS_VAULT" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
       
+      - name: Install Anchor CLI
+        if: success() && steps.check-verified.outputs.skip != 'true'
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor --tag v${{ env.ANCHOR_VERSION }} anchor-cli --locked
+
+      - name: Download IDL from release
+        if: success() && steps.check-verified.outputs.skip != 'true'
+        run: |
+          mkdir -p target/idl
+          gh release download ${{ steps.params.outputs.tag }} \
+            --pattern "omnipair.json" \
+            --dir target/idl
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Publish IDL on-chain
+        if: success() && steps.check-verified.outputs.skip != 'true'
+        run: |
+          RPC_URL="${{ vars.MAINNET_RPC_URL }}"
+          if [ -z "$RPC_URL" ]; then
+            RPC_URL="https://api.mainnet-beta.solana.com"
+          fi
+
+          echo "Publishing IDL on-chain for ${{ env.PROGRAM_ID }}..."
+
+          # Try upgrade first (IDL account already exists), fall back to init
+          anchor idl upgrade \
+            --provider.cluster "$RPC_URL" \
+            --filepath target/idl/omnipair.json \
+            ${{ env.PROGRAM_ID }} || \
+          anchor idl init \
+            --provider.cluster "$RPC_URL" \
+            --filepath target/idl/omnipair.json \
+            ${{ env.PROGRAM_ID }}
+
+          echo "IDL published successfully"
+
       - name: Verification status
         run: |
           if [ "${{ steps.check-verified.outputs.skip }}" = "true" ]; then
