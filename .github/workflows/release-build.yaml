@@ -550,10 +550,13 @@ jobs:
       - name: Setup deployer keypair
         if: steps.check-verified.outputs.skip != 'true'
         run: |
-          # Use deployer keypair for OtterSec attestation (needs SOL for on-chain tx)
+          # Use deployer keypair for OtterSec attestation and IDL publishing (needs SOL for on-chain tx)
           mkdir -p ~/.config/solana
           echo "${{ secrets.DEPLOYER_KEYPAIR }}" > ~/.config/solana/id.json
           chmod 600 ~/.config/solana/id.json
+          # Also write to deployer-keypair.json (Anchor.toml provider.wallet references this)
+          echo "${{ secrets.DEPLOYER_KEYPAIR }}" > deployer-keypair.json
+          chmod 600 deployer-keypair.json
           solana config set --url ${{ vars.MAINNET_RPC_URL || 'https://api.mainnet-beta.solana.com' }}
           echo "Deployer balance:"
           solana balance || echo "Could not check balance"
@@ -705,9 +708,9 @@ jobs:
             echo "📋 See 'Export OtterSec PDA transaction for Squads' step for OtterSec registry instructions"
           fi
 
-      - name: Cleanup keypair
+      - name: Cleanup keypairs
         if: always()
-        run: rm -f ~/.config/solana/id.json
+        run: rm -f ~/.config/solana/id.json deployer-keypair.json
 
   # Publish TypeScript package to npm (manual trigger only, after upgrade is live)
   publish-npm:
