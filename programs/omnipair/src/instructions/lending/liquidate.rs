@@ -301,7 +301,7 @@ impl<'info> Liquidate<'info> {
 
         // Pass exact shares to writeoff to avoid edge cases where floor division leaves residual shares
         user_position.decrease_debt(pair, &debt_token, debt_to_writeoff, DebtDecreaseReason::WriteOff(shares_to_writeoff))?;
-        user_position.set_applied_min_cf_for_debt_token(&debt_token, &pair, liquidation_cf_bps);
+        user_position.set_liquidation_cf_for_debt_token(&debt_token, &pair, liquidation_cf_bps);
 
         // Transfer liquidation incentive to caller from collateral vault
         if caller_incentive > 0 {

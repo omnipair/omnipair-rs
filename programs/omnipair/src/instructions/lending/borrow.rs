@@ -106,7 +106,7 @@ impl<'info> CommonAdjustDebt<'info> {
         
         user_position.increase_debt(pair, &reserve_token_mint.key(), borrow_amount)?;
         // update user position fixed CF
-        user_position.set_applied_min_cf_for_debt_token(&reserve_token_mint.key(), &pair, liquidation_cf_bps);
+        user_position.set_liquidation_cf_for_debt_token(&reserve_token_mint.key(), &pair, liquidation_cf_bps);
         
         // Emit debt adjustment event
         let (amount0, amount1) = if is_token0 {
@@ -129,8 +129,10 @@ impl<'info> CommonAdjustDebt<'info> {
             collateral1: user_position.collateral1,
             debt0_shares: user_position.debt0_shares,
             debt1_shares: user_position.debt1_shares,
-            collateral0_applied_min_cf_bps: user_position.collateral0_applied_min_cf_bps,
-            collateral1_applied_min_cf_bps: user_position.collateral1_applied_min_cf_bps,
+            collateral0_max_cf_bps: user_position.get_max_cf_bps_for_debt_token(pair, &pair.token1),
+            collateral1_max_cf_bps: user_position.get_max_cf_bps_for_debt_token(pair, &pair.token0),
+            collateral0_liquidation_cf_bps: user_position.collateral0_liquidation_cf_bps,
+            collateral1_liquidation_cf_bps: user_position.collateral1_liquidation_cf_bps,
         });
 
         Ok(())
