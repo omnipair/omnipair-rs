@@ -65,7 +65,8 @@ pub enum PairViewKind {
     K,
     GetRates,
     GetBorrowLimitAndCfBpsForCollateral,
-
+    Reserves,
+    CashReserves,
 }
 impl fmt::Display for PairViewKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -77,6 +78,8 @@ impl fmt::Display for PairViewKind {
             PairViewKind::K => write!(f, "K"),
             PairViewKind::GetRates => write!(f, "GetRates"),
             PairViewKind::GetBorrowLimitAndCfBpsForCollateral => write!(f, "GetBorrowLimitAndCfBpsForCollateral"),
+            PairViewKind::Reserves => write!(f, "Reserves"),
+            PairViewKind::CashReserves => write!(f, "CashReserves"),
         }
     }
 }
@@ -166,6 +169,14 @@ impl ViewPairData<'_> {
                     OptionalUint::from_u16(pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount).unwrap().1)
                 )
             },
+            PairViewKind::Reserves => (
+                OptionalUint::from_u64(pair.reserve0),
+                OptionalUint::from_u64(pair.reserve1),
+            ),
+            PairViewKind::CashReserves => (
+                OptionalUint::from_u64(pair.cash_reserve0),
+                OptionalUint::from_u64(pair.cash_reserve1),
+            ),
         };
 
         msg!("{}: {:?}", getter, value);
