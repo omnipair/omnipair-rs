@@ -4,6 +4,7 @@ use std::fmt;
 use crate::errors::ErrorCode;
 use crate::constants::*;
 use crate::utils::gamm_math::{CPCurve, construct_virtual_reserves_at_pessimistic_price};
+use crate::utils::math::ceil_div;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
 pub enum OptionalUint {
@@ -48,8 +49,8 @@ impl OptionalUint {
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct EmitValueArgs {
-    pub collateral_amount: Option<u64>,
-    pub collateral_token: Option<Pubkey>,
+    pub amount: Option<u64>,
+    pub token_mint: Option<Pubkey>,
 }
 
 
@@ -66,6 +67,7 @@ pub enum PairViewKind {
     GetBorrowLimitAndCfBpsForCollateral,
     Reserves,
     CashReserves,
+    SwapQuote,
 }
 impl fmt::Display for PairViewKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -79,6 +81,7 @@ impl fmt::Display for PairViewKind {
             PairViewKind::GetBorrowLimitAndCfBpsForCollateral => write!(f, "GetBorrowLimitAndCfBpsForCollateral"),
             PairViewKind::Reserves => write!(f, "Reserves"),
             PairViewKind::CashReserves => write!(f, "CashReserves"),
+            PairViewKind::SwapQuote => write!(f, "SwapQuote"),
         }
     }
 }
@@ -165,8 +168,8 @@ impl ViewPairData<'_> {
                 (OptionalUint::from_u64(rate0), OptionalUint::from_u64(rate1))
             },
             PairViewKind::GetBorrowLimitAndCfBpsForCollateral => {
-                let collateral_amount = args.collateral_amount.ok_or(ErrorCode::ArgumentMissing)?;
-                let collateral_token = args.collateral_token.ok_or(ErrorCode::ArgumentMissing)?;
+                let collateral_amount = args.amount.ok_or(ErrorCode::ArgumentMissing)?;
+                let collateral_token = args.token_mint.ok_or(ErrorCode::ArgumentMissing)?;
                 (
                     OptionalUint::from_u64(pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount).unwrap().0),
                     OptionalUint::from_u16(pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount).unwrap().1)
@@ -180,6 +183,28 @@ impl ViewPairData<'_> {
                 OptionalUint::from_u64(pair.cash_reserve0),
                 OptionalUint::from_u64(pair.cash_reserve1),
             ),
+            PairViewKind::SwapQuote => {
+                // Preview swap: given amount_in of collateral_token, returns (amount_out, swap_fee)
+                let amount_in = args.amount.ok_or(ErrorCode::ArgumentMissing)?;
+                let token_in = args.token_mint.ok_or(ErrorCode::ArgumentMissing)?;
+                let is_token0_in = token_in == pair.token0;
+
+                let swap_fee = ceil_div(
+                    (amount_in as u128)
+                        .checked_mul(pair.swap_fee_bps as u128)
+                        .ok_or(ErrorCode::FeeMathOverflow)?,
+                    BPS_DENOMINATOR as u128,
+                ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
+
+                let amount_in_after_fee = amount_in.checked_sub(swap_fee).ok_or(ErrorCode::FeeMathOverflow)?;
+
+                let reserve_in = if is_token0_in { pair.reserve0 } else { pair.reserve1 };
+                let reserve_out = if is_token0_in { pair.reserve1 } else { pair.reserve0 };
+
+                let amount_out = CPCurve::calculate_amount_out(reserve_in, reserve_out, amount_in_after_fee)?;
+
+                (OptionalUint::from_u64(amount_out), OptionalUint::from_u64(swap_fee))
+            },
         };
 
         msg!("{}: {:?}", getter, value);
