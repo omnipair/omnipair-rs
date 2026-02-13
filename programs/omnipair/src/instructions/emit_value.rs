@@ -157,31 +157,36 @@ impl ViewPairData<'_> {
         // update pair to get updated rates, interest, debt, etc.
         pair.update(&ctx.accounts.rate_model, &ctx.accounts.futarchy_authority, pair_key)?;
 
-        let value: (OptionalUint, OptionalUint) = match getter {
-            PairViewKind::EmaPrice0Nad => (OptionalUint::from_u64(pair.ema_price0_nad()), OptionalUint::OptionalU64(None)),
-            PairViewKind::EmaPrice1Nad => (OptionalUint::from_u64(pair.ema_price1_nad()), OptionalUint::OptionalU64(None)),
-            PairViewKind::SpotPrice0Nad => (OptionalUint::from_u64(pair.spot_price0_nad()), OptionalUint::OptionalU64(None)),
-            PairViewKind::SpotPrice1Nad => (OptionalUint::from_u64(pair.spot_price1_nad()), OptionalUint::OptionalU64(None)),
-            PairViewKind::K => (OptionalUint::from_u128(pair.k()), OptionalUint::OptionalU128(None)),
+        let empty = || OptionalUint::OptionalU64(None);
+        let value: (OptionalUint, OptionalUint, OptionalUint) = match getter {
+            PairViewKind::EmaPrice0Nad => (OptionalUint::from_u64(pair.ema_price0_nad()), empty(), empty()),
+            PairViewKind::EmaPrice1Nad => (OptionalUint::from_u64(pair.ema_price1_nad()), empty(), empty()),
+            PairViewKind::SpotPrice0Nad => (OptionalUint::from_u64(pair.spot_price0_nad()), empty(), empty()),
+            PairViewKind::SpotPrice1Nad => (OptionalUint::from_u64(pair.spot_price1_nad()), empty(), empty()),
+            PairViewKind::K => (OptionalUint::from_u128(pair.k()), empty(), empty()),
             PairViewKind::GetRates => {
                 let (rate0, rate1) = pair.get_rates(&ctx.accounts.rate_model).unwrap();
-                (OptionalUint::from_u64(rate0), OptionalUint::from_u64(rate1))
+                (OptionalUint::from_u64(rate0), OptionalUint::from_u64(rate1), empty())
             },
             PairViewKind::GetBorrowLimitAndCfBpsForCollateral => {
                 let collateral_amount = args.amount.ok_or(ErrorCode::ArgumentMissing)?;
                 let collateral_token = args.token_mint.ok_or(ErrorCode::ArgumentMissing)?;
+                let (borrow_limit, max_cf_bps, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount).unwrap();
                 (
-                    OptionalUint::from_u64(pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount).unwrap().0),
-                    OptionalUint::from_u16(pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount).unwrap().1)
+                    OptionalUint::from_u64(borrow_limit),
+                    OptionalUint::from_u16(max_cf_bps),
+                    OptionalUint::from_u16(liquidation_cf_bps),
                 )
             },
             PairViewKind::Reserves => (
                 OptionalUint::from_u64(pair.reserve0),
                 OptionalUint::from_u64(pair.reserve1),
+                empty(),
             ),
             PairViewKind::CashReserves => (
                 OptionalUint::from_u64(pair.cash_reserve0),
                 OptionalUint::from_u64(pair.cash_reserve1),
+                empty(),
             ),
             PairViewKind::SwapQuote => {
                 // Preview swap: given amount_in of collateral_token, returns (amount_out, swap_fee)
@@ -203,7 +208,7 @@ impl ViewPairData<'_> {
 
                 let amount_out = CPCurve::calculate_amount_out(reserve_in, reserve_out, amount_in_after_fee)?;
 
-                (OptionalUint::from_u64(amount_out), OptionalUint::from_u64(swap_fee))
+                (OptionalUint::from_u64(amount_out), OptionalUint::from_u64(swap_fee), empty())
             },
         };
 
@@ -223,7 +228,8 @@ impl ViewUserPositionData<'_> {
         // update pair to get updated rates, interest, debt, etc.
         pair.update(&ctx.accounts.rate_model, &ctx.accounts.futarchy_authority, pair_key)?;
 
-        let value: (OptionalUint, OptionalUint) = match getter {
+        let empty = || OptionalUint::OptionalU64(None);
+        let value: (OptionalUint, OptionalUint, OptionalUint) = match getter {
             UserPositionViewKind::UserDynamicBorrowLimit => {
                 let collateral_token0 = pair.get_collateral_token(&pair.token0);
                 let collateral_amount0 = match collateral_token0 == pair.token0 {
@@ -242,6 +248,7 @@ impl ViewUserPositionData<'_> {
                 (
                     OptionalUint::from_u64(borrow_limit0),
                     OptionalUint::from_u64(borrow_limit1),
+                    empty(),
                 )
             },
             UserPositionViewKind::UserDynamicCollateralFactorBps => {
@@ -261,24 +268,29 @@ impl ViewUserPositionData<'_> {
                 
                 (
                     OptionalUint::from_u16(token0_cf_bps),
-                    OptionalUint::from_u16(token1_cf_bps)
+                    OptionalUint::from_u16(token1_cf_bps),
+                    empty(),
                 )
             },
             UserPositionViewKind::UserLiquidationCfBps => (
                 OptionalUint::from_u16(user_position.get_liquidation_cf_bps(&pair, &pair.token0).unwrap()),
-                OptionalUint::from_u16(user_position.get_liquidation_cf_bps(&pair, &pair.token1).unwrap())
+                OptionalUint::from_u16(user_position.get_liquidation_cf_bps(&pair, &pair.token1).unwrap()),
+                empty(),
             ),
             UserPositionViewKind::UserDebtUtilizationBps => (
                 OptionalUint::from_u64(user_position.get_debt_utilization_bps(&pair, &pair.token0).unwrap()),
-                OptionalUint::from_u64(user_position.get_debt_utilization_bps(&pair, &pair.token1).unwrap())
+                OptionalUint::from_u64(user_position.get_debt_utilization_bps(&pair, &pair.token1).unwrap()),
+                empty(),
             ),
             UserPositionViewKind::UserLiquidationPrice => (
                 OptionalUint::from_u64(user_position.get_liquidation_price(&pair, &pair.token0).unwrap()),
-                OptionalUint::from_u64(user_position.get_liquidation_price(&pair, &pair.token1).unwrap())
+                OptionalUint::from_u64(user_position.get_liquidation_price(&pair, &pair.token1).unwrap()),
+                empty(),
             ),
             UserPositionViewKind::UserDebtWithInterest => (
                 OptionalUint::from_u64(user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares).unwrap()),
-                OptionalUint::from_u64(user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares).unwrap())
+                OptionalUint::from_u64(user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares).unwrap()),
+                empty(),
             ),
             UserPositionViewKind::UserIsLiquidatable => {
                 // Check liquidatability for both directions using price impact
@@ -328,7 +340,7 @@ impl ViewUserPositionData<'_> {
                     }
                 };
                 
-                (OptionalUint::from_u64(is_liquidatable_0), OptionalUint::from_u64(is_liquidatable_1))
+                (OptionalUint::from_u64(is_liquidatable_0), OptionalUint::from_u64(is_liquidatable_1), empty())
             },
             UserPositionViewKind::UserCollateralValueWithImpact => {
                 // Collateral value in debt-token units with price impact (same math as liquidation)
@@ -356,7 +368,7 @@ impl ViewUserPositionData<'_> {
                         CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, user_collateral).unwrap_or(0)
                     }
                 };
-                (OptionalUint::from_u64(value0), OptionalUint::from_u64(value1))
+                (OptionalUint::from_u64(value0), OptionalUint::from_u64(value1), empty())
             },
             UserPositionViewKind::UserLiquidationBorrowLimit => {
                 // Liquidation borrow limit = collateral_value_with_impact * liquidation_cf / BPS
@@ -395,7 +407,7 @@ impl ViewUserPositionData<'_> {
                             .unwrap_or(0) as u64
                     }
                 };
-                (OptionalUint::from_u64(limit0), OptionalUint::from_u64(limit1))
+                (OptionalUint::from_u64(limit0), OptionalUint::from_u64(limit1), empty())
             },
         };
 
