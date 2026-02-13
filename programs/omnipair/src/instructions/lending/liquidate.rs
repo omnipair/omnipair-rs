@@ -301,7 +301,7 @@ impl<'info> Liquidate<'info> {
 
         // Pass exact shares to writeoff to avoid edge cases where floor division leaves residual shares
         user_position.decrease_debt(pair, &debt_token, debt_to_writeoff, DebtDecreaseReason::WriteOff(shares_to_writeoff))?;
-        user_position.set_applied_min_cf_for_debt_token(&debt_token, &pair, liquidation_cf_bps);
+        user_position.set_liquidation_cf_for_debt_token(&debt_token, &pair, liquidation_cf_bps);
 
         // Transfer liquidation incentive to caller from collateral vault
         if caller_incentive > 0 {
@@ -358,8 +358,8 @@ impl<'info> Liquidate<'info> {
             metadata: EventMetadata::new(position_owner.key(), pair.key()),
             position: user_position.key(),
             liquidator: payer.key(),
-            collateral0_liquidated: if is_collateral_token0 { 0 } else { collateral_final },
-            collateral1_liquidated: if is_collateral_token0 { collateral_final } else { 0 },
+            collateral0_liquidated: if is_collateral_token0 { collateral_final } else { 0 },
+            collateral1_liquidated: if is_collateral_token0 { 0 } else { collateral_final },
             debt0_liquidated: if is_collateral_token0 { 0 } else { debt_to_writeoff },
             debt1_liquidated: if is_collateral_token0 { debt_to_writeoff } else { 0 },
             collateral_price: if is_collateral_token0 { pair.ema_price0_nad() } else { pair.ema_price1_nad() },

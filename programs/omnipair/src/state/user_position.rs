@@ -3,7 +3,6 @@ use crate::constants::*;
 use crate::errors::ErrorCode;
 use crate::utils::math::ceil_div;
 use super::Pair;
-use std::cmp::max;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DebtDecreaseReason {
@@ -19,8 +18,8 @@ pub struct UserPosition {
     // User and pair info
     pub owner: Pubkey,             // who owns this position
     pub pair: Pubkey,              // the pair this position belongs to
-    pub collateral0_applied_min_cf_bps: u16, // applied min. cf for borrowing token1 using token0 as collateral
-    pub collateral1_applied_min_cf_bps: u16, // applied min. cf for borrowing token0 using token1 as collateral
+    pub collateral0_liquidation_cf_bps: u16, // liquidation cf for borrowing token1 using token0 as collateral
+    pub collateral1_liquidation_cf_bps: u16, // liquidation cf for borrowing token0 using token1 as collateral
     
     // Collateral tracking
     pub collateral0: u64,          // token0 collateral amount
@@ -44,8 +43,8 @@ impl UserPosition {
         self.owner = owner;
         self.pair = pair;
         self.bump = bump;
-        self.collateral0_applied_min_cf_bps = 0; // Start with dynamic CF
-        self.collateral1_applied_min_cf_bps = 0; // Start with dynamic CF
+        self.collateral0_liquidation_cf_bps = 0;
+        self.collateral1_liquidation_cf_bps = 0;
         Ok(())
     }
 
@@ -53,13 +52,27 @@ impl UserPosition {
         self.owner != Pubkey::default() && self.pair != Pubkey::default()
     }
 
-    /// Set applied min. cf for a specific debt token
-    pub fn set_applied_min_cf_for_debt_token(&mut self, debt_token: &Pubkey, pair: &Pair, cf_bps: u16) {
+    /// Set the fixed liquidation CF for a specific debt token.
+    /// Called on borrow, remove_collateral, and liquidation to lock in the CF.
+    pub fn set_liquidation_cf_for_debt_token(&mut self, debt_token: &Pubkey, pair: &Pair, liquidation_cf_bps: u16) {
         if *debt_token == pair.token1 {
-            self.collateral0_applied_min_cf_bps = cf_bps;
+            self.collateral0_liquidation_cf_bps = liquidation_cf_bps;
         } else {
-            self.collateral1_applied_min_cf_bps = cf_bps;
+            self.collateral1_liquidation_cf_bps = liquidation_cf_bps;
         }
+    }
+
+    /// Derive max CF (borrow limit CF with LTV buffer) from liquidation CF.
+    /// max_cf = liquidation_cf * (BPS - LTV_BUFFER_BPS) / BPS
+    pub fn get_max_cf_bps_for_debt_token(&self, pair: &Pair, debt_token: &Pubkey) -> u16 {
+        let liquidation_cf = if *debt_token == pair.token1 {
+            self.collateral0_liquidation_cf_bps
+        } else {
+            self.collateral1_liquidation_cf_bps
+        };
+        ((liquidation_cf as u32)
+            .saturating_mul((BPS_DENOMINATOR - LTV_BUFFER_BPS) as u32)
+            / BPS_DENOMINATOR as u32) as u16
     }
 
     /// With 10^6 scaling, the first borrow of 1 unit creates 1,000,000 shares,
@@ -214,7 +227,6 @@ impl UserPosition {
         }
     }
 
-
     pub fn get_remaining_borrow_limit(&self, pair: &Pair, debt_token: &Pubkey, applied_min_cf_bps: u16) -> Result<u64> {
         let is_token0 = debt_token == &pair.token0;
 
@@ -264,8 +276,8 @@ impl UserPosition {
     
         // NOTE: debt in token0 → collateral is token1
         // Use maximum allowed collateral factor (not liquidation CF) for accurate debt utilization
-        let max_allowed_cf_bps = self.get_max_allowed_cf_bps(pair, debt_token)?;
-        let borrow_limit = self.get_remaining_borrow_limit(pair, debt_token, max_allowed_cf_bps)?;
+        let max_cf_bps = self.get_max_cf_bps_for_debt_token(pair, debt_token);
+        let borrow_limit = self.get_remaining_borrow_limit(pair, debt_token, max_cf_bps)?;
         
         
         if borrow_limit == 0 {
@@ -278,45 +290,16 @@ impl UserPosition {
             .ok_or(ErrorCode::DebtUtilizationOverflow)?)
     }
 
-    /// Get the maximum allowed collateral factor in BPS for a given debt token
+    /// Get the liquidation collateral factor in BPS for a given debt token
     /// 
     /// - `pair`: The pair the user position belongs to
     /// - `debt_token`: The token the user is borrowing
     /// 
-    /// Returns the max of the maximum allowed collateral factor in BPS and the applied min. cf in BPS
-    pub fn get_max_allowed_cf_bps(&self, pair: &Pair, debt_token: &Pubkey) -> Result<u16> {
-        match debt_token == &pair.token1 {
-            true => {
-                let cf_bps = pair.get_max_debt_and_cf_bps_for_collateral(pair, &pair.token0, self.collateral0)?.1;
-                let min_cf_bps = self.collateral0_applied_min_cf_bps;
-                Ok(max(cf_bps, min_cf_bps))
-            },
-            false => {
-                let cf_bps = pair.get_max_debt_and_cf_bps_for_collateral(pair, &pair.token1, self.collateral1)?.1;
-                let min_cf_bps = self.collateral1_applied_min_cf_bps;
-                Ok(max(cf_bps, min_cf_bps))
-            }
-        }        
-    }
-
-        /// Get the liquidation collateral factor in BPS for a given debt token
-    /// 
-    /// - `pair`: The pair the user position belongs to
-    /// - `debt_token`: The token the user is borrowing
-    /// 
-    /// Returns the max of the pessimistic collateral factor in BPS and the applied min. cf in BPS
+    /// Returns the liquidation collateral factor in BPS
     pub fn get_liquidation_cf_bps(&self, pair: &Pair, debt_token: &Pubkey) -> Result<u16> {
         match debt_token == &pair.token1 {
-            true => {
-                let (_, _, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(pair, &pair.token0, self.collateral0)?;
-                let min_cf_bps = self.collateral0_applied_min_cf_bps;
-                Ok(max(liquidation_cf_bps, min_cf_bps))
-            },
-            false => {
-                let (_, _, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(pair, &pair.token1, self.collateral1)?;
-                let min_cf_bps = self.collateral1_applied_min_cf_bps;
-                Ok(max(liquidation_cf_bps, min_cf_bps))
-            }
+            true => Ok(self.collateral0_liquidation_cf_bps),
+            false => Ok(self.collateral1_liquidation_cf_bps)
         }        
     }
 

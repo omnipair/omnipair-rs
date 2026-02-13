@@ -2351,7 +2351,7 @@ dependencies = [
 
 [[package]]
 name = "omnipair"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
