@@ -187,12 +187,20 @@ pub fn pessimistic_max_debt(
         return Ok((0, 0, 0));
     }
 
-    // Collateral Value (V) in debt token (Y) = Collateral Amount (X) * Collateral EMA Price (P_ema) / NAD
-    // V = X * P_ema / NAD  (raw Y units)
-    let collateral_value = (collateral_amount as u128)
-        .saturating_mul(collateral_ema_price_nad as u128)
-        .checked_div(NAD_U128)
-        .ok_or(ErrorCode::Overflow)?;
+    // V_impact: impact-aware collateral value using virtual reserves at pessimistic price.
+    // This matches the valuation used in liquidation (CPCurve::calculate_amount_out),
+    // ensuring the borrow limit never exceeds the liquidation threshold.
+    // Without this, V_linear > V_impact for collateral > ~5.26% of AMM reserve,
+    // which would make max-borrow positions instantly liquidatable.
+    let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
+        collateral_amm_reserve,
+        debt_amm_reserve,
+        collateral_ema_price_nad,
+        collateral_directional_ema_price_nad,
+    )?;
+
+    let collateral_value_with_impact =
+        CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, collateral_amount)? as u128;
 
     // Determine base CF: either fixed CF or dynamic AMM-based CF
     let base_cf_bps: u64 = if let Some(fixed_cf) = fixed_cf_bps {
@@ -226,10 +234,11 @@ pub fn pessimistic_max_debt(
         // 2. Calculate user max debt.
         let user_max_debt = max_allowed_total_debt.checked_sub(total_debt).unwrap_or(0);
 
-        // 3. Calculate base CF = user max debt * BPS_DENOMINATOR / Collateral Value (V)
+        // 3. Calculate base CF = user max debt * BPS_DENOMINATOR / V_impact
+        //    CF is relative to impact value so it captures only the debt crowding effect.
         (user_max_debt as u128)
         .saturating_mul(BPS_DENOMINATOR_U128)
-        .checked_div(collateral_value) 
+        .checked_div(collateral_value_with_impact) 
         .unwrap_or(0) as u64
     };
 
@@ -260,8 +269,10 @@ pub fn pessimistic_max_debt(
         .saturating_mul((BPS_DENOMINATOR - LTV_BUFFER_BPS) as u32)
         / BPS_DENOMINATOR as u32) as u16;
 
-    // Final borrow limit = V * max_allowed_cf_bps / BPS
-    let final_borrow_limit: u64 = collateral_value
+    // Final borrow limit = V_impact * max_allowed_cf_bps / BPS
+    // Uses impact-aware collateral value to match liquidation's valuation method,
+    // guaranteeing borrow_limit ≤ liquidation_limit for any collateral size.
+    let final_borrow_limit: u64 = collateral_value_with_impact
         .saturating_mul(max_allowed_cf_bps as u128)
         .checked_div(BPS_DENOMINATOR_U128)
         .unwrap_or(0)
@@ -493,12 +504,14 @@ mod tests {
 
     #[test]
     fn pessimistic_max_debt_values() {
-        // user_max=500k, cf=500k*10000/1M=5000bps, max_cf=4750, limit=475k
+        // impact_value = amount_out(1M, 1M, 1M) = 500k
+        // user_max=500k, base_cf=500k*10000/500k=10000bps (capped to 8500), max_cf=8075
+        // limit = 500k * 8075 / 10000 = 403,750
         let (limit, max_cf, liq_cf) = pessimistic_max_debt(
             1_000_000, NAD, NAD, 1_000_000, 1_000_000, 0, None
         ).unwrap();
         
-        assert_eq!((liq_cf, max_cf, limit), (5000, 4750, 475_000));
+        assert_eq!((liq_cf, max_cf, limit), (8500, 8075, 403_750));
 
         println!("=== Pessimistic Max Debt (1M coll, 0 debt) ===");
         println!("liq_cf={} bps | max_cf={} bps | limit={}", liq_cf, max_cf, limit);
@@ -506,15 +519,18 @@ mod tests {
 
     #[test]
     fn pessimistic_max_debt_with_existing_debt_values() {
-        // @0: user_max=333,333, cf=6666bps, max_cf=6332, limit=316,600
+        // impact_value = amount_out(1M, 1M, 500k) = 333,333
+        // @0: user_max=333,333, base_cf=333,333*10000/333,333=10000 (capped 8500), max_cf=8075
+        //     limit=333,333*8075/10000=269,166
         let (l0, cf0, _) = pessimistic_max_debt(500_000, NAD, NAD, 1_000_000, 1_000_000, 0, None).unwrap();
-        assert_eq!((l0, cf0), (316_600, 6332));
+        assert_eq!((l0, cf0), (269_166, 8075));
         
-        // @200k: user_max=228,571, cf=4571bps, max_cf=4342, limit=217,100
+        // @200k: user_max=228,571, base_cf=228,571*10000/333,333=6857, max_cf=6514
+        //        limit=333,333*6514/10000=217,133
         let (l200k, cf200k, _) = pessimistic_max_debt(500_000, NAD, NAD, 1_000_000, 1_000_000, 200_000, None).unwrap();
-        assert_eq!((l200k, cf200k), (217_100, 4342));
+        assert_eq!((l200k, cf200k), (217_133, 6514));
         
-        assert_eq!(l0 - l200k, 99_500);
+        assert_eq!(l0 - l200k, 52_033);
 
         println!("=== Pessimistic Max Debt with Existing Debt ===");
         println!("@0: cf={}, limit={} | @200k: cf={}, limit={}", cf0, l0, cf200k, l200k);
@@ -736,5 +752,118 @@ mod tests {
             // Invariant: max_debt(manipulated) ≤ max_debt(fair)
             assert!(max_manip <= max_fair);
         }
+    }
+
+    // =======
+    // BORROW vs LIQUIDATION DISCREPANCY
+    // Demonstrates that borrow.rs uses linear collateral valuation while liquidate.rs
+    // uses price-impact-aware valuation (CPCurve::calculate_amount_out), causing
+    // max-borrow positions to be instantly liquidatable when collateral > ~5.26% of reserve.
+
+    /// Verifies that the borrow limit (from pessimistic_max_debt) never exceeds
+    /// the liquidation limit (from liquidate.rs), regardless of collateral size.
+    ///
+    /// The fix: pessimistic_max_debt now uses impact-aware collateral value
+    /// (CPCurve::calculate_amount_out) for the final borrow limit, matching
+    /// the same valuation method used in liquidation.
+    ///
+    /// Since max_cf = liquidation_cf * 0.95, and both paths now use the same
+    /// impact-aware valuation, we guarantee:
+    ///   borrow_limit = V_impact * max_cf ≤ V_impact * liquidation_cf = liquidation_limit
+    #[test]
+    fn borrow_limit_never_exceeds_liquidation_limit() {
+        let collateral_reserve: u64 = 1_000_000;
+        let debt_reserve: u64 = 1_000_000;
+        let ema_price: u64 = NAD; // 1:1 price, no EMA divergence
+        let total_debt: u64 = 0;
+
+        // Virtual reserves at pessimistic price (shared by both paths when ema = spot)
+        let (c_ema_r, d_ema_r) = construct_virtual_reserves_at_pessimistic_price(
+            collateral_reserve, debt_reserve, ema_price, ema_price,
+        ).unwrap();
+        assert_eq!((c_ema_r, d_ema_r), (collateral_reserve, debt_reserve));
+
+        // Helper: compute liquidation borrow limit as in liquidate.rs lines 204-214
+        let liquidation_limit = |user_coll: u64, liq_cf_bps: u16| -> u64 {
+            let impact_value = CPCurve::calculate_amount_out(c_ema_r, d_ema_r, user_coll).unwrap();
+            (impact_value as u128 * liq_cf_bps as u128 / BPS_DENOMINATOR as u128) as u64
+        };
+
+        // Test collateral sizes from 1% to 50% of reserve — ALL must be safe
+        let test_cases: Vec<(u64, &str)> = vec![
+            (10_000,   "1% of reserve"),
+            (50_000,   "5% of reserve"),
+            (100_000,  "10% of reserve"),
+            (200_000,  "20% of reserve"),
+            (500_000,  "50% of reserve"),
+        ];
+
+        println!("=== Borrow Limit vs Liquidation Limit (dynamic CF) ===");
+        println!("{:<25} {:>12} {:>12} {:>10} {:>8}",
+            "Collateral", "BorrowLim", "LiqLim", "Buffer", "Safe?");
+        println!("{}", "-".repeat(70));
+
+        for (user_coll, label) in &test_cases {
+            let (borrow_lim, _, liq_cf) = pessimistic_max_debt(
+                *user_coll, ema_price, ema_price,
+                collateral_reserve, debt_reserve, total_debt, None,
+            ).unwrap();
+            let liq_lim = liquidation_limit(*user_coll, liq_cf);
+            let buffer = liq_lim.saturating_sub(borrow_lim);
+
+            println!("{:<25} {:>12} {:>12} {:>10} {:>8}",
+                format!("{} ({})", user_coll, label),
+                borrow_lim, liq_lim, buffer, "YES");
+
+            assert!(
+                borrow_lim <= liq_lim,
+                "REGRESSION: borrow_limit ({}) > liquidation_limit ({}) for {} collateral ({})",
+                borrow_lim, liq_lim, user_coll, label
+            );
+        }
+
+        // Also test with fixed CF — must also be safe
+        let fixed_cf: u16 = 8500;
+        println!("\n=== Fixed CF {} bps ===", fixed_cf);
+        println!("{:<25} {:>12} {:>12} {:>10} {:>8}",
+            "Collateral", "BorrowLim", "LiqLim", "Buffer", "Safe?");
+        println!("{}", "-".repeat(70));
+
+        for (user_coll, label) in &test_cases {
+            let (borrow_lim, _, liq_cf) = pessimistic_max_debt(
+                *user_coll, ema_price, ema_price,
+                collateral_reserve, debt_reserve, total_debt, Some(fixed_cf),
+            ).unwrap();
+            let liq_lim = liquidation_limit(*user_coll, liq_cf);
+            let buffer = liq_lim.saturating_sub(borrow_lim);
+
+            println!("{:<25} {:>12} {:>12} {:>10} {:>8}",
+                format!("{} ({})", user_coll, label),
+                borrow_lim, liq_lim, buffer, "YES");
+
+            assert!(
+                borrow_lim <= liq_lim,
+                "REGRESSION (fixed CF): borrow_limit ({}) > liquidation_limit ({}) for {} collateral ({})",
+                borrow_lim, liq_lim, user_coll, label
+            );
+        }
+
+        // Verify the buffer is always positive (strict safety margin from LTV_BUFFER_BPS)
+        // For any collateral size, since both use impact value:
+        //   borrow_limit = V_impact * liq_cf * 0.95 / BPS
+        //   liq_limit    = V_impact * liq_cf / BPS
+        //   buffer       = V_impact * liq_cf * 0.05 / BPS > 0
+        let large_coll: u64 = 500_000;
+        let (borrow_lim, _, liq_cf) = pessimistic_max_debt(
+            large_coll, ema_price, ema_price,
+            collateral_reserve, debt_reserve, total_debt, None,
+        ).unwrap();
+        let liq_lim = liquidation_limit(large_coll, liq_cf);
+        assert!(
+            liq_lim > borrow_lim,
+            "Buffer must be strictly positive: borrow={} >= liq={}",
+            borrow_lim, liq_lim
+        );
+        println!("\n=== Verified: 5% LTV buffer preserved for all collateral sizes ===");
     }
 }
