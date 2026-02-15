@@ -1,6 +1,6 @@
 [package]
 name = "omnipair"
-version = "0.9.5"
+version = "0.9.6"
 description = "Oracless spot and margin money market protocol"
 edition = "2021"
 resolver = "2"
