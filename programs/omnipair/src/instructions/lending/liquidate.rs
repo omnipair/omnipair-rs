@@ -10,7 +10,7 @@ use crate::{
     state::futarchy_authority::FutarchyAuthority,
     constants::*,
     errors::ErrorCode,
-    events::{UserPositionLiquidatedEvent, EventMetadata},
+    events::{AdjustDebtEvent, UserPositionLiquidatedEvent, UserPositionUpdatedEvent, EventMetadata},
     state::user_position::{UserPosition, DebtDecreaseReason},
     utils::{
         token::{transfer_from_vault_to_user, transfer_from_vault_to_vault}, 
@@ -353,6 +353,32 @@ impl<'info> Liquidate<'info> {
                 pair.cash_reserve1 = pair.cash_reserve1.saturating_add(collateral_to_reserves);
             }
         }
+
+        // Emit debt adjustment event (debt written off)
+        let (amount0, amount1) = if is_collateral_token0 {
+            (0, -(debt_to_writeoff as i64))
+        } else {
+            (-(debt_to_writeoff as i64), 0)
+        };
+        emit_cpi!(AdjustDebtEvent {
+            metadata: EventMetadata::new(position_owner.key(), pair.key()),
+            amount0,
+            amount1,
+        });
+
+        // Emit position updated event
+        emit_cpi!(UserPositionUpdatedEvent {
+            metadata: EventMetadata::new(position_owner.key(), pair.key()),
+            position: user_position.key(),
+            collateral0: user_position.collateral0,
+            collateral1: user_position.collateral1,
+            debt0_shares: user_position.debt0_shares,
+            debt1_shares: user_position.debt1_shares,
+            collateral0_max_cf_bps: user_position.get_max_cf_bps_for_debt_token(pair, &pair.token1),
+            collateral1_max_cf_bps: user_position.get_max_cf_bps_for_debt_token(pair, &pair.token0),
+            collateral0_liquidation_cf_bps: user_position.collateral0_liquidation_cf_bps,
+            collateral1_liquidation_cf_bps: user_position.collateral1_liquidation_cf_bps,
+        });
 
         emit_cpi!(UserPositionLiquidatedEvent {
             metadata: EventMetadata::new(position_owner.key(), pair.key()),
