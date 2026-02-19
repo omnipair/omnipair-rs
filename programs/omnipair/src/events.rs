@@ -25,6 +25,10 @@ pub struct SwapEvent {
     pub amount_in: u64,
     pub amount_out: u64,
     pub amount_in_after_fee: u64,
+    /// Swap fee (input token units) to LPs
+    pub lp_fee: u64,
+    /// Swap fee (input token units) to protocol
+    pub protocol_fee: u64,
     pub metadata: EventMetadata,
 }
 
@@ -106,8 +110,18 @@ pub struct UpdatePairEvent {
     pub price1_ema: u64,
     pub rate0: u64,
     pub rate1: u64,
+    /// Total interest (token0) applied to borrowers this update = lp_interest0 + protocol_interest0
     pub accrued_interest0: u128,
+    /// Total interest (token1) applied to borrowers this update = lp_interest1 + protocol_interest1
     pub accrued_interest1: u128,
+    /// Interest (token0) to LPs this update, added to reserves
+    pub lp_interest0: u64,
+    /// Interest (token1) to LPs this update, added to reserves
+    pub lp_interest1: u64,
+    /// Interest (token0) to protocol this update
+    pub protocol_interest0: u64,
+    /// Interest (token1) to protocol this update
+    pub protocol_interest1: u64,
     pub cash_reserve0: u64,
     pub cash_reserve1: u64,
     pub reserve0_after_interest: u64,

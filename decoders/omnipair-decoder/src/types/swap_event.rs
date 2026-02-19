@@ -12,5 +12,7 @@ pub struct SwapEvent {
     pub amount_in: u64,
     pub amount_out: u64,
     pub amount_in_after_fee: u64,
+    pub lp_fee: u64,
+    pub protocol_fee: u64,
     pub metadata: EventMetadata,
 }
