@@ -412,8 +412,8 @@ impl Pair {
                 let protocol_fee1: u64 = u64::try_from(
                     (total_interest1 * futarchy_authority.revenue_share.interest_bps as u128) / BPS_DENOMINATOR as u128
                 ).unwrap_or(u64::MAX);
-                let lp_share0 = u64::try_from(total_interest0).unwrap_or(u64::MAX);
-                let lp_share1 = u64::try_from(total_interest1).unwrap_or(u64::MAX);
+                let lp_interest0 = u64::try_from(total_interest0).unwrap_or(u64::MAX);
+                let lp_interest1 = u64::try_from(total_interest1).unwrap_or(u64::MAX);
 
                 // Total amount borrowers owe = interest + protocol_fee (extra fee)
                 let total_borrower_cost0 = total_interest0.checked_add(protocol_fee0 as u128).expect("Interest overflow");
@@ -428,12 +428,12 @@ impl Pair {
                     .expect("Total debt1 overflow");
 
                 // The change in virtual reserves (ΔV) depends on accounted cash availability (r_cash, where r_cash >= 0):
-                // 1. Always add lp_share to virtual reserves.
+                // 1. Always add lp_interest to virtual reserves.
                 // 2. Only add the "uncovered" portion of protocol_fee to virtual reserves.
                 //
                 // This ensures the state ΔR_virtual = ΔR_cash + ΔR_debt holds, where:
-                // L: r_virtual + lp_share + (protocol_fee - cash_covered_fee)
-                // R: (r_cash - cash_covered_fee) + (r_debt + lp_share + protocol_fee)
+                // L: r_virtual + lp_interest + (protocol_fee - cash_covered_fee)
+                // R: (r_cash - cash_covered_fee) + (r_debt + lp_interest + protocol_fee)
                 // where:
                 // cash_covered_fee = min(protocol_fee, cash_reserve)
                 // Realized protocol fees is the reserve token balance - accounted cash reserve (r_actual - r_cash)
@@ -443,9 +443,9 @@ impl Pair {
                 let cash_covered_fee1 = protocol_fee1.min(self.cash_reserve1);
 
                 // 2. Update virtual reserves
-                // ΔV = lp_share + (protocol_fee - cash_covered_fee)
-                self.reserve0 = self.reserve0.saturating_add(lp_share0 + (protocol_fee0 - cash_covered_fee0)); // won't underflow because protocol_fee0 <= cash_covered_fee
-                self.reserve1 = self.reserve1.saturating_add(lp_share1 + (protocol_fee1 - cash_covered_fee1));
+                // ΔV = lp_interest + (protocol_fee - cash_covered_fee)
+                self.reserve0 = self.reserve0.saturating_add(lp_interest0 + (protocol_fee0 - cash_covered_fee0));
+                self.reserve1 = self.reserve1.saturating_add(lp_interest1 + (protocol_fee1 - cash_covered_fee1));
 
                 // 3. Update physical cash reserves
                 // Cash reserves are reduced by the amount we can afford to take (as r_cash can't go below zero), 
@@ -459,8 +459,12 @@ impl Pair {
                     price1_ema: self.last_price1_ema.symmetric,
                     rate0: self.last_rate0,
                     rate1: self.last_rate1,
-                    accrued_interest0: total_interest0,
-                    accrued_interest1: total_interest1,
+                    accrued_interest0: total_borrower_cost0,
+                    accrued_interest1: total_borrower_cost1,
+                    lp_interest0,
+                    lp_interest1,
+                    protocol_interest0: protocol_fee0,
+                    protocol_interest1: protocol_fee1,
                     cash_reserve0: self.cash_reserve0, 
                     cash_reserve1: self.cash_reserve1,
                     reserve0_after_interest: self.reserve0,

@@ -255,7 +255,8 @@ impl<'info> Swap<'info> {
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
         
-        // Emit event
+        let lp_fee = swap_fee.checked_sub(futarchy_fee).unwrap_or(0);
+
         emit_cpi!(SwapEvent {
             metadata: EventMetadata::new(user.key(), pair.key()),
             reserve0: pair.reserve0,
@@ -264,6 +265,8 @@ impl<'info> Swap<'info> {
             amount_in: amount_in,
             amount_out: amount_out,
             amount_in_after_fee: amount_in_after_swap_fee as u64,
+            lp_fee,
+            protocol_fee: futarchy_fee,
         });
         
         Ok(())
