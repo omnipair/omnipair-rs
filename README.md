@@ -4,7 +4,9 @@
 
 ## Overview
 
-Omnipair [GAMM](https://docs.omnipair.fi/technical-breakdown/generalized-automated-market-maker) (Generalized Automated Market Maker) combines a UniV2-style CPMM (constant-product market maker) with an integrated lending market, allowing liquidity providers to earn both swap fees and lending interest on their deposited assets. Borrowers can use one side of the pair as collateral to borrow the other. Price uses a built-in **symmetric EMA** (smooths both up and down over a half-life); **dynamic LTV and collateral factors** use a **double-EMA** (symmetric + directional), taking the more conservative of the two to protect against volatility and front-running. Lending is **isolated** per pair (each pool’s risk is contained), and **bad debt is socialized on LPs** (insolvent positions are written off against the pool so the protocol avoids bank runs; LPs bear the loss via the constant-product curve). The protocol is **oracless** (no external oracle dependency) and **permissionless** (anyone can create pairs, add liquidity, borrow, or liquidate).
+Omnipair [GAMM](https://docs.omnipair.fi/technical-breakdown/generalized-automated-market-maker) (Generalized Automated Market Maker) combines a UniV2-style CPMM (constant-product market maker) with an integrated lending market, allowing liquidity providers to earn both swap fees and lending interest on their deposited assets. Borrowers can use one side of the pair as collateral to borrow the other. Price uses a built-in **symmetric EMA** (smooths both up and down over a half-life); **dynamic LTV and collateral factors** use a **double-EMA** (symmetric + directional), taking the more conservative of the two to protect against volatility and front-running. 
+
+Lending is **isolated** per pair (each pool’s risk is contained), and **bad debt is socialized on LPs** (insolvent positions are written off against the pool so the protocol avoids bank runs; LPs bear the loss via the constant-product curve). The protocol is **oracless** (no external oracle dependency) and **permissionless** (anyone can create pairs, add liquidity, borrow, or liquidate).
 
 Beyond the AMM invariant *xy* = *k*, Omnipair enforces a **lending solvency invariant**: virtual reserves = cash + debt (`R_virtual = R_cash + R_debt`) with `R_cash ≥ 0`, and every state change obeys `ΔR_virtual = ΔR_cash + ΔR_debt`. See the [Docs](https://docs.omnipair.fi/technical-breakdown/overview) for reserve types, Impact-aware collateral factor and how liquidation works.
 
@@ -15,8 +17,6 @@ Beyond the AMM invariant *xy* = *k*, Omnipair enforces a **lending solvency inva
 - **Bad debt socialized on LPs** - Insolvent positions are written off against the pool; LPs absorb the loss (via the AMM curve) to protect the protocol from bank runs
 - **Lending EMA price** - Built-in price uses a **symmetric EMA** that smooths both up and down movements over a configurable half-life
 - **Dynamic LTV / collateral factors: double-EMA** - Two EMAs (**symmetric** and **directional**) feed dynamic LTV and collateral ratios; the more conservative of the two is used for borrow and liquidation limits to protect LPs and borrowers
-- **Oracless & Permissionless** - No external oracles; built-in price from AMM reserves. Anyone can create pairs, provide liquidity, borrow, or liquidate—no whitelist or keeper infrastructure
-- **No Keepers Required** - Liquidations are permissionless; any account can call liquidate and earn the 0.5% incentive (3% total penalty: 0.5% to liquidator, 2.5% to LPs)
 - **Flash Loans** - Uncollateralized loans within a single transaction (0.05% fee)
 - **Interest Rate Model** - Adaptive rates based on utilization with configurable target ranges
 - **Liquidation Engine** - Partial liquidations with 3% penalty (0.5% to liquidator, 2.5% to LPs)
