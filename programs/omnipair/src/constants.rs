@@ -61,8 +61,11 @@ pub const MIN_INITIAL_RATE_BPS: u64 = 10;       // Initial rate must be at least
 pub const MAX_INITIAL_RATE_BPS: u64 = 10_000;   // Initial rate cannot exceed 100%
 
 // Rate half-life bounds (controls adjustment speed)
+// Our model: half_life is the time for the *interest rate* to double (when util > target) or halve (when util < target).
+// So e.g. 3 days => 2% -> 4% in 3 days when util > target. This is different from Aave/Compound, where
+// rate = f(util) is applied instantly (no exponential smoothing).
 #[constant]
-pub const DEFAULT_RATE_HALF_LIFE_MS: u64 = MS_PER_DAY;  // 1 day default (current behavior)
+pub const DEFAULT_RATE_HALF_LIFE_MS: u64 = 3 * MS_PER_DAY;  // 3 days: rate doubles/halves every 3 days when outside target util
 #[constant]
 pub const MIN_RATE_HALF_LIFE_MS: u64 = 3_600_000;  // 1 hour minimum (fastest adjustment)
 #[constant]
@@ -74,9 +77,9 @@ pub const DEBT_SHARE_SCALE: u64 = 1_000_000; // 10^6
 
 // Default IRM constants
 #[constant]
-pub const TARGET_UTIL_START_BPS: u64 = 5_000; // 50%
+pub const TARGET_UTIL_START_BPS: u64 = 3_000; // 30%
 #[constant]
-pub const TARGET_UTIL_END_BPS: u64 = 8_500; // 85%
+pub const TARGET_UTIL_END_BPS: u64 = 5_000; // 50%
 #[constant]
 pub const MILLISECONDS_PER_YEAR: u64 = 31_536_000_000_u64; // 31,536,000 seconds * 1000
 

@@ -42,8 +42,8 @@ pub struct InitializeAndBootstrapArgs {
     pub fixed_cf_bps: Option<u16>,
     
     // Interest rate controller parameters (all optional, use defaults if None)
-    pub target_util_start_bps: Option<u64>, // utilization lower bound (defaults to 50%)
-    pub target_util_end_bps: Option<u64>,   // utilization upper bound (defaults to 85%)
+    pub target_util_start_bps: Option<u64>, // utilization lower bound (defaults to 30%)
+    pub target_util_end_bps: Option<u64>,   // utilization upper bound (defaults to 50%)
     pub rate_half_life_ms: Option<u64>,     // rate adjustment speed (defaults to 1 day)
     pub min_rate_bps: Option<u64>,          // rate floor (defaults to 1%)
     pub max_rate_bps: Option<u64>,          // rate ceiling (defaults to 500%, 0 = no cap)
