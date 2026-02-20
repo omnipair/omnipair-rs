@@ -297,8 +297,8 @@ mod tests {
     // Helper to create a rate model with defaults (matches original behavior)
     fn default_rate_model() -> RateModel {
         RateModel::new(
-            TARGET_UTIL_START_BPS,  // 50%
-            TARGET_UTIL_END_BPS,    // 85%
+            TARGET_UTIL_START_BPS,  // 30%
+            TARGET_UTIL_END_BPS,    // 50%
             DEFAULT_RATE_HALF_LIFE_MS,  // 1 day
             DEFAULT_MIN_RATE_BPS,   // 1%
             0,                      // uncapped (default)
@@ -327,7 +327,7 @@ mod tests {
         
         let last_rate = RateModel::bps_to_nad(200);  // 2%
         let time_elapsed = 3600_000;  // 1 hour
-        let high_util = RateModel::bps_to_nad(9000);  // 90% > 85% target_end
+        let high_util = RateModel::bps_to_nad(9000);  // 90% > 50% target_end
         
         let (default_rate, default_integral) = default_model.calculate_rate(last_rate, time_elapsed, high_util);
         let (original_rate, original_integral) = original_model.calculate_rate(last_rate, time_elapsed, high_util);
@@ -343,7 +343,7 @@ mod tests {
         
         let last_rate = RateModel::bps_to_nad(500);  // 5%
         let time_elapsed = 3600_000;  // 1 hour
-        let low_util = RateModel::bps_to_nad(3000);  // 30% < 50% target_start
+        let low_util = RateModel::bps_to_nad(2000);  // 20% < 30% target_start
         
         let (default_rate, default_integral) = default_model.calculate_rate(last_rate, time_elapsed, low_util);
         let (original_rate, original_integral) = original_model.calculate_rate(last_rate, time_elapsed, low_util);
@@ -359,7 +359,7 @@ mod tests {
         
         let last_rate = RateModel::bps_to_nad(300);  // 3%
         let time_elapsed = 3600_000;  // 1 hour
-        let mid_util = RateModel::bps_to_nad(7000);  // 70% - in optimal range
+        let mid_util = RateModel::bps_to_nad(4000);  // 40% - in optimal range [30%, 50%]
         
         let (default_rate, default_integral) = default_model.calculate_rate(last_rate, time_elapsed, mid_util);
         let (original_rate, original_integral) = original_model.calculate_rate(last_rate, time_elapsed, mid_util);
