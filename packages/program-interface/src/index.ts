@@ -1,9 +1,9 @@
 // Re-export IDL
-export { default as IDL } from "./idl.json";
-export type { Omnipair } from "./types";
+export { default as IDL } from "./idl.js";
+export type { Omnipair } from "./types.js";
 
 // Re-export types
-export * from "./types";
+export * from "./types.js";
 
 // Re-export constants and utilities
-export * from "./constants";
+export * from "./constants.js";
