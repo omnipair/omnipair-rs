@@ -82,7 +82,6 @@ pub struct CommonAdjustCollateral<'info> {
     )]
     pub collateral_token_mint: Box<Account<'info, Mint>>,
 
-    #[account(mut)]
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
@@ -93,7 +92,12 @@ impl<'info> CommonAdjustCollateral<'info> {
     // generic update function for pair internal state
     pub fn update(&mut self) -> Result<()> {
         let pair_key = self.pair.to_account_info().key();
-        self.pair.update(&self.rate_model, &self.futarchy_authority, pair_key)?;
+        self.pair.update(
+            &self.rate_model,
+            &self.futarchy_authority,
+            pair_key,
+            Some(self.event_authority.to_account_info()),
+        )?;
         Ok(())
     }
 }
@@ -166,7 +170,6 @@ pub struct CommonAdjustDebt<'info> {
     )]
     pub reserve_token_mint: Box<Account<'info, Mint>>,
 
-    #[account(mut)]
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
@@ -177,7 +180,12 @@ impl<'info> CommonAdjustDebt<'info> {
     // generic update function for pair internal state
     pub fn update(&mut self) -> Result<()> {
         let pair_key = self.pair.to_account_info().key();
-        self.pair.update(&self.rate_model, &self.futarchy_authority, pair_key)?;
+        self.pair.update(
+            &self.rate_model,
+            &self.futarchy_authority,
+            pair_key,
+            Some(self.event_authority.to_account_info()),
+        )?;
         Ok(())
     }
 }

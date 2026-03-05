@@ -87,7 +87,6 @@ pub struct Swap<'info> {
     )]
     pub token_out_mint: Box<Account<'info, Mint>>,
     
-    #[account(mut)]
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
@@ -141,7 +140,12 @@ impl<'info> Swap<'info> {
 
     pub fn update(&mut self) -> Result<()> {
         let pair_key = self.pair.to_account_info().key();
-        self.pair.update(&self.rate_model, &self.futarchy_authority, pair_key)?;
+        self.pair.update(
+            &self.rate_model,
+            &self.futarchy_authority,
+            pair_key,
+            Some(self.event_authority.to_account_info()),
+        )?;
         Ok(())
     }
 
