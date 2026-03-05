@@ -87,7 +87,6 @@ pub struct Swap<'info> {
     )]
     pub token_out_mint: Box<Account<'info, Mint>>,
     
-    #[account(mut)]
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,

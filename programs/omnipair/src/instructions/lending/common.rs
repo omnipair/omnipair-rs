@@ -82,7 +82,6 @@ pub struct CommonAdjustCollateral<'info> {
     )]
     pub collateral_token_mint: Box<Account<'info, Mint>>,
 
-    #[account(mut)]
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
@@ -166,7 +165,6 @@ pub struct CommonAdjustDebt<'info> {
     )]
     pub reserve_token_mint: Box<Account<'info, Mint>>,
 
-    #[account(mut)]
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,

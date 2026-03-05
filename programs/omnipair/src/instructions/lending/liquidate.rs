@@ -94,7 +94,6 @@ pub struct Liquidate<'info> {
     /// CHECK: This is the owner of the position being liquidated.
     #[account(address = user_position.owner)]
     pub position_owner: AccountInfo<'info>,
-    #[account(mut)]
     pub payer: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
