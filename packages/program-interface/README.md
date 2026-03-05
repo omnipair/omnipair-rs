@@ -2,7 +2,7 @@
 
 TypeScript interface for the [Omnipair](https://omnipair.fi) Solana program - an oracleless spot and margin money market protocol.
 
-## Installation
+## Step 1: Install
 
 ```bash
 npm install @omnipair/program-interface
@@ -10,34 +10,32 @@ npm install @omnipair/program-interface
 yarn add @omnipair/program-interface
 ```
 
-## Usage
+## Step 2: Create Anchor provider and program
 
 ```typescript
-import { Program } from "@coral-xyz/anchor";
-import { IDL, PROGRAM_ID, derivePairAddress } from "@omnipair/program-interface";
+import * as anchor from "@coral-xyz/anchor";
 import type { Omnipair } from "@omnipair/program-interface";
+import { IDL } from "@omnipair/program-interface";
 
-// Create a typed program instance
-const program = new Program<Omnipair>(IDL, PROGRAM_ID, provider);
-
-// Fetch a pair account (fully typed)
-const [pairAddress] = derivePairAddress(token0, token1, paramsHash);
-const pair = await program.account.pair.fetch(pairAddress);
-
-console.log("Reserve0:", pair.reserve0.toString());
-console.log("Reserve1:", pair.reserve1.toString());
+const connection = new anchor.web3.Connection(
+  process.env.ANCHOR_PROVIDER_URL ?? "https://api.mainnet-beta.solana.com",
+  "confirmed"
+);
+const wallet = new anchor.Wallet(anchor.web3.Keypair.generate());
+const provider = new anchor.AnchorProvider(connection, wallet, {
+  commitment: "confirmed",
+});
+const program = new anchor.Program<Omnipair>(IDL, provider);
 ```
 
-### Derive Pair PDA (full example)
+## Step 3: Compute `paramsHash` (same as on-chain initialize)
 
 `derivePairAddress` requires the same `paramsHash` used by the on-chain initialize instruction.
 
 ```typescript
-import { PublicKey } from "@solana/web3.js";
 import { createHash } from "node:crypto";
-import { derivePairAddress } from "@omnipair/program-interface";
 
-type InitParams = {
+export type InitParams = {
   version: number;
   swapFeeBps: number;
   halfLife: bigint;
@@ -76,6 +74,13 @@ function computeParamsHash(params: InitParams): Uint8Array {
 
   return createHash("sha256").update(payload).digest();
 }
+```
+
+## Step 4: Derive pair PDA and fetch account
+
+```typescript
+import { PublicKey } from "@solana/web3.js";
+import { derivePairAddress } from "@omnipair/program-interface";
 
 const token0 = new PublicKey("So11111111111111111111111111111111111111112");
 const token1 = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
@@ -94,12 +99,16 @@ const paramsHash = computeParamsHash({
 
 const [pairPda, pairBump] = derivePairAddress(token0, token1, paramsHash);
 console.log("pair:", pairPda.toBase58(), "bump:", pairBump);
+
+const pair = await program.account.pair.fetch(pairPda);
+console.log("Reserve0:", pair.reserve0.toString());
+console.log("Reserve1:", pair.reserve1.toString());
 ```
 
-### JavaScript (runtime-only imports)
+## JavaScript runtime-only imports
 
 ```javascript
-import { IDL, PROGRAM_ID, derivePairAddress } from "@omnipair/program-interface";
+import { IDL, derivePairAddress } from "@omnipair/program-interface";
 ```
 
 `Omnipair` is a TypeScript type export, not a runtime JavaScript value. In TypeScript, import it with `import type { Omnipair } ...`.
