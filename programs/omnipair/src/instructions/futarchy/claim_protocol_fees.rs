@@ -21,6 +21,7 @@ use crate::{
 /// 
 /// The recipient addresses in FutarchyAuthority are pubkeys not ATAs.
 /// ATAs are derived at runtime for each token being claimed.
+#[event_cpi]
 #[derive(Accounts)]
 pub struct ClaimProtocolFees<'info> {
     /// Anyone can call this instruction
@@ -148,7 +149,12 @@ pub struct ClaimProtocolFees<'info> {
 impl<'info> ClaimProtocolFees<'info> {
     pub fn update(&mut self) -> Result<()> {
         let pair_key = self.pair.to_account_info().key();
-        self.pair.update(&self.rate_model, &self.futarchy_authority, pair_key)?;
+        self.pair.update(
+            &self.rate_model,
+            &self.futarchy_authority,
+            pair_key,
+            Some(self.event_authority.to_account_info()),
+        )?;
         Ok(())
     }
 
@@ -311,7 +317,8 @@ impl<'info> ClaimProtocolFees<'info> {
         }
 
         // Emit event for tracking
-        emit!(ClaimProtocolFeesEvent {
+        emit_cpi!(ClaimProtocolFeesEvent {
+            metadata: EventMetadata::new(caller.key(), pair.key()),
             token0: pair.token0,
             token1: pair.token1,
             futarchy_treasury_amount0: futarchy_amount0,
@@ -320,7 +327,6 @@ impl<'info> ClaimProtocolFees<'info> {
             buybacks_vault_amount1: buybacks_amount1,
             team_treasury_amount0: team_amount0,
             team_treasury_amount1: team_amount1,
-            metadata: EventMetadata::new(caller.key(), pair.key()),
         });
 
         Ok(())

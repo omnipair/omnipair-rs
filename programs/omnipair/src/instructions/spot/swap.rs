@@ -140,7 +140,12 @@ impl<'info> Swap<'info> {
 
     pub fn update(&mut self) -> Result<()> {
         let pair_key = self.pair.to_account_info().key();
-        self.pair.update(&self.rate_model, &self.futarchy_authority, pair_key)?;
+        self.pair.update(
+            &self.rate_model,
+            &self.futarchy_authority,
+            pair_key,
+            Some(self.event_authority.to_account_info()),
+        )?;
         Ok(())
     }
 

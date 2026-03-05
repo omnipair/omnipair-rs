@@ -10,7 +10,7 @@ use crate::{
     state::futarchy_authority::FutarchyAuthority,
     constants::*,
     errors::ErrorCode,
-    events::{AdjustDebtEvent, UserPositionLiquidatedEvent, UserPositionUpdatedEvent, EventMetadata},
+    events::{AdjustDebtEvent, EventMetadata, UserPositionLiquidatedEvent, UserPositionUpdatedEvent},
     state::user_position::{UserPosition, DebtDecreaseReason},
     utils::{
         token::{transfer_from_vault_to_user, transfer_from_vault_to_vault}, 
@@ -125,7 +125,12 @@ impl<'info> Liquidate<'info> {
 
     pub fn update(&mut self) -> Result<()> {
         let pair_key = self.pair.to_account_info().key();
-        self.pair.update(&self.rate_model, &self.futarchy_authority, pair_key)?;
+        self.pair.update(
+            &self.rate_model,
+            &self.futarchy_authority,
+            pair_key,
+            Some(self.event_authority.to_account_info()),
+        )?;
         Ok(())
     }
 

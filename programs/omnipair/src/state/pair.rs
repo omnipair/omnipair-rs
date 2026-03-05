@@ -323,7 +323,13 @@ impl Pair {
         }
     }
 
-    pub fn update(&mut self, rate_model: &Account<RateModel>, futarchy_authority: &crate::state::FutarchyAuthority, pair_key: Pubkey) -> Result<()> {
+    pub fn update<'info>(
+        &mut self,
+        rate_model: &Account<RateModel>,
+        futarchy_authority: &crate::state::FutarchyAuthority,
+        pair_key: Pubkey,
+        event_authority: Option<AccountInfo<'info>>,
+    ) -> Result<()> {
         let current_slot = Clock::get()?.slot;
         let spot_price0 = self.spot_price0_nad();
         let spot_price1 = self.spot_price1_nad();
@@ -453,23 +459,47 @@ impl Pair {
                 self.cash_reserve0 -= cash_covered_fee0; // won't underflow because cash_covered_fee <= cash_reserve
                 self.cash_reserve1 -= cash_covered_fee1;
 
-                emit!(UpdatePairEvent {
-                    metadata: EventMetadata::new(Pubkey::default(), pair_key),
-                    price0_ema: self.last_price0_ema.symmetric,
-                    price1_ema: self.last_price1_ema.symmetric,
-                    rate0: self.last_rate0,
-                    rate1: self.last_rate1,
-                    accrued_interest0: total_borrower_cost0,
-                    accrued_interest1: total_borrower_cost1,
-                    lp_interest0,
-                    lp_interest1,
-                    protocol_interest0: protocol_fee0,
-                    protocol_interest1: protocol_fee1,
-                    cash_reserve0: self.cash_reserve0, 
-                    cash_reserve1: self.cash_reserve1,
-                    reserve0_after_interest: self.reserve0,
-                    reserve1_after_interest: self.reserve1,
-                });
+                if let Some(event_authority) = event_authority {
+                    let (_, event_authority_bump) =
+                        Pubkey::find_program_address(&[b"__event_authority"], &crate::ID);
+
+                    struct EventCpiAccounts<'a> {
+                        event_authority: AccountInfo<'a>,
+                    }
+                    struct EventCpiBumps {
+                        event_authority: u8,
+                    }
+                    struct EventCpiContext<'a> {
+                        accounts: EventCpiAccounts<'a>,
+                        bumps: EventCpiBumps,
+                    }
+                    let ctx = EventCpiContext {
+                        accounts: EventCpiAccounts {
+                            event_authority,
+                        },
+                        bumps: EventCpiBumps {
+                            event_authority: event_authority_bump,
+                        },
+                    };
+
+                    emit_cpi!(UpdatePairEvent {
+                        metadata: EventMetadata::new(Pubkey::default(), pair_key),
+                        price0_ema: self.last_price0_ema.symmetric,
+                        price1_ema: self.last_price1_ema.symmetric,
+                        rate0: self.last_rate0,
+                        rate1: self.last_rate1,
+                        accrued_interest0: total_borrower_cost0,
+                        accrued_interest1: total_borrower_cost1,
+                        lp_interest0,
+                        lp_interest1,
+                        protocol_interest0: protocol_fee0,
+                        protocol_interest1: protocol_fee1,
+                        cash_reserve0: self.cash_reserve0,
+                        cash_reserve1: self.cash_reserve1,
+                        reserve0_after_interest: self.reserve0,
+                        reserve1_after_interest: self.reserve1,
+                    });
+                }
             }
             
             self.last_update = current_slot;
