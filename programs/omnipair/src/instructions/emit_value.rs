@@ -51,6 +51,8 @@ impl OptionalUint {
 pub struct EmitValueArgs {
     pub amount: Option<u64>,
     pub token_mint: Option<Pubkey>,
+    /// Used by SimulateLiquidationPrice: the debt amount to simulate borrowing
+    pub debt_amount: Option<u64>,
 }
 
 
@@ -68,6 +70,10 @@ pub enum PairViewKind {
     Reserves,
     CashReserves,
     SwapQuote,
+    /// Simulate liquidation price for a hypothetical new position.
+    /// Args: amount = collateral_amount, token_mint = collateral_token, debt_amount = debt to borrow.
+    /// Returns NAD-scaled liquidation price of the collateral in debt token units.
+    SimulateLiquidationPrice,
 }
 impl fmt::Display for PairViewKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -82,6 +88,7 @@ impl fmt::Display for PairViewKind {
             PairViewKind::Reserves => write!(f, "Reserves"),
             PairViewKind::CashReserves => write!(f, "CashReserves"),
             PairViewKind::SwapQuote => write!(f, "SwapQuote"),
+            PairViewKind::SimulateLiquidationPrice => write!(f, "SimulateLiquidationPrice"),
         }
     }
 }
@@ -209,6 +216,66 @@ impl ViewPairData<'_> {
                 let amount_out = CPCurve::calculate_amount_out(reserve_in, reserve_out, amount_in_after_fee)?;
 
                 (OptionalUint::from_u64(amount_out), OptionalUint::from_u64(swap_fee), empty())
+            },
+            PairViewKind::SimulateLiquidationPrice => {
+                // Simulate liquidation price for a hypothetical new position
+                // amount = collateral_amount, token_mint = collateral_token, debt_amount = debt to borrow
+                let collateral_amount = args.amount.ok_or(ErrorCode::ArgumentMissing)?;
+                let collateral_token = args.token_mint.ok_or(ErrorCode::ArgumentMissing)?;
+                let debt_amount = args.debt_amount.ok_or(ErrorCode::ArgumentMissing)?;
+
+                if debt_amount == 0 {
+                    return Ok(()); // No debt = no liquidation price
+                }
+
+                // Compute the liquidation CF that would be locked in at borrow time
+                let (_, _, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(
+                    &pair, &collateral_token, collateral_amount
+                )?;
+
+                let cf_bps = liquidation_cf_bps as u128;
+                if collateral_amount == 0 || cf_bps == 0 {
+                    // Immediately unsafe
+                    let value = (OptionalUint::from_u64(u64::MAX), empty(), empty());
+                    msg!("{}: {:?}", getter, value);
+                    return Ok(());
+                }
+
+                // Determine decimal adjustments
+                let is_collateral_token0 = collateral_token == pair.token0;
+                let (collateral_decimals, debt_decimals) = if is_collateral_token0 {
+                    (pair.token0_decimals as i32, pair.token1_decimals as i32)
+                } else {
+                    (pair.token1_decimals as i32, pair.token0_decimals as i32)
+                };
+
+                // P* (NAD) = ceil( debt * 10^{collateral_decimals} * NAD * BPS / (collateral * 10^{debt_decimals} * CF_BPS) )
+                let dec_diff = collateral_decimals - debt_decimals;
+                let (num_dec_mul, den_dec_mul): (u128, u128) = if dec_diff >= 0 {
+                    (10u128.pow(dec_diff as u32), 1)
+                } else {
+                    (1, 10u128.pow((-dec_diff) as u32))
+                };
+
+                let num = (debt_amount as u128)
+                    .saturating_mul(num_dec_mul)
+                    .saturating_mul(NAD as u128)
+                    .saturating_mul(BPS_DENOMINATOR as u128);
+
+                let den = (collateral_amount as u128)
+                    .saturating_mul(den_dec_mul)
+                    .saturating_mul(cf_bps);
+
+                let p_star_nad = if den == 0 {
+                    u64::MAX
+                } else {
+                    num.saturating_add(den.saturating_sub(1))
+                        .checked_div(den)
+                        .unwrap_or(u128::MAX)
+                        .min(u64::MAX as u128) as u64
+                };
+
+                (OptionalUint::from_u64(p_star_nad), OptionalUint::from_u16(liquidation_cf_bps), empty())
             },
         };
 
