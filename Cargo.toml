@@ -1,5 +1,10 @@
 [workspace]
-members = ["programs/omnipair", "programs/faucet", "examples/flashloan_receiver"]
+members = [
+    "programs/omnipair",
+    "programs/faucet",
+    "examples/flashloan_receiver",
+    "decoders/omnipair-decoder",
+]
 resolver = "2"
 
 [profile.release]

@@ -9,22 +9,22 @@ skip-lint = false
 [programs.devnet]
 faucet = "3Ckfn1LMByoDfVpcDPf7nouk5nQAUm51Zkdf1oprQTAK"
 flashloan_receiver_example = "GmtswKBDrFZ9DfUfP7jbPFvbtuG7AJcX73SvoKWGxJbu"
-omnipair = "2h6oKUk4jcNQ81EzKvYVtzsyRpJwsz6J2pEeQTo1KsQB"
+omnipair = "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE"
 
 [programs.localnet]
 faucet = "3Ckfn1LMByoDfVpcDPf7nouk5nQAUm51Zkdf1oprQTAK"
 flashloan_receiver_example = "GmtswKBDrFZ9DfUfP7jbPFvbtuG7AJcX73SvoKWGxJbu"
-omnipair = "2h6oKUk4jcNQ81EzKvYVtzsyRpJwsz6J2pEeQTo1KsQB"
+omnipair = "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE"
 
 [programs.mainnet]
-omnipair = "3tJrAXnjofAw8oskbMaSo9oMAYuzdBgVbW3TvQLdMEBd"
+omnipair = "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE"
 
 [registry]
-url = "https://devnet.helius-rpc.com/?api-key=66a4060b-2453-49cd-bf7a-fa03546c97ec"
+url = "https://mainnet.helius-rpc.com/?api-key=30168341-6376-4364-98bd-e7bb7da3d5e1"
 
 [provider]
-cluster = "devnet"
-wallet = "testnet-keypair.json"
+cluster = "mainnet"
+wallet = "deployer-keypair.json"
 
 [workspace]
 members = ["programs/omnipair", "programs/faucet"]

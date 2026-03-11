@@ -1,16 +1,19 @@
 use crate::constants::*;
 use anchor_lang::prelude::{Clock, *};
 
-pub fn compute_ema(last_ema: u64, last_update: i64, input: u64, half_life: u64) -> u64 {
-    let current_time = Clock::get().unwrap().unix_timestamp;
-    
-    let dt = (current_time - last_update) as u64;
+/// Approximates the elapsed time in milliseconds between two slots.
+pub fn slots_to_ms(start_slot: u64, end_slot: u64) -> Option<u64> {
+    end_slot
+        .checked_sub(start_slot)?
+        .checked_mul(TARGET_MS_PER_SLOT)
+}
+
+pub fn compute_ema(last_ema: u64, last_update: u64, input: u64, half_life: u64) -> u64 {
+    let dt = slots_to_ms(last_update, Clock::get().unwrap().slot).unwrap();
     
     if dt > 0 && half_life > 0 {
-        // Calculate exp_time in NAD scale
-        let exp_time = (half_life as u128 * NAD as u128) / NATURAL_LOG_OF_TWO_NAD as u128;
         // Calculate x in NAD scale
-        let x = (dt as u128 * NAD as u128) / exp_time;
+        let x = (dt as u128 * NATURAL_LOG_OF_TWO_NAD as u128) / half_life as u128;
         let alpha = taylor_exp(-(x as i64), NAD, TAYLOR_TERMS);
         
         let result = ((input as u128 * (NAD - alpha) as u128 + last_ema as u128 * alpha as u128) / NAD as u128) as u64;
@@ -157,4 +160,12 @@ pub fn normalize_two_values_to_nad(
     normalize_two_values_to_scale(a, a_decimals, b, NAD_DECIMALS)
 }
 
-        
+/// Ceiling division: rounds up to the nearest integer
+/// Formula: ceil(a / b) = (a + b - 1) / b
+/// Returns None on overflow
+pub fn ceil_div(a: u128, b: u128) -> Option<u128> {
+    if b == 0 {
+        return None;
+    }
+    a.checked_add(b - 1)?.checked_div(b)
+}

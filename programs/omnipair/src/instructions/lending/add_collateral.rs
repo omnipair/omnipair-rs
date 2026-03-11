@@ -1,13 +1,13 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    token::Token,
-    token_interface::{Mint, TokenAccount, Token2022},
+    token::{Token, TokenAccount, Mint},
+    token_interface::{Token2022},
 };
 use crate::{
     errors::ErrorCode,
-    events::{AdjustCollateralEvent, UserPositionCreatedEvent, UserPositionUpdatedEvent, EventMetadata},
-    utils::{token::transfer_from_user_to_pool_vault, account::get_size_with_discriminator},
-    instructions::lending::common::AdjustPositionArgs,
+    events::{AdjustCollateralEvent, EventMetadata, UserPositionCreatedEvent, UserPositionUpdatedEvent},
+    utils::{token::transfer_from_user_to_vault, account::get_size_with_discriminator},
+    instructions::lending::common::AdjustCollateralArgs,
     state::{user_position::UserPosition, pair::Pair, rate_model::RateModel, futarchy_authority::FutarchyAuthority},
     constants::*,
 };
@@ -21,9 +21,9 @@ pub struct AddCollateral<'info> {
             PAIR_SEED_PREFIX,
             pair.token0.as_ref(),
             pair.token1.as_ref(),
-            pair.pair_nonce.as_ref()
+            pair.params_hash.as_ref()
         ],
-        bump
+        bump = pair.bump
     )]
     pub pair: Account<'info, Pair>,
 
@@ -35,7 +35,7 @@ pub struct AddCollateral<'info> {
 
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
-        bump
+        bump = futarchy_authority.bump
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
 
@@ -56,19 +56,26 @@ pub struct AddCollateral<'info> {
 
     #[account(
         mut,
-        constraint = collateral_vault.mint == pair.token0 || collateral_vault.mint == pair.token1,
+        seeds = [
+            COLLATERAL_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            collateral_token_mint.key().as_ref(),
+        ],
+        bump = pair.get_collateral_vault_bump(&collateral_token_mint.key())
     )]
-    pub collateral_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub collateral_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         constraint = user_collateral_token_account.mint == pair.token0 || user_collateral_token_account.mint == pair.token1,
         token::authority = user,
     )]
-    pub user_collateral_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub user_collateral_token_account: Box<Account<'info, TokenAccount>>,
 
-    #[account(address = collateral_vault.mint)]
-    pub collateral_token_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(
+        constraint = collateral_token_mint.key() == pair.token0 || collateral_token_mint.key() == pair.token1 @ ErrorCode::InvalidMint
+    )]
+    pub collateral_token_mint: Box<Account<'info, Mint>>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -78,8 +85,8 @@ pub struct AddCollateral<'info> {
 }
 
 impl<'info> AddCollateral<'info> {
-    pub fn validate_add(&self, args: &AdjustPositionArgs) -> Result<()> {
-        let AdjustPositionArgs { amount } = args;
+    pub fn validate_add(&self, args: &AdjustCollateralArgs) -> Result<()> {
+        let AdjustCollateralArgs { amount } = args;
         
         require!(*amount > 0, ErrorCode::AmountZero);
         
@@ -94,17 +101,22 @@ impl<'info> AddCollateral<'info> {
     
     pub fn update(&mut self) -> Result<()> {
         let pair_key = self.pair.to_account_info().key();
-        self.pair.update(&self.rate_model, &self.futarchy_authority, pair_key)?;
+        self.pair.update(
+            &self.rate_model,
+            &self.futarchy_authority,
+            pair_key,
+            Some(self.event_authority.to_account_info()),
+        )?;
         Ok(())
     }
 
-    pub fn update_and_validate_add(&mut self, args: &AdjustPositionArgs) -> Result<()> {
+    pub fn update_and_validate_add(&mut self, args: &AdjustCollateralArgs) -> Result<()> {
         self.update()?;
         self.validate_add(args)?;
         Ok(())
     }
 
-    pub fn handle_add_collateral(ctx: Context<Self>, args: AdjustPositionArgs) -> Result<()> {
+    pub fn handle_add_collateral(ctx: Context<Self>, args: AdjustCollateralArgs) -> Result<()> {
         let AddCollateral { 
             pair, 
             user, 
@@ -133,7 +145,7 @@ impl<'info> AddCollateral<'info> {
         // Transfer tokens from user to collateral vault
         let is_collateral_token0 = user_collateral_token_account.mint == pair.token0;
 
-        transfer_from_user_to_pool_vault(
+        transfer_from_user_to_vault(
             user.to_account_info(),
             user_collateral_token_account.to_account_info(),
             collateral_vault.to_account_info(),
@@ -178,8 +190,10 @@ impl<'info> AddCollateral<'info> {
             collateral1: user_position.collateral1,
             debt0_shares: user_position.debt0_shares,
             debt1_shares: user_position.debt1_shares,
-            collateral0_applied_min_cf_bps: user_position.collateral0_applied_min_cf_bps,
-            collateral1_applied_min_cf_bps: user_position.collateral1_applied_min_cf_bps,
+            collateral0_max_cf_bps: user_position.get_max_cf_bps_for_debt_token(pair, &pair.token1),
+            collateral1_max_cf_bps: user_position.get_max_cf_bps_for_debt_token(pair, &pair.token0),
+            collateral0_liquidation_cf_bps: user_position.collateral0_liquidation_cf_bps,
+            collateral1_liquidation_cf_bps: user_position.collateral1_liquidation_cf_bps,
         });
 
         Ok(())

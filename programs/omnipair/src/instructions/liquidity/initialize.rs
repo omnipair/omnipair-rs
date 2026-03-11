@@ -1,12 +1,15 @@
 use anchor_lang::{
-    prelude::*,
-    accounts::interface_account::InterfaceAccount,
-    solana_program::{program::invoke, system_instruction}
+    prelude::*, 
+    solana_program::{
+        program::invoke, 
+        system_instruction,
+        hash::hash,
+    }
 };
 use anchor_spl::{
     token::spl_token,
-    token::{Token},
-    token_interface::{Mint, TokenAccount, Token2022},
+    token::{Token, TokenAccount, Mint},
+    token_interface::{Token2022},
     associated_token::{AssociatedToken, create_idempotent},
 };
 use anchor_spl::metadata::{
@@ -17,7 +20,7 @@ use anchor_spl::metadata::{
 };
 use anchor_lang::solana_program::program_pack::Pack;
 use crate::state::{
-    pair::Pair,
+    pair::{Pair, VaultBumps, LastPriceEMA},
     rate_model::RateModel,
     futarchy_authority::FutarchyAuthority,
 };
@@ -25,11 +28,11 @@ use crate::errors::ErrorCode;
 use crate::constants::*;
 use crate::utils::account::get_size_with_discriminator;
 use crate::utils::token::{
-    transfer_from_user_to_pool_vault,
+    transfer_from_user_to_vault,
     token_mint_to,  
 };
 use crate::utils::math::SqrtU128;
-use crate::events::{PairCreatedEvent, EventMetadata};
+use crate::events::{PairCreatedEvent, MintEvent, UserLiquidityPositionUpdatedEvent, EventMetadata};
 use crate::generate_gamm_pair_seeds;
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
@@ -37,7 +40,17 @@ pub struct InitializeAndBootstrapArgs {
     pub swap_fee_bps: u16,
     pub half_life: u64,
     pub fixed_cf_bps: Option<u16>,
-    pub pair_nonce: [u8; 16],
+    
+    // Interest rate controller parameters (all optional, use defaults if None)
+    pub target_util_start_bps: Option<u64>, // utilization lower bound (defaults to 30%)
+    pub target_util_end_bps: Option<u64>,   // utilization upper bound (defaults to 50%)
+    pub rate_half_life_ms: Option<u64>,     // rate adjustment speed (defaults to 1 day)
+    pub min_rate_bps: Option<u64>,          // rate floor (defaults to 1%)
+    pub max_rate_bps: Option<u64>,          // rate ceiling (defaults to 500%, 0 = no cap)
+    pub initial_rate_bps: Option<u64>,      // starting rate (defaults to 2%)
+    
+    pub params_hash: [u8; 32],
+    pub version: u8,
 
     pub amount0_in: u64,
     pub amount1_in: u64,
@@ -55,8 +68,8 @@ pub struct InitializeAndBootstrap<'info> {
     #[account(mut)]
     pub deployer: Signer<'info>,
 
-    pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
-    pub token1_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub token0_mint: Box<Account<'info, Mint>>,
+    pub token1_mint: Box<Account<'info, Mint>>,
     
     #[account(
         init,
@@ -66,15 +79,15 @@ pub struct InitializeAndBootstrap<'info> {
             PAIR_SEED_PREFIX, 
             token0_mint.key().as_ref(), 
             token1_mint.key().as_ref(),
-            args.pair_nonce.as_ref(),
-            ],
+            args.params_hash.as_ref(),
+        ],
         bump
     )]
     pub pair: Box<Account<'info, Pair>>,
 
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
-        bump
+        bump = futarchy_authority.bump
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
 
@@ -106,42 +119,88 @@ pub struct InitializeAndBootstrap<'info> {
     pub deployer_lp_token_account: UncheckedAccount<'info>,
 
     #[account(
-        init_if_needed,
+        init,
+        seeds = [
+            RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            token0_mint.key().as_ref(),
+        ],
         payer = deployer,
-        associated_token::mint = token0_mint,
-        associated_token::authority = pair,
+        token::mint = token0_mint,
+        token::authority = pair,
+        bump
     )]
-    pub token0_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub reserve0_vault: Box<Account<'info, TokenAccount>>,
     
     #[account(
-        init_if_needed,
+        init,
+        seeds = [
+            RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            token1_mint.key().as_ref(),
+        ],
         payer = deployer,
-        associated_token::mint = token1_mint,
-        associated_token::authority = pair,
+        token::mint = token1_mint,
+        token::authority = pair,
+        bump
     )]
-    pub token1_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub reserve1_vault: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+        init,
+        seeds = [
+            COLLATERAL_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            token0_mint.key().as_ref(),
+        ],
+        payer = deployer,
+        token::mint = token0_mint,
+        token::authority = pair,
+        bump
+    )]
+    pub collateral0_vault: Box<Account<'info, TokenAccount>>,
+    
+    #[account(
+        init,
+        seeds = [
+            COLLATERAL_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            token1_mint.key().as_ref(),
+        ],
+        payer = deployer,
+        token::mint = token1_mint,
+        token::authority = pair,
+        bump
+    )]
+    pub collateral1_vault: Box<Account<'info, TokenAccount>>,
     
     #[account(
         mut,
         token::mint = token0_mint,
         token::authority = deployer,
     )]
-    pub deployer_token0_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub deployer_token0_account: Box<Account<'info, TokenAccount>>,
     
     #[account(
         mut,
         token::mint = token1_mint,
         token::authority = deployer,
     )]
-    pub deployer_token1_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub deployer_token1_account: Box<Account<'info, TokenAccount>>,
+
+    /// CHECK: Validated against futarchy_authority.recipients.team_treasury
+    #[account(
+        address = futarchy_authority.recipients.team_treasury @ ErrorCode::InvalidRecipient,
+    )]
+    pub team_treasury: AccountInfo<'info>,
 
     #[account(
         mut,
-        constraint = authority_wsol_account.mint == spl_token::native_mint::id(),
-        constraint = authority_wsol_account.owner == futarchy_authority.key() @ ErrorCode::InvalidFutarchyAuthority,
-        constraint = *authority_wsol_account.to_account_info().owner == token_program.key() @ ErrorCode::InvalidTokenProgram,
-      )]
-      pub authority_wsol_account: Box<InterfaceAccount<'info, TokenAccount>>,
+        constraint = team_treasury_wsol_account.mint == spl_token::native_mint::id(),
+        constraint = team_treasury_wsol_account.owner == futarchy_authority.recipients.team_treasury @ ErrorCode::InvalidRecipient,
+        constraint = *team_treasury_wsol_account.to_account_info().owner == token_program.key() @ ErrorCode::InvalidTokenProgram,
+    )]
+    pub team_treasury_wsol_account: Box<Account<'info, TokenAccount>>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
@@ -154,9 +213,17 @@ pub struct InitializeAndBootstrap<'info> {
 impl<'info> InitializeAndBootstrap<'info> {
     pub fn validate(&self, args: &InitializeAndBootstrapArgs) -> Result<()> {
         let InitializeAndBootstrapArgs { 
+            version,
             swap_fee_bps, 
             half_life,
             fixed_cf_bps,
+            target_util_start_bps,
+            target_util_end_bps,
+            rate_half_life_ms,
+            min_rate_bps,
+            max_rate_bps,
+            initial_rate_bps,
+            params_hash,
             amount0_in,
             amount1_in,
             lp_name,
@@ -165,16 +232,53 @@ impl<'info> InitializeAndBootstrap<'info> {
             ..
         } = args;
 
+        // tokens canonical order check (token0 > token1)
+        // this prevents the same token pair from having two valid addresses (0,1) and (1,0)
+        require_gt!(self.token1_mint.key(), self.token0_mint.key(), ErrorCode::InvalidTokenOrder);
+
         // validate pool parameters
-        require_gte!(BPS_DENOMINATOR, *swap_fee_bps, ErrorCode::InvalidSwapFeeBps); // 0 <= swap_fee_bps <= 100%
-        require_gte!(*half_life, MIN_HALF_LIFE, ErrorCode::InvalidHalfLife); // half_life >= 1 minute
-        require_gte!(MAX_HALF_LIFE, *half_life, ErrorCode::InvalidHalfLife); // half_life <= 12 hours
+        require_eq!(*version, VERSION, ErrorCode::InvalidVersion);
+        require_gte!(BPS_DENOMINATOR / 2, *swap_fee_bps, ErrorCode::InvalidSwapFeeBps); // 0 <= swap_fee_bps <= 50%
+        require_gte!(*half_life, MIN_HALF_LIFE_MS, ErrorCode::InvalidHalfLife); // half_life >= 1 minute
+        require_gte!(MAX_HALF_LIFE_MS, *half_life, ErrorCode::InvalidHalfLife); // half_life <= 12 hours
 
         // validate fixed_cf_bps if provided
         if let Some(cf_bps) = fixed_cf_bps {
             require_gte!(BPS_DENOMINATOR, *cf_bps, ErrorCode::InvalidArgument); // 0 <= fixed_cf_bps <= 100%
             require_gte!(*cf_bps, 100, ErrorCode::InvalidArgument); // fixed_cf_bps >= 1% (100 bps) minimum
         }
+
+        // validate utilization bounds if provided (both must be provided together, or neither)
+        let util_start = target_util_start_bps.unwrap_or(TARGET_UTIL_START_BPS);
+        let util_end = target_util_end_bps.unwrap_or(TARGET_UTIL_END_BPS);
+        require!(RateModel::validate_util_bounds(util_start, util_end), ErrorCode::InvalidUtilBounds);
+
+        // Validate interest rate controller parameters
+        let rate_hl = rate_half_life_ms.unwrap_or(DEFAULT_RATE_HALF_LIFE_MS);
+        let min_rate = min_rate_bps.unwrap_or(DEFAULT_MIN_RATE_BPS);
+        let max_rate = max_rate_bps.unwrap_or(DEFAULT_MAX_RATE_BPS);
+        let init_rate = initial_rate_bps.unwrap_or(DEFAULT_INITIAL_RATE_BPS);
+        require!(
+            RateModel::validate_rate_params(rate_hl, min_rate, max_rate, init_rate),
+            ErrorCode::InvalidRateParams
+        );
+
+        // Verify params_hash matches the computed hash
+        // SHA256(VERSION || swap_fee_bps || half_life || fixed_cf_bps || target_util_start_bps || target_util_end_bps 
+        //        || rate_half_life_ms || min_rate_bps || max_rate_bps)
+        let mut hash_data = Vec::new();
+        hash_data.extend_from_slice(&VERSION.to_le_bytes());
+        hash_data.extend_from_slice(&swap_fee_bps.to_le_bytes());
+        hash_data.extend_from_slice(&half_life.to_le_bytes());
+        hash_data.extend_from_slice(&fixed_cf_bps.unwrap_or(0).to_le_bytes());
+        hash_data.extend_from_slice(&target_util_start_bps.unwrap_or(0).to_le_bytes());
+        hash_data.extend_from_slice(&target_util_end_bps.unwrap_or(0).to_le_bytes());
+        hash_data.extend_from_slice(&rate_half_life_ms.unwrap_or(0).to_le_bytes());
+        hash_data.extend_from_slice(&min_rate_bps.unwrap_or(0).to_le_bytes());
+        hash_data.extend_from_slice(&max_rate_bps.unwrap_or(0).to_le_bytes());
+        let computed_hash = hash(&hash_data).to_bytes();
+        let hashes_match = computed_hash.iter().zip(params_hash.iter()).all(|(a, b)| a == b);
+        require!(hashes_match, ErrorCode::InvalidParamsHash);
 
         // validate bootstrap parameters
         require!(*amount0_in > 0 && *amount1_in > 0, ErrorCode::AmountZero);
@@ -184,7 +288,8 @@ impl<'info> InitializeAndBootstrap<'info> {
         #[cfg(feature = "production")]
         {
             let lp_mint_key: String = self.lp_mint.key().to_string();
-            let last_4_chars = &lp_mint_key[lp_mint_key.len() - 4..];
+            let start_idx = lp_mint_key.len().checked_sub(4).ok_or(ErrorCode::InvalidLpMintKey)?;
+            let last_4_chars = &lp_mint_key[start_idx..];
             require_eq!("omLP", last_4_chars, ErrorCode::InvalidLpMintKey);
         }
     
@@ -198,14 +303,8 @@ impl<'info> InitializeAndBootstrap<'info> {
         Ok(())
     }
 
-    pub fn handle_create_rate_model(&mut self) -> Result<()> {
-        let rate_model = &mut self.rate_model;
-        rate_model.set_inner(RateModel::new());
-        Ok(())
-    }
-
     pub fn handle_initialize(ctx: Context<Self>, args: InitializeAndBootstrapArgs) -> Result<()> {
-        let current_time = Clock::get()?.unix_timestamp;
+        let current_slot = Clock::get()?.slot;
         let pair_key = ctx.accounts.pair.key();
         let pair = &mut ctx.accounts.pair;
         
@@ -213,25 +312,32 @@ impl<'info> InitializeAndBootstrap<'info> {
             swap_fee_bps, 
             half_life, 
             fixed_cf_bps,
+            target_util_start_bps,
+            target_util_end_bps,
+            rate_half_life_ms,
+            min_rate_bps,
+            max_rate_bps,
+            initial_rate_bps,
+            params_hash,
+            version,
             amount0_in,
             amount1_in,
             min_liquidity_out,
             lp_name,
             lp_symbol,
             lp_uri,
-            pair_nonce,
         } = args;
 
-        // Collect pair creation fee from deployer to futarchy authority
+        // Collect pair creation fee from deployer to team treasury
         invoke(
             &system_instruction::transfer(
                 ctx.accounts.deployer.key,
-                &ctx.accounts.authority_wsol_account.key(),
+                &ctx.accounts.team_treasury_wsol_account.key(),
                 PAIR_CREATION_FEE_LAMPORTS,
             ),
             &[
                 ctx.accounts.deployer.to_account_info(),
-                ctx.accounts.authority_wsol_account.to_account_info(),
+                ctx.accounts.team_treasury_wsol_account.to_account_info(),
                 ctx.accounts.system_program.to_account_info(),
             ],
         )?;
@@ -239,11 +345,11 @@ impl<'info> InitializeAndBootstrap<'info> {
         invoke(
             &spl_token::instruction::sync_native(
                 ctx.accounts.token_program.key,
-                &ctx.accounts.authority_wsol_account.key(),
+                &ctx.accounts.team_treasury_wsol_account.key(),
             )?,
             &[
                 ctx.accounts.token_program.to_account_info(),
-                ctx.accounts.authority_wsol_account.to_account_info(),
+                ctx.accounts.team_treasury_wsol_account.to_account_info(),
             ],
         )?;
         
@@ -263,10 +369,31 @@ impl<'info> InitializeAndBootstrap<'info> {
             ctx.accounts.lp_mint.key(),
         );
 
-        // Initialize rate model
-        ctx.accounts.rate_model.set_inner(RateModel::new());
+        // Initialize rate model with optional custom parameters
+        let util_start = target_util_start_bps.unwrap_or(TARGET_UTIL_START_BPS);
+        let util_end = target_util_end_bps.unwrap_or(TARGET_UTIL_END_BPS);
+        let rate_hl = rate_half_life_ms.unwrap_or(DEFAULT_RATE_HALF_LIFE_MS);
+        let min_rate = min_rate_bps.unwrap_or(DEFAULT_MIN_RATE_BPS);
+        let max_rate = max_rate_bps.unwrap_or(DEFAULT_MAX_RATE_BPS);
+        let init_rate = initial_rate_bps.unwrap_or(DEFAULT_INITIAL_RATE_BPS);
+        
+        ctx.accounts.rate_model.set_inner(RateModel::new(
+            util_start,
+            util_end,
+            rate_hl,
+            min_rate,
+            max_rate,
+            init_rate,
+        ));
 
         // Initialize pair (before LP mint is initialized, but we store the key)
+        let vault_bumps = VaultBumps {
+            reserve0: ctx.bumps.reserve0_vault,
+            reserve1: ctx.bumps.reserve1_vault,
+            collateral0: ctx.bumps.collateral0_vault,
+            collateral1: ctx.bumps.collateral1_vault,
+        };
+
         pair.set_inner(Pair::initialize(
             token0,
             token1,
@@ -277,17 +404,19 @@ impl<'info> InitializeAndBootstrap<'info> {
             swap_fee_bps,
             half_life,
             fixed_cf_bps,
-            current_time,
-            
-            pair_nonce,
+            current_slot,
+            params_hash,
+            version,
             ctx.bumps.pair,
+            vault_bumps,
+            ctx.accounts.rate_model.initial_rate, // Use rate model's configured initial rate (NAD-scaled)
         ));
 
         // Transfer tokens from deployer to vaults
-        transfer_from_user_to_pool_vault(
+        transfer_from_user_to_vault(
             ctx.accounts.deployer.to_account_info(),
             ctx.accounts.deployer_token0_account.to_account_info(),
-            ctx.accounts.token0_vault.to_account_info(),
+            ctx.accounts.reserve0_vault.to_account_info(),
             ctx.accounts.token0_mint.to_account_info(),
             match ctx.accounts.token0_mint.to_account_info().owner == ctx.accounts.token_program.key {
                 true => ctx.accounts.token_program.to_account_info(),
@@ -297,10 +426,10 @@ impl<'info> InitializeAndBootstrap<'info> {
             ctx.accounts.token0_mint.decimals,
         )?;
 
-        transfer_from_user_to_pool_vault(
+        transfer_from_user_to_vault(
             ctx.accounts.deployer.to_account_info(),
             ctx.accounts.deployer_token1_account.to_account_info(),
-            ctx.accounts.token1_vault.to_account_info(),
+            ctx.accounts.reserve1_vault.to_account_info(),
             ctx.accounts.token1_mint.to_account_info(),
             match ctx.accounts.token1_mint.to_account_info().owner == ctx.accounts.token_program.key {
                 true => ctx.accounts.token_program.to_account_info(),
@@ -406,7 +535,7 @@ impl<'info> InitializeAndBootstrap<'info> {
 
         require!(
             liquidity >= min_liquidity_out,
-            ErrorCode::InsufficientLiquidity
+            ErrorCode::SlippageExceeded
         );
         
         // Mint LP tokens to deployer
@@ -430,12 +559,75 @@ impl<'info> InitializeAndBootstrap<'info> {
             .checked_add(liquidity)
             .ok_or(ErrorCode::SupplyOverflow)?;
 
-        // Emit event
+        // Update cash reserves (initial state, r_debt = 0 => r_cash = r_virtual)
+        pair.cash_reserve0 = pair.reserve0;
+        pair.cash_reserve1 = pair.reserve1;
+
+        // Initialize EMA prices based on initial liquidity
+        pair.last_price0_ema = LastPriceEMA {
+            symmetric: pair.spot_price0_nad(),
+            directional: pair.spot_price0_nad(),
+        };
+        pair.last_price1_ema = LastPriceEMA {
+            symmetric: pair.spot_price1_nad(),
+            directional: pair.spot_price1_nad(),
+        };
+
+        let deployer_lp_balance = liquidity;
+        let deployer_token0_amount = (deployer_lp_balance as u128)
+            .checked_mul(pair.reserve0 as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .checked_div(pair.total_supply as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .try_into()
+            .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
+        let deployer_token1_amount = (deployer_lp_balance as u128)
+            .checked_mul(pair.reserve1 as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .checked_div(pair.total_supply as u128)
+            .ok_or(ErrorCode::LiquidityMathOverflow)?
+            .try_into()
+            .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
+
         emit_cpi!(PairCreatedEvent {
             metadata: EventMetadata::new(ctx.accounts.deployer.key(), pair.key()),
             token0: ctx.accounts.token0_mint.key(),
             token1: ctx.accounts.token1_mint.key(),
+            lp_mint: ctx.accounts.lp_mint.key(),
+            token0_decimals: ctx.accounts.token0_mint.decimals,
+            token1_decimals: ctx.accounts.token1_mint.decimals,
+            rate_model: ctx.accounts.rate_model.key(),
+            swap_fee_bps: pair.swap_fee_bps,
+            half_life: pair.half_life,
+            fixed_cf_bps: pair.fixed_cf_bps,
+            target_util_start_bps: target_util_start_bps.unwrap_or(0),
+            target_util_end_bps: target_util_end_bps.unwrap_or(0),
+            rate_half_life_ms: rate_half_life_ms.unwrap_or(0),
+            min_rate_bps: min_rate_bps.unwrap_or(0),
+            max_rate_bps: max_rate_bps.unwrap_or(0),
+            params_hash: pair.params_hash,
+            version: pair.version,
         });
+
+        emit_cpi!(MintEvent {
+            metadata: EventMetadata::new(ctx.accounts.deployer.key(), pair.key()),
+            amount0: amount0_in,
+            amount1: amount1_in,
+            liquidity: liquidity,
+        });
+
+        emit_cpi!(UserLiquidityPositionUpdatedEvent {
+            metadata: EventMetadata::new(ctx.accounts.deployer.key(), pair.key()),
+            token0_amount: deployer_token0_amount,
+            token1_amount: deployer_token1_amount,
+            lp_amount: deployer_lp_balance,
+            cash_reserve0: pair.cash_reserve0,
+            cash_reserve1: pair.cash_reserve1,
+            token0_mint: pair.token0,
+            token1_mint: pair.token1,
+            lp_mint: ctx.accounts.lp_mint.key(),
+        });
+        
 
         Ok(())
     }   

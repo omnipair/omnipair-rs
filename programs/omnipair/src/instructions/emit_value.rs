@@ -3,6 +3,8 @@ use crate::state::{Pair, UserPosition, RateModel, FutarchyAuthority};
 use std::fmt;
 use crate::errors::ErrorCode;
 use crate::constants::*;
+use crate::utils::gamm_math::{CPCurve, construct_virtual_reserves_at_pessimistic_price};
+use crate::utils::math::ceil_div;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
 pub enum OptionalUint {
@@ -47,9 +49,8 @@ impl OptionalUint {
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct EmitValueArgs {
-    pub debt_amount: Option<u64>,
-    pub collateral_amount: Option<u64>,
-    pub collateral_token: Option<Pubkey>,
+    pub amount: Option<u64>,
+    pub token_mint: Option<Pubkey>,
 }
 
 
@@ -64,7 +65,9 @@ pub enum PairViewKind {
     K,
     GetRates,
     GetBorrowLimitAndCfBpsForCollateral,
-
+    Reserves,
+    CashReserves,
+    SwapQuote,
 }
 impl fmt::Display for PairViewKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -76,28 +79,37 @@ impl fmt::Display for PairViewKind {
             PairViewKind::K => write!(f, "K"),
             PairViewKind::GetRates => write!(f, "GetRates"),
             PairViewKind::GetBorrowLimitAndCfBpsForCollateral => write!(f, "GetBorrowLimitAndCfBpsForCollateral"),
+            PairViewKind::Reserves => write!(f, "Reserves"),
+            PairViewKind::CashReserves => write!(f, "CashReserves"),
+            PairViewKind::SwapQuote => write!(f, "SwapQuote"),
         }
     }
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub enum UserPositionViewKind {
-    UserBorrowingPower,
-    UserAppliedCollateralFactorBps,
-    UserLiquidationCollateralFactorBps,
+    UserDynamicBorrowLimit,
+    UserDynamicCollateralFactorBps,
+    UserLiquidationCfBps,
     UserDebtUtilizationBps,
     UserLiquidationPrice,
     UserDebtWithInterest,
+    UserIsLiquidatable,
+    UserCollateralValueWithImpact,
+    UserLiquidationBorrowLimit,
 }
 impl fmt::Display for UserPositionViewKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            UserPositionViewKind::UserBorrowingPower => write!(f, "UserBorrowingPower"),
-            UserPositionViewKind::UserAppliedCollateralFactorBps => write!(f, "UserAppliedCollateralFactorBps"),
-            UserPositionViewKind::UserLiquidationCollateralFactorBps => write!(f, "UserLiquidationCollateralFactorBps"),
+            UserPositionViewKind::UserDynamicBorrowLimit => write!(f, "UserDynamicBorrowLimit"),
+            UserPositionViewKind::UserDynamicCollateralFactorBps => write!(f, "UserDynamicCollateralFactorBps"),
+            UserPositionViewKind::UserLiquidationCfBps => write!(f, "UserLiquidationCfBps"),
             UserPositionViewKind::UserDebtUtilizationBps => write!(f, "UserDebtUtilizationBps"),
             UserPositionViewKind::UserLiquidationPrice => write!(f, "UserLiquidationPrice"),
             UserPositionViewKind::UserDebtWithInterest => write!(f, "UserDebtWithInterest"),
+            UserPositionViewKind::UserIsLiquidatable => write!(f, "UserIsLiquidatable"),
+            UserPositionViewKind::UserCollateralValueWithImpact => write!(f, "UserCollateralValueWithImpact"),
+            UserPositionViewKind::UserLiquidationBorrowLimit => write!(f, "UserLiquidationBorrowLimit"),
         }
     }
 }
@@ -106,54 +118,97 @@ impl fmt::Display for UserPositionViewKind {
 
 #[derive(Accounts)]
 pub struct ViewPairData<'info> {
-    #[account(mut)]
     pub pair: Account<'info, Pair>,
+    #[account(
+        address = pair.rate_model @ ErrorCode::InvalidRateModel
+    )]
     pub rate_model: Account<'info, RateModel>,
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
-        bump
+        bump = futarchy_authority.bump
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
 }
 
 #[derive(Accounts)]
 pub struct ViewUserPositionData<'info> {
-    #[account(mut)]
     pub pair: Account<'info, Pair>,
-    #[account(mut)]
+    #[account(
+        constraint = user_position.pair == pair.key() @ ErrorCode::InvalidPair
+    )]
     pub user_position: Account<'info, UserPosition>,
+    #[account(
+        address = pair.rate_model @ ErrorCode::InvalidRateModel
+    )]
     pub rate_model: Account<'info, RateModel>,
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
-        bump
+        bump = futarchy_authority.bump
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
 }
 
 impl ViewPairData<'_> {
     pub fn handle_view_data(ctx: Context<Self>, getter: PairViewKind, args: EmitValueArgs) -> Result<()> {
-        let pair = &mut ctx.accounts.pair;
+        // Create a copy of the pair state to perform simulated update without modifying the actual account
+        let pair_key = ctx.accounts.pair.key();
+        let mut pair = ctx.accounts.pair.clone().into_inner();
+        
+        // update pair to get updated rates, interest, debt, etc.
+        pair.update(&ctx.accounts.rate_model, &ctx.accounts.futarchy_authority, pair_key, None)?;
 
-        let pair_key = pair.to_account_info().key();
-        pair.update(&ctx.accounts.rate_model, &ctx.accounts.futarchy_authority, pair_key)?;
-
-        let value: (OptionalUint, OptionalUint) = match getter {
-            PairViewKind::EmaPrice0Nad => (OptionalUint::from_u64(pair.ema_price0_nad()), OptionalUint::OptionalU64(None)),
-            PairViewKind::EmaPrice1Nad => (OptionalUint::from_u64(pair.ema_price1_nad()), OptionalUint::OptionalU64(None)),
-            PairViewKind::SpotPrice0Nad => (OptionalUint::from_u64(pair.spot_price0_nad()), OptionalUint::OptionalU64(None)),
-            PairViewKind::SpotPrice1Nad => (OptionalUint::from_u64(pair.spot_price1_nad()), OptionalUint::OptionalU64(None)),
-            PairViewKind::K => (OptionalUint::from_u64(pair.k() as u64), OptionalUint::OptionalU64(None)),
+        let empty = || OptionalUint::OptionalU64(None);
+        let value: (OptionalUint, OptionalUint, OptionalUint) = match getter {
+            PairViewKind::EmaPrice0Nad => (OptionalUint::from_u64(pair.ema_price0_nad()), empty(), empty()),
+            PairViewKind::EmaPrice1Nad => (OptionalUint::from_u64(pair.ema_price1_nad()), empty(), empty()),
+            PairViewKind::SpotPrice0Nad => (OptionalUint::from_u64(pair.spot_price0_nad()), empty(), empty()),
+            PairViewKind::SpotPrice1Nad => (OptionalUint::from_u64(pair.spot_price1_nad()), empty(), empty()),
+            PairViewKind::K => (OptionalUint::from_u128(pair.k()), empty(), empty()),
             PairViewKind::GetRates => {
                 let (rate0, rate1) = pair.get_rates(&ctx.accounts.rate_model).unwrap();
-                (OptionalUint::from_u64(rate0), OptionalUint::from_u64(rate1))
+                (OptionalUint::from_u64(rate0), OptionalUint::from_u64(rate1), empty())
             },
             PairViewKind::GetBorrowLimitAndCfBpsForCollateral => {
-                let collateral_amount = args.collateral_amount.ok_or(ErrorCode::ArgumentMissing)?;
-                let collateral_token = args.collateral_token.ok_or(ErrorCode::ArgumentMissing)?;
+                let collateral_amount = args.amount.ok_or(ErrorCode::ArgumentMissing)?;
+                let collateral_token = args.token_mint.ok_or(ErrorCode::ArgumentMissing)?;
+                let (borrow_limit, max_cf_bps, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount).unwrap();
                 (
-                    OptionalUint::from_u64(pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount).unwrap().0),
-                    OptionalUint::from_u16(pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount).unwrap().1)
+                    OptionalUint::from_u64(borrow_limit),
+                    OptionalUint::from_u16(max_cf_bps),
+                    OptionalUint::from_u16(liquidation_cf_bps),
                 )
+            },
+            PairViewKind::Reserves => (
+                OptionalUint::from_u64(pair.reserve0),
+                OptionalUint::from_u64(pair.reserve1),
+                empty(),
+            ),
+            PairViewKind::CashReserves => (
+                OptionalUint::from_u64(pair.cash_reserve0),
+                OptionalUint::from_u64(pair.cash_reserve1),
+                empty(),
+            ),
+            PairViewKind::SwapQuote => {
+                // Preview swap: given amount_in of collateral_token, returns (amount_out, swap_fee)
+                let amount_in = args.amount.ok_or(ErrorCode::ArgumentMissing)?;
+                let token_in = args.token_mint.ok_or(ErrorCode::ArgumentMissing)?;
+                let is_token0_in = token_in == pair.token0;
+
+                let swap_fee = ceil_div(
+                    (amount_in as u128)
+                        .checked_mul(pair.swap_fee_bps as u128)
+                        .ok_or(ErrorCode::FeeMathOverflow)?,
+                    BPS_DENOMINATOR as u128,
+                ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
+
+                let amount_in_after_fee = amount_in.checked_sub(swap_fee).ok_or(ErrorCode::FeeMathOverflow)?;
+
+                let reserve_in = if is_token0_in { pair.reserve0 } else { pair.reserve1 };
+                let reserve_out = if is_token0_in { pair.reserve1 } else { pair.reserve0 };
+
+                let amount_out = CPCurve::calculate_amount_out(reserve_in, reserve_out, amount_in_after_fee)?;
+
+                (OptionalUint::from_u64(amount_out), OptionalUint::from_u64(swap_fee), empty())
             },
         };
 
@@ -165,15 +220,17 @@ impl ViewPairData<'_> {
 
 impl ViewUserPositionData<'_> {
     pub fn handle_view_data(ctx: Context<Self>, getter: UserPositionViewKind) -> Result<()> {
-        let pair = &mut ctx.accounts.pair;
+        // Create a copy of the pair state to perform simulated update without modifying the actual account
+        let pair_key = ctx.accounts.pair.key();
+        let mut pair = ctx.accounts.pair.clone().into_inner();
         let user_position = &ctx.accounts.user_position;
 
         // update pair to get updated rates, interest, debt, etc.
-        let pair_key = pair.to_account_info().key();
-        pair.update(&ctx.accounts.rate_model, &ctx.accounts.futarchy_authority, pair_key)?;
+        pair.update(&ctx.accounts.rate_model, &ctx.accounts.futarchy_authority, pair_key, None)?;
 
-        let value: (OptionalUint, OptionalUint) = match getter {
-            UserPositionViewKind::UserBorrowingPower => {
+        let empty = || OptionalUint::OptionalU64(None);
+        let value: (OptionalUint, OptionalUint, OptionalUint) = match getter {
+            UserPositionViewKind::UserDynamicBorrowLimit => {
                 let collateral_token0 = pair.get_collateral_token(&pair.token0);
                 let collateral_amount0 = match collateral_token0 == pair.token0 {
                     true => user_position.collateral0,
@@ -191,9 +248,10 @@ impl ViewUserPositionData<'_> {
                 (
                     OptionalUint::from_u64(borrow_limit0),
                     OptionalUint::from_u64(borrow_limit1),
+                    empty(),
                 )
             },
-            UserPositionViewKind::UserAppliedCollateralFactorBps => {
+            UserPositionViewKind::UserDynamicCollateralFactorBps => {
                 let collateral_token0 = pair.get_collateral_token(&pair.token0);
                 let collateral_amount0 = match collateral_token0 == pair.token0 {
                     true => user_position.collateral0,
@@ -210,25 +268,147 @@ impl ViewUserPositionData<'_> {
                 
                 (
                     OptionalUint::from_u16(token0_cf_bps),
-                    OptionalUint::from_u16(token1_cf_bps)
+                    OptionalUint::from_u16(token1_cf_bps),
+                    empty(),
                 )
             },
-            UserPositionViewKind::UserLiquidationCollateralFactorBps => (
+            UserPositionViewKind::UserLiquidationCfBps => (
                 OptionalUint::from_u16(user_position.get_liquidation_cf_bps(&pair, &pair.token0).unwrap()),
-                OptionalUint::from_u16(user_position.get_liquidation_cf_bps(&pair, &pair.token1).unwrap())
+                OptionalUint::from_u16(user_position.get_liquidation_cf_bps(&pair, &pair.token1).unwrap()),
+                empty(),
             ),
             UserPositionViewKind::UserDebtUtilizationBps => (
                 OptionalUint::from_u64(user_position.get_debt_utilization_bps(&pair, &pair.token0).unwrap()),
-                OptionalUint::from_u64(user_position.get_debt_utilization_bps(&pair, &pair.token1).unwrap())
+                OptionalUint::from_u64(user_position.get_debt_utilization_bps(&pair, &pair.token1).unwrap()),
+                empty(),
             ),
             UserPositionViewKind::UserLiquidationPrice => (
                 OptionalUint::from_u64(user_position.get_liquidation_price(&pair, &pair.token0).unwrap()),
-                OptionalUint::from_u64(user_position.get_liquidation_price(&pair, &pair.token1).unwrap())
+                OptionalUint::from_u64(user_position.get_liquidation_price(&pair, &pair.token1).unwrap()),
+                empty(),
             ),
             UserPositionViewKind::UserDebtWithInterest => (
                 OptionalUint::from_u64(user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares).unwrap()),
-                OptionalUint::from_u64(user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares).unwrap())
+                OptionalUint::from_u64(user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares).unwrap()),
+                empty(),
             ),
+            UserPositionViewKind::UserIsLiquidatable => {
+                // Check liquidatability for both directions using price impact
+                // Returns (is_liquidatable_with_token0_collateral, is_liquidatable_with_token1_collateral)
+                
+                // Token0 as collateral, Token1 as debt
+                let is_liquidatable_0 = {
+                    let user_debt = user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares).unwrap_or(0);
+                    let user_collateral = user_position.collateral0;
+                    let liquidation_cf = user_position.get_liquidation_cf_bps(&pair, &pair.token1).unwrap_or(0);
+                    
+                    if user_debt == 0 || user_collateral == 0 {
+                        0u64
+                    } else {
+                        let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
+                            pair.reserve0, pair.reserve1, pair.ema_price0_nad(), pair.directional_ema_price0_nad()
+                        ).unwrap_or((pair.reserve0, pair.reserve1));
+                        
+                        let collateral_value = CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, user_collateral).unwrap_or(0);
+                        let borrow_limit = (collateral_value as u128)
+                            .saturating_mul(liquidation_cf as u128)
+                            .checked_div(BPS_DENOMINATOR as u128).unwrap_or(0);
+                        
+                        if (user_debt as u128) >= borrow_limit { 1 } else { 0 }
+                    }
+                };
+                
+                // Token1 as collateral, Token0 as debt
+                let is_liquidatable_1 = {
+                    let user_debt = user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares).unwrap_or(0);
+                    let user_collateral = user_position.collateral1;
+                    let liquidation_cf = user_position.get_liquidation_cf_bps(&pair, &pair.token0).unwrap_or(0);
+                    
+                    if user_debt == 0 || user_collateral == 0 {
+                        0u64
+                    } else {
+                        let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
+                            pair.reserve1, pair.reserve0, pair.ema_price1_nad(), pair.directional_ema_price1_nad()
+                        ).unwrap_or((pair.reserve1, pair.reserve0));
+                        
+                        let collateral_value = CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, user_collateral).unwrap_or(0);
+                        let borrow_limit = (collateral_value as u128)
+                            .saturating_mul(liquidation_cf as u128)
+                            .checked_div(BPS_DENOMINATOR as u128).unwrap_or(0);
+                        
+                        if (user_debt as u128) >= borrow_limit { 1 } else { 0 }
+                    }
+                };
+                
+                (OptionalUint::from_u64(is_liquidatable_0), OptionalUint::from_u64(is_liquidatable_1), empty())
+            },
+            UserPositionViewKind::UserCollateralValueWithImpact => {
+                // Collateral value in debt-token units with price impact (same math as liquidation)
+                // Token0 as collateral (backing token1 debt)
+                let value0 = {
+                    let user_collateral = user_position.collateral0;
+                    if user_collateral == 0 {
+                        0u64
+                    } else {
+                        let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
+                            pair.reserve0, pair.reserve1, pair.ema_price0_nad(), pair.ema_price0_nad()
+                        ).unwrap_or((pair.reserve0, pair.reserve1));
+                        CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, user_collateral).unwrap_or(0)
+                    }
+                };
+                // Token1 as collateral (backing token0 debt)
+                let value1 = {
+                    let user_collateral = user_position.collateral1;
+                    if user_collateral == 0 {
+                        0u64
+                    } else {
+                        let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
+                            pair.reserve1, pair.reserve0, pair.ema_price1_nad(), pair.ema_price1_nad()
+                        ).unwrap_or((pair.reserve1, pair.reserve0));
+                        CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, user_collateral).unwrap_or(0)
+                    }
+                };
+                (OptionalUint::from_u64(value0), OptionalUint::from_u64(value1), empty())
+            },
+            UserPositionViewKind::UserLiquidationBorrowLimit => {
+                // Liquidation borrow limit = collateral_value_with_impact * liquidation_cf / BPS
+                // Position is liquidatable when debt >= this value
+                // Token0 as collateral (backing token1 debt)
+                let limit0 = {
+                    let user_collateral = user_position.collateral0;
+                    let liquidation_cf = user_position.get_liquidation_cf_bps(&pair, &pair.token1).unwrap_or(0);
+                    if user_collateral == 0 || liquidation_cf == 0 {
+                        0u64
+                    } else {
+                        let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
+                            pair.reserve0, pair.reserve1, pair.ema_price0_nad(), pair.ema_price0_nad()
+                        ).unwrap_or((pair.reserve0, pair.reserve1));
+                        let collateral_value = CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, user_collateral).unwrap_or(0);
+                        (collateral_value as u128)
+                            .saturating_mul(liquidation_cf as u128)
+                            .checked_div(BPS_DENOMINATOR as u128)
+                            .unwrap_or(0) as u64
+                    }
+                };
+                // Token1 as collateral (backing token0 debt)
+                let limit1 = {
+                    let user_collateral = user_position.collateral1;
+                    let liquidation_cf = user_position.get_liquidation_cf_bps(&pair, &pair.token0).unwrap_or(0);
+                    if user_collateral == 0 || liquidation_cf == 0 {
+                        0u64
+                    } else {
+                        let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
+                            pair.reserve1, pair.reserve0, pair.ema_price1_nad(), pair.ema_price1_nad()
+                        ).unwrap_or((pair.reserve1, pair.reserve0));
+                        let collateral_value = CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, user_collateral).unwrap_or(0);
+                        (collateral_value as u128)
+                            .saturating_mul(liquidation_cf as u128)
+                            .checked_div(BPS_DENOMINATOR as u128)
+                            .unwrap_or(0) as u64
+                    }
+                };
+                (OptionalUint::from_u64(limit0), OptionalUint::from_u64(limit1), empty())
+            },
         };
 
         msg!("{}: {:?}", getter, value);

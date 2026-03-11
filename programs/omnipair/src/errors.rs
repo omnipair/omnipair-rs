@@ -5,17 +5,14 @@ pub enum ErrorCode {
     #[msg("Invalid deployer")]
     InvalidDeployer,
 
-    #[msg("Invalid nonce")]
-    InvalidNonce,
-
-    #[msg("Invalid futarchy fee bps")]
-    InvalidFutarchyFeeBps,
-
     #[msg("Argument missing")]
     ArgumentMissing,
 
     #[msg("Invalid swap fee bps")]
     InvalidSwapFeeBps,
+
+    #[msg("Invalid interest fee bps")]
+    InvalidInterestFeeBps,
 
     #[msg("Invalid half life")]
     InvalidHalfLife,
@@ -25,22 +22,7 @@ pub enum ErrorCode {
 
     #[msg("Invalid argument")]
     InvalidArgument,
-
-    #[msg("Pair already initialized")]
-    PairAlreadyInitialized,
-
-    #[msg("Invalid K value")]
-    InvalidK,
     
-    #[msg("Insufficient collateral")]
-    InsufficientCollateral,
-
-    #[msg("User already added collateral")]
-    UserAlreadyAddedCollateral,
-
-    #[msg("Zero collateral amount")]
-    ZeroCollateralAmount,
-
     #[msg("Amount cannot be zero")]
     AmountZero,
 
@@ -53,59 +35,14 @@ pub enum ErrorCode {
     #[msg("Borrowing power exceeded")]
     BorrowingPowerExceeded,
     
-    #[msg("Invalid amount")]
-    InvalidAmount,
-    
-    #[msg("Invalid rate model")]
-    InvalidRateModel,
-    
     #[msg("Invalid token account")]
     InvalidTokenAccount,
     
     #[msg("Invalid token program")]
     InvalidTokenProgram,
     
-    #[msg("Invalid system program")]
-    InvalidSystemProgram,
-    
-    #[msg("Invalid signer")]
-    InvalidSigner,
-    
-    #[msg("Invalid account")]
-    InvalidAccount,
-    
-    #[msg("Invalid program")]
-    InvalidProgram,
-    
-    #[msg("Invalid instruction")]
-    InvalidInstruction,
-    
-    #[msg("Invalid state")]
-    InvalidState,
-    
-    #[msg("Invalid calculation")]
-    InvalidCalculation,
-    
-    #[msg("Invalid time")]
-    InvalidTime,
-    
-    #[msg("Invalid price")]
-    InvalidPrice,
-    
-    #[msg("Invalid rate")]
-    InvalidRate,
-    
-    #[msg("Invalid utilization")]
-    InvalidUtilization,
-    
     #[msg("Borrow exceeds reserve")]
     BorrowExceedsReserve,
-
-    #[msg("Invalid token order")]
-    InvalidTokenOrder,
-
-    #[msg("Debt not zero")]
-    DebtNotZero,
 
     #[msg("Insufficient amount0")]
     InsufficientAmount0,
@@ -116,8 +53,17 @@ pub enum ErrorCode {
     #[msg("Insufficient output amount")]
     InsufficientOutputAmount,
 
+    #[msg("Output amount below minimum requested (slippage exceeded)")]
+    SlippageExceeded,
+
     #[msg("Insufficient liquidity")]
     InsufficientLiquidity,
+
+    #[msg("Insufficient cash reserve0")]
+    InsufficientCashReserve0,
+
+    #[msg("Insufficient cash reserve1")]
+    InsufficientCashReserve1,
 
     #[msg("Arithmetic overflow")]
     Overflow,
@@ -125,17 +71,14 @@ pub enum ErrorCode {
     #[msg("Undercollateralized")]
     Undercollateralized,
 
-    #[msg("Insufficient collateral for token0")]
-    InsufficientCollateral0,
-
-    #[msg("Insufficient collateral for token1")]
-    InsufficientCollateral1,
-
     #[msg("Insufficient balance for collateral")]
     InsufficientBalanceForCollateral,
 
     #[msg("Insufficient amount")]
     InsufficientAmount,
+
+    #[msg("User balance insufficient to cover requested amount")]
+    InsufficientBalance,
 
     #[msg("Insufficient debt")]
     InsufficientDebt,
@@ -164,6 +107,12 @@ pub enum ErrorCode {
     #[msg("Math overflow during reserve calculation.")]
     ReserveOverflow,
 
+    #[msg("Math underflow during reserve calculation.")]
+    ReserveUnderflow,
+
+    #[msg("Math underflow during cash reserve calculation.")]
+    CashReserveUnderflow,
+
     #[msg("Math overflow during denominator calculation.")]
     DenominatorOverflow,
 
@@ -179,11 +128,11 @@ pub enum ErrorCode {
     #[msg("Math overflow during liquidity conversion")]
     LiquidityConversionOverflow,
 
-    #[msg("Math overflow during liquidity division")]
-    LiquidityDivisionOverflow,
-
     #[msg("Math overflow during supply calculation")]
     SupplyOverflow,
+
+    #[msg("Math underflow during supply calculation")]
+    SupplyUnderflow,
 
     #[msg("Math overflow during debt calculation")]
     DebtMathOverflow,
@@ -209,9 +158,6 @@ pub enum ErrorCode {
     #[msg("Invalid LP mint key")]
     InvalidLpMintKey,
 
-    #[msg("Invalid pair key")]
-    InvalidPairKey,
-
     #[msg("Invalid LP name")]
     InvalidLpName,
 
@@ -236,4 +182,39 @@ pub enum ErrorCode {
     #[msg("Wrong LP decimals")]
     WrongLpDecimals,
     
+    #[msg("Invalid vault - token_in_vault and token_out_vault must be different")]
+    InvalidVaultSameAccount,
+
+    #[msg("Invalid vault")]
+    InvalidVault,
+
+    #[msg("Invalid params hash - hash does not match computed parameters")]
+    InvalidParamsHash,
+
+    #[msg("Invalid version")]
+    InvalidVersion,
+
+    #[msg("Invalid token order")]
+    InvalidTokenOrder,
+
+    #[msg("Invalid rate model - rate_model does not match pair.rate_model")]
+    InvalidRateModel,
+
+    #[msg("Invalid pair - pair does not match user_position.pair")]
+    InvalidPair,
+
+    #[msg("Invalid utilization bounds - must satisfy: MIN <= start < end <= MAX")]
+    InvalidUtilBounds,
+
+    #[msg("Invalid rate parameters - check half_life_ms, min_rate_bps, max_rate_bps, initial_rate_bps bounds")]
+    InvalidRateParams,
+
+    #[msg("Operation blocked: reduce-only mode is active")]
+    ReduceOnlyMode,
+
+    #[msg("Cannot remove collateral in reduce-only mode while debt exists")]
+    ReduceOnlyHasDebt,
+
+    #[msg("Invalid recipient - address does not match configured revenue recipient")]
+    InvalidRecipient,
 }

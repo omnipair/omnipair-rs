@@ -96,31 +96,36 @@ async function main() {
     );
     console.log('Futarchy Authority PDA:', futarchyAuthorityPda.toBase58());
 
-    // Get WSOL account for authority (PDA-owned)
-    const authorityWsolAccount = getAssociatedTokenAddressSync(
+    // Get team treasury from futarchy authority account
+    const futarchyAuthorityAccount = await program.account.futarchyAuthority.fetch(futarchyAuthorityPda);
+    const teamTreasury = futarchyAuthorityAccount.recipients.teamTreasury;
+    console.log('Team Treasury:', teamTreasury.toBase58());
+
+    // Get WSOL account for team treasury
+    const teamTreasuryWsolAccount = getAssociatedTokenAddressSync(
         NATIVE_MINT,
-        futarchyAuthorityPda,
-        true // allowOwnerOffCurve for PDAs
+        teamTreasury,
+        true // allowOwnerOffCurve in case team treasury is a PDA
     );
-    console.log('Authority WSOL Account (PDA-owned):', authorityWsolAccount.toBase58());
+    console.log('Team Treasury WSOL Account:', teamTreasuryWsolAccount.toBase58());
     
-    // Check if the WSOL account exists, if not create it
-    const authorityWsolAccountInfo = await provider.connection.getAccountInfo(authorityWsolAccount);
-    if (!authorityWsolAccountInfo) {
-        console.log('Creating authority WSOL account...');
+    // Check if the team treasury WSOL account exists, if not create it
+    const teamTreasuryWsolAccountInfo = await provider.connection.getAccountInfo(teamTreasuryWsolAccount);
+    if (!teamTreasuryWsolAccountInfo) {
+        console.log('Creating team treasury WSOL account...');
         const createWsolIx = createAssociatedTokenAccountInstruction(
             DEPLOYER_KEYPAIR.publicKey,
-            authorityWsolAccount,
-            futarchyAuthorityPda,
+            teamTreasuryWsolAccount,
+            teamTreasury,
             NATIVE_MINT,
             TOKEN_PROGRAM_ID
         );
         
         const tx = new Transaction().add(createWsolIx);
         const signature = await provider.sendAndConfirm(tx, [DEPLOYER_KEYPAIR]);
-        console.log('Authority WSOL account created:', signature);
+        console.log('Team treasury WSOL account created:', signature);
     } else {
-        console.log('Authority WSOL account already exists');
+        console.log('Team treasury WSOL account already exists');
     }
 
     // Get token accounts for deployer
@@ -183,7 +188,8 @@ async function main() {
             token1Vault: token1Vault,
             deployerToken0Account: deployerToken0Account,
             deployerToken1Account: deployerToken1Account,
-            authorityWsolAccount: authorityWsolAccount,
+            teamTreasury: teamTreasury,
+            teamTreasuryWsolAccount: teamTreasuryWsolAccount,
             systemProgram: SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
             token2022Program: TOKEN_2022_PROGRAM_ID,

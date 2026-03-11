@@ -3,20 +3,25 @@ use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::errors::ErrorCode;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace)]
 pub struct RevenueShare {
     pub swap_bps: u16,
     pub interest_bps: u16,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize)]
+/// Revenue recipient wallet addresses (not ATAs).
+/// When claiming protocol fees, ATAs are derived from these wallet addresses for each token.
+#[derive(Clone, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace)]
 pub struct RevenueRecipients {
+    /// Wallet address for futarchy/DAO treasury (e.g., multisig or DAO authority)
     pub futarchy_treasury: Pubkey,
+    /// Wallet address for buybacks vault
     pub buybacks_vault: Pubkey,
+    /// Wallet address for team treasury
     pub team_treasury: Pubkey,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace)]
 pub struct RevenueDistribution {
     pub futarchy_treasury_bps: u16,
     pub buybacks_vault_bps: u16,
@@ -33,7 +38,7 @@ impl RevenueDistribution {
 }
 
 #[account]
-#[derive(Debug)]
+#[derive(Debug, InitSpace)]
 pub struct FutarchyAuthority {
     pub version: u8,
     pub authority: Pubkey,
@@ -41,6 +46,9 @@ pub struct FutarchyAuthority {
     pub recipients: RevenueRecipients,
     pub revenue_share: RevenueShare,
     pub revenue_distribution: RevenueDistribution,
+
+    /// Global reduce-only mode - when enabled, blocks borrowing and adding liquidity across all pairs
+    pub global_reduce_only: bool,
 
     pub bump: u8,
 }
@@ -53,6 +61,11 @@ impl FutarchyAuthority {
             return Err(ErrorCode::InvalidDistribution.into());
         }
         Ok(())
+    }
+
+    /// Check if reduce-only mode is active (either globally or for a specific pair)
+    pub fn is_reduce_only(&self, pair_reduce_only: bool) -> bool {
+        self.global_reduce_only || pair_reduce_only
     }
 
     pub fn initialize(
@@ -90,6 +103,7 @@ impl FutarchyAuthority {
             },
             revenue_share,
             revenue_distribution,
+            global_reduce_only: false,
             bump,
         })
     }

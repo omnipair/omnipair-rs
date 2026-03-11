@@ -20,7 +20,7 @@ pub struct UpdateFutarchyAuthority<'info> {
     #[account(
         mut,
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
-        bump
+        bump = futarchy_authority.bump
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
 

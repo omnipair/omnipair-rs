@@ -1,23 +1,27 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    token::{Token, TokenAccount},
-    token_interface::{Mint, Token2022},
+    token::{Token, TokenAccount, Mint},
+    token_interface::Token2022,
     associated_token::AssociatedToken,
 };
 use crate::{
     state::*,
     constants::*,
     errors::ErrorCode,
-    utils::token::transfer_from_pool_vault_to_user,
+    events::{ClaimProtocolFeesEvent, EventMetadata},
+    utils::token::transfer_from_vault_to_vault,
     generate_gamm_pair_seeds,
 };
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct ClaimProtocolFeesArgs {
-    pub amount0: u64,
-    pub amount1: u64,
-}
-
+/// Claims protocol fees from a pair and distributes them directly to revenue recipients.
+/// 
+/// This instruction is permissionless - anyone can call it to trigger fee distribution.
+/// Fees are transferred directly from pair reserve vaults to recipient ATAs based on
+/// the distribution percentages stored in FutarchyAuthority.
+/// 
+/// The recipient addresses in FutarchyAuthority are pubkeys not ATAs.
+/// ATAs are derived at runtime for each token being claimed.
+#[event_cpi]
 #[derive(Accounts)]
 pub struct ClaimProtocolFees<'info> {
     /// Anyone can call this instruction
@@ -26,50 +30,115 @@ pub struct ClaimProtocolFees<'info> {
 
     #[account(
         mut,
-        seeds = [PAIR_SEED_PREFIX, pair.token0.as_ref(), pair.token1.as_ref(), pair.pair_nonce.as_ref()],
-        bump
+        seeds = [PAIR_SEED_PREFIX, pair.token0.as_ref(), pair.token1.as_ref(), pair.params_hash.as_ref()],
+        bump = pair.bump
     )]
-    pub pair: Account<'info, Pair>,
+    pub pair: Box<Account<'info, Pair>>,
+
+    #[account(
+        mut,
+        address = pair.rate_model,
+    )]
+    pub rate_model: Box<Account<'info, RateModel>>,
 
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
-        bump
+        bump = futarchy_authority.bump
     )]
-    pub futarchy_authority: Account<'info, FutarchyAuthority>,
+    pub futarchy_authority: Box<Account<'info, FutarchyAuthority>>,
+
+    // Reserve Vaults (source of fees) - boxed to reduce stack usage
+    #[account(
+        mut,
+        seeds = [
+            RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            pair.token0.as_ref(),
+        ],
+        bump = pair.vault_bumps.reserve0
+    )]
+    pub reserve0_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
-        constraint = token0_vault.mint == pair.token0,
+        seeds = [
+            RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            pair.token1.as_ref(),
+        ],
+        bump = pair.vault_bumps.reserve1
     )]
-    pub token0_vault: Account<'info, TokenAccount>,
+    pub reserve1_vault: Box<Account<'info, TokenAccount>>,
 
-    #[account(
-        mut,
-        constraint = token1_vault.mint == pair.token1,
-    )]
-    pub token1_vault: Account<'info, TokenAccount>,
+    // Token Mints
+    #[account(address = pair.token0)]
+    pub token0_mint: Box<Account<'info, Mint>>,
+    
+    #[account(address = pair.token1)]
+    pub token1_mint: Box<Account<'info, Mint>>,
 
+    // Futarchy Treasury ATAs (boxed to reduce stack usage)
     #[account(
         init_if_needed,
         payer = caller,
         associated_token::mint = token0_mint,
-        associated_token::authority = futarchy_authority,
+        associated_token::authority = futarchy_treasury,
     )]
-    pub authority_token0_account: Account<'info, TokenAccount>,
+    pub futarchy_treasury_token0: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
         payer = caller,
         associated_token::mint = token1_mint,
-        associated_token::authority = futarchy_authority,
+        associated_token::authority = futarchy_treasury,
     )]
-    pub authority_token1_account: Account<'info, TokenAccount>,
+    pub futarchy_treasury_token1: Box<Account<'info, TokenAccount>>,
 
-    #[account(address = pair.token0)]
-    pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
-    
-    #[account(address = pair.token1)]
-    pub token1_mint: Box<InterfaceAccount<'info, Mint>>,
+    /// CHECK: Validated against futarchy_authority.recipients.futarchy_treasury
+    #[account(address = futarchy_authority.recipients.futarchy_treasury @ ErrorCode::InvalidRecipient)]
+    pub futarchy_treasury: AccountInfo<'info>,
+
+    // Buybacks Vault ATAs (boxed to reduce stack usage)
+    #[account(
+        init_if_needed,
+        payer = caller,
+        associated_token::mint = token0_mint,
+        associated_token::authority = buybacks_vault,
+    )]
+    pub buybacks_vault_token0: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+        init_if_needed,
+        payer = caller,
+        associated_token::mint = token1_mint,
+        associated_token::authority = buybacks_vault,
+    )]
+    pub buybacks_vault_token1: Box<Account<'info, TokenAccount>>,
+
+    /// CHECK: Validated against futarchy_authority.recipients.buybacks_vault
+    #[account(address = futarchy_authority.recipients.buybacks_vault @ ErrorCode::InvalidRecipient)]
+    pub buybacks_vault: AccountInfo<'info>,
+
+    // Team Treasury ATAs (boxed to reduce stack usage)
+    #[account(
+        init_if_needed,
+        payer = caller,
+        associated_token::mint = token0_mint,
+        associated_token::authority = team_treasury,
+    )]
+    pub team_treasury_token0: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+        init_if_needed,
+        payer = caller,
+        associated_token::mint = token1_mint,
+        associated_token::authority = team_treasury,
+    )]
+    pub team_treasury_token1: Box<Account<'info, TokenAccount>>,
+
+    /// CHECK: Validated against futarchy_authority.recipients.team_treasury
+    #[account(address = futarchy_authority.recipients.team_treasury @ ErrorCode::InvalidRecipient)]
+    pub team_treasury: AccountInfo<'info>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
@@ -78,80 +147,188 @@ pub struct ClaimProtocolFees<'info> {
 }
 
 impl<'info> ClaimProtocolFees<'info> {
-    pub fn validate(&self, args: &ClaimProtocolFeesArgs) -> Result<()> {
-        let ClaimProtocolFeesArgs { amount0, amount1 } = args;
-
-        require!(
-            *amount0 > 0 || *amount1 > 0,
-            ErrorCode::AmountZero
-        );
-
-        if *amount0 > 0 {
-            require_gte!(
-                self.pair.protocol_revenue_reserve0,
-                *amount0,
-                ErrorCode::InsufficientAmount0
-            );
-        }
-
-        if *amount1 > 0 {
-            require_gte!(
-                self.pair.protocol_revenue_reserve1,
-                *amount1,
-                ErrorCode::InsufficientAmount1
-            );
-        }
-
+    pub fn update(&mut self) -> Result<()> {
+        let pair_key = self.pair.to_account_info().key();
+        self.pair.update(
+            &self.rate_model,
+            &self.futarchy_authority,
+            pair_key,
+            Some(self.event_authority.to_account_info()),
+        )?;
         Ok(())
     }
 
-    pub fn handle_claim(ctx: Context<Self>, args: ClaimProtocolFeesArgs) -> Result<()> {
-        let ClaimProtocolFeesArgs { amount0, amount1 } = args;
-        let pair = &mut ctx.accounts.pair;
+    pub fn handle_claim(ctx: Context<Self>) -> Result<()> {
+        let ClaimProtocolFees { 
+            pair, 
+            reserve0_vault, 
+            reserve1_vault, 
+            futarchy_authority,
+            caller,
+            .. 
+        } = ctx.accounts;
 
-        if amount0 > 0 {
-            transfer_from_pool_vault_to_user(
+        // Defensive check: ensure distribution percentages sum to 100%
+        require!(
+            futarchy_authority.revenue_distribution.is_valid(),
+            ErrorCode::InvalidDistribution
+        );
+
+        // Calculate claimable amounts (fees accumulated in vaults beyond cash reserves)
+        let claimable_amount0 = reserve0_vault.amount.saturating_sub(pair.cash_reserve0);
+        let claimable_amount1 = reserve1_vault.amount.saturating_sub(pair.cash_reserve1);
+
+        // Calculate amounts for each recipient (token0)
+        let buybacks_amount0 = (claimable_amount0 as u128)
+            .checked_mul(futarchy_authority.revenue_distribution.buybacks_vault_bps as u128)
+            .ok_or(ErrorCode::FeeMathOverflow)?
+            .checked_div(BPS_DENOMINATOR as u128)
+            .ok_or(ErrorCode::FeeMathOverflow)? as u64;
+
+        let team_amount0 = (claimable_amount0 as u128)
+            .checked_mul(futarchy_authority.revenue_distribution.team_treasury_bps as u128)
+            .ok_or(ErrorCode::FeeMathOverflow)?
+            .checked_div(BPS_DENOMINATOR as u128)
+            .ok_or(ErrorCode::FeeMathOverflow)? as u64;
+
+        // Futarchy treasury gets the remainder (handles rounding dust)
+        let futarchy_amount0 = claimable_amount0
+            .saturating_sub(buybacks_amount0)
+            .saturating_sub(team_amount0);
+
+        // Calculate amounts for each recipient (token1)
+        let buybacks_amount1 = (claimable_amount1 as u128)
+            .checked_mul(futarchy_authority.revenue_distribution.buybacks_vault_bps as u128)
+            .ok_or(ErrorCode::FeeMathOverflow)?
+            .checked_div(BPS_DENOMINATOR as u128)
+            .ok_or(ErrorCode::FeeMathOverflow)? as u64;
+
+        let team_amount1 = (claimable_amount1 as u128)
+            .checked_mul(futarchy_authority.revenue_distribution.team_treasury_bps as u128)
+            .ok_or(ErrorCode::FeeMathOverflow)?
+            .checked_div(BPS_DENOMINATOR as u128)
+            .ok_or(ErrorCode::FeeMathOverflow)? as u64;
+
+        // Futarchy treasury gets the remainder (handles rounding dust)
+        let futarchy_amount1 = claimable_amount1
+            .saturating_sub(buybacks_amount1)
+            .saturating_sub(team_amount1);
+
+        let pair_seeds = generate_gamm_pair_seeds!(pair);
+        let signer_seeds = &[&pair_seeds[..]];
+
+        // Determine token programs
+        let token0_program = if ctx.accounts.token0_mint.to_account_info().owner == ctx.accounts.token_program.key {
+            ctx.accounts.token_program.to_account_info()
+        } else {
+            ctx.accounts.token_2022_program.to_account_info()
+        };
+
+        let token1_program = if ctx.accounts.token1_mint.to_account_info().owner == ctx.accounts.token_program.key {
+            ctx.accounts.token_program.to_account_info()
+        } else {
+            ctx.accounts.token_2022_program.to_account_info()
+        };
+
+        // Token0 transfers
+        // Transfer to futarchy treasury
+        if futarchy_amount0 > 0 {
+            transfer_from_vault_to_vault(
                 pair.to_account_info(),
-                ctx.accounts.token0_vault.to_account_info(),
-                ctx.accounts.authority_token0_account.to_account_info(),
+                ctx.accounts.reserve0_vault.to_account_info(),
+                ctx.accounts.futarchy_treasury_token0.to_account_info(),
                 ctx.accounts.token0_mint.to_account_info(),
-                match ctx.accounts.token0_mint.to_account_info().owner == ctx.accounts.token_program.key {
-                    true => ctx.accounts.token_program.to_account_info(),
-                    false => ctx.accounts.token_2022_program.to_account_info(),
-                },
-                amount0,
+                token0_program.clone(),
+                futarchy_amount0,
                 ctx.accounts.token0_mint.decimals,
-                &[&generate_gamm_pair_seeds!(pair)[..]],
+                signer_seeds,
             )?;
-
-            // Deduct from protocol revenue reserve
-            pair.protocol_revenue_reserve0 = pair.protocol_revenue_reserve0
-                .checked_sub(amount0)
-                .ok_or(ErrorCode::DebtMathOverflow)?;
         }
 
-        if amount1 > 0 {
-            transfer_from_pool_vault_to_user(
+        // Transfer to buybacks vault
+        if buybacks_amount0 > 0 {
+            transfer_from_vault_to_vault(
                 pair.to_account_info(),
-                ctx.accounts.token1_vault.to_account_info(),
-                ctx.accounts.authority_token1_account.to_account_info(),
-                ctx.accounts.token1_mint.to_account_info(),
-                match ctx.accounts.token1_mint.to_account_info().owner == ctx.accounts.token_program.key {
-                    true => ctx.accounts.token_program.to_account_info(),
-                    false => ctx.accounts.token_2022_program.to_account_info(),
-                },
-                amount1,
-                ctx.accounts.token1_mint.decimals,
-                &[&generate_gamm_pair_seeds!(pair)[..]],
+                ctx.accounts.reserve0_vault.to_account_info(),
+                ctx.accounts.buybacks_vault_token0.to_account_info(),
+                ctx.accounts.token0_mint.to_account_info(),
+                token0_program.clone(),
+                buybacks_amount0,
+                ctx.accounts.token0_mint.decimals,
+                signer_seeds,
             )?;
-
-            // Deduct from protocol revenue reserve
-            pair.protocol_revenue_reserve1 = pair.protocol_revenue_reserve1
-                .checked_sub(amount1)
-                .ok_or(ErrorCode::DebtMathOverflow)?;
         }
+
+        // Transfer to team treasury
+        if team_amount0 > 0 {
+            transfer_from_vault_to_vault(
+                pair.to_account_info(),
+                ctx.accounts.reserve0_vault.to_account_info(),
+                ctx.accounts.team_treasury_token0.to_account_info(),
+                ctx.accounts.token0_mint.to_account_info(),
+                token0_program,
+                team_amount0,
+                ctx.accounts.token0_mint.decimals,
+                signer_seeds,
+            )?;
+        }
+
+        // Token1 transfers
+        // Transfer to futarchy treasury
+        if futarchy_amount1 > 0 {
+            transfer_from_vault_to_vault(
+                pair.to_account_info(),
+                ctx.accounts.reserve1_vault.to_account_info(),
+                ctx.accounts.futarchy_treasury_token1.to_account_info(),
+                ctx.accounts.token1_mint.to_account_info(),
+                token1_program.clone(),
+                futarchy_amount1,
+                ctx.accounts.token1_mint.decimals,
+                signer_seeds,
+            )?;
+        }
+
+        // Transfer to buybacks vault
+        if buybacks_amount1 > 0 {
+            transfer_from_vault_to_vault(
+                pair.to_account_info(),
+                ctx.accounts.reserve1_vault.to_account_info(),
+                ctx.accounts.buybacks_vault_token1.to_account_info(),
+                ctx.accounts.token1_mint.to_account_info(),
+                token1_program.clone(),
+                buybacks_amount1,
+                ctx.accounts.token1_mint.decimals,
+                signer_seeds,
+            )?;
+        }
+
+        // Transfer to team treasury
+        if team_amount1 > 0 {
+            transfer_from_vault_to_vault(
+                pair.to_account_info(),
+                ctx.accounts.reserve1_vault.to_account_info(),
+                ctx.accounts.team_treasury_token1.to_account_info(),
+                ctx.accounts.token1_mint.to_account_info(),
+                token1_program,
+                team_amount1,
+                ctx.accounts.token1_mint.decimals,
+                signer_seeds,
+            )?;
+        }
+
+        // Emit event for tracking
+        emit_cpi!(ClaimProtocolFeesEvent {
+            metadata: EventMetadata::new(caller.key(), pair.key()),
+            token0: pair.token0,
+            token1: pair.token1,
+            futarchy_treasury_amount0: futarchy_amount0,
+            futarchy_treasury_amount1: futarchy_amount1,
+            buybacks_vault_amount0: buybacks_amount0,
+            buybacks_vault_amount1: buybacks_amount1,
+            team_treasury_amount0: team_amount0,
+            team_treasury_amount1: team_amount1,
+        });
 
         Ok(())
     }
 }
-

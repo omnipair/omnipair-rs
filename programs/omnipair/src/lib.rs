@@ -12,21 +12,42 @@ pub use instructions::*;
 pub use utils::account::*;
 pub use instructions::emit_value::{EmitValueArgs, PairViewKind, UserPositionViewKind, ViewPairData, ViewUserPositionData};
 
-declare_id!("Bd9Uhf5S8yzfop8cG9oqRs6jVcLtu8B4cb2gvRmtbNzk");
+#[cfg(not(feature = "no-entrypoint"))]
+use solana_security_txt::security_txt;
 
-pub mod deployer {
-    use super::{pubkey, Pubkey};
-    
-    #[cfg(feature = "development")]
-    pub const ID: Pubkey = pubkey!("C7GKpfqQyBoFR6S13DECwBjdi7aCQKbbeKjXm4Jt5Hds");
-    
-    #[cfg(feature = "production")]
-    pub const ID: Pubkey = pubkey!("8tF4uYMBXqGhCUGRZL3AmPqRzbX8JJ1TpYnY3uJKN4kt");
-    
-    // Default to development if no feature is specified
-    #[cfg(not(any(feature = "development", feature = "production")))]
-    pub const ID: Pubkey = pubkey!("C7GKpfqQyBoFR6S13DECwBjdi7aCQKbbeKjXm4Jt5Hds");
+#[cfg(not(feature = "no-entrypoint"))]
+security_txt! {
+    name: "Omnipair",
+    project_url: "https://omnipair.fi",
+    contacts: "email:security@omnipair.fi,telegram:rustfully",
+    encryption: "
+    -----BEGIN PGP PUBLIC KEY BLOCK-----
+    Comment: User ID:	elrakabawi <muhammed@omnipair.fi>
+    Comment: Fingerprint:	211A 6E45 DF9C FED4 D274  C2AE 022F C8B7 FB82 0E26
+
+
+    mDMEaXYfpBYJKwYBBAHaRw8BAQdAuJGsO1bf97ftK3AXLBGoGMVNsKfYEgbgFbTL
+    XM61dt20IWVscmFrYWJhd2kgPG11aGFtbWVkQG9tbmlwYWlyLmZpPoivBBMWCgBX
+    GxSAAAAAAAQADm1hbnUyLDIuNSsxLjExLDIsMQIbAwULCQgHAgIiAgYVCgkICwIE
+    FgIDAQIeBwIXgBYhBCEabkXfnP7U0nTCrgIvyLf7gg4mBQJpdihJAAoJEAIvyLf7
+    gg4mxfYBAPCkQftSqGfV5sxCRDNgWrgbwv0MIFN/PVVUMIvkJ/gFAQC6/sYGZrPK
+    ebn6YVuRXB8fdUZdhN0jP/0NM0WPl350B7g4BGl2H6QSCisGAQQBl1UBBQEBB0B9
+    TA7UtvyyduFFA9XzGdoI6+kX9//N0T8IdFAwYAPMSwMBCAeIlAQYFgoAPBsUgAAA
+    AAAEAA5tYW51MiwyLjUrMS4xMSwyLDECGwwWIQQhGm5F35z+1NJ0wq4CL8i3+4IO
+    JgUCaXYoTwAKCRACL8i3+4IOJsXTAQC0gR5fZXblXez9LuJGWTQgZGhbm7a/jquS
+    DsC4cr6QOAD/eCbtxLgkh0XOvmCfdzeYezEAKATL+7g1Nyq2lPSmKQM=
+    =pIZY
+    -----END PGP PUBLIC KEY BLOCK-----
+    ",
+    source_code: "https://github.com/omnipair/omnipair-rs",
+    source_release: env!("GIT_RELEASE"),
+    source_revision: env!("GIT_REV"),
+    auditors: "Offside Labs, Ackee",
+    policy: "https://omnipair.fi/security",
+    acknowledgements: "Gongyu Shi (Offside Labs) & Sirius Xie (Offside Labs) & Juan (Obsidian Audits)"
 }
+
+declare_id!("omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE");
 
 #[program]
 pub mod omnipair {
@@ -48,13 +69,31 @@ pub mod omnipair {
         InitFutarchyAuthority::handle_init(ctx, args)
     }
 
-    pub fn distribute_tokens(ctx: Context<DistributeTokens>, args: DistributeTokensArgs) -> Result<()> {
-        DistributeTokens::handle_distribute(ctx, args)
+    pub fn update_futarchy_authority(ctx: Context<UpdateFutarchyAuthority>, args: UpdateFutarchyAuthorityArgs) -> Result<()> {
+        UpdateFutarchyAuthority::handle_update(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate(&args))]
-    pub fn claim_protocol_fees(ctx: Context<ClaimProtocolFees>, args: ClaimProtocolFeesArgs) -> Result<()> {
-        ClaimProtocolFees::handle_claim(ctx, args)
+    pub fn update_protocol_revenue(ctx: Context<UpdateProtocolRevenue>, args: UpdateProtocolRevenueArgs) -> Result<()> {
+        UpdateProtocolRevenue::handle_update(ctx, args)
+    }
+
+    pub fn update_revenue_recipients(ctx: Context<UpdateRevenueRecipients>, args: UpdateRevenueRecipientsArgs) -> Result<()> {
+        UpdateRevenueRecipients::handle_update(ctx, args)
+    }
+
+    /// Claims protocol fees from a pair and distributes directly to revenue recipients.
+    /// This instruction is permissionless - anyone can trigger fee distribution.
+    #[access_control(ctx.accounts.update())]
+    pub fn claim_protocol_fees(ctx: Context<ClaimProtocolFees>) -> Result<()> {
+        ClaimProtocolFees::handle_claim(ctx)
+    }
+
+    pub fn set_global_reduce_only(ctx: Context<SetGlobalReduceOnly>, args: SetGlobalReduceOnlyArgs) -> Result<()> {
+        SetGlobalReduceOnly::handle_set_global_reduce_only(ctx, args)
+    }
+
+    pub fn set_pair_reduce_only(ctx: Context<SetPairReduceOnly>, args: SetPairReduceOnlyArgs) -> Result<()> {
+        SetPairReduceOnly::handle_set_pair_reduce_only(ctx, args)
     }
 
     // Pair instructions
@@ -89,23 +128,23 @@ pub mod omnipair {
 
     // Lending instructions
     #[access_control(ctx.accounts.update_and_validate_add(&args))]
-    pub fn add_collateral(ctx: Context<AddCollateral>, args: AdjustPositionArgs) -> Result<()> {
+    pub fn add_collateral(ctx: Context<AddCollateral>, args: AdjustCollateralArgs) -> Result<()> {
         AddCollateral::handle_add_collateral(ctx, args)
     }
 
     #[access_control(ctx.accounts.update_and_validate_remove(&args))]
-    pub fn remove_collateral(ctx: Context<CommonAdjustPosition>, args: AdjustPositionArgs) -> Result<()> {
-        CommonAdjustPosition::handle_remove_collateral(ctx, args)
+    pub fn remove_collateral(ctx: Context<CommonAdjustCollateral>, args: AdjustCollateralArgs) -> Result<()> {
+        CommonAdjustCollateral::handle_remove_collateral(ctx, args)
     }
 
     #[access_control(ctx.accounts.update_and_validate_borrow(&args))]
-    pub fn borrow(ctx: Context<CommonAdjustPosition>, args: AdjustPositionArgs) -> Result<()> {
-        CommonAdjustPosition::handle_borrow(ctx, args)
+    pub fn borrow(ctx: Context<CommonAdjustDebt>, args: AdjustDebtArgs) -> Result<()> {
+        CommonAdjustDebt::handle_borrow(ctx, args)
     }
 
     #[access_control(ctx.accounts.update_and_validate_repay(&args))]
-    pub fn repay(ctx: Context<CommonAdjustPosition>, args: AdjustPositionArgs) -> Result<()> {
-        CommonAdjustPosition::handle_repay(ctx, args)
+    pub fn repay(ctx: Context<CommonAdjustDebt>, args: AdjustDebtArgs) -> Result<()> {
+        CommonAdjustDebt::handle_repay(ctx, args)
     }
 
     #[access_control(ctx.accounts.update_and_validate_liquidate())]

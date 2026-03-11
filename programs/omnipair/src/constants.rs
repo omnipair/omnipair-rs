@@ -17,47 +17,93 @@ pub const LTV_BUFFER_BPS: u16 = 500; // 5% buffer between borrow limit and liqui
 #[constant]
 pub const FLASHLOAN_FEE_BPS: u16 = 5; // 0.05%
 #[constant]
-pub const LIQUIDATION_INCENTIVE_BPS: u16 = 300; // 3% liquidation incentive for caller
+pub const LIQUIDATION_INCENTIVE_BPS: u16 = 50; // 0.5% liquidation incentive for caller
+#[constant]
+pub const LIQUIDATION_PENALTY_BPS: u16 = 300; // 3% total liquidation penalty (0.5% to liquidator, 2.5% to LPs)
+#[constant]
+pub const LIQUIDITY_WITHDRAWAL_FEE_BPS: u16 = 100; // 1% fee on liquidity withdrawal (goes to remaining LPs)
 #[constant]
 pub const PAIR_CREATION_FEE_LAMPORTS: u64 = 200_000_000; // 0.2 SOL
-
-
-// EMA constants
+// 3log2(100) = 19.93 secs (with 400ms slot time, this is ~50 slots)
 #[constant]
-pub const DEFAULT_HALF_LIFE: u64 = 7 * 60; // 7 minutes (recommended)
-pub const MIN_HALF_LIFE: u64 = 1 * 60; // 1 minute
-pub const MAX_HALF_LIFE: u64 = 12 * 60 * 60; // 12 hours
+pub const DIRECTIONAL_EMA_HALF_LIFE_MS: u64 = 3_000; // 3 seconds
+/// The nominal slot duration in milliseconds.
+#[constant]
+pub const TARGET_MS_PER_SLOT: u64 = 400;
+
+
+// EMA constants (in milliseconds)
+pub const MIN_HALF_LIFE_MS: u64 = 1 * 60 * 1_000; // 1 minute
+pub const MAX_HALF_LIFE_MS: u64 = 12 * 60 * 60 * 1_000; // 12 hours
 pub const TAYLOR_TERMS: u64 = 5;
 pub const NATURAL_LOG_OF_TWO_NAD: u64 = 693_147_180; // ln(2) scaled by NAD
 
 // Pair constants
+#[constant]
 pub const MIN_LIQUIDITY: u64 = 1_000; // 10^3
-pub const INITIAL_RATE_BPS: u64 = 200; // 2%
-pub const MIN_RATE_BPS: u64 = 100;      // 1%
+
+// Rate model configurable bounds
+#[constant]
+pub const DEFAULT_INITIAL_RATE_BPS: u64 = 200;  // 2% default starting rate
+#[constant]
+pub const DEFAULT_MIN_RATE_BPS: u64 = 100;      // 1% default floor
+#[constant]
+pub const DEFAULT_MAX_RATE_BPS: u64 = 0;        // 0 = uncapped by default (no ceiling)
+
+// Rate bounds validation limits
+#[constant]
+pub const MIN_ALLOWED_RATE_BPS: u64 = 0;        // Pools can set floor to 0%
+#[constant]
+pub const MAX_ALLOWED_RATE_BPS: u64 = 100_000;  // Pools can set ceiling up to 1000%
+#[constant]
+pub const MIN_INITIAL_RATE_BPS: u64 = 10;       // Initial rate must be at least 0.1%
+#[constant]
+pub const MAX_INITIAL_RATE_BPS: u64 = 10_000;   // Initial rate cannot exceed 100%
+
+// Rate half-life bounds (controls adjustment speed)
+// Our model: half_life is the time for the *interest rate* to double (when util > target) or halve (when util < target).
+// So e.g. 3 days => 2% -> 4% in 3 days when util > target. This is different from Aave/Compound, where
+// rate = f(util) is applied instantly (no exponential smoothing).
+#[constant]
+pub const DEFAULT_RATE_HALF_LIFE_MS: u64 = 3 * MS_PER_DAY;  // 3 days: rate doubles/halves every 3 days when outside target util
+#[constant]
+pub const MIN_RATE_HALF_LIFE_MS: u64 = 3_600_000;  // 1 hour minimum (fastest adjustment)
+#[constant]
+pub const MAX_RATE_HALF_LIFE_MS: u64 = 2_592_000_000_u64;  // 30 days maximum (slowest adjustment)
+
+/// Debt share scaling factor for increased precision floor in rounded division.
+#[constant]
+pub const DEBT_SHARE_SCALE: u64 = 1_000_000; // 10^6
 
 // Default IRM constants
-pub const TARGET_UTIL_START_BPS: u64 = 5_000; // 50%
-pub const TARGET_UTIL_END_BPS: u64 = 8_500; // 85%
-pub const SECONDS_PER_DAY: u64 = 86_400;
-pub const SECONDS_PER_YEAR: u64 = 31_536_000;
+#[constant]
+pub const TARGET_UTIL_START_BPS: u64 = 3_000; // 30%
+#[constant]
+pub const TARGET_UTIL_END_BPS: u64 = 5_000; // 50%
+#[constant]
+pub const MILLISECONDS_PER_YEAR: u64 = 31_536_000_000_u64; // 31,536,000 seconds * 1000
 
-// Math constants
-pub const MAX_X_E18: u128 = 161_324_830_204_992_680_279;
-pub const MAX_X_E12: u64 = 289_279_112_968_179;
+// Rate model constants
+#[constant]
+pub const MS_PER_DAY: u64 = 86_400_000;
+// Utilization bounds (configurable per pool within these limits)
+#[constant]
+pub const MIN_TARGET_UTIL_BPS: u64 = 100;  // 1% minimum for target_util_start
+#[constant]
+pub const MAX_TARGET_UTIL_BPS: u64 = 10_000;  // 100% maximum for target_util_end
 
 // Global Seeds for deterministic PDAs
 #[constant]
 pub const PAIR_SEED_PREFIX: &[u8] = b"gamm_pair";
 #[constant]
-pub const LP_MINT_SEED_PREFIX: &[u8] = b"gamm_lp_mint";
-#[constant]
-pub const FACTORY_SEED_PREFIX: &[u8] = b"gamm_factory";
-#[constant]
 pub const POSITION_SEED_PREFIX: &[u8] = b"gamm_position";
-#[constant]
-pub const LEVERAGED_POSITION_SEED_PREFIX: &[u8] = b"gamm_leveraged_position";
 #[constant]
 pub const FUTARCHY_AUTHORITY_SEED_PREFIX: &[u8] = b"futarchy_authority";
 #[constant]
 pub const METADATA_SEED_PREFIX: &[u8] = b"metadata";
-// TODO: check unused and clean up
+#[constant]
+pub const RESERVE_VAULT_SEED_PREFIX: &[u8] = b"reserve_vault";
+#[constant]
+pub const COLLATERAL_VAULT_SEED_PREFIX: &[u8] = b"collateral_vault";
+#[constant]
+pub const VERSION: u8 = 1;

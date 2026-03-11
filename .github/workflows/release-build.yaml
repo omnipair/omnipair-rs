@@ -1,0 +1,907 @@
+name: release-build
+
+# Conventional Commits -> Semantic Versioning
+# - fix: or fix(scope):     -> PATCH (v1.0.0 -> v1.0.1)
+# - feat: or feat(scope):   -> MINOR (v1.0.0 -> v1.1.0)  
+# - feat!: or fix!: or BREAKING CHANGE: -> MAJOR (v1.0.0 -> v2.0.0)
+# - chore:, docs:, style:, refactor:, perf:, test: -> no release (unless labeled)
+
+on:
+  # Trigger on merged PRs to main
+  pull_request:
+    types: [closed]
+    branches: [main]
+  
+  # Manual trigger with explicit version
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0 without v prefix)'
+        required: false
+      bump_type:
+        description: 'Bump type (if version not specified)'
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+        default: auto
+      verify_only:
+        description: 'Only run verification (skip build/release)'
+        type: boolean
+        default: false
+      deploy_buffer:
+        description: 'Deploy buffer to Solana mainnet (costs ~8 SOL)'
+        type: boolean
+        default: false
+      publish_packages:
+        description: 'Publish npm & crates.io packages (run after upgrade is live)'
+        type: boolean
+        default: false
+
+env:
+  ANCHOR_VERSION: '0.31.1'
+  SOLANA_VERSION: '1.18.18'
+
+jobs:
+  # Determine if we should release and what version
+  prepare-release:
+    # Only run for new releases (PR merge or manual with version/bump)
+    # Skip when just deploying buffer, verifying, or publishing
+    if: |
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true) ||
+      (github.event_name == 'workflow_dispatch' && 
+       github.event.inputs.verify_only != 'true' &&
+       github.event.inputs.deploy_buffer != 'true' &&
+       github.event.inputs.publish_packages != 'true')
+    runs-on: ubuntu-22.04
+    outputs:
+      should_release: ${{ steps.version.outputs.should_release }}
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      sha: ${{ steps.version.outputs.sha }}
+      bump_type: ${{ steps.version.outputs.bump_type }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Analyze commits and calculate version
+        id: version
+        run: |
+          # Get the latest tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
+          
+          # Strip 'v' prefix for version math
+          LATEST_VERSION="${LATEST_TAG#v}"
+          
+          # Parse version components
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$LATEST_VERSION"
+          MAJOR=${MAJOR:-0}
+          MINOR=${MINOR:-0}
+          PATCH=${PATCH:-0}
+          
+          SHOULD_RELEASE="true"
+          BUMP_TYPE="none"
+          
+          # Manual workflow dispatch
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ -n "${{ github.event.inputs.version }}" ]; then
+              NEW_VERSION="${{ github.event.inputs.version }}"
+              BUMP_TYPE="manual"
+            else
+              BUMP_TYPE="${{ github.event.inputs.bump_type }}"
+              if [ "$BUMP_TYPE" = "auto" ]; then
+                # Analyze recent commits for auto detection
+                BUMP_TYPE="patch"
+              fi
+            fi
+          else
+            # PR merge - skip release if no program changes (we build/release from programs/omnipair/)
+            echo "Checking for changes in programs/omnipair/..."
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} 2>/dev/null || true)
+            PROGRAM_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^programs/omnipair/' || true)
+            if [ -z "$PROGRAM_CHANGED" ]; then
+              echo "No changes in programs/omnipair/ - skipping release (no new program binary)"
+              SHOULD_RELEASE="false"
+            fi
+            
+            # Analyze commits in the PR (only if we might release)
+            if [ "$SHOULD_RELEASE" = "true" ]; then
+              echo "Analyzing PR commits..."
+              COMMITS=$(git log --format="%s" ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} 2>/dev/null || git log --format="%s" -10)
+              echo "Commits to analyze:"
+              echo "$COMMITS"
+            fi
+            
+            # Check for breaking changes (MAJOR) - only when program changed
+            if [ "$SHOULD_RELEASE" = "true" ]; then
+              if echo "$COMMITS" | grep -qiE "^(feat|fix|refactor|perf|build|ci|docs|style|test|chore)(\(.+\))?!:|BREAKING CHANGE:"; then
+                BUMP_TYPE="major"
+                echo "Found breaking change -> MAJOR bump"
+              elif echo "$COMMITS" | grep -qiE "^feat(\(.+\))?:"; then
+                BUMP_TYPE="minor"
+                echo "Found feature -> MINOR bump"
+              elif echo "$COMMITS" | grep -qiE "^fix(\(.+\))?:"; then
+                BUMP_TYPE="patch"
+                echo "Found fix -> PATCH bump"
+              elif echo "$COMMITS" | grep -qiE "^perf(\(.+\))?:"; then
+                BUMP_TYPE="patch"
+                echo "Found perf -> PATCH bump"
+              else
+                # No conventional commit found - check for release label override
+                if ${{ contains(github.event.pull_request.labels.*.name, 'release:major') }}; then
+                  BUMP_TYPE="major"
+                elif ${{ contains(github.event.pull_request.labels.*.name, 'release:minor') }}; then
+                  BUMP_TYPE="minor"
+                elif ${{ contains(github.event.pull_request.labels.*.name, 'release:patch') }}; then
+                  BUMP_TYPE="patch"
+                elif ${{ contains(github.event.pull_request.labels.*.name, 'release') }}; then
+                  BUMP_TYPE="patch"
+                else
+                  echo "No release-worthy commits found (chore, docs, style, refactor, test, ci)"
+                  SHOULD_RELEASE="false"
+                fi
+              fi
+            fi
+          fi
+          
+          # Calculate new version based on bump type
+          if [ "$SHOULD_RELEASE" = "true" ] && [ "$BUMP_TYPE" != "manual" ]; then
+            case $BUMP_TYPE in
+              major) NEW_VERSION="$((MAJOR + 1)).0.0" ;;
+              minor) NEW_VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
+              patch) NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+              *) SHOULD_RELEASE="false" ;;
+            esac
+          fi
+          
+          if [ "$SHOULD_RELEASE" = "true" ]; then
+            NEW_TAG="v${NEW_VERSION}"
+            SHA=$(git rev-parse HEAD)
+            
+            echo "============================================"
+            echo "Release: $NEW_TAG ($BUMP_TYPE bump)"
+            echo "Commit: $SHA"
+            echo "============================================"
+            
+            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
+            echo "sha=$SHA" >> $GITHUB_OUTPUT
+          else
+            echo "No release will be created"
+          fi
+          
+          echo "should_release=$SHOULD_RELEASE" >> $GITHUB_OUTPUT
+          echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
+
+  # Build and release
+  build-and-release:
+    needs: prepare-release
+    if: needs.prepare-release.outputs.should_release == 'true'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    outputs:
+      final_sha: ${{ steps.bump-version.outputs.sha }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Extract Program ID from source
+        run: |
+          PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+          echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
+          echo "Extracted Program ID: $PROGRAM_ID"
+
+      - name: Bump version in Cargo.toml
+        id: bump-version
+        run: |
+          VERSION="${{ needs.prepare-release.outputs.version }}"
+          echo "Updating version to $VERSION"
+          
+          # Update omnipair Cargo.toml
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" programs/omnipair/Cargo.toml
+          
+          # Update package.json if exists
+          if [ -f "packages/program-interface/package.json" ]; then
+            sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" packages/program-interface/package.json
+          fi
+          
+          # Commit version bump
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add programs/omnipair/Cargo.toml packages/program-interface/package.json 2>/dev/null || true
+          git commit -m "chore: bump version to $VERSION [skip ci]" || echo "No changes to commit"
+          git push origin HEAD:main
+          
+          # Output the new SHA
+          NEW_SHA=$(git rev-parse HEAD)
+          echo "sha=$NEW_SHA" >> $GITHUB_OUTPUT
+          echo "New SHA after version bump: $NEW_SHA"
+
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
+          echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Install Anchor CLI
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor --tag v${{ env.ANCHOR_VERSION }} anchor-cli --locked
+
+      - name: Verify installations
+        run: |
+          solana --version
+          anchor --version
+
+      - name: Clean target (fresh verifiable build)
+        run: cargo clean
+
+      - name: Build verifiable
+        run: |
+          anchor build --verifiable -p omnipair \
+            -e GIT_REV=${{ steps.bump-version.outputs.sha }} \
+            -e GIT_RELEASE=${{ needs.prepare-release.outputs.tag }} \
+            -- --features "production"
+
+      - name: List build artifacts
+        run: |
+          ls -la target/deploy/ || echo "target/deploy does not exist"
+          ls -la target/verifiable/ || echo "target/verifiable does not exist"
+          ls -la target/idl/ || echo "target/idl does not exist"
+
+      - name: Verify security.txt
+        run: |
+          echo "Checking security.txt in binary..."
+          SO_FILE=$(find target -name "omnipair.so" | head -1)
+          strings "$SO_FILE" | grep -E "(source_release|source_revision)" || true
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a ${{ needs.prepare-release.outputs.tag }} -m "Release ${{ needs.prepare-release.outputs.tag }}"
+          git push origin ${{ needs.prepare-release.outputs.tag }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnipair-build-${{ needs.prepare-release.outputs.tag }}
+          path: |
+            target/verifiable/omnipair.so
+            target/idl/omnipair.json
+            target/types/omnipair.ts
+          retention-days: 90
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare-release.outputs.tag }}
+          name: Omnipair ${{ needs.prepare-release.outputs.tag }}
+          body: |
+            ## Omnipair ${{ needs.prepare-release.outputs.tag }}
+            
+            **Commit:** `${{ steps.bump-version.outputs.sha }}`
+            **Bump:** `${{ needs.prepare-release.outputs.bump_type }}`
+            
+            ### Verifiable Build
+            This release was built using:
+            - Anchor: ${{ env.ANCHOR_VERSION }}
+            - Solana: ${{ env.SOLANA_VERSION }}
+            - Features: `production`
+            
+            To verify this build:
+            ```bash
+            solana-verify verify-from-repo \
+              --remote \
+              --program-id ${{ env.PROGRAM_ID }} \
+              https://github.com/${{ github.repository }} \
+              --commit-hash ${{ steps.bump-version.outputs.sha }} \
+              --library-name omnipair \
+              -- --features production
+            ```
+          files: |
+            target/verifiable/omnipair.so
+            target/idl/omnipair.json
+            target/types/omnipair.ts
+          generate_release_notes: true
+          make_latest: true
+
+  # Deploy buffer and transfer to Squads multisig (manual trigger only)
+  deploy-buffer:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_buffer == 'true'
+    runs-on: ubuntu-22.04
+    outputs:
+      buffer_address: ${{ steps.buffer.outputs.address }}
+      release_tag: ${{ steps.release-info.outputs.tag }}
+      release_sha: ${{ steps.release-info.outputs.sha }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract Program ID from source
+        run: |
+          PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+          echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
+          echo "Extracted Program ID: $PROGRAM_ID"
+
+      - name: Get latest release info
+        id: release-info
+        run: |
+          # Get version from input or latest tag
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="v${{ github.event.inputs.version }}"
+          else
+            TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          fi
+          
+          if [ -z "$TAG" ]; then
+            echo "Error: No release tag found. Create a release first."
+            exit 1
+          fi
+          
+          SHA=$(git rev-list -n 1 "$TAG" 2>/dev/null || git rev-parse HEAD)
+          VERSION="${TAG#v}"
+          
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using release: $TAG (commit: $SHA)"
+
+      - name: Download binary from release
+        run: |
+          mkdir -p ./artifacts
+          gh release download ${{ steps.release-info.outputs.tag }} \
+            --pattern "omnipair.so" \
+            --dir ./artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Locate binary
+        id: locate
+        run: |
+          SO_FILE=$(find ./artifacts -name "omnipair.so" | head -1)
+          if [ -z "$SO_FILE" ]; then
+            echo "Error: omnipair.so not found in release"
+            ls -laR ./artifacts/
+            exit 1
+          fi
+          echo "so_path=$SO_FILE" >> $GITHUB_OUTPUT
+          echo "Found binary: $SO_FILE"
+
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
+          echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Setup deployer keypair
+        run: |
+          echo "${{ secrets.DEPLOYER_KEYPAIR }}" > deployer-keypair.json
+          chmod 600 deployer-keypair.json
+
+      - name: Check deployer balance
+        run: |
+          solana balance deployer-keypair.json -u ${{ vars.MAINNET_RPC_URL || 'https://api.mainnet-beta.solana.com' }}
+
+      - name: Generate buffer keypair
+        run: |
+          solana-keygen new -s -o buffer-keypair.json --no-bip39-passphrase
+          BUFFER_PUBKEY=$(solana-keygen pubkey buffer-keypair.json)
+          echo "Generated buffer keypair: $BUFFER_PUBKEY"
+
+      - name: Deploy buffer
+        id: buffer
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 30
+          max_attempts: 10
+          shell: bash
+          command: |
+            RPC_URL="${{ vars.MAINNET_RPC_URL }}"
+            if [ -z "$RPC_URL" ]; then
+              RPC_URL="https://api.mainnet-beta.solana.com"
+            fi
+            
+            solana program write-buffer \
+              --keypair deployer-keypair.json \
+              --buffer buffer-keypair.json \
+              --max-sign-attempts 50 \
+              --with-compute-unit-price 50000 \
+              --use-rpc \
+              ${{ steps.locate.outputs.so_path }} \
+              -u "$RPC_URL"
+            
+            BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
+            echo "address=$BUFFER_ADDRESS" >> $GITHUB_OUTPUT
+            echo "Buffer deployed: $BUFFER_ADDRESS"
+
+      - name: Transfer buffer authority to Squads
+        run: |
+          RPC_URL="${{ vars.MAINNET_RPC_URL }}"
+          if [ -z "$RPC_URL" ]; then
+            RPC_URL="https://api.mainnet-beta.solana.com"
+          fi
+          
+          BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
+          SQUADS_VAULT="${{ vars.SQUADS_VAULT_ADDRESS }}"
+          
+          if [ -z "$SQUADS_VAULT" ]; then
+            echo "Warning: SQUADS_VAULT_ADDRESS not set, skipping authority transfer"
+            exit 0
+          fi
+          
+          solana program set-buffer-authority \
+            "$BUFFER_ADDRESS" \
+            --new-buffer-authority "$SQUADS_VAULT" \
+            --keypair deployer-keypair.json \
+            -u "$RPC_URL"
+          
+          echo "Buffer authority transferred to Squads vault: $SQUADS_VAULT"
+
+      - name: Output upgrade instructions
+        run: |
+          BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
+          PROGRAM_ID="${{ env.PROGRAM_ID }}"
+          SQUADS_MULTISIG="${{ vars.SQUADS_MULTISIG_ADDRESS }}"
+          
+          echo "============================================"
+          echo "BUFFER DEPLOYED - READY FOR UPGRADE"
+          echo "============================================"
+          echo ""
+          echo "Buffer Address: $BUFFER_ADDRESS"
+          echo "Program ID: $PROGRAM_ID"
+          echo "Release Tag: ${{ steps.release-info.outputs.tag }}"
+          echo "Commit SHA: ${{ steps.release-info.outputs.sha }}"
+          echo ""
+          echo "============================================"
+          echo "NEXT STEPS (Squads Multisig)"
+          echo "============================================"
+          echo ""
+          echo "1. Go to Squads: https://app.squads.so/squads/$SQUADS_MULTISIG/developer/programs/$PROGRAM_ID"
+          echo ""
+          echo "2. Click 'Upgrade' and enter buffer address: $BUFFER_ADDRESS"
+          echo ""
+          echo "3. Team members sign and execute the transaction"
+
+      - name: Cleanup keypairs
+        if: always()
+        run: |
+          rm -f deployer-keypair.json buffer-keypair.json
+
+  # Manual verification job - run after Squads upgrade is executed
+  verify-release:
+    if: |
+      github.event_name == 'workflow_dispatch' && 
+      (github.event.inputs.verify_only == 'true' || github.event.inputs.publish_packages == 'true')
+    runs-on: ubuntu-22.04
+    outputs:
+      tag: ${{ steps.params.outputs.tag }}
+      sha: ${{ steps.params.outputs.sha }}
+      version: ${{ steps.params.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract Program ID from source
+        run: |
+          PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+          echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
+          echo "Extracted Program ID: $PROGRAM_ID"
+
+      - name: Get verification parameters
+        id: params
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="v${{ github.event.inputs.version }}"
+          else
+            TAG=$(git describe --tags --abbrev=0)
+          fi
+          
+          SHA=$(git rev-list -n 1 "$TAG" 2>/dev/null || git rev-parse HEAD)
+          VERSION="${TAG#v}"
+          
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Will verify tag: $TAG at commit: $SHA"
+
+      - name: Check if already verified
+        id: check-verified
+        run: |
+          # Check OtterSec API for existing verification (no dependencies needed, just curl)
+          PROGRAM_ID="${{ env.PROGRAM_ID }}"
+          RESPONSE=$(curl -s "https://verify.osec.io/status/${PROGRAM_ID}" || echo "{}")
+          
+          if echo "$RESPONSE" | grep -q '"is_verified":true'; then
+            VERIFIED_HASH=$(echo "$RESPONSE" | grep -oP '"on_chain_hash":"\K[^"]+' || echo "")
+            echo "Program is already verified on OtterSec registry"
+            echo "Verified hash: $VERIFIED_HASH"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Program not yet verified, proceeding with verification"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install Solana CLI
+        if: steps.check-verified.outputs.skip != 'true'
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
+          echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Install system dependencies
+        if: steps.check-verified.outputs.skip != 'true'
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
+
+      - name: Install solana-verify
+        if: steps.check-verified.outputs.skip != 'true'
+        run: cargo install solana-verify
+
+      - name: Setup deployer keypair
+        if: steps.check-verified.outputs.skip != 'true'
+        run: |
+          # Use deployer keypair for OtterSec attestation and IDL publishing (needs SOL for on-chain tx)
+          mkdir -p ~/.config/solana
+          echo "${{ secrets.DEPLOYER_KEYPAIR }}" > ~/.config/solana/id.json
+          chmod 600 ~/.config/solana/id.json
+          # Also write to deployer-keypair.json (Anchor.toml provider.wallet references this)
+          echo "${{ secrets.DEPLOYER_KEYPAIR }}" > deployer-keypair.json
+          chmod 600 deployer-keypair.json
+          solana config set --url ${{ vars.MAINNET_RPC_URL || 'https://api.mainnet-beta.solana.com' }}
+          echo "Deployer balance:"
+          solana balance || echo "Could not check balance"
+
+      - name: Verify from repository (hash check)
+        if: steps.check-verified.outputs.skip != 'true'
+        run: |
+          RPC_URL="${{ vars.MAINNET_RPC_URL }}"
+          if [ -z "$RPC_URL" ]; then
+            RPC_URL="https://api.mainnet-beta.solana.com"
+          fi
+          
+          COMMIT_HASH="${{ steps.params.outputs.sha }}"
+          VERSION="${{ steps.params.outputs.tag }}"
+          
+          # Build locally and compare with on-chain program
+          # Note: Using solanafoundation/anchor image to match the release build
+          # --skip-prompt prevents attempting to upload verification data (we can't - multisig controls program)
+          solana-verify verify-from-repo \
+            --skip-prompt \
+            --base-image solanafoundation/anchor:v0.31.1 \
+            --program-id ${{ env.PROGRAM_ID }} \
+            https://github.com/${{ github.repository }} \
+            --commit-hash "$COMMIT_HASH" \
+            --library-name omnipair \
+            -u "$RPC_URL" \
+            -- --features production \
+               --config "env.GIT_REV=\"${COMMIT_HASH}\"" \
+               --config "env.GIT_RELEASE=\"${VERSION}\""
+
+      - name: Export OtterSec PDA transaction for Squads
+        id: export-pda
+        if: success() && steps.check-verified.outputs.skip != 'true'
+        run: |
+          # Program is controlled by Squads multisig, so we cannot directly upload verification data.
+          # Export the PDA transaction for manual submission through Squads.
+          # See: https://solana.com/docs/programs/verified-builds#how-to-verify-your-program-when-its-controlled-by-a-multisig-like-squads
+          
+          COMMIT_HASH="${{ steps.params.outputs.sha }}"
+          VERSION="${{ steps.params.outputs.tag }}"
+          SQUADS_VAULT="${{ vars.SQUADS_VAULT_ADDRESS }}"
+          
+          if [ -z "$SQUADS_VAULT" ]; then
+            echo "::warning::SQUADS_VAULT_ADDRESS not set. Skipping PDA transaction export."
+            echo "To enable OtterSec verification, set the SQUADS_VAULT_ADDRESS repository variable."
+            exit 0
+          fi
+          
+          echo "Exporting PDA transaction for OtterSec verification..."
+          echo "Program ID: ${{ env.PROGRAM_ID }}"
+          echo "Uploader (Squads Vault): $SQUADS_VAULT"
+          echo "Commit: $COMMIT_HASH"
+          echo "Version: $VERSION"
+          
+          # Export the PDA transaction (includes --base-image so OtterSec uses correct build environment)
+          PDA_TX=$(solana-verify export-pda-tx \
+            https://github.com/${{ github.repository }} \
+            --base-image solanafoundation/anchor:v0.31.1 \
+            --program-id ${{ env.PROGRAM_ID }} \
+            --uploader "$SQUADS_VAULT" \
+            --commit-hash "$COMMIT_HASH" \
+            --library-name omnipair \
+            --encoding base58 \
+            -- --features production \
+               --config "env.GIT_REV=\"${COMMIT_HASH}\"" \
+               --config "env.GIT_RELEASE=\"${VERSION}\"" 2>&1 | tail -1)
+          
+          echo ""
+          echo "=================================================="
+          echo "OTTERSEC VERIFICATION - SQUADS TRANSACTION"
+          echo "=================================================="
+          echo ""
+          echo "Base58 Transaction (submit via Squads):"
+          echo ""
+          echo "$PDA_TX"
+          echo ""
+          echo "=================================================="
+          echo ""
+          echo "NEXT STEPS:"
+          echo "1. Copy the base58 transaction above"
+          echo "2. Go to Squads: https://v4.squads.so/transactions"
+          echo "3. Import and submit the transaction"
+          echo "4. After approval, run:"
+          echo ""
+          echo "   solana-verify remote submit-job \\"
+          echo "     --program-id ${{ env.PROGRAM_ID }} \\"
+          echo "     --uploader $SQUADS_VAULT"
+          echo ""
+          echo "=================================================="
+          
+          # Save to step summary for easy access
+          echo "## OtterSec Verification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Base58 Transaction for Squads" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "$PDA_TX" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### After Squads Approval" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "solana-verify remote submit-job --program-id ${{ env.PROGRAM_ID }} --uploader $SQUADS_VAULT" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Install Anchor CLI
+        if: success() && steps.check-verified.outputs.skip != 'true'
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor --tag v${{ env.ANCHOR_VERSION }} anchor-cli --locked
+
+      - name: Download IDL from release
+        if: success() && steps.check-verified.outputs.skip != 'true'
+        run: |
+          mkdir -p target/idl
+          gh release download ${{ steps.params.outputs.tag }} \
+            --pattern "omnipair.json" \
+            --dir target/idl
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Publish IDL on-chain
+        if: success() && steps.check-verified.outputs.skip != 'true'
+        run: |
+          RPC_URL="${{ vars.MAINNET_RPC_URL }}"
+          if [ -z "$RPC_URL" ]; then
+            RPC_URL="https://api.mainnet-beta.solana.com"
+          fi
+
+          echo "Publishing IDL on-chain for ${{ env.PROGRAM_ID }}..."
+
+          # Try upgrade first (IDL account already exists), fall back to init
+          anchor idl upgrade \
+            --provider.cluster "$RPC_URL" \
+            --filepath target/idl/omnipair.json \
+            ${{ env.PROGRAM_ID }} || \
+          anchor idl init \
+            --provider.cluster "$RPC_URL" \
+            --filepath target/idl/omnipair.json \
+            ${{ env.PROGRAM_ID }}
+
+          echo "IDL published successfully"
+
+      - name: Verification status
+        run: |
+          if [ "${{ steps.check-verified.outputs.skip }}" = "true" ]; then
+            echo "✅ Program was already verified - skipped re-verification"
+          else
+            echo "✅ Program hash verification completed successfully"
+            echo "📋 See 'Export OtterSec PDA transaction for Squads' step for OtterSec registry instructions"
+          fi
+
+      - name: Cleanup keypairs
+        if: always()
+        run: rm -f ~/.config/solana/id.json deployer-keypair.json
+
+  # Publish TypeScript package to npm (manual trigger only, after upgrade is live)
+  publish-npm:
+    needs: [verify-release]
+    if: |
+      github.event_name == 'workflow_dispatch' && 
+      github.event.inputs.publish_packages == 'true'
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract Program ID from source
+        run: |
+          PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+          echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
+          echo "Extracted Program ID: $PROGRAM_ID"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Download IDL and types from release
+        run: |
+          mkdir -p target/idl target/types
+          gh release download ${{ needs.verify-release.outputs.tag }} \
+            --pattern "omnipair.json" \
+            --dir target/idl
+          gh release download ${{ needs.verify-release.outputs.tag }} \
+            --pattern "omnipair.ts" \
+            --dir target/types
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Verify IDL downloaded
+        run: |
+          echo "Downloaded artifacts:"
+          ls -laR target/
+          test -f target/idl/omnipair.json && echo "IDL found!" || echo "IDL NOT found!"
+
+      - name: Install dependencies
+        working-directory: packages/program-interface
+        run: npm install
+
+      - name: Update package version
+        working-directory: packages/program-interface
+        run: npm version ${{ needs.verify-release.outputs.version }} --no-git-tag-version --allow-same-version
+
+      - name: Build package
+        working-directory: packages/program-interface
+        run: npm run build
+        env:
+          PROGRAM_ID: ${{ env.PROGRAM_ID }}
+          OMNIPAIR_PROGRAM_ID: ${{ env.PROGRAM_ID }}
+
+      - name: Check if version already published
+        id: check-npm
+        working-directory: packages/program-interface
+        run: |
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          VERSION="${{ needs.verify-release.outputs.version }}"
+          if npm view "${PACKAGE_NAME}@${VERSION}" version 2>/dev/null; then
+            echo "Version ${VERSION} already published to npm, skipping"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Version ${VERSION} not found on npm, will publish"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish to npm
+        if: steps.check-npm.outputs.skip != 'true'
+        working-directory: packages/program-interface
+        run: |
+          VERSION="${{ needs.verify-release.outputs.version }}"
+          if [[ "$VERSION" == *"-"* ]]; then
+            npm publish --access public --tag next
+          else
+            npm publish --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Publish Rust decoder to crates.io (manual trigger only, after upgrade is live)
+  publish-crate:
+    needs: [verify-release]
+    if: |
+      github.event_name == 'workflow_dispatch' && 
+      github.event.inputs.publish_packages == 'true'
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check if version already published
+        id: check-crate
+        working-directory: decoders/omnipair-decoder
+        run: |
+          CRATE_NAME=$(grep '^name' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          VERSION="${{ needs.verify-release.outputs.version }}"
+          echo "Checking if ${CRATE_NAME}@${VERSION} is already published..."
+          if cargo search "${CRATE_NAME}" --limit 1 | grep -q "^${CRATE_NAME} = \"${VERSION}\""; then
+            echo "Version ${VERSION} already published to crates.io, skipping"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Version ${VERSION} not found on crates.io, will publish"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Node.js
+        if: steps.check-crate.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Download IDL from release
+        if: steps.check-crate.outputs.skip != 'true'
+        run: |
+          mkdir -p target/idl
+          gh release download ${{ needs.verify-release.outputs.tag }} \
+            --pattern "omnipair.json" \
+            --dir target/idl
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Verify IDL downloaded
+        if: steps.check-crate.outputs.skip != 'true'
+        run: |
+          echo "Downloaded artifacts:"
+          ls -laR target/
+          test -f target/idl/omnipair.json && echo "IDL found!" || echo "IDL NOT found!"
+
+      - name: Install carbon-cli
+        if: steps.check-crate.outputs.skip != 'true'
+        run: npm install -g @sevenlabs-hq/carbon-cli
+
+      - name: Generate decoder from IDL
+        if: steps.check-crate.outputs.skip != 'true'
+        run: |
+          mkdir -p temp-decoder
+          carbon-cli parse \
+            --idl target/idl/omnipair.json \
+            --out-dir ./temp-decoder
+          
+          echo "Generated structure:"
+          ls -laR temp-decoder/
+          
+          # Find the src directory containing accounts/instructions/types
+          # Carbon-cli outputs to: temp-decoder/src/ (new) or temp-decoder/omnipair_decoder/ (old)
+          if [ -d "temp-decoder/src/accounts" ]; then
+            DECODER_SRC="temp-decoder/src"
+          elif [ -d "temp-decoder/omnipair_decoder/accounts" ]; then
+            DECODER_SRC="temp-decoder/omnipair_decoder"
+          elif [ -d "temp-decoder/accounts" ]; then
+            DECODER_SRC="temp-decoder"
+          else
+            echo "ERROR: Could not find decoder source directory"
+            exit 1
+          fi
+          
+          echo "Using decoder source: $DECODER_SRC"
+          
+          # Copy generated files (preserves custom graphql/, postgres/ subdirectories)
+          cp -r "$DECODER_SRC/accounts/"* decoders/omnipair-decoder/src/accounts/
+          cp -r "$DECODER_SRC/instructions/"* decoders/omnipair-decoder/src/instructions/
+          cp -r "$DECODER_SRC/types/"* decoders/omnipair-decoder/src/types/
+          
+          rm -rf temp-decoder
+
+      - name: Update crate version
+        if: steps.check-crate.outputs.skip != 'true'
+        working-directory: decoders/omnipair-decoder
+        run: |
+          sed -i 's/^version = ".*"/version = "${{ needs.verify-release.outputs.version }}"/' Cargo.toml
+          cat Cargo.toml
+
+      - name: Verify crate builds
+        if: steps.check-crate.outputs.skip != 'true'
+        working-directory: decoders/omnipair-decoder
+        run: cargo build --release
+
+      - name: Publish to crates.io
+        if: steps.check-crate.outputs.skip != 'true'
+        working-directory: decoders/omnipair-decoder
+        run: cargo publish --allow-dirty --token ${{ secrets.CRATES_IO_TOKEN }}

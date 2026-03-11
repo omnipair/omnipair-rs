@@ -4,7 +4,7 @@ use anchor_lang::prelude::*;
 pub struct EventMetadata {
     pub signer: Pubkey,
     pub pair: Pubkey,
-    pub timestamp: i64,
+    pub slot: u64,
 }
 
 impl EventMetadata {
@@ -12,7 +12,7 @@ impl EventMetadata {
         Self {
             signer,
             pair,
-            timestamp: Clock::get().unwrap().unix_timestamp,
+            slot: Clock::get().unwrap().slot,
         }
     }
 }
@@ -25,6 +25,10 @@ pub struct SwapEvent {
     pub amount_in: u64,
     pub amount_out: u64,
     pub amount_in_after_fee: u64,
+    /// Swap fee (input token units) to LPs
+    pub lp_fee: u64,
+    /// Swap fee (input token units) to protocol
+    pub protocol_fee: u64,
     pub metadata: EventMetadata,
 }
 
@@ -46,6 +50,20 @@ pub struct AdjustDebtEvent {
 pub struct PairCreatedEvent {
     pub token0: Pubkey,
     pub token1: Pubkey,
+    pub lp_mint: Pubkey,
+    pub token0_decimals: u8,
+    pub token1_decimals: u8,
+    pub rate_model: Pubkey,
+    pub swap_fee_bps: u16,
+    pub half_life: u64,
+    pub fixed_cf_bps: Option<u16>,
+    pub target_util_start_bps: u64,
+    pub target_util_end_bps: u64,
+    pub rate_half_life_ms: u64,
+    pub min_rate_bps: u64,
+    pub max_rate_bps: u64,
+    pub params_hash: [u8; 32],
+    pub version: u8,
     pub metadata: EventMetadata,
 }
 
@@ -74,15 +92,38 @@ pub struct MintEvent {
 }
 
 #[event]
+pub struct UserLiquidityPositionUpdatedEvent {
+    pub token0_amount: u64,
+    pub token1_amount: u64,
+    pub lp_amount: u64,
+    pub cash_reserve0: u64,
+    pub cash_reserve1: u64,
+    pub token0_mint: Pubkey,
+    pub token1_mint: Pubkey,
+    pub lp_mint: Pubkey,
+    pub metadata: EventMetadata,
+}
+
+#[event]
 pub struct UpdatePairEvent {
     pub price0_ema: u64,
     pub price1_ema: u64,
     pub rate0: u64,
     pub rate1: u64,
+    /// Total interest (token0) applied to borrowers this update = lp_interest0 + protocol_interest0
     pub accrued_interest0: u128,
+    /// Total interest (token1) applied to borrowers this update = lp_interest1 + protocol_interest1
     pub accrued_interest1: u128,
-    pub protocol_revenue_reserve0: u64,
-    pub protocol_revenue_reserve1: u64,
+    /// Interest (token0) to LPs this update, added to reserves
+    pub lp_interest0: u64,
+    /// Interest (token1) to LPs this update, added to reserves
+    pub lp_interest1: u64,
+    /// Interest (token0) to protocol this update
+    pub protocol_interest0: u64,
+    /// Interest (token1) to protocol this update
+    pub protocol_interest1: u64,
+    pub cash_reserve0: u64,
+    pub cash_reserve1: u64,
     pub reserve0_after_interest: u64,
     pub reserve1_after_interest: u64,
     pub metadata: EventMetadata,
@@ -99,10 +140,12 @@ pub struct UserPositionUpdatedEvent {
     pub position: Pubkey,
     pub collateral0: u64,
     pub collateral1: u64,
-    pub debt0_shares: u64,
-    pub debt1_shares: u64,
-    pub collateral0_applied_min_cf_bps: u16,
-    pub collateral1_applied_min_cf_bps: u16,
+    pub debt0_shares: u128,
+    pub debt1_shares: u128,
+    pub collateral0_max_cf_bps: u16,
+    pub collateral1_max_cf_bps: u16,
+    pub collateral0_liquidation_cf_bps: u16,
+    pub collateral1_liquidation_cf_bps: u16,
     pub metadata: EventMetadata,
 }
 
@@ -129,5 +172,18 @@ pub struct FlashloanEvent {
     pub fee0: u64,
     pub fee1: u64,
     pub receiver: Pubkey,
+    pub metadata: EventMetadata,
+}
+
+#[event]
+pub struct ClaimProtocolFeesEvent {
+    pub token0: Pubkey,
+    pub token1: Pubkey,
+    pub futarchy_treasury_amount0: u64,
+    pub futarchy_treasury_amount1: u64,
+    pub buybacks_vault_amount0: u64,
+    pub buybacks_vault_amount1: u64,
+    pub team_treasury_amount0: u64,
+    pub team_treasury_amount1: u64,
     pub metadata: EventMetadata,
 }

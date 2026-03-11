@@ -5,15 +5,15 @@ use anchor_lang::solana_program::{
     hash::hash,
 };
 use anchor_spl::{
-    token::{Token, TokenAccount},
-    token_interface::{Mint, Token2022},
+    token::{Token, TokenAccount, Mint},
+    token_interface::{Token2022},
 };
 use crate::{
     state::*,
     constants::*,
     errors::ErrorCode,
     events::*,
-    utils::token::transfer_from_pool_vault_to_user,
+    utils::{token::{transfer_from_vault_to_user, sync_native_if_wsol}, math::ceil_div},
     generate_gamm_pair_seeds,
 };
 
@@ -39,8 +39,8 @@ pub struct FlashLoanCallbackData {
 pub struct Flashloan<'info> {
     #[account(
         mut,
-        seeds = [PAIR_SEED_PREFIX, pair.token0.as_ref(), pair.token1.as_ref(), pair.pair_nonce.as_ref()],
-        bump
+        seeds = [PAIR_SEED_PREFIX, pair.token0.as_ref(), pair.token1.as_ref(), pair.params_hash.as_ref()],
+        bump = pair.bump
     )]
     pub pair: Account<'info, Pair>,
 
@@ -52,27 +52,41 @@ pub struct Flashloan<'info> {
 
     #[account(
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
-        bump
+        bump = futarchy_authority.bump
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
     
     #[account(
         mut,
-        constraint = token0_vault.mint == pair.token0,
+        seeds = [
+            RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            pair.token0.as_ref(),
+        ],
+        bump = pair.vault_bumps.reserve0
     )]
-    pub token0_vault: Account<'info, TokenAccount>,
+    pub reserve0_vault: Account<'info, TokenAccount>,
     
     #[account(
         mut,
-        constraint = token1_vault.mint == pair.token1,
+        seeds = [
+            RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            pair.token1.as_ref(),
+        ],
+        bump = pair.vault_bumps.reserve1
     )]
-    pub token1_vault: Account<'info, TokenAccount>,
+    pub reserve1_vault: Account<'info, TokenAccount>,
 
-    #[account(address = token0_vault.mint)]
-    pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(
+        address = pair.token0 @ ErrorCode::InvalidMint
+    )]
+    pub token0_mint: Box<Account<'info, Mint>>,
     
-    #[account(address = token1_vault.mint)]
-    pub token1_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(
+        address = pair.token1 @ ErrorCode::InvalidMint
+    )]
+    pub token1_mint: Box<Account<'info, Mint>>,
 
     #[account(
         mut,
@@ -105,10 +119,10 @@ impl<'info> Flashloan<'info> {
             ErrorCode::AmountZero
         );
         
-        // Ensure loan amounts doesn't exceed available reserves
+        // Ensure loan amounts doesn't exceed available cash reserves
         if args.amount0 > 0 {
             require_gte!(
-                self.pair.reserve0,
+                self.pair.cash_reserve0,
                 args.amount0,
                 ErrorCode::BorrowExceedsReserve
             );
@@ -116,7 +130,7 @@ impl<'info> Flashloan<'info> {
         
         if args.amount1 > 0 {
             require_gte!(
-                self.pair.reserve1,
+                self.pair.cash_reserve1,
                 args.amount1,
                 ErrorCode::BorrowExceedsReserve
             );
@@ -127,7 +141,12 @@ impl<'info> Flashloan<'info> {
 
     pub fn update(&mut self) -> Result<()> {
         let pair_key = self.pair.to_account_info().key();
-        self.pair.update(&self.rate_model, &self.futarchy_authority, pair_key)?;
+        self.pair.update(
+            &self.rate_model,
+            &self.futarchy_authority,
+            pair_key,
+            Some(self.event_authority.to_account_info()),
+        )?;
         Ok(())
     }
 
@@ -140,8 +159,8 @@ impl<'info> Flashloan<'info> {
     pub fn handle_flashloan(ctx: Context<'_, '_, '_, 'info, Self>, args: FlashloanArgs) -> Result<()> {
         let Flashloan {
             pair,
-            token0_vault,
-            token1_vault,
+            reserve0_vault,
+            reserve1_vault,
             receiver_token0_account,
             receiver_token1_account,
             token0_mint,
@@ -156,29 +175,33 @@ impl<'info> Flashloan<'info> {
         let FlashloanArgs { amount0, amount1, data } = args;
 
         // Calculate fees (5 bps = 0.05%)
-        let fee0 = (amount0 as u128)
+        let fee0 = ceil_div((amount0 as u128)
             .checked_mul(FLASHLOAN_FEE_BPS as u128)
-            .unwrap()
-            .checked_div(BPS_DENOMINATOR as u128)
-            .unwrap() as u64;
+            .ok_or(ErrorCode::FeeMathOverflow)?,
+            BPS_DENOMINATOR as u128,
+        ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
         
-        let fee1 = (amount1 as u128)
+        let fee1 = ceil_div((amount1 as u128)
             .checked_mul(FLASHLOAN_FEE_BPS as u128)
-            .unwrap()
-            .checked_div(BPS_DENOMINATOR as u128)
-            .unwrap() as u64;
+            .ok_or(ErrorCode::FeeMathOverflow)?,
+            BPS_DENOMINATOR as u128,
+        ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
+
+        // Sync native SOL for WSOL vaults before recording balances
+        sync_native_if_wsol(&pair.token0, &reserve0_vault.to_account_info(), &token_program.to_account_info())?;
+        sync_native_if_wsol(&pair.token1, &reserve1_vault.to_account_info(), &token_program.to_account_info())?;
 
         // Record balances before the flash loan
-        token0_vault.reload()?;
-        token1_vault.reload()?;
-        let balance0_before = token0_vault.amount;
-        let balance1_before = token1_vault.amount;
+        reserve0_vault.reload()?;
+        reserve1_vault.reload()?;
+        let balance0_before = reserve0_vault.amount;
+        let balance1_before = reserve1_vault.amount;
 
         // Transfer tokens to receiver if requested
         if amount0 > 0 {
-            transfer_from_pool_vault_to_user(
+            transfer_from_vault_to_user(
                 pair.to_account_info(),
-                token0_vault.to_account_info(),
+                reserve0_vault.to_account_info(),
                 receiver_token0_account.to_account_info(),
                 token0_mint.to_account_info(),
                 match token0_mint.to_account_info().owner == token_program.key {
@@ -192,9 +215,9 @@ impl<'info> Flashloan<'info> {
         }
 
         if amount1 > 0 {
-            transfer_from_pool_vault_to_user(
+            transfer_from_vault_to_user(
                 pair.to_account_info(),
-                token1_vault.to_account_info(),
+                reserve1_vault.to_account_info(),
                 receiver_token1_account.to_account_info(),
                 token1_mint.to_account_info(),
                 match token1_mint.to_account_info().owner == token_program.key {
@@ -274,20 +297,26 @@ impl<'info> Flashloan<'info> {
         )?;
 
         // Reload vault accounts to get updated balances after callback execution
-        token0_vault.reload()?;
-        token1_vault.reload()?;
+        reserve0_vault.reload()?;
+        reserve1_vault.reload()?;
 
         let required_balance0 = balance0_before.checked_add(fee0).unwrap();
         let required_balance1 = balance1_before.checked_add(fee1).unwrap();
-        
+
         require!(
-            token0_vault.amount >= required_balance0,
+            reserve0_vault.amount >= required_balance0,
             ErrorCode::InsufficientAmount0
         );
         require!(
-            token1_vault.amount >= required_balance1,
+            reserve1_vault.amount >= required_balance1,
             ErrorCode::InsufficientAmount1
         );
+
+        // update reserves with fees
+        pair.reserve0 = pair.reserve0.saturating_add(fee0);
+        pair.reserve1 = pair.reserve1.saturating_add(fee1);
+        pair.cash_reserve0 = pair.cash_reserve0.saturating_add(fee0);
+        pair.cash_reserve1 = pair.cash_reserve1.saturating_add(fee1);
 
         // Emit event
         emit_cpi!(FlashloanEvent {
