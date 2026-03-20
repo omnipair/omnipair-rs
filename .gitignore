@@ -26,4 +26,4 @@ temp-decoder/
 carbon-cli-test/
 
 # Audit reports
-.audit/
+**/.audit/
