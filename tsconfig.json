@@ -8,18 +8,24 @@
       "./node_modules/@types"
     ],
     "lib": [
-      "es2015"
+      "es2020"
     ],
-    "module": "commonjs",
-    "target": "es6",
+    "module": "esnext",
+    "target": "es2020",
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true
   },
   "include": [
     "tests/**/*"
   ],
   "exclude": [
     "node_modules"
-  ]
+  ],
+  "ts-node": {
+    "esm": true,
+    "experimentalEsm": true
+  }
 }
