@@ -63,7 +63,7 @@ pub mod flashloan_receiver_example {
                     TransferChecked {
                         from: ctx.accounts.receiver_token0_account.to_account_info(),
                         mint: ctx.accounts.token0_mint.to_account_info(),
-                        to: ctx.accounts.token0_vault.to_account_info(),
+                        to: ctx.accounts.repay0_vault.to_account_info(),
                         authority: ctx.accounts.initiator.to_account_info(),
                     },
                 ),
@@ -81,7 +81,7 @@ pub mod flashloan_receiver_example {
                     TransferChecked {
                         from: ctx.accounts.receiver_token1_account.to_account_info(),
                         mint: ctx.accounts.token1_mint.to_account_info(),
-                        to: ctx.accounts.token1_vault.to_account_info(),
+                        to: ctx.accounts.repay1_vault.to_account_info(),
                         authority: ctx.accounts.initiator.to_account_info(),
                     },
                 ),
@@ -113,10 +113,10 @@ pub struct FlashLoanCallback<'info> {
     pub token1_mint: Box<Account<'info, Mint>>,
     
     #[account(mut)]
-    pub token0_vault: Account<'info, TokenAccount>,
+    pub repay0_vault: Account<'info, TokenAccount>,
     
     #[account(mut)]
-    pub token1_vault: Account<'info, TokenAccount>,
+    pub repay1_vault: Account<'info, TokenAccount>,
     
     pub token_program: Program<'info, Token>,
 }
