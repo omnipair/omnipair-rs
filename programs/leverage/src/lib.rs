@@ -11,7 +11,10 @@ use omnipair::{
     ceil_div,
 };
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+pub mod state;
+pub use state::{UserLeveragePosition, LEVERAGE_POSITION_SEED_PREFIX};
+
+declare_id!("7S6gLNQXrx3GtR91xnF2ZTjdPeJfbMq79u4TovRDQEBn");
 
 // ── Remaining-accounts layout (passed from multiply → flashloan → flash_loan_callback) ──
 //
@@ -42,6 +45,7 @@ const IDX_TOKEN_2022_PROGRAM: usize = 7;
 const IDX_SYSTEM_PROGRAM: usize = 8;
 const IDX_EVENT_AUTHORITY: usize = 9;
 const IDX_OMNIPAIR_PROGRAM: usize = 10;
+const IDX_USER_LEV_POSITION: usize = 11;
 
 const BPS_DENOMINATOR: u64 = 10_000;
 const FLASHLOAN_FEE_BPS: u64 = 5;
@@ -84,7 +88,7 @@ pub mod omnipair_leverage {
         require!(max_slippage_bps <= BPS_DENOMINATOR, LeverageError::InvalidSlippage);
 
         let ra = ctx.remaining_accounts;
-        require!(ra.len() >= 11, LeverageError::MissingRemainingAccounts);
+        require!(ra.len() >= 12, LeverageError::MissingRemainingAccounts);
 
         // ── tie remaining_accounts to the validated outer accounts ─────────
         // Prevents a malicious/buggy client from passing a different pair in
@@ -118,6 +122,10 @@ pub mod omnipair_leverage {
         );
         require_keys_eq!(
             ra[IDX_OMNIPAIR_PROGRAM].key(), omnipair::ID,
+            LeverageError::RemainingAccountMismatch
+        );
+        require_keys_eq!(
+            ra[IDX_USER_LEV_POSITION].key(), ctx.accounts.user_leverage_position.key(),
             LeverageError::RemainingAccountMismatch
         );
 
@@ -168,6 +176,23 @@ pub mod omnipair_leverage {
             / BPS_DENOMINATOR as u128)
             .try_into().map_err(|_| LeverageError::Overflow)?;
 
+        // ── init / update user leverage position ──────────────────────────
+        // Written now so the callback can update position_size after the swap.
+        // All fields except position_size are known at this point.
+        {
+            let lev_pos = &mut ctx.accounts.user_leverage_position;
+            lev_pos.initialize(
+                ctx.accounts.user.key(),
+                ctx.accounts.pair.key(),
+                is_lev_collateral0,
+                lev_collateral_amount,
+                multiplier_bps,
+                borrow_amount,
+                Clock::get()?.unix_timestamp,
+                ctx.bumps.user_leverage_position,
+            );
+        }
+
         // ── encode callback params ─────────────────────────────────────────
         let mut callback_bytes = Vec::new();
         InternalCallbackData {
@@ -208,7 +233,7 @@ pub mod omnipair_leverage {
             AccountMeta::new_readonly(event_authority.key(), false),
             AccountMeta::new_readonly(omnipair_program.key(), false),
         ];
-        // Append remaining_accounts — omnipair forwards these verbatim to the callback
+        // Append remaining_accounts[0..11] — omnipair forwards these verbatim to the callback
         for acc in ra.iter() {
             flashloan_metas.push(AccountMeta {
                 pubkey: acc.key(),
@@ -216,6 +241,10 @@ pub mod omnipair_leverage {
                 is_writable: acc.is_writable,
             });
         }
+        // remaining_accounts[11] = user_leverage_position (writable, for callback to set position_size)
+        flashloan_metas.push(AccountMeta::new(
+            ctx.accounts.user_leverage_position.key(), false,
+        ));
 
         let discriminator = &hash(b"global:flashloan").to_bytes()[..8];
         let mut ix_data = discriminator.to_vec();
@@ -244,6 +273,7 @@ pub mod omnipair_leverage {
         for acc in ra.iter() {
             account_infos.push(acc.to_account_info());
         }
+        account_infos.push(ctx.accounts.user_leverage_position.to_account_info());
 
         invoke(
             &Instruction {
@@ -369,6 +399,18 @@ pub mod omnipair_leverage {
             }
         };
         require!(amount_out > 0, LeverageError::SwapFailed);
+
+        // ── record position_size in the leverage position account ─────────
+        {
+            let lev_pos_account = &ra[IDX_USER_LEV_POSITION];
+            let mut data = lev_pos_account.try_borrow_mut_data()?;
+            // position_size is at a known offset inside UserLeveragePosition:
+            // discriminator(8) + owner(32) + pair(32) + is_lev_collateral0(1) +
+            // lev_collateral_amount(8) + multiplier_bps(8) = offset 89
+            const POSITION_SIZE_OFFSET: usize = 8 + 32 + 32 + 1 + 8 + 8;
+            data[POSITION_SIZE_OFFSET..POSITION_SIZE_OFFSET + 8]
+                .copy_from_slice(&amount_out.to_le_bytes());
+        }
 
         {
             let add_collateral_accounts = vec![
@@ -496,6 +538,7 @@ pub mod omnipair_leverage {
 // ── Account structs ───────────────────────────────────────────────────────────
 
 #[derive(Accounts)]
+#[instruction(is_lev_collateral0: bool)]
 pub struct Multiply<'info> {
     // omnipair pair state
     /// CHECK: validated by omnipair
@@ -539,6 +582,17 @@ pub struct Multiply<'info> {
     /// CHECK: must be this program's own ID
     #[account(address = ID)]
     pub receiver_program: UncheckedAccount<'info>,
+
+    /// Leverage position PDA for this (pair, user).
+    /// Created on first multiply, overwritten on subsequent calls.
+    #[account(
+        init_if_needed,
+        payer = user,
+        space = 8 + UserLeveragePosition::INIT_SPACE,
+        seeds = [LEVERAGE_POSITION_SEED_PREFIX, pair.key().as_ref(), user.key().as_ref(), &[is_lev_collateral0 as u8]],
+        bump,
+    )]
+    pub user_leverage_position: Account<'info, UserLeveragePosition>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -591,9 +645,7 @@ pub enum LeverageError {
     Overflow,
     #[msg("Pair has no liquidity")]
     InsufficientLiquidity,
-    #[msg("Slippage tolerance exceeded")]
-    SlippageExceeded,
-    #[msg("Failed to decode internal callback data")]
+#[msg("Failed to decode internal callback data")]
     InvalidCallbackData,
     #[msg("Swap returned zero tokens")]
     SwapFailed,
