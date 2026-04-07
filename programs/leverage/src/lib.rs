@@ -583,10 +583,10 @@ pub struct Multiply<'info> {
     #[account(address = ID)]
     pub receiver_program: UncheckedAccount<'info>,
 
-    /// Leverage position PDA for this (pair, user).
-    /// Created on first multiply, overwritten on subsequent calls.
+    /// Leverage position PDA for this (pair, user, side).
+    /// Fails if it already exists — close it first before opening a new position.
     #[account(
-        init_if_needed,
+        init,
         payer = user,
         space = 8 + UserLeveragePosition::INIT_SPACE,
         seeds = [LEVERAGE_POSITION_SEED_PREFIX, pair.key().as_ref(), user.key().as_ref(), &[is_lev_collateral0 as u8]],
