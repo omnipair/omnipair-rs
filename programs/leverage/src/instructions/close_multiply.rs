@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
-use omnipair::state::{Pair, UserPosition};
+use omnipair::state::{Pair, UserPosition, RateModel, FutarchyAuthority};
 use crate::{
     constants::*,
     errors::LeverageError,
@@ -78,7 +78,7 @@ pub struct CloseMultiply<'info> {
 /// - `is_lev_collateral0`: must match the direction used when opening
 /// - `min_collateral_out`: minimum lev_collateral token to receive after swapping back
 pub fn handle<'info>(
-    ctx: Context<'_, '_, '_, 'info, CloseMultiply<'info>>,
+    ctx: Context<'_, '_, 'info, 'info, CloseMultiply<'info>>,
     is_lev_collateral0: bool,
     min_collateral_out: u64,
 ) -> Result<()> {
@@ -97,6 +97,23 @@ pub fn handle<'info>(
         true, // close: TOKEN_IN is position token
         ctx.accounts.user_leverage_position.key(),
     )?;
+
+    // ── update pair to accrue current-slot interest before reading debt ─
+    // Without this, close_multiply snapshots a stale total_debt while the
+    // flashloan's update_and_validate() accrues interest in the same tx,
+    // causing the callback repay to demand more than the receiver holds.
+    let rate_model = Account::<RateModel>::try_from(&ra[IDX_RATE_MODEL])?;
+    let futarchy = FutarchyAuthority::try_deserialize(
+        &mut &**ra[IDX_FUTARCHY].try_borrow_data()?
+    )?;
+    let pair_key = ra[IDX_PAIR].key();
+    {
+        let mut pair_buf = ra[IDX_PAIR].try_borrow_mut_data()?;
+        let mut pair = Pair::try_deserialize(&mut pair_buf.as_ref())?;
+        pair.update(&rate_model, &futarchy, pair_key, Some(ra[IDX_EVENT_AUTHORITY].clone()))?;
+        let mut writer: &mut [u8] = &mut pair_buf;
+        pair.try_serialize(&mut writer)?;
+    }
 
     // ── read current debt from omnipair state ──────────────────────────
     let pair_data = Pair::try_deserialize(&mut &**ra[IDX_PAIR].try_borrow_data()?)?;

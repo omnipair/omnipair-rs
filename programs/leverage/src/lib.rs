@@ -36,7 +36,7 @@ pub mod omnipair_leverage {
     }
 
     pub fn close_multiply<'info>(
-        ctx: Context<'_, '_, '_, 'info, CloseMultiply<'info>>,
+        ctx: Context<'_, '_, 'info, 'info, CloseMultiply<'info>>,
         is_lev_collateral0: bool,
         min_collateral_out: u64,
     ) -> Result<()> {
