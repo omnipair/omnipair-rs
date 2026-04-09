@@ -61,3 +61,37 @@ impl UserLeveragePosition {
         self.owner != Pubkey::default()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn initialize_sets_fields_and_zero_position_size() {
+        let owner = Pubkey::new_unique();
+        let pair = Pubkey::new_unique();
+        let mut p = UserLeveragePosition {
+            owner: Pubkey::default(),
+            pair: Pubkey::default(),
+            is_lev_collateral0: false,
+            lev_collateral_amount: 0,
+            multiplier_bps: 0,
+            position_size: 999,
+            borrow_amount: 0,
+            opened_at: 0,
+            bump: 0,
+        };
+        assert!(!p.is_initialized());
+        p.initialize(owner, pair, true, 100, 20_000, 50, 1_700_000_000, 255);
+        assert_eq!(p.owner, owner);
+        assert_eq!(p.pair, pair);
+        assert!(p.is_lev_collateral0);
+        assert_eq!(p.lev_collateral_amount, 100);
+        assert_eq!(p.multiplier_bps, 20_000);
+        assert_eq!(p.position_size, 0);
+        assert_eq!(p.borrow_amount, 50);
+        assert_eq!(p.opened_at, 1_700_000_000);
+        assert_eq!(p.bump, 255);
+        assert!(p.is_initialized());
+    }
+}
