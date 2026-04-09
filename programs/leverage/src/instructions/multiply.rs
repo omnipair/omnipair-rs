@@ -1,9 +1,10 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
-use omnipair::{state::Pair, ceil_div};
+use omnipair::state::Pair;
 use crate::{
     constants::*,
     errors::LeverageError,
+    instruction_math::compute_multiply_amounts,
     state::{UserLeveragePosition, LEVERAGE_POSITION_SEED_PREFIX},
     types::InternalCallbackData,
     utils::{FlashloanAccounts, validate_remaining_accounts, invoke_flashloan_raw},
@@ -84,10 +85,6 @@ pub fn handle<'info>(
     multiplier_bps: u64,
     max_slippage_bps: u64,
 ) -> Result<()> {
-    require!(lev_collateral_amount > 0, LeverageError::AmountZero);
-    require!(multiplier_bps > BPS_DENOMINATOR, LeverageError::MultiplierTooLow);
-    require!(max_slippage_bps <= BPS_DENOMINATOR, LeverageError::InvalidSlippage);
-
     let ra = ctx.remaining_accounts;
     require!(ra.len() >= 12, LeverageError::MissingRemainingAccounts);
 
@@ -103,46 +100,24 @@ pub fn handle<'info>(
         ctx.accounts.user_leverage_position.key(),
     )?;
 
-    // ── compute amounts ────────────────────────────────────────────────
-    let swap_amount_in: u64 = (lev_collateral_amount as u128)
-        .checked_mul(multiplier_bps as u128).ok_or(LeverageError::Overflow)?
-        .checked_div(BPS_DENOMINATOR as u128).ok_or(LeverageError::Overflow)?
-        .try_into().map_err(|_| LeverageError::Overflow)?;
-
-    let borrow_amount = swap_amount_in
-        .checked_sub(lev_collateral_amount).ok_or(LeverageError::Overflow)?;
-
-    let flashloan_fee = ceil_div(
-        (borrow_amount as u128)
-            .checked_mul(FLASHLOAN_FEE_BPS as u128).ok_or(LeverageError::Overflow)?,
-        BPS_DENOMINATOR as u128,
-    ).ok_or(LeverageError::Overflow)? as u64;
-
-    let repay_amount = borrow_amount
-        .checked_add(flashloan_fee).ok_or(LeverageError::Overflow)?;
-
-    // ── slippage: spot-price floor ─────────────────────────────────────
     let pair_data = Pair::try_deserialize(&mut &**ra[IDX_PAIR].try_borrow_data()?)?;
     let (reserve_in, reserve_out) = if is_lev_collateral0 {
         (pair_data.reserve0, pair_data.reserve1)
     } else {
         (pair_data.reserve1, pair_data.reserve0)
     };
-    require!(reserve_in > 0 && reserve_out > 0, LeverageError::InsufficientLiquidity);
 
-    let spot_out: u64 = (lev_collateral_amount as u128)
-        .checked_mul(multiplier_bps as u128).ok_or(LeverageError::Overflow)?
-        .checked_mul(reserve_out as u128).ok_or(LeverageError::Overflow)?
-        .checked_div(
-            (reserve_in as u128)
-                .checked_mul(BPS_DENOMINATOR as u128).ok_or(LeverageError::Overflow)?
-        ).ok_or(LeverageError::Overflow)?
-        .try_into().map_err(|_| LeverageError::Overflow)?;
-
-    let min_amount_out: u64 = ((spot_out as u128)
-        .saturating_mul((BPS_DENOMINATOR as u128).saturating_sub(max_slippage_bps as u128))
-        / BPS_DENOMINATOR as u128)
-        .try_into().map_err(|_| LeverageError::Overflow)?;
+    let amounts = compute_multiply_amounts(
+        lev_collateral_amount,
+        multiplier_bps,
+        max_slippage_bps,
+        reserve_in,
+        reserve_out,
+    )?;
+    let swap_amount_in = amounts.swap_amount_in;
+    let borrow_amount = amounts.borrow_amount;
+    let repay_amount = amounts.repay_amount;
+    let min_amount_out = amounts.min_amount_out;
 
     // ── init user leverage position ────────────────────────────────────
     ctx.accounts.user_leverage_position.initialize(

@@ -9,6 +9,7 @@ use omnipair::{FlashLoanCallbackData, SwapArgs, AdjustCollateralArgs, AdjustDebt
 use crate::{
     constants::*,
     errors::LeverageError,
+    instruction_math::callback_swap_token0_is_input,
     types::InternalCallbackData,
 };
 
@@ -73,7 +74,7 @@ pub fn handle<'info>(
     //   open,  is_lev_collateral0=false → token1 in, token0 out
     //   close, is_lev_collateral0=true  → token1 in, token0 out (reversed)
     //   close, is_lev_collateral0=false → token0 in, token1 out (reversed)
-    let token0_in = is_lev_collateral0 ^ is_close;
+    let token0_in = callback_swap_token0_is_input(is_lev_collateral0, is_close);
 
     let (token_in_mint, token_out_mint, user_token_in_ai, user_token_out_ai) =
         if token0_in {

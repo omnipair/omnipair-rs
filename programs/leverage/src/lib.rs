@@ -3,6 +3,7 @@ use omnipair::FlashLoanCallbackData;
 
 pub mod constants;
 pub mod errors;
+pub mod instruction_math;
 pub mod instructions;
 pub mod state;
 pub mod types;

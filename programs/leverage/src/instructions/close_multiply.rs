@@ -1,9 +1,10 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
-use omnipair::{state::{Pair, UserPosition}, ceil_div};
+use omnipair::state::{Pair, UserPosition};
 use crate::{
     constants::*,
     errors::LeverageError,
+    instruction_math::compute_close_repay_amounts,
     state::{UserLeveragePosition, LEVERAGE_POSITION_SEED_PREFIX},
     types::InternalCallbackData,
     utils::{FlashloanAccounts, validate_remaining_accounts, invoke_flashloan_raw},
@@ -106,16 +107,7 @@ pub fn handle<'info>(
     } else {
         user_pos.calculate_debt1(pair_data.total_debt1, pair_data.total_debt1_shares)?
     };
-    require!(debt_amount > 0, LeverageError::PositionNotOpen);
-
-    let flashloan_fee = ceil_div(
-        (debt_amount as u128)
-            .checked_mul(FLASHLOAN_FEE_BPS as u128).ok_or(LeverageError::Overflow)?,
-        BPS_DENOMINATOR as u128,
-    ).ok_or(LeverageError::Overflow)? as u64;
-
-    let repay_amount = debt_amount
-        .checked_add(flashloan_fee).ok_or(LeverageError::Overflow)?;
+    let (_flashloan_fee, repay_amount) = compute_close_repay_amounts(debt_amount)?;
 
     // ── invoke flashloan ───────────────────────────────────────────────
     let (amount0, amount1) = if is_lev_collateral0 {
