@@ -188,9 +188,12 @@ impl UserPosition {
                     DebtDecreaseReason::Repayment => pair.cash_reserve1 = pair.cash_reserve1.saturating_add(amount),
                     DebtDecreaseReason::WriteOff(_) => pair.reserve1 = pair.reserve1.checked_sub(amount).unwrap_or(1),
                 };
-                // Sync debt and shares: if shares reaches 0, reset debt to avoid orphaned state
+                // Sync debt and shares: reset the counterpart to avoid orphaned state
                 if pair.total_debt1_shares == 0 && pair.total_debt1 > 0 {
                     pair.total_debt1 = 0; 
+                }
+                if pair.total_debt1 == 0 && pair.total_debt1_shares > 0 {
+                    pair.total_debt1_shares = 0;
                 }
             }
         }
