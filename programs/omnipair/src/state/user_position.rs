@@ -167,12 +167,17 @@ impl UserPosition {
                     // r_virtual can't reach zero during write off
                     DebtDecreaseReason::WriteOff(_) => pair.reserve0 = pair.reserve0.checked_sub(amount).unwrap_or(1),
                 };
-                // Sync debt and shares: reset the counterpart to avoid orphaned state
+                // Sync debt and shares: reset the counterpart to avoid orphaned state.
+                // If shares went to 0, zero the remaining debt (no one can claim it).
                 if pair.total_debt0_shares == 0 && pair.total_debt0 > 0 {
                     pair.total_debt0 = 0; 
                 }
+                // If debt would go to 0 while shares still exist on other positions,
+                // keep 1 unit of dust debt alive to preserve the share exchange rate.
+                // Zeroing total_debt0_shares here would orphan per-user debt0_shares
+                // and let the next borrow resurrect them as phantom debt.
                 if pair.total_debt0 == 0 && pair.total_debt0_shares > 0 {
-                    pair.total_debt0_shares = 0;
+                    pair.total_debt0 = 1;
                 }
             }
             false => {
@@ -191,12 +196,17 @@ impl UserPosition {
                     DebtDecreaseReason::Repayment => pair.cash_reserve1 = pair.cash_reserve1.saturating_add(amount),
                     DebtDecreaseReason::WriteOff(_) => pair.reserve1 = pair.reserve1.checked_sub(amount).unwrap_or(1),
                 };
-                // Sync debt and shares: reset the counterpart to avoid orphaned state
+                // Sync debt and shares: reset the counterpart to avoid orphaned state.
+                // If shares went to 0, zero the remaining debt (no one can claim it).
                 if pair.total_debt1_shares == 0 && pair.total_debt1 > 0 {
                     pair.total_debt1 = 0; 
                 }
+                // If debt would go to 0 while shares still exist on other positions,
+                // keep 1 unit of dust debt alive to preserve the share exchange rate.
+                // Zeroing total_debt1_shares here would orphan per-user debt1_shares
+                // and let the next borrow resurrect them as phantom debt.
                 if pair.total_debt1 == 0 && pair.total_debt1_shares > 0 {
-                    pair.total_debt1_shares = 0;
+                    pair.total_debt1 = 1;
                 }
             }
         }
