@@ -167,9 +167,12 @@ impl UserPosition {
                     // r_virtual can't reach zero during write off
                     DebtDecreaseReason::WriteOff(_) => pair.reserve0 = pair.reserve0.checked_sub(amount).unwrap_or(1),
                 };
-                // Sync debt and shares: if shares reaches 0, reset debt to avoid orphaned state
+                // Sync debt and shares: reset the counterpart to avoid orphaned state
                 if pair.total_debt0_shares == 0 && pair.total_debt0 > 0 {
                     pair.total_debt0 = 0; 
+                }
+                if pair.total_debt0 == 0 && pair.total_debt0_shares > 0 {
+                    pair.total_debt0_shares = 0;
                 }
             }
             false => {
