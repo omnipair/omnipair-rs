@@ -236,6 +236,8 @@ pub struct OpenLeverage<'info> {
 
     #[account(mut)]
     pub user: Signer<'info>,
+    #[account(address = authorized_leverage_authority() @ ErrorCode::InvalidLeverageAuthority)]
+    pub leverage_authority: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
     pub system_program: Program<'info, System>,
@@ -336,6 +338,8 @@ pub struct CloseLeverage<'info> {
 
     #[account(mut)]
     pub user: Signer<'info>,
+    #[account(address = authorized_leverage_authority() @ ErrorCode::InvalidLeverageAuthority)]
+    pub leverage_authority: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
     pub system_program: Program<'info, System>,
@@ -630,6 +634,14 @@ fn require_temp_loan_cash(pair: &Pair, is_token0: bool, amount: u64) -> Result<(
         false => require_gte!(pair.cash_reserve1, amount, ErrorCode::BorrowExceedsReserve),
     }
     Ok(())
+}
+
+fn authorized_leverage_authority() -> Pubkey {
+    Pubkey::find_program_address(
+        &[LEVERAGE_AUTHORITY_SEED_PREFIX],
+        &AUTHORIZED_LEVERAGE_PROGRAM_ID,
+    )
+    .0
 }
 
 #[allow(clippy::too_many_arguments)]

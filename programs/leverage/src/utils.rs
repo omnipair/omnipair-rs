@@ -3,7 +3,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{
     hash::hash,
     instruction::{AccountMeta, Instruction},
-    program::invoke,
+    program::invoke_signed,
 };
 use omnipair::{CloseLeverageArgs, OpenLeverageArgs};
 
@@ -23,6 +23,7 @@ pub struct NativeLeverageAccounts<'info> {
     pub token_in_mint: AccountInfo<'info>,
     pub token_out_mint: AccountInfo<'info>,
     pub user: AccountInfo<'info>,
+    pub leverage_authority: AccountInfo<'info>,
     pub token_program: AccountInfo<'info>,
     pub token_2022_program: AccountInfo<'info>,
     pub system_program: AccountInfo<'info>,
@@ -121,13 +122,19 @@ fn invoke_native_leverage_raw<'info>(
     ix_data: Vec<u8>,
 ) -> Result<()> {
     let omnipair_program = &ra[IDX_OMNIPAIR_PROGRAM];
-    invoke(
+    let (_, authority_bump) =
+        Pubkey::find_program_address(&[LEVERAGE_AUTHORITY_SEED_PREFIX], &crate::ID);
+    let authority_bump = [authority_bump];
+    let signer_seeds: &[&[&[u8]]] = &[&[LEVERAGE_AUTHORITY_SEED_PREFIX, &authority_bump]];
+
+    invoke_signed(
         &Instruction {
             program_id: omnipair_program.key(),
             accounts: native_leverage_metas(a, &ra[IDX_EVENT_AUTHORITY], omnipair_program),
             data: ix_data,
         },
         &native_leverage_infos(a, &ra[IDX_EVENT_AUTHORITY], omnipair_program),
+        signer_seeds,
     )?;
     Ok(())
 }
@@ -150,6 +157,7 @@ fn native_leverage_metas<'info>(
         AccountMeta::new_readonly(a.token_in_mint.key(), false),
         AccountMeta::new_readonly(a.token_out_mint.key(), false),
         AccountMeta::new(a.user.key(), true),
+        AccountMeta::new_readonly(a.leverage_authority.key(), true),
         AccountMeta::new_readonly(a.token_program.key(), false),
         AccountMeta::new_readonly(a.token_2022_program.key(), false),
         AccountMeta::new_readonly(a.system_program.key(), false),
@@ -176,6 +184,7 @@ fn native_leverage_infos<'info>(
         a.token_in_mint.clone(),
         a.token_out_mint.clone(),
         a.user.clone(),
+        a.leverage_authority.clone(),
         a.token_program.clone(),
         a.token_2022_program.clone(),
         a.system_program.clone(),

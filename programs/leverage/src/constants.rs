@@ -32,5 +32,8 @@ pub const IDX_EVENT_AUTHORITY: usize = 9;
 pub const IDX_OMNIPAIR_PROGRAM: usize = 10;
 pub const IDX_USER_LEV_POSITION: usize = 11;
 
+// Must match Omnipair's authorized leverage authority seed.
+pub const LEVERAGE_AUTHORITY_SEED_PREFIX: &[u8] = b"leverage_authority";
+
 pub const BPS_DENOMINATOR: u64 = 10_000;
 pub const FLASHLOAN_FEE_BPS: u64 = 5;

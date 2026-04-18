@@ -52,6 +52,13 @@ pub struct Multiply<'info> {
     )]
     pub user_leverage_position: Account<'info, UserLeveragePosition>,
 
+    /// CHECK: PDA signer used to prove this CPI came from the leverage program.
+    #[account(
+        seeds = [LEVERAGE_AUTHORITY_SEED_PREFIX],
+        bump,
+    )]
+    pub leverage_authority: UncheckedAccount<'info>,
+
     #[account(mut)]
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
@@ -140,6 +147,7 @@ pub fn handle<'info>(
             token_in_mint,
             token_out_mint,
             user: ctx.accounts.user.to_account_info(),
+            leverage_authority: ctx.accounts.leverage_authority.to_account_info(),
             token_program: ctx.accounts.token_program.to_account_info(),
             token_2022_program: ctx.accounts.token_2022_program.to_account_info(),
             system_program: ctx.accounts.system_program.to_account_info(),
