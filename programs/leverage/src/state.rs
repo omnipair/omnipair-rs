@@ -9,8 +9,8 @@ pub const LEVERAGE_POSITION_SEED_PREFIX: &[u8] = b"leverage_position";
 /// context (direction, entry multiplier, amounts at open time) so clients can
 /// compute PnL, health, and display the position without re-deriving history.
 ///
-/// `position_size` is written by the callback after the internal swap completes,
-/// because the exact amount is only known post-execution.
+/// `position_size` is written by the wrapper after Omnipair's native leverage
+/// instruction completes, because the exact amount is only known post-execution.
 #[account]
 #[derive(InitSpace)]
 pub struct UserLeveragePosition {
@@ -25,7 +25,7 @@ pub struct UserLeveragePosition {
     pub lev_collateral_amount: u64,
     /// Leverage multiplier at open (BPS, e.g. 20_000 = 2×)
     pub multiplier_bps: u64,
-    /// Amount of position token deposited as collateral (swap output, set by callback)
+    /// Amount of position token deposited as collateral (swap output, set after native execution)
     pub position_size: u64,
     /// Principal borrowed from omnipair at open (excludes flashloan fee)
     pub borrow_amount: u64,
@@ -51,7 +51,7 @@ impl UserLeveragePosition {
         self.is_lev_collateral0 = is_lev_collateral0;
         self.lev_collateral_amount = lev_collateral_amount;
         self.multiplier_bps = multiplier_bps;
-        self.position_size = 0; // set later by flash_loan_callback
+        self.position_size = 0; // set after native Omnipair execution
         self.borrow_amount = borrow_amount;
         self.opened_at = opened_at;
         self.bump = bump;

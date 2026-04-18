@@ -24,3 +24,6 @@ packages/program-interface/src/types.ts
 # Temp directories
 temp-decoder/
 carbon-cli-test/
+
+# Local audit reports
+.audit/

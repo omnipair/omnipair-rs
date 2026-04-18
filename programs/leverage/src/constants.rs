@@ -1,7 +1,7 @@
 // ── Remaining-accounts layout ─────────────────────────────────────────────────
 //
-// Shared by multiply and close_multiply. Passed verbatim from the outer
-// instruction → omnipair flashloan → flash_loan_callback.
+// Shared by multiply and close_multiply. Passed from the leverage wrapper to
+// Omnipair's native leverage executor.
 //
 // For multiply (open):  TOKEN_IN = lev_collateral reserve, TOKEN_OUT = position token reserve.
 // For close_multiply:   TOKEN_IN = position token reserve, TOKEN_OUT = lev_collateral reserve.

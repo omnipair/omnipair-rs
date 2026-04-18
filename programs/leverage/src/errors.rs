@@ -12,8 +12,8 @@ pub enum LeverageError {
     Overflow,
     #[msg("Pair has no liquidity")]
     InsufficientLiquidity,
-    #[msg("Failed to decode internal callback data")]
-    InvalidCallbackData,
+    #[msg("Failed to decode internal leverage data")]
+    InvalidLeverageData,
     #[msg("Swap returned zero tokens")]
     SwapFailed,
     #[msg("No open debt found — position may already be closed or never opened")]

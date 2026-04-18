@@ -10,5 +10,6 @@ pub use lending::common::*;
 pub use lending::add_collateral::*;
 pub use lending::liquidate::*;
 pub use lending::flashloan::*;
+pub use lending::leverage::*;
 pub use futarchy::*;
 pub use emit_value::*;

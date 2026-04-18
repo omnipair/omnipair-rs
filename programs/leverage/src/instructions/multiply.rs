@@ -1,13 +1,15 @@
-use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount};
-use omnipair::state::Pair;
 use crate::{
     constants::*,
     errors::LeverageError,
     instruction_math::compute_multiply_amounts,
     state::{UserLeveragePosition, LEVERAGE_POSITION_SEED_PREFIX},
-    types::InternalCallbackData,
-    utils::{FlashloanAccounts, validate_remaining_accounts, invoke_flashloan_raw},
+    utils::{invoke_open_leverage_raw, validate_remaining_accounts, NativeLeverageAccounts},
+};
+use anchor_lang::prelude::*;
+use anchor_spl::token::{Token, TokenAccount};
+use omnipair::{
+    state::{Pair, UserPosition},
+    OpenLeverageArgs,
 };
 
 #[derive(Accounts)]
@@ -34,21 +36,10 @@ pub struct Multiply<'info> {
     /// CHECK: validated by omnipair
     pub token1_mint: UncheckedAccount<'info>,
 
-    /// CHECK: PDA created and closed by omnipair flashloan
-    #[account(mut)]
-    pub repay0_vault: UncheckedAccount<'info>,
-    /// CHECK: PDA created and closed by omnipair flashloan
-    #[account(mut)]
-    pub repay1_vault: UncheckedAccount<'info>,
-
     #[account(mut, token::authority = user)]
     pub receiver_token0_account: Account<'info, TokenAccount>,
     #[account(mut, token::authority = user)]
     pub receiver_token1_account: Account<'info, TokenAccount>,
-
-    /// CHECK: must be this program's own ID
-    #[account(address = crate::ID)]
-    pub receiver_program: UncheckedAccount<'info>,
 
     /// Leverage position PDA for this (pair, user, side).
     /// Fails if already exists — close the position first.
@@ -72,8 +63,8 @@ pub struct Multiply<'info> {
 
 /// Opens a leveraged position.
 ///
-/// Flashloans the borrow portion from omnipair, swaps everything into the
-/// position token, deposits as collateral, borrows to repay — all atomic.
+/// Executes the leverage path through a native Omnipair instruction, avoiding
+/// any flashloan callback reentry.
 ///
 /// - `is_lev_collateral0`: true = long token0 (token0 is lev_collateral, token1 is position token)
 /// - `multiplier_bps`: leverage in BPS (20_000 = 2×); must be > 10_000
@@ -114,12 +105,61 @@ pub fn handle<'info>(
         reserve_in,
         reserve_out,
     )?;
-    let swap_amount_in = amounts.swap_amount_in;
     let borrow_amount = amounts.borrow_amount;
-    let repay_amount = amounts.repay_amount;
-    let min_amount_out = amounts.min_amount_out;
 
-    // ── init user leverage position ────────────────────────────────────
+    let starting_position_size =
+        position_token_collateral_or_zero(&ra[IDX_USER_POSITION], is_lev_collateral0)?;
+    let (user_token_in_account, user_token_out_account, token_in_mint, token_out_mint) =
+        if is_lev_collateral0 {
+            (
+                ctx.accounts.receiver_token0_account.to_account_info(),
+                ctx.accounts.receiver_token1_account.to_account_info(),
+                ctx.accounts.token0_mint.to_account_info(),
+                ctx.accounts.token1_mint.to_account_info(),
+            )
+        } else {
+            (
+                ctx.accounts.receiver_token1_account.to_account_info(),
+                ctx.accounts.receiver_token0_account.to_account_info(),
+                ctx.accounts.token1_mint.to_account_info(),
+                ctx.accounts.token0_mint.to_account_info(),
+            )
+        };
+
+    invoke_open_leverage_raw(
+        &NativeLeverageAccounts {
+            pair: ctx.accounts.pair.to_account_info(),
+            rate_model: ctx.accounts.rate_model.to_account_info(),
+            futarchy_authority: ctx.accounts.futarchy_authority.to_account_info(),
+            user_position: ra[IDX_USER_POSITION].to_account_info(),
+            token_in_vault: ra[IDX_TOKEN_IN_VAULT].to_account_info(),
+            token_out_vault: ra[IDX_TOKEN_OUT_VAULT].to_account_info(),
+            collateral_vault: ra[IDX_COLLATERAL_VAULT].to_account_info(),
+            user_token_in_account,
+            user_token_out_account,
+            token_in_mint,
+            token_out_mint,
+            user: ctx.accounts.user.to_account_info(),
+            token_program: ctx.accounts.token_program.to_account_info(),
+            token_2022_program: ctx.accounts.token_2022_program.to_account_info(),
+            system_program: ctx.accounts.system_program.to_account_info(),
+        },
+        ra,
+        OpenLeverageArgs {
+            is_lev_collateral0,
+            lev_collateral_amount,
+            multiplier_bps,
+            max_slippage_bps,
+        },
+    )?;
+
+    let ending_position_size =
+        read_position_token_collateral(&ra[IDX_USER_POSITION], is_lev_collateral0)?;
+    let position_size = ending_position_size
+        .checked_sub(starting_position_size)
+        .ok_or(LeverageError::Overflow)?;
+    require!(position_size > 0, LeverageError::SwapFailed);
+
     ctx.accounts.user_leverage_position.initialize(
         ctx.accounts.user.key(),
         ctx.accounts.pair.key(),
@@ -130,43 +170,48 @@ pub fn handle<'info>(
         Clock::get()?.unix_timestamp,
         ctx.bumps.user_leverage_position,
     );
+    ctx.accounts.user_leverage_position.position_size = position_size;
 
-    // ── invoke flashloan ───────────────────────────────────────────────
-    let (amount0, amount1) = if is_lev_collateral0 {
-        (borrow_amount, 0u64)
-    } else {
-        (0u64, borrow_amount)
-    };
+    Ok(())
+}
 
-    invoke_flashloan_raw(
-        &FlashloanAccounts {
-            pair:                   ctx.accounts.pair.to_account_info(),
-            rate_model:             ctx.accounts.rate_model.to_account_info(),
-            futarchy_authority:     ctx.accounts.futarchy_authority.to_account_info(),
-            reserve0_vault:         ctx.accounts.reserve0_vault.to_account_info(),
-            reserve1_vault:         ctx.accounts.reserve1_vault.to_account_info(),
-            token0_mint:            ctx.accounts.token0_mint.to_account_info(),
-            token1_mint:            ctx.accounts.token1_mint.to_account_info(),
-            repay0_vault:           ctx.accounts.repay0_vault.to_account_info(),
-            repay1_vault:           ctx.accounts.repay1_vault.to_account_info(),
-            receiver_token0_account: ctx.accounts.receiver_token0_account.to_account_info(),
-            receiver_token1_account: ctx.accounts.receiver_token1_account.to_account_info(),
-            receiver_program:       ctx.accounts.receiver_program.to_account_info(),
-            user:                   ctx.accounts.user.to_account_info(),
-            token_program:          ctx.accounts.token_program.to_account_info(),
-            token_2022_program:     ctx.accounts.token_2022_program.to_account_info(),
-            system_program:         ctx.accounts.system_program.to_account_info(),
-            user_leverage_position: ctx.accounts.user_leverage_position.to_account_info(),
-        },
-        ra,
-        amount0,
-        amount1,
-        InternalCallbackData {
-            is_close: false,
+fn position_token_collateral_or_zero<'info>(
+    user_position_ai: &AccountInfo<'info>,
+    is_lev_collateral0: bool,
+) -> Result<u64> {
+    if user_position_ai.owner != &omnipair::ID {
+        return Ok(0);
+    }
+
+    let data = user_position_ai.try_borrow_data()?;
+    if data.len() < 8 || data.iter().all(|byte| *byte == 0) {
+        return Ok(0);
+    }
+
+    match UserPosition::try_deserialize(&mut &data[..]) {
+        Ok(user_position) => Ok(position_token_collateral(
+            &user_position,
             is_lev_collateral0,
-            swap_amount_in,
-            min_amount_out,
-            repay_amount,
-        },
-    )
+        )),
+        Err(_) => Ok(0),
+    }
+}
+
+fn read_position_token_collateral<'info>(
+    user_position_ai: &AccountInfo<'info>,
+    is_lev_collateral0: bool,
+) -> Result<u64> {
+    let user_position = UserPosition::try_deserialize(&mut &**user_position_ai.try_borrow_data()?)?;
+    Ok(position_token_collateral(
+        &user_position,
+        is_lev_collateral0,
+    ))
+}
+
+fn position_token_collateral(user_position: &UserPosition, is_lev_collateral0: bool) -> u64 {
+    if is_lev_collateral0 {
+        user_position.collateral1
+    } else {
+        user_position.collateral0
+    }
 }
