@@ -83,26 +83,45 @@ pub fn construct_virtual_reserves_at_pessimistic_price(
     let spot_k = (collateral_spot_reserve as u128)
     .checked_mul(debt_spot_reserve as u128)
     .ok_or(ErrorCode::Overflow)?;
-    
+
     // k * NAD / P_pessimistic
-    let x_virt_squared = spot_k
-        .checked_mul(NAD_U128)
-        .ok_or(ErrorCode::Overflow)?
-        .checked_div(pessimistic_price)
-        .ok_or(ErrorCode::DenominatorOverflow)?;
+    // Try direct multiplication first; on overflow, split as (R_c * NAD / P) * R_d
+    // to keep intermediates within u128 (at a small precision cost).
+    let x_virt_squared = match spot_k.checked_mul(NAD_U128) {
+        Some(v) => v.checked_div(pessimistic_price)
+            .ok_or(ErrorCode::DenominatorOverflow)?,
+        None => {
+            let partial = (collateral_spot_reserve as u128)
+                .checked_mul(NAD_U128)
+                .ok_or(ErrorCode::Overflow)?
+                .checked_div(pessimistic_price)
+                .ok_or(ErrorCode::DenominatorOverflow)?;
+            partial.checked_mul(debt_spot_reserve as u128)
+                .ok_or(ErrorCode::Overflow)?
+        }
+    };
     // sqrt(k * NAD / P_pessimistic)
     let collateral_ema_reserve = x_virt_squared
         .sqrt()
         .ok_or(ErrorCode::Overflow)?
         .try_into()
         .map_err(|_| ErrorCode::Overflow)?;
-    
+
     // k * P_pessimistic / NAD
-    let y_virt_squared = spot_k
-        .checked_mul(pessimistic_price)
-        .ok_or(ErrorCode::Overflow)?
-        .checked_div(NAD_U128)
-        .ok_or(ErrorCode::DenominatorOverflow)?;
+    // Try direct multiplication first; on overflow, split as (R_d * P / NAD) * R_c.
+    let y_virt_squared = match spot_k.checked_mul(pessimistic_price) {
+        Some(v) => v.checked_div(NAD_U128)
+            .ok_or(ErrorCode::DenominatorOverflow)?,
+        None => {
+            let partial = (debt_spot_reserve as u128)
+                .checked_mul(pessimistic_price)
+                .ok_or(ErrorCode::Overflow)?
+                .checked_div(NAD_U128)
+                .ok_or(ErrorCode::DenominatorOverflow)?;
+            partial.checked_mul(collateral_spot_reserve as u128)
+                .ok_or(ErrorCode::Overflow)?
+        }
+    };
     // sqrt(k * P_pessimistic / NAD)
     let debt_ema_reserve = y_virt_squared
         .sqrt()
@@ -637,6 +656,38 @@ mod tests {
         
         // Invariant: manipulation cannot increase borrowing capacity
         assert!(max_manip <= max_fair);
+    }
+
+    #[test]
+    fn large_price_asymmetry_no_overflow() {
+        // Regression: STAR/USDC pool CN6r... overflows u128 at spot_k * pessimistic_price.
+        // collateral = USDC (token1), debt = STAR (token0)
+        // reserve1 (USDC) = 3,341,694,358 (~3,341 USDC)
+        // reserve0 (STAR) = 2,957,700,173,774,845 (~2.96M STAR)
+        // price1_ema = 903,353,968,854,947 (1 USDC ≈ 903K STAR)
+        // collateral_amount = 13,000,000 (13 USDC)
+        let collateral_amount: u64 = 13_000_000;
+        let collateral_ema_price: u64 = 903_353_968_854_947;
+        let collateral_directional_ema_price: u64 = 903_353_968_854_947;
+        let collateral_amm_reserve: u64 = 3_341_694_358;
+        let debt_amm_reserve: u64 = 2_957_700_173_774_845;
+        let total_debt: u64 = 0;
+
+        let result = pessimistic_max_debt(
+            collateral_amount,
+            collateral_ema_price,
+            collateral_directional_ema_price,
+            collateral_amm_reserve,
+            debt_amm_reserve,
+            total_debt,
+            None,
+        );
+        assert!(result.is_ok(), "Should not overflow for large price asymmetry pools");
+        let (borrow_limit, max_cf, liq_cf) = result.unwrap();
+        assert!(borrow_limit > 0, "Borrow limit should be positive");
+        assert!(max_cf > 0, "Max CF should be positive");
+        assert!(liq_cf > 0, "Liquidation CF should be positive");
+        println!("STAR/USDC overflow regression: limit={}, max_cf={}, liq_cf={}", borrow_limit, max_cf, liq_cf);
     }
 
     // =======

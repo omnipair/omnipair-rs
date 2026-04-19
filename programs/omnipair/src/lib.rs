@@ -96,6 +96,15 @@ pub mod omnipair {
         SetPairReduceOnly::handle_set_pair_reduce_only(ctx, args)
     }
 
+    pub fn set_pair_rate_model(ctx: Context<SetPairRateModel>) -> Result<()> {
+        SetPairRateModel::handle_set_pair_rate_model(ctx)
+    }
+
+    #[access_control(CreateRateModel::validate(&args))]
+    pub fn create_rate_model(ctx: Context<CreateRateModel>, args: CreateRateModelArgs) -> Result<()> {
+        CreateRateModel::handle_create_rate_model(ctx, args)
+    }
+
     // Pair instructions
     #[access_control(ctx.accounts.validate(&args))]
     pub fn initialize(ctx: Context<InitializeAndBootstrap>, args: InitializeAndBootstrapArgs) -> Result<()> {
