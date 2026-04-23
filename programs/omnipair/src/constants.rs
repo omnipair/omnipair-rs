@@ -106,4 +106,8 @@ pub const RESERVE_VAULT_SEED_PREFIX: &[u8] = b"reserve_vault";
 #[constant]
 pub const COLLATERAL_VAULT_SEED_PREFIX: &[u8] = b"collateral_vault";
 #[constant]
+pub const FLASHLOAN_REPAY_SEED_PREFIX: &[u8] = b"flashloan_repay";
+#[constant]
+pub const LEVERAGE_POSITION_SEED_PREFIX: &[u8] = b"leverage_position";
+#[constant]
 pub const VERSION: u8 = 1;

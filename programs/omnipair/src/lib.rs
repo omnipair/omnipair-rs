@@ -166,4 +166,18 @@ pub mod omnipair {
     pub fn flashloan<'info>(ctx: Context<'_, '_, '_, 'info, Flashloan<'info>>, args: FlashloanArgs) -> Result<()> {
         Flashloan::handle_flashloan(ctx, args)
     }
+
+    pub fn open_leverage<'info>(
+        ctx: Context<'_, '_, '_, 'info, OpenLeverage<'info>>,
+        args: OpenLeverageArgs,
+    ) -> Result<()> {
+        OpenLeverage::handle_open_leverage(ctx, args)
+    }
+
+    pub fn close_leverage<'info>(
+        ctx: Context<'_, '_, '_, 'info, CloseLeverage<'info>>,
+        args: CloseLeverageArgs,
+    ) -> Result<()> {
+        CloseLeverage::handle_close_leverage(ctx, args)
+    }
 }

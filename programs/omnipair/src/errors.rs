@@ -217,4 +217,7 @@ pub enum ErrorCode {
 
     #[msg("Invalid recipient - address does not match configured revenue recipient")]
     InvalidRecipient,
+
+    #[msg("Leverage position does not match isolated underlying state")]
+    LeveragePositionNotIsolated,
 }

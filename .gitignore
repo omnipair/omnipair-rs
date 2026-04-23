@@ -25,5 +25,5 @@ packages/program-interface/src/types.ts
 temp-decoder/
 carbon-cli-test/
 
-# Audit reports
-**/.audit/
+# Local audit reports
+.audit/

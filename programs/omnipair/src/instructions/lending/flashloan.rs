@@ -5,7 +5,7 @@ use anchor_lang::solana_program::{
     hash::hash,
 };
 use anchor_spl::{
-    token::{Token, TokenAccount, Mint},
+    token::{self, Token, TokenAccount, Mint},
     token_interface::{Token2022},
 };
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
     constants::*,
     errors::ErrorCode,
     events::*,
-    utils::{token::{transfer_from_vault_to_user, sync_native_if_wsol}, math::ceil_div},
+    utils::{token::{transfer_from_vault_to_user, transfer_from_vault_to_vault, sync_native_if_wsol}, math::ceil_div},
     generate_gamm_pair_seeds,
 };
 
@@ -88,6 +88,30 @@ pub struct Flashloan<'info> {
     )]
     pub token1_mint: Box<Account<'info, Mint>>,
 
+    /// Temporary repayment vault for token0. Created at instruction start, verified
+    /// after callback, swept to reserve vault, then closed. Isolates repayment
+    /// verification from reserve vault balance changes.
+    #[account(
+        init,
+        payer = user,
+        token::mint = token0_mint,
+        token::authority = pair,
+        seeds = [FLASHLOAN_REPAY_SEED_PREFIX, pair.key().as_ref(), pair.token0.as_ref()],
+        bump,
+    )]
+    pub repay0_vault: Account<'info, TokenAccount>,
+
+    /// Temporary repayment vault for token1.
+    #[account(
+        init,
+        payer = user,
+        token::mint = token1_mint,
+        token::authority = pair,
+        seeds = [FLASHLOAN_REPAY_SEED_PREFIX, pair.key().as_ref(), pair.token1.as_ref()],
+        bump,
+    )]
+    pub repay1_vault: Account<'info, TokenAccount>,
+
     #[account(
         mut,
         constraint = receiver_token0_account.mint == pair.token0,
@@ -104,11 +128,11 @@ pub struct Flashloan<'info> {
     /// This program will be invoked via CPI
     pub receiver_program: UncheckedAccount<'info>,
     
+    #[account(mut)]
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
     
-    /// CHECK: System program for CPI
     pub system_program: Program<'info, System>,
 }
 
@@ -161,6 +185,8 @@ impl<'info> Flashloan<'info> {
             pair,
             reserve0_vault,
             reserve1_vault,
+            repay0_vault,
+            repay1_vault,
             receiver_token0_account,
             receiver_token1_account,
             token0_mint,
@@ -186,16 +212,6 @@ impl<'info> Flashloan<'info> {
             .ok_or(ErrorCode::FeeMathOverflow)?,
             BPS_DENOMINATOR as u128,
         ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
-
-        // Sync native SOL for WSOL vaults before recording balances
-        sync_native_if_wsol(&pair.token0, &reserve0_vault.to_account_info(), &token_program.to_account_info())?;
-        sync_native_if_wsol(&pair.token1, &reserve1_vault.to_account_info(), &token_program.to_account_info())?;
-
-        // Record balances before the flash loan
-        reserve0_vault.reload()?;
-        reserve1_vault.reload()?;
-        let balance0_before = reserve0_vault.amount;
-        let balance1_before = reserve1_vault.amount;
 
         // Transfer tokens to receiver if requested
         if amount0 > 0 {
@@ -254,10 +270,11 @@ impl<'info> Flashloan<'info> {
             AccountMeta::new(receiver_token1_account.key(), false), // receiver_token1_account
             AccountMeta::new_readonly(token0_mint.key(), false),    // token0_mint
             AccountMeta::new_readonly(token1_mint.key(), false),    // token1_mint
+            AccountMeta::new(repay0_vault.key(), false),            // repay0_vault
+            AccountMeta::new(repay1_vault.key(), false),            // repay1_vault
         ];
 
-        // Add remaining accounts (vaults + any additional accounts)
-        // The first two remaining accounts should be the vaults for token return
+        // Add any additional accounts the receiver may need
         for acc in ctx.remaining_accounts.iter() {
             callback_account_metas.push(AccountMeta {
                 pubkey: acc.key(),
@@ -277,18 +294,17 @@ impl<'info> Flashloan<'info> {
         };
 
         // Execute the CPI callback
-        // Create a slice of base accounts, then we'll include remaining accounts
         let base_accounts = &[
             user.to_account_info(),
             receiver_token0_account.to_account_info(),
             receiver_token1_account.to_account_info(),
             token0_mint.to_account_info(),
             token1_mint.to_account_info(),
+            repay0_vault.to_account_info(),
+            repay1_vault.to_account_info(),
             token_program.to_account_info(),
         ];
         
-        // For the CPI, we need to pass all account infos
-        // Combine base accounts with remaining accounts into a single slice
         let all_accounts = [base_accounts, ctx.remaining_accounts].concat();
 
         invoke(
@@ -296,23 +312,89 @@ impl<'info> Flashloan<'info> {
             &all_accounts,
         )?;
 
-        // Reload vault accounts to get updated balances after callback execution
-        reserve0_vault.reload()?;
-        reserve1_vault.reload()?;
+        // Verify repayment via isolated repay vaults (started at zero balance)
+        sync_native_if_wsol(&pair.token0, &repay0_vault.to_account_info(), &token_program.to_account_info())?;
+        sync_native_if_wsol(&pair.token1, &repay1_vault.to_account_info(), &token_program.to_account_info())?;
 
-        let required_balance0 = balance0_before.checked_add(fee0).unwrap();
-        let required_balance1 = balance1_before.checked_add(fee1).unwrap();
+        repay0_vault.reload()?;
+        repay1_vault.reload()?;
+
+        let required0 = amount0.checked_add(fee0).ok_or(ErrorCode::FeeMathOverflow)?;
+        let required1 = amount1.checked_add(fee1).ok_or(ErrorCode::FeeMathOverflow)?;
 
         require!(
-            reserve0_vault.amount >= required_balance0,
+            repay0_vault.amount >= required0,
             ErrorCode::InsufficientAmount0
         );
         require!(
-            reserve1_vault.amount >= required_balance1,
+            repay1_vault.amount >= required1,
             ErrorCode::InsufficientAmount1
         );
 
-        // update reserves with fees
+        // Sweep repaid tokens from repay vaults into reserve vaults
+        let pair_seeds = generate_gamm_pair_seeds!(pair);
+        let signer_seeds = &[&pair_seeds[..]];
+        let repay0_amount = repay0_vault.amount;
+        let repay1_amount = repay1_vault.amount;
+
+        if repay0_amount > 0 {
+            transfer_from_vault_to_vault(
+                pair.to_account_info(),
+                repay0_vault.to_account_info(),
+                reserve0_vault.to_account_info(),
+                token0_mint.to_account_info(),
+                match token0_mint.to_account_info().owner == token_program.key {
+                    true => token_program.to_account_info(),
+                    false => token_2022_program.to_account_info(),
+                },
+                repay0_amount,
+                token0_mint.decimals,
+                signer_seeds,
+            )?;
+        }
+
+        if repay1_amount > 0 {
+            transfer_from_vault_to_vault(
+                pair.to_account_info(),
+                repay1_vault.to_account_info(),
+                reserve1_vault.to_account_info(),
+                token1_mint.to_account_info(),
+                match token1_mint.to_account_info().owner == token_program.key {
+                    true => token_program.to_account_info(),
+                    false => token_2022_program.to_account_info(),
+                },
+                repay1_amount,
+                token1_mint.decimals,
+                signer_seeds,
+            )?;
+        }
+
+        // Close repay vaults and return rent to user
+        token::close_account(
+            CpiContext::new_with_signer(
+                token_program.to_account_info(),
+                token::CloseAccount {
+                    account: repay0_vault.to_account_info(),
+                    destination: user.to_account_info(),
+                    authority: pair.to_account_info(),
+                },
+                signer_seeds,
+            ),
+        )?;
+
+        token::close_account(
+            CpiContext::new_with_signer(
+                token_program.to_account_info(),
+                token::CloseAccount {
+                    account: repay1_vault.to_account_info(),
+                    destination: user.to_account_info(),
+                    authority: pair.to_account_info(),
+                },
+                signer_seeds,
+            ),
+        )?;
+
+        // Update reserves with fees
         pair.reserve0 = pair.reserve0.saturating_add(fee0);
         pair.reserve1 = pair.reserve1.saturating_add(fee1);
         pair.cash_reserve0 = pair.cash_reserve0.saturating_add(fee0);
