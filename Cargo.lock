@@ -2351,7 +2351,7 @@ dependencies = [
 
 [[package]]
 name = "omnipair"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
@@ -2387,15 +2387,6 @@ dependencies = [
  "solana-pubkey 3.0.0",
  "sqlx",
  "sqlx_migrator",
-]
-
-[[package]]
-name = "omnipair-leverage"
-version = "0.1.0"
-dependencies = [
- "anchor-lang",
- "anchor-spl",
- "omnipair",
 ]
 
 [[package]]

@@ -10,7 +10,9 @@ use crate::{
     events::*,
     generate_gamm_pair_seeds,
     instructions::lending::common::AdjustDebtArgs,
-    state::{DebtDecreaseReason, FutarchyAuthority, Pair, RateModel, UserPosition},
+    state::{
+        DebtDecreaseReason, FutarchyAuthority, Pair, RateModel, UserLeveragePosition, UserPosition,
+    },
     utils::{
         account::get_size_with_discriminator,
         gamm_math::CPCurve,
@@ -178,6 +180,20 @@ pub struct OpenLeverage<'info> {
     pub user_position: Account<'info, UserPosition>,
 
     #[account(
+        init,
+        payer = user,
+        space = get_size_with_discriminator::<UserLeveragePosition>(),
+        seeds = [
+            LEVERAGE_POSITION_SEED_PREFIX,
+            pair.key().as_ref(),
+            user.key().as_ref(),
+            &[args.is_lev_collateral0 as u8]
+        ],
+        bump,
+    )]
+    pub user_leverage_position: Account<'info, UserLeveragePosition>,
+
+    #[account(
         mut,
         seeds = [
             RESERVE_VAULT_SEED_PREFIX,
@@ -236,8 +252,6 @@ pub struct OpenLeverage<'info> {
 
     #[account(mut)]
     pub user: Signer<'info>,
-    #[account(address = authorized_leverage_authority() @ ErrorCode::InvalidLeverageAuthority)]
-    pub leverage_authority: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
     pub system_program: Program<'info, System>,
@@ -278,6 +292,22 @@ pub struct CloseLeverage<'info> {
         bump = user_position.bump
     )]
     pub user_position: Account<'info, UserPosition>,
+
+    #[account(
+        mut,
+        close = user,
+        seeds = [
+            LEVERAGE_POSITION_SEED_PREFIX,
+            pair.key().as_ref(),
+            user.key().as_ref(),
+            &[args.is_lev_collateral0 as u8]
+        ],
+        bump = user_leverage_position.bump,
+        constraint = user_leverage_position.owner == user.key(),
+        constraint = user_leverage_position.pair == pair.key(),
+        constraint = user_leverage_position.is_lev_collateral0 == args.is_lev_collateral0,
+    )]
+    pub user_leverage_position: Account<'info, UserLeveragePosition>,
 
     #[account(
         mut,
@@ -338,8 +368,6 @@ pub struct CloseLeverage<'info> {
 
     #[account(mut)]
     pub user: Signer<'info>,
-    #[account(address = authorized_leverage_authority() @ ErrorCode::InvalidLeverageAuthority)]
-    pub leverage_authority: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
     pub system_program: Program<'info, System>,
@@ -399,6 +427,21 @@ impl<'info> OpenLeverage<'info> {
         } else {
             accounts.pair.reserve0
         };
+        let existing_debt = current_debt(
+            &accounts.user_position,
+            &accounts.pair,
+            &lev_collateral_mint,
+        )?;
+        let existing_position_collateral = if position_mint == accounts.pair.token0 {
+            accounts.user_position.collateral0
+        } else {
+            accounts.user_position.collateral1
+        };
+        require!(
+            existing_debt == 0 && existing_position_collateral == 0,
+            ErrorCode::LeveragePositionNotIsolated
+        );
+
         let amounts = compute_multiply_amounts(
             args.lev_collateral_amount,
             args.multiplier_bps,
@@ -478,6 +521,11 @@ impl<'info> OpenLeverage<'info> {
             amounts.repay_amount,
         )?;
         accounts.user_token_in_account.reload()?;
+        let debt_shares = current_debt_shares(
+            &accounts.user_position,
+            &accounts.pair,
+            &lev_collateral_mint,
+        );
 
         settle_temp_loan(
             &mut accounts.pair,
@@ -489,7 +537,22 @@ impl<'info> OpenLeverage<'info> {
             &accounts.token_2022_program.to_account_info(),
             amounts.repay_amount,
             amounts.flashloan_fee,
-        )
+        )?;
+
+        accounts.user_leverage_position.initialize(
+            accounts.user.key(),
+            accounts.pair.key(),
+            args.is_lev_collateral0,
+            args.lev_collateral_amount,
+            args.multiplier_bps,
+            position_size,
+            amounts.borrow_amount,
+            debt_shares,
+            Clock::get()?.unix_timestamp,
+            ctx.bumps.user_leverage_position,
+        );
+
+        Ok(())
     }
 }
 
@@ -525,6 +588,22 @@ impl<'info> CloseLeverage<'info> {
             pair_key,
             accounts.event_authority.to_account_info(),
         )?;
+
+        let position_collateral = if position_mint == accounts.pair.token0 {
+            accounts.user_position.collateral0
+        } else {
+            accounts.user_position.collateral1
+        };
+        let debt_shares = current_debt_shares(
+            &accounts.user_position,
+            &accounts.pair,
+            &lev_collateral_mint,
+        );
+        require!(
+            position_collateral == accounts.user_leverage_position.position_size
+                && debt_shares == accounts.user_leverage_position.debt_shares,
+            ErrorCode::LeveragePositionNotIsolated
+        );
 
         let debt_amount = current_debt(
             &accounts.user_position,
@@ -634,14 +713,6 @@ fn require_temp_loan_cash(pair: &Pair, is_token0: bool, amount: u64) -> Result<(
         false => require_gte!(pair.cash_reserve1, amount, ErrorCode::BorrowExceedsReserve),
     }
     Ok(())
-}
-
-fn authorized_leverage_authority() -> Pubkey {
-    Pubkey::find_program_address(
-        &[LEVERAGE_AUTHORITY_SEED_PREFIX],
-        &AUTHORIZED_LEVERAGE_PROGRAM_ID,
-    )
-    .0
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1260,6 +1331,14 @@ fn current_debt(user_position: &UserPosition, pair: &Pair, debt_token: &Pubkey) 
         user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)
     } else {
         user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)
+    }
+}
+
+fn current_debt_shares(user_position: &UserPosition, pair: &Pair, debt_token: &Pubkey) -> u128 {
+    if *debt_token == pair.token0 {
+        user_position.debt0_shares
+    } else {
+        user_position.debt1_shares
     }
 }
 

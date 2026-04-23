@@ -1,4 +1,4 @@
-use anchor_lang::{prelude::*, solana_program::pubkey};
+use anchor_lang::prelude::*;
 
 // GLOBAL CONSTANTS
 /// NAD: Nine-decimal fixed point unit (1e9 scaling), similar to WAD (1e18) by Maker.
@@ -108,8 +108,6 @@ pub const COLLATERAL_VAULT_SEED_PREFIX: &[u8] = b"collateral_vault";
 #[constant]
 pub const FLASHLOAN_REPAY_SEED_PREFIX: &[u8] = b"flashloan_repay";
 #[constant]
-pub const LEVERAGE_AUTHORITY_SEED_PREFIX: &[u8] = b"leverage_authority";
-pub const AUTHORIZED_LEVERAGE_PROGRAM_ID: Pubkey =
-    pubkey!("7S6gLNQXrx3GtR91xnF2ZTjdPeJfbMq79u4TovRDQEBn");
+pub const LEVERAGE_POSITION_SEED_PREFIX: &[u8] = b"leverage_position";
 #[constant]
 pub const VERSION: u8 = 1;
