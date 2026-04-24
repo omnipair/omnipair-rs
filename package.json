@@ -26,6 +26,10 @@
     "faucet-mint": "ts-node --esm scripts/mint_pair_tokens.ts",
     "get-pair-stats": "ts-node --esm scripts/get_pair_stats.ts",
     "get-user-stats": "ts-node --esm scripts/get_user_stats.ts",
+    "validate-health-ltv": "ANCHOR_PROVIDER_URL=${ANCHOR_PROVIDER_URL:-http://127.0.0.1:8899} ANCHOR_WALLET=${ANCHOR_WALLET:-deployer-keypair.json} ts-node --esm scripts/validate_health_adjusted_ltv.ts",
+    "validate-health-ltv-fork": "ANCHOR_PROVIDER_URL=${ANCHOR_PROVIDER_URL:-http://127.0.0.1:8899} ANCHOR_WALLET=${ANCHOR_WALLET:-deployer-keypair.json} ts-node --esm scripts/validate_health_adjusted_ltv_fork.ts",
+    "surfpool:fork-mainnet": "surfpool start --network mainnet --no-deploy --no-tui --no-studio --legacy-anchor-compatibility",
+    "deploy:surfpool": "ANCHOR_PROVIDER_URL=http://127.0.0.1:8899 ANCHOR_WALLET=deployer-keypair.json anchor deploy -p omnipair --provider.cluster localnet",
     "deploy-receiver": "anchor deploy -p flashloan_receiver_example",
     "test-flashloan": "ts-node --esm scripts/test_flashloan.ts"
   },

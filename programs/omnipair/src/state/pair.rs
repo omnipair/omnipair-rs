@@ -285,17 +285,38 @@ impl Pair {
     /// directional EMA replaces raw spot price in divergence logic,
     /// enabling one_way_ema / two_way_ema comparisons rather than raw_spot/ema. 
     /// This provides more front-running resistance by capturing quick price drops, while still smoothing upward movements.
-    pub fn get_max_debt_and_cf_bps_for_collateral(&self, pair: &Pair, collateral_token: &Pubkey, collateral_amount: u64) -> Result<(u64, u16, u16)> {
+    pub fn get_max_debt_and_cf_bps_for_collateral_with_overrides(
+        &self,
+        pair: &Pair,
+        collateral_token: &Pubkey,
+        collateral_amount: u64,
+        total_debt_override: Option<u64>,
+        total_collateral_override: Option<u64>,
+    ) -> Result<(u64, u16, u16)> {
         let (
             collateral_ema_price,
             collateral_directional_ema_price,
             collateral_amm_reserve,
             debt_amm_reserve,
             debt_total,
-            
+            total_collateral_for_side,
         ) = match collateral_token == &pair.token0 {
-            true => (pair.ema_price0_nad(), pair.directional_ema_price0_nad(), pair.reserve0, pair.reserve1, pair.total_debt1),
-            false => (pair.ema_price1_nad(), pair.directional_ema_price1_nad(), pair.reserve1, pair.reserve0, pair.total_debt0),
+            true => (
+                pair.ema_price0_nad(),
+                pair.directional_ema_price0_nad(),
+                pair.reserve0,
+                pair.reserve1,
+                total_debt_override.unwrap_or(pair.total_debt1),
+                total_collateral_override.unwrap_or(pair.total_collateral0),
+            ),
+            false => (
+                pair.ema_price1_nad(),
+                pair.directional_ema_price1_nad(),
+                pair.reserve1,
+                pair.reserve0,
+                total_debt_override.unwrap_or(pair.total_debt0),
+                total_collateral_override.unwrap_or(pair.total_collateral1),
+            ),
         };
 
         pessimistic_max_debt(
@@ -305,7 +326,18 @@ impl Pair {
             collateral_amm_reserve,
             debt_amm_reserve,
             debt_total,
+            total_collateral_for_side,
             pair.fixed_cf_bps,
+        )
+    }
+
+    pub fn get_max_debt_and_cf_bps_for_collateral(&self, pair: &Pair, collateral_token: &Pubkey, collateral_amount: u64) -> Result<(u64, u16, u16)> {
+        self.get_max_debt_and_cf_bps_for_collateral_with_overrides(
+            pair,
+            collateral_token,
+            collateral_amount,
+            None,
+            None,
         )
     }
 

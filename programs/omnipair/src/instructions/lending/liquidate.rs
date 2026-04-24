@@ -286,7 +286,33 @@ impl<'info> Liquidate<'info> {
         let collateral_amount_post_liquidation = collateral_amount_pre_liquidation
             .checked_sub(collateral_final)
             .ok_or(ErrorCode::DebtMathOverflow)?;
-        let (_, _, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount_post_liquidation)?;
+        let (total_debt_post_liquidation, total_collateral_post_liquidation) =
+            if is_collateral_token0 {
+                (
+                    pair.total_debt1
+                        .checked_sub(debt_to_writeoff)
+                        .ok_or(ErrorCode::DebtMathOverflow)?,
+                    pair.total_collateral0
+                        .checked_sub(collateral_final)
+                        .ok_or(ErrorCode::DebtMathOverflow)?,
+                )
+            } else {
+                (
+                    pair.total_debt0
+                        .checked_sub(debt_to_writeoff)
+                        .ok_or(ErrorCode::DebtMathOverflow)?,
+                    pair.total_collateral1
+                        .checked_sub(collateral_final)
+                        .ok_or(ErrorCode::DebtMathOverflow)?,
+                )
+            };
+        let (_, _, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral_with_overrides(
+            &pair,
+            &collateral_token,
+            collateral_amount_post_liquidation,
+            Some(total_debt_post_liquidation),
+            Some(total_collateral_post_liquidation),
+        )?;
 
         // Liquidator incentive from base amount (not from penalty)
         let caller_incentive: u64 = min(
@@ -400,5 +426,75 @@ impl<'info> Liquidate<'info> {
         });
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::constants::NAD;
+    use crate::utils::gamm_math::pessimistic_max_debt;
+
+    fn refreshed_liquidation_cf(
+        user_collateral: u64,
+        total_debt: u64,
+        total_pool_collateral: u64,
+        collateral_reserve: u64,
+        debt_reserve: u64,
+        ema_price: u64,
+    ) -> u16 {
+        pessimistic_max_debt(
+            user_collateral,
+            ema_price,
+            ema_price,
+            collateral_reserve,
+            debt_reserve,
+            total_debt,
+            total_pool_collateral,
+            None,
+        )
+        .unwrap()
+        .2
+    }
+
+    #[test]
+    fn liquidation_cf_refresh_uses_post_liquidation_pool_state() {
+        let collateral_reserve = 1_000_000;
+        let debt_reserve = 1_000_000;
+        let ema_price = NAD;
+
+        let user_collateral_pre = 100_000;
+        let total_pool_collateral_pre = 100_000;
+        let total_debt_pre = 100_000;
+
+        let debt_to_writeoff = 25_000;
+        let collateral_final = 10_000;
+
+        let user_collateral_post = user_collateral_pre - collateral_final;
+        let total_pool_collateral_post = total_pool_collateral_pre - collateral_final;
+        let total_debt_post = total_debt_pre - debt_to_writeoff;
+
+        let stale_pre_state_cf = refreshed_liquidation_cf(
+            user_collateral_post,
+            total_debt_pre,
+            total_pool_collateral_pre,
+            collateral_reserve,
+            debt_reserve,
+            ema_price,
+        );
+        let correct_post_state_cf = refreshed_liquidation_cf(
+            user_collateral_post,
+            total_debt_post,
+            total_pool_collateral_post,
+            collateral_reserve,
+            debt_reserve,
+            ema_price,
+        );
+
+        assert_eq!(stale_pre_state_cf, 8167);
+        assert_eq!(correct_post_state_cf, 8500);
+        assert!(
+            correct_post_state_cf > stale_pre_state_cf,
+            "liquidation CF refresh should use post-liquidation pool debt/collateral, not stale pre-liquidation values"
+        );
     }
 }
