@@ -51,10 +51,23 @@ impl<'info> CommonAdjustCollateral<'info> {
                 .checked_sub(withdraw_amount)
                 .ok_or(ErrorCode::Overflow)?;
             let collateral_token = if is_collateral_token0 { self.pair.token0 } else { self.pair.token1 };
-            let (post_withdraw_borrow_limit, _, _) = self.pair.get_max_debt_and_cf_bps_for_collateral(
+            let total_collateral_post_withdraw = if is_collateral_token0 {
+                self.pair
+                    .total_collateral0
+                    .checked_sub(withdraw_amount)
+                    .ok_or(ErrorCode::Overflow)?
+            } else {
+                self.pair
+                    .total_collateral1
+                    .checked_sub(withdraw_amount)
+                    .ok_or(ErrorCode::Overflow)?
+            };
+            let (post_withdraw_borrow_limit, _, _) = self.pair.get_max_debt_and_cf_bps_for_collateral_with_overrides(
                 &self.pair,
                 &collateral_token,
                 remaining_collateral,
+                None,
+                Some(total_collateral_post_withdraw),
             )?;
             require_gte!(
                 post_withdraw_borrow_limit,
@@ -193,6 +206,7 @@ mod tests {
         user_collateral: u64,
         debt: u64,
         total_debt: u64,
+        total_pool_collateral: u64,
         collateral_reserve: u64,
         debt_reserve: u64,
         ema_price: u64,
@@ -205,6 +219,7 @@ mod tests {
             collateral_reserve,
             debt_reserve,
             total_debt,
+            total_pool_collateral,
             None,
         )
         .unwrap();
@@ -227,6 +242,7 @@ mod tests {
         user_collateral: u64,
         debt: u64,
         total_debt: u64,
+        total_pool_collateral: u64,
         collateral_reserve: u64,
         debt_reserve: u64,
         ema_price: u64,
@@ -239,6 +255,7 @@ mod tests {
             collateral_reserve,
             debt_reserve,
             total_debt,
+            total_pool_collateral,
             None,
         )
         .unwrap();
@@ -268,6 +285,7 @@ mod tests {
     fn post_withdraw_borrow_limit(
         user_collateral: u64,
         total_debt: u64,
+        total_pool_collateral: u64,
         collateral_reserve: u64,
         debt_reserve: u64,
         ema_price: u64,
@@ -280,6 +298,7 @@ mod tests {
             collateral_reserve,
             debt_reserve,
             total_debt,
+            total_pool_collateral,
             None,
         )
         .unwrap();
@@ -315,6 +334,7 @@ mod tests {
     fn refreshed_liquidation_limit(
         user_collateral: u64,
         total_debt: u64,
+        total_pool_collateral: u64,
         collateral_reserve: u64,
         debt_reserve: u64,
         ema_price: u64,
@@ -327,6 +347,7 @@ mod tests {
             collateral_reserve,
             debt_reserve,
             total_debt,
+            total_pool_collateral,
             None,
         )
         .unwrap();
@@ -369,6 +390,7 @@ mod tests {
                 collateral_reserve,
                 debt_reserve,
                 0,
+                user_collateral,
                 None,
             )
             .unwrap();
@@ -389,6 +411,7 @@ mod tests {
                 user_collateral,
                 user_debt,
                 user_debt,
+                user_collateral,
                 collateral_reserve,
                 debt_reserve,
                 ema_price,
@@ -398,6 +421,7 @@ mod tests {
             let linear_refreshed_liquidation_limit = refreshed_liquidation_limit(
                 linear_remaining,
                 user_debt,
+                linear_remaining,
                 collateral_reserve,
                 debt_reserve,
                 ema_price,
@@ -415,13 +439,14 @@ mod tests {
             );
             assert!(
                 post_withdraw_borrow_limit(
-                    linear_remaining,
-                    user_debt,
-                    collateral_reserve,
-                    debt_reserve,
-                    ema_price,
-                    directional_ema_price,
-                ) < user_debt,
+                linear_remaining,
+                user_debt,
+                linear_remaining,
+                collateral_reserve,
+                debt_reserve,
+                ema_price,
+                directional_ema_price,
+            ) < user_debt,
                 "post-withdraw borrow-limit check should reject the linear withdrawal for {}",
                 label
             );
@@ -429,7 +454,7 @@ mod tests {
     }
 
     #[test]
-    fn post_withdraw_check_rejects_impact_inverse_dynamic_cf_counterexample() {
+    fn aggressive_one_step_impact_inverse_withdrawal_is_still_rejected() {
         let collateral_reserve = 1_000_000;
         let debt_reserve = 1_000_000;
         let ema_price = NAD;
@@ -442,6 +467,7 @@ mod tests {
             user_collateral,
             user_debt,
             total_debt,
+            user_collateral,
             collateral_reserve,
             debt_reserve,
             ema_price,
@@ -451,27 +477,29 @@ mod tests {
         let refreshed_limit = refreshed_liquidation_limit(
             remaining,
             total_debt,
+            remaining,
             collateral_reserve,
             debt_reserve,
             ema_price,
             directional_ema_price,
         );
 
-        assert_eq!(remaining, 208_039);
+        assert_eq!(remaining, 200_001);
         assert!(
             post_withdraw_borrow_limit(
                 remaining,
                 total_debt,
+                remaining,
                 collateral_reserve,
                 debt_reserve,
                 ema_price,
                 directional_ema_price,
             ) < user_debt,
-            "post-withdraw borrow-limit check should reject the one-step impact inverse"
+            "the aggressive one-step impact inverse should still fail the post-withdraw borrow-limit check"
         );
         assert!(
-            user_debt >= refreshed_limit,
-            "one-step impact inverse should reproduce the dynamic-CF liquidation regression"
+            user_debt < refreshed_limit,
+            "the refreshed liquidation bound should remain above debt even when the post-withdraw borrow-limit check rejects the withdrawal"
         );
     }
 
@@ -485,22 +513,24 @@ mod tests {
         let user_debt = 134_583;
         let total_debt = user_debt;
 
-        let safe_remaining = 226_185;
+        let safe_remaining = 209_856;
         let safe_withdrawal = user_collateral - safe_remaining;
         let refreshed_limit = refreshed_liquidation_limit(
             safe_remaining,
             total_debt,
+            safe_remaining,
             collateral_reserve,
             debt_reserve,
             ema_price,
             directional_ema_price,
         );
 
-        assert_eq!(safe_withdrawal, 1_773_815);
+        assert_eq!(safe_withdrawal, 1_790_144);
         assert!(
             post_withdraw_borrow_limit(
                 safe_remaining,
                 total_debt,
+                safe_remaining,
                 collateral_reserve,
                 debt_reserve,
                 ema_price,
@@ -516,6 +546,7 @@ mod tests {
             post_withdraw_borrow_limit(
                 safe_remaining - 1,
                 total_debt,
+                safe_remaining - 1,
                 collateral_reserve,
                 debt_reserve,
                 ema_price,
@@ -525,5 +556,45 @@ mod tests {
         );
 
         assert_eq!(user_collateral - (safe_withdrawal + 1), safe_remaining - 1);
+    }
+
+    #[test]
+    fn reduced_pool_collateral_makes_post_withdraw_check_stricter() {
+        let collateral_reserve = 1_000_000;
+        let debt_reserve = 1_000_000;
+        let ema_price = NAD;
+        let directional_ema_price = NAD;
+        let user_collateral_pre_withdraw = 300_000;
+        let total_pool_collateral_pre_withdraw = 500_000;
+        let user_debt = 186_345;
+        let remaining_collateral = 1_000;
+        let total_pool_collateral_post_withdraw =
+            total_pool_collateral_pre_withdraw - (user_collateral_pre_withdraw - remaining_collateral);
+
+        let stale_pool_limit = post_withdraw_borrow_limit(
+            remaining_collateral,
+            user_debt,
+            total_pool_collateral_pre_withdraw,
+            collateral_reserve,
+            debt_reserve,
+            ema_price,
+            directional_ema_price,
+        );
+        let reduced_pool_limit = post_withdraw_borrow_limit(
+            remaining_collateral,
+            user_debt,
+            total_pool_collateral_post_withdraw,
+            collateral_reserve,
+            debt_reserve,
+            ema_price,
+            directional_ema_price,
+        );
+
+        assert_eq!(stale_pool_limit, 761);
+        assert_eq!(reduced_pool_limit, 628);
+        assert!(
+            reduced_pool_limit < stale_pool_limit,
+            "post-withdraw pool collateral should produce a stricter borrow limit than stale pre-withdraw collateral"
+        );
     }
 }

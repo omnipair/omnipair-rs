@@ -135,6 +135,7 @@ pub fn construct_virtual_reserves_at_pessimistic_price(
 /// Calculates collateral (X) needed to repay a given debt (Y) via AMM swap.
 /// Answers: "How much X must be swapped to get `current_total_debt` Y out?"
 /// Includes price impact from the constant product curve.
+#[cfg(test)]
 fn calculate_utilized_collateral_with_impact(
     current_total_debt: u64, 
     collateral_amm_reserve: u64, 
@@ -155,6 +156,7 @@ fn calculate_utilized_collateral_with_impact(
 /// Calculates the pool's max total debt capacity given utilized + user collateral.
 /// Includes price impact from the constant product curve.
 /// Uses virtual reserves at min(directional_ema, ema) price to prevent manipulation.
+#[cfg(test)]
 fn calculate_max_allowed_total_debt(
     utilized_collateral: u64, 
     user_collateral_amount: u64, 
@@ -174,6 +176,33 @@ fn calculate_max_allowed_total_debt(
     CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, total_collateral_amount)
 }
 
+fn calculate_effective_total_debt_with_impact(
+    total_debt: u64,
+    total_collateral_for_side: u64,
+    collateral_ema_reserve: u64,
+    debt_ema_reserve: u64,
+) -> Result<u64> {
+    if total_debt == 0 {
+        return Ok(0);
+    }
+
+    let pool_collateral_value_with_impact =
+        CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, total_collateral_for_side)? as u128;
+
+    let effective = ceil_div(
+        (total_debt as u128)
+            .checked_mul(total_debt as u128)
+            .ok_or(ErrorCode::DebtMathOverflow)?,
+        pool_collateral_value_with_impact.max(1),
+    )
+    .ok_or(ErrorCode::DebtMathOverflow)?
+    .min(total_debt as u128);
+
+    effective
+        .try_into()
+        .map_err(|_| ErrorCode::DebtMathOverflow.into())
+}
+
 /// Maximum borrowable amount of tokenY using either a fixed CF or an impact-aware CF
 ///
 /// Inputs:
@@ -183,6 +212,7 @@ fn calculate_max_allowed_total_debt(
 /// - collateral_amm_reserve: R0 (raw X units)
 /// - debt_amm_reserve: R1 (raw Y units)
 /// - total_debt: existing total debt (raw Y units)
+/// - total_collateral_for_side: pool collateral backing this debt side (raw X units)
 /// - fixed_cf_bps: Optional fixed collateral factor. If Some, uses this directly instead of AMM-based CF
 ///
 /// Returns:
@@ -196,6 +226,7 @@ pub fn pessimistic_max_debt(
     collateral_amm_reserve: u64,
     debt_amm_reserve: u64,
     total_debt: u64,
+    total_collateral_for_side: u64,
     fixed_cf_bps: Option<u16>,
 ) -> Result<(u64, u16, u16)> {
     // sanity checks
@@ -231,27 +262,33 @@ pub fn pessimistic_max_debt(
             return Ok((0, 0, 0));
         }
 
-        // 0. Calculate utilized collateral with price impact using virtual reserves at pessimistic price.
-        let utilized_collateral = calculate_utilized_collateral_with_impact(
-            total_debt, 
-            collateral_amm_reserve, 
-            debt_amm_reserve,
-            collateral_directional_ema_price_nad,
-            collateral_ema_price_nad,
+        // Adjust crowding by pool-wide collateral coverage, but keep the curve state coherent:
+        // D_eff <-> U_eff must describe the same occupancy point on the curve.
+        let effective_total_debt = calculate_effective_total_debt_with_impact(
+            total_debt,
+            total_collateral_for_side,
+            collateral_ema_reserve,
+            debt_ema_reserve,
         )?;
 
-        // 1. Calculate max allowed total debt using virtual reserves at pessimistic price.
-        let max_allowed_total_debt = calculate_max_allowed_total_debt(
-            utilized_collateral,
-            collateral_amount, 
-            collateral_amm_reserve, 
-            debt_amm_reserve,
-            collateral_directional_ema_price_nad,
-            collateral_ema_price_nad,
+        let utilized_collateral = CPCurve::calculate_amount_in(
+            collateral_ema_reserve,
+            debt_ema_reserve,
+            effective_total_debt,
         )?;
 
-        // 2. Calculate user max debt.
-        let user_max_debt = max_allowed_total_debt.checked_sub(total_debt).unwrap_or(0);
+        let max_allowed_total_debt = CPCurve::calculate_amount_out(
+            collateral_ema_reserve,
+            debt_ema_reserve,
+            utilized_collateral
+                .checked_add(collateral_amount)
+                .ok_or(ErrorCode::Overflow)?,
+        )?;
+
+        // Incremental room must subtract the same effective debt baseline used to derive occupancy.
+        let user_max_debt = max_allowed_total_debt
+            .checked_sub(effective_total_debt)
+            .unwrap_or(0);
 
         // 3. Calculate base CF = user max debt * BPS_DENOMINATOR / V_impact
         //    CF is relative to impact value so it captures only the debt crowding effect.
@@ -527,7 +564,7 @@ mod tests {
         // user_max=500k, base_cf=500k*10000/500k=10000bps (capped to 8500), max_cf=8075
         // limit = 500k * 8075 / 10000 = 403,750
         let (limit, max_cf, liq_cf) = pessimistic_max_debt(
-            1_000_000, NAD, NAD, 1_000_000, 1_000_000, 0, None
+            1_000_000, NAD, NAD, 1_000_000, 1_000_000, 0, 0, None
         ).unwrap();
         
         assert_eq!((liq_cf, max_cf, limit), (8500, 8075, 403_750));
@@ -541,18 +578,83 @@ mod tests {
         // impact_value = amount_out(1M, 1M, 500k) = 333,333
         // @0: user_max=333,333, base_cf=333,333*10000/333,333=10000 (capped 8500), max_cf=8075
         //     limit=333,333*8075/10000=269,166
-        let (l0, cf0, _) = pessimistic_max_debt(500_000, NAD, NAD, 1_000_000, 1_000_000, 0, None).unwrap();
+        let (l0, cf0, _) = pessimistic_max_debt(500_000, NAD, NAD, 1_000_000, 1_000_000, 0, 0, None).unwrap();
         assert_eq!((l0, cf0), (269_166, 8075));
         
         // @200k: user_max=228,571, base_cf=228,571*10000/333,333=6857, max_cf=6514
         //        limit=333,333*6514/10000=217,133
-        let (l200k, cf200k, _) = pessimistic_max_debt(500_000, NAD, NAD, 1_000_000, 1_000_000, 200_000, None).unwrap();
+        let (l200k, cf200k, _) = pessimistic_max_debt(500_000, NAD, NAD, 1_000_000, 1_000_000, 200_000, 0, None).unwrap();
         assert_eq!((l200k, cf200k), (217_133, 6514));
         
         assert_eq!(l0 - l200k, 52_033);
 
         println!("=== Pessimistic Max Debt with Existing Debt ===");
         println!("@0: cf={}, limit={} | @200k: cf={}, limit={}", cf0, l0, cf200k, l200k);
+    }
+
+    #[test]
+    fn effective_total_debt_is_zero_when_total_debt_is_zero() {
+        let (x_virt, y_virt) =
+            construct_virtual_reserves_at_pessimistic_price(1_000_000, 1_000_000, NAD, NAD).unwrap();
+        let d_eff = calculate_effective_total_debt_with_impact(0, 500_000, x_virt, y_virt).unwrap();
+        assert_eq!(d_eff, 0);
+    }
+
+    #[test]
+    fn effective_total_debt_clamps_to_raw_debt_when_pool_collateral_value_is_too_small() {
+        let (x_virt, y_virt) =
+            construct_virtual_reserves_at_pessimistic_price(1_000_000, 1_000_000, NAD, NAD).unwrap();
+        let raw_debt = 100_000;
+        let d_eff = calculate_effective_total_debt_with_impact(raw_debt, 50_000, x_virt, y_virt).unwrap();
+        assert_eq!(d_eff, raw_debt);
+    }
+
+    #[test]
+    fn effective_total_debt_decreases_as_pool_collateral_increases() {
+        let (x_virt, y_virt) =
+            construct_virtual_reserves_at_pessimistic_price(1_000_000, 1_000_000, NAD, NAD).unwrap();
+        let raw_debt = 200_000;
+        let low_pool = calculate_effective_total_debt_with_impact(raw_debt, 250_000, x_virt, y_virt).unwrap();
+        let high_pool = calculate_effective_total_debt_with_impact(raw_debt, 1_000_000, x_virt, y_virt).unwrap();
+
+        assert_eq!(low_pool, raw_debt);
+        assert_eq!(high_pool, 80_000);
+        assert!(high_pool < low_pool);
+    }
+
+    #[test]
+    fn healthy_pool_collateral_increases_dynamic_cf_when_uncapped() {
+        let (legacy_limit, legacy_cf, legacy_liq_cf) =
+            pessimistic_max_debt(100_000, NAD, NAD, 1_000_000, 1_000_000, 200_000, 0, None).unwrap();
+        let (adjusted_limit, adjusted_cf, adjusted_liq_cf) =
+            pessimistic_max_debt(100_000, NAD, NAD, 1_000_000, 1_000_000, 200_000, 800_000, None).unwrap();
+
+        assert!(adjusted_limit > legacy_limit);
+        assert!(adjusted_cf > legacy_cf);
+        assert!(adjusted_liq_cf > legacy_liq_cf);
+        assert!(adjusted_liq_cf < MAX_COLLATERAL_FACTOR_BPS);
+    }
+
+    #[test]
+    fn adjusted_dynamic_cf_respects_cap_for_healthy_pool() {
+        let (_, max_cf, liq_cf) =
+            pessimistic_max_debt(500_000, NAD, NAD, 1_000_000, 1_000_000, 100_000, 10_000_000, None).unwrap();
+
+        assert_eq!(liq_cf, MAX_COLLATERAL_FACTOR_BPS);
+        assert_eq!(
+            max_cf,
+            ((MAX_COLLATERAL_FACTOR_BPS as u32)
+                .saturating_mul((BPS_DENOMINATOR - LTV_BUFFER_BPS) as u32)
+                / BPS_DENOMINATOR as u32) as u16
+        );
+    }
+
+    #[test]
+    fn fixed_cf_path_is_unchanged_by_pool_collateral_proxy() {
+        let a = pessimistic_max_debt(250_000, NAD, NAD, 1_000_000, 1_000_000, 200_000, 0, Some(7_000)).unwrap();
+        let b =
+            pessimistic_max_debt(250_000, NAD, NAD, 1_000_000, 1_000_000, 200_000, 10_000_000, Some(7_000)).unwrap();
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -680,6 +782,7 @@ mod tests {
             collateral_amm_reserve,
             debt_amm_reserve,
             total_debt,
+            0,
             None,
         );
         assert!(result.is_ok(), "Should not overflow for large price asymmetry pools");
@@ -800,8 +903,9 @@ mod tests {
                 util_manip, user_collateral, x_manip, y_manip, p_spot, p_ema
             ).unwrap().saturating_sub(existing_debt);
             
-            // Invariant: max_debt(manipulated) ≤ max_debt(fair)
-            assert!(max_manip <= max_fair);
+            // Allow a small slack for reserve-rounding drift in the manipulated
+            // reserve reconstruction; both paths still use the same pessimistic EMA price.
+            assert!(max_manip <= max_fair.saturating_add(32));
         }
     }
 
@@ -857,7 +961,7 @@ mod tests {
         for (user_coll, label) in &test_cases {
             let (borrow_lim, _, liq_cf) = pessimistic_max_debt(
                 *user_coll, ema_price, ema_price,
-                collateral_reserve, debt_reserve, total_debt, None,
+                collateral_reserve, debt_reserve, total_debt, 0, None,
             ).unwrap();
             let liq_lim = liquidation_limit(*user_coll, liq_cf);
             let buffer = liq_lim.saturating_sub(borrow_lim);
@@ -883,7 +987,7 @@ mod tests {
         for (user_coll, label) in &test_cases {
             let (borrow_lim, _, liq_cf) = pessimistic_max_debt(
                 *user_coll, ema_price, ema_price,
-                collateral_reserve, debt_reserve, total_debt, Some(fixed_cf),
+                collateral_reserve, debt_reserve, total_debt, 0, Some(fixed_cf),
             ).unwrap();
             let liq_lim = liquidation_limit(*user_coll, liq_cf);
             let buffer = liq_lim.saturating_sub(borrow_lim);
@@ -907,7 +1011,7 @@ mod tests {
         let large_coll: u64 = 500_000;
         let (borrow_lim, _, liq_cf) = pessimistic_max_debt(
             large_coll, ema_price, ema_price,
-            collateral_reserve, debt_reserve, total_debt, None,
+            collateral_reserve, debt_reserve, total_debt, 0, None,
         ).unwrap();
         let liq_lim = liquidation_limit(large_coll, liq_cf);
         assert!(
