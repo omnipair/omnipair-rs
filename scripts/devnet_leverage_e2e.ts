@@ -40,6 +40,8 @@ const ADD_MARGIN_AMOUNT = 1 * UNIT;
 const INCREASE_DEBT_AMOUNT = 2 * UNIT;
 const CLOSE_PERMISSION = 1 << 0;
 const ORDER_KIND_TAKE_PROFIT = 1;
+const BPS_DENOMINATOR = 10_000n;
+const NAD = 1_000_000_000n;
 
 function walletPath(): string {
     return resolve(process.env.ANCHOR_WALLET ?? 'deployer-keypair.json');
@@ -86,6 +88,49 @@ function u64(value: number): Buffer {
     const buffer = Buffer.alloc(8);
     buffer.writeBigUInt64LE(BigInt(value));
     return buffer;
+}
+
+function toBigInt(value: BN | number | bigint): bigint {
+    if (typeof value === 'bigint') {
+        return value;
+    }
+    if (typeof value === 'number') {
+        return BigInt(value);
+    }
+    return BigInt(value.toString());
+}
+
+function ceilDiv(numerator: bigint, denominator: bigint): bigint {
+    return (numerator + denominator - 1n) / denominator;
+}
+
+function calculateAmountOut(reserveIn: bigint, reserveOut: bigint, amountIn: bigint): bigint {
+    return (amountIn * reserveOut) / (reserveIn + amountIn);
+}
+
+function closeoutPricePerUnitNad(pairAccount: any, positionAccount: any) {
+    const collateralAmount = toBigInt(positionAccount.collateralAmount);
+    if (collateralAmount === 0n) {
+        throw new Error('Cannot compute take-profit trigger for a zero-collateral position');
+    }
+
+    const isCollateralToken0 = !positionAccount.isDebtToken0;
+    const reserveIn = isCollateralToken0
+        ? toBigInt(pairAccount.reserve0)
+        : toBigInt(pairAccount.reserve1);
+    const reserveOut = isCollateralToken0
+        ? toBigInt(pairAccount.reserve1)
+        : toBigInt(pairAccount.reserve0);
+    const swapFee = ceilDiv(
+        collateralAmount * BigInt(pairAccount.swapFeeBps),
+        BPS_DENOMINATOR,
+    );
+    const amountInAfterFee = collateralAmount - swapFee;
+    const closeoutValue = calculateAmountOut(reserveIn, reserveOut, amountInAfterFee);
+    return {
+        closeoutValue,
+        closeoutPriceNad: (closeoutValue * NAD) / collateralAmount,
+    };
 }
 
 function paramsHash(args: {
@@ -516,11 +561,20 @@ async function main() {
         provider.wallet.publicKey.toBuffer(),
         u64(orderId),
     ]);
+    const pairForTp = await omnipair.account.pair.fetch(pair);
+    position = await omnipair.account.userLeveragePosition.fetch(userLeveragePosition);
+    const takeProfit = closeoutPricePerUnitNad(pairForTp, position);
+    console.log(
+        'take_profit_trigger_closeout_price_nad:',
+        takeProfit.closeoutPriceNad.toString(),
+        'closeout_value:',
+        takeProfit.closeoutValue.toString(),
+    );
     const createOrderSignature = await leverageDelegate.methods
         .createLeverageOrder({
             orderId: new BN(orderId),
             kind: ORDER_KIND_TAKE_PROFIT,
-            triggerCloseoutPriceNad: new BN(1),
+            triggerCloseoutPriceNad: new BN(takeProfit.closeoutPriceNad.toString()),
         })
         .accounts({
             pair,
@@ -540,6 +594,7 @@ async function main() {
     const custodyTokenAccount = await ensureAta(provider, token0Mint, custodyAuthority, true);
     const executorTokenAccount = await ensureAta(provider, token0Mint, executor.publicKey);
     const ownerTokenAccount = userToken0;
+    console.log('keeper_executor:', executor.publicKey.toBase58());
 
     const beforeIx = await leverageDelegate.methods
         .beforeTakeProfit({ orderId: new BN(orderId) })
