@@ -2,6 +2,23 @@
 
 This directory contains TypeScript scripts for interacting with the Omnipair protocol.
 
+## Devnet Isolated Leverage E2E
+
+The current isolated leverage devnet smoke path is:
+
+```bash
+npm run deploy-devnet-leverage
+npm run test-devnet-leverage
+```
+
+`deploy-devnet-leverage` builds and deploys `omnipair` and `leverage_delegate` to devnet using `deployer-keypair.json` by default. Override with:
+
+```bash
+ANCHOR_WALLET=/path/to/keypair.json DEVNET_RPC_URL=https://api.devnet.solana.com npm run deploy-devnet-leverage
+```
+
+`test-devnet-leverage` is self-contained. It creates fresh SPL test mints, initializes futarchy if needed, initializes a fresh pair, opens isolated leverage, runs owner adjust instructions, creates a delegation/order, then executes a delegated take-profit close through `leverage_delegate`.
+
 ## Updated Scripts for New Pair Config Structure
 
 The scripts have been updated to work with the new pair config structure that includes futarchy authority and pair config PDAs with proper seeds and deployment parameters.
