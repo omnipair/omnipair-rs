@@ -9,11 +9,13 @@ skip-lint = false
 [programs.devnet]
 faucet = "3Ckfn1LMByoDfVpcDPf7nouk5nQAUm51Zkdf1oprQTAK"
 flashloan_receiver_example = "GmtswKBDrFZ9DfUfP7jbPFvbtuG7AJcX73SvoKWGxJbu"
+leverage_delegate = "EPGF9iFrbGnhWgC3To9rC9vxinEYuDHaz4RXgLPvuRkp"
 omnipair = "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE"
 
 [programs.localnet]
 faucet = "3Ckfn1LMByoDfVpcDPf7nouk5nQAUm51Zkdf1oprQTAK"
 flashloan_receiver_example = "GmtswKBDrFZ9DfUfP7jbPFvbtuG7AJcX73SvoKWGxJbu"
+leverage_delegate = "EPGF9iFrbGnhWgC3To9rC9vxinEYuDHaz4RXgLPvuRkp"
 omnipair = "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE"
 
 [programs.mainnet]
@@ -27,7 +29,7 @@ cluster = "mainnet"
 wallet = "deployer-keypair.json"
 
 [workspace]
-members = ["programs/omnipair", "programs/faucet"]
+members = ["programs/omnipair", "programs/faucet", "programs/leverage_delegate"]
 
 [scripts]
 build-devnet = "anchor build -- --features \"development\""

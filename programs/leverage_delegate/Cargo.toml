@@ -1,0 +1,30 @@
+[package]
+name = "leverage_delegate"
+version = "0.1.0"
+description = "Permissionless leverage delegation strategies for Omnipair"
+edition = "2021"
+resolver = "2"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "leverage_delegate"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+cpi-no-ix = ["cpi", "no-log-ix-name"]
+no-spl-memo = []
+default = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build", "omnipair/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+production = []
+development = []
+
+[dependencies]
+anchor-lang = { version = "0.31.1", features = ["init-if-needed", "derive"] }
+anchor-spl = { version = "0.31.1", features = ["metadata"] }
+omnipair = { path = "../omnipair", features = ["no-entrypoint"] }
