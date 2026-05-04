@@ -19,6 +19,26 @@ ANCHOR_WALLET=/path/to/keypair.json DEVNET_RPC_URL=https://api.devnet.solana.com
 
 `test-devnet-leverage` is self-contained. It creates fresh SPL test mints, initializes futarchy if needed, initializes a fresh pair, opens isolated leverage, runs owner adjust instructions, creates a delegation/order, then executes a delegated take-profit close through `leverage_delegate`.
 
+## Surfpool Mainnet-Fork Leverage E2E
+
+Use this path when you want mainnet pair state without devnet program-rent funding:
+
+```bash
+anchor build -- --features "development"
+npm run surfpool-mainnet-fork
+npm run test-surfpool-leverage
+```
+
+The default target pair is `Cp2nGCWWfqkUmPR3pPKoR376Fti8wuYRFrSWJZq1a9SA`. The script funds a fresh local owner on the Surfpool fork with `surfnet_setTokenAccount`, opens isolated leverage against that real pair state, creates a current-price take-profit order, and closes it through a separate keeper executor.
+
+You can also run the combined path, which builds, starts a temporary Surfpool fork, runs the e2e, and stops the fork:
+
+```bash
+npm run surfpool-leverage-e2e
+```
+
+Override the local fork RPC or pair with `SURFPOOL_RPC_URL` and `SURFPOOL_LEVERAGE_PAIR`.
+
 ## Updated Scripts for New Pair Config Structure
 
 The scripts have been updated to work with the new pair config structure that includes futarchy authority and pair config PDAs with proper seeds and deployment parameters.
