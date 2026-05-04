@@ -2070,6 +2070,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "leverage_delegate"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "omnipair",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.180"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2351,7 +2360,7 @@ dependencies = [
 
 [[package]]
 name = "omnipair"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "anchor-lang",
  "anchor-spl",

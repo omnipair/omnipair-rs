@@ -176,6 +176,74 @@ pub struct FlashloanEvent {
 }
 
 #[event]
+pub struct LeveragePositionOpenedEvent {
+    pub position: Pubkey,
+    pub owner: Pubkey,
+    pub is_debt_token0: bool,
+    pub margin_amount: u64,
+    pub debt_amount: u64,
+    pub debt_shares: u128,
+    pub collateral_amount: u64,
+    pub closeout_value: u64,
+    pub equity: u64,
+    pub multiplier_bps: u64,
+    pub metadata: EventMetadata,
+}
+
+#[event]
+pub struct LeveragePositionClosedEvent {
+    pub position: Pubkey,
+    pub owner: Pubkey,
+    pub is_debt_token0: bool,
+    pub debt_repaid: u64,
+    pub collateral_sold: u64,
+    pub closeout_value: u64,
+    pub residual: u64,
+    pub metadata: EventMetadata,
+}
+
+#[event]
+pub struct LeveragePositionUpdatedEvent {
+    pub position: Pubkey,
+    pub owner: Pubkey,
+    pub is_debt_token0: bool,
+    pub collateral_amount: u64,
+    pub debt_amount: u64,
+    pub debt_shares: u128,
+    pub margin_amount: u64,
+    pub closeout_value: u64,
+    pub equity: i128,
+    pub metadata: EventMetadata,
+}
+
+#[event]
+pub struct LeverageDelegationUpdatedEvent {
+    pub delegation: Pubkey,
+    pub position: Pubkey,
+    pub owner: Pubkey,
+    pub delegated_program: Pubkey,
+    pub approved_actions: u32,
+    pub metadata: EventMetadata,
+}
+
+#[event]
+pub struct LeveragePositionLiquidatedEvent {
+    pub position: Pubkey,
+    pub owner: Pubkey,
+    pub liquidator: Pubkey,
+    pub is_debt_token0: bool,
+    pub debt_repaid: u64,
+    pub debt_shares_repaid: u128,
+    pub collateral_seized: u64,
+    pub collateral_to_reserves: u64,
+    pub remaining_collateral: u64,
+    pub closeout_value: u64,
+    pub incentive: u64,
+    pub shortfall: u64,
+    pub metadata: EventMetadata,
+}
+
+#[event]
 pub struct ClaimProtocolFeesEvent {
     pub token0: Pubkey,
     pub token1: Pubkey,

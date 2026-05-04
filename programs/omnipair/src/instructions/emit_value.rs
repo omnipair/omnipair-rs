@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::state::{Pair, UserPosition, RateModel, FutarchyAuthority};
+use crate::state::{FutarchyAuthority, Pair, RateModel, UserLeveragePosition, UserPosition};
 use std::fmt;
 use crate::errors::ErrorCode;
 use crate::constants::*;
@@ -70,6 +70,10 @@ pub enum PairViewKind {
     Reserves,
     CashReserves,
     SwapQuote,
+    /// Quote an isolated leverage open.
+    /// Args: amount = margin amount, token_mint = debt token, debt_amount = isolated debt amount.
+    /// Returns (collateral_out, closeout_value, equity_bps).
+    LeverageOpenQuote,
     /// Simulate liquidation price for a hypothetical new position.
     /// Args: amount = collateral_amount, token_mint = collateral_token, debt_amount = debt to borrow.
     /// Returns NAD-scaled liquidation price of the collateral in debt token units.
@@ -88,6 +92,7 @@ impl fmt::Display for PairViewKind {
             PairViewKind::Reserves => write!(f, "Reserves"),
             PairViewKind::CashReserves => write!(f, "CashReserves"),
             PairViewKind::SwapQuote => write!(f, "SwapQuote"),
+            PairViewKind::LeverageOpenQuote => write!(f, "LeverageOpenQuote"),
             PairViewKind::SimulateLiquidationPrice => write!(f, "SimulateLiquidationPrice"),
         }
     }
@@ -121,6 +126,25 @@ impl fmt::Display for UserPositionViewKind {
     }
 }
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub enum LeveragePositionViewKind {
+    PositionHealth,
+    CloseoutValue,
+    CurrentDebt,
+    IsLiquidatable,
+}
+
+impl fmt::Display for LeveragePositionViewKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            LeveragePositionViewKind::PositionHealth => write!(f, "PositionHealth"),
+            LeveragePositionViewKind::CloseoutValue => write!(f, "CloseoutValue"),
+            LeveragePositionViewKind::CurrentDebt => write!(f, "CurrentDebt"),
+            LeveragePositionViewKind::IsLiquidatable => write!(f, "IsLiquidatable"),
+        }
+    }
+}
+
 
 
 #[derive(Accounts)]
@@ -144,6 +168,24 @@ pub struct ViewUserPositionData<'info> {
         constraint = user_position.pair == pair.key() @ ErrorCode::InvalidPair
     )]
     pub user_position: Account<'info, UserPosition>,
+    #[account(
+        address = pair.rate_model @ ErrorCode::InvalidRateModel
+    )]
+    pub rate_model: Account<'info, RateModel>,
+    #[account(
+        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
+        bump = futarchy_authority.bump
+    )]
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
+}
+
+#[derive(Accounts)]
+pub struct ViewLeveragePositionData<'info> {
+    pub pair: Account<'info, Pair>,
+    #[account(
+        constraint = user_leverage_position.pair == pair.key() @ ErrorCode::InvalidPair
+    )]
+    pub user_leverage_position: Account<'info, UserLeveragePosition>,
     #[account(
         address = pair.rate_model @ ErrorCode::InvalidRateModel
     )]
@@ -216,6 +258,61 @@ impl ViewPairData<'_> {
                 let amount_out = CPCurve::calculate_amount_out(reserve_in, reserve_out, amount_in_after_fee)?;
 
                 (OptionalUint::from_u64(amount_out), OptionalUint::from_u64(swap_fee), empty())
+            },
+            PairViewKind::LeverageOpenQuote => {
+                let margin_amount = args.amount.ok_or(ErrorCode::ArgumentMissing)?;
+                let debt_amount = args.debt_amount.ok_or(ErrorCode::ArgumentMissing)?;
+                let debt_token = args.token_mint.ok_or(ErrorCode::ArgumentMissing)?;
+                let notional = margin_amount
+                    .checked_add(debt_amount)
+                    .ok_or(ErrorCode::Overflow)?;
+                let is_debt_token0 = debt_token == pair.token0;
+                require!(
+                    debt_token == pair.token0 || debt_token == pair.token1,
+                    ErrorCode::InvalidMint
+                );
+
+                let reserve_in = if is_debt_token0 { pair.reserve0 } else { pair.reserve1 };
+                let reserve_out = if is_debt_token0 { pair.reserve1 } else { pair.reserve0 };
+                let swap_fee = ceil_div(
+                    (notional as u128)
+                        .checked_mul(pair.swap_fee_bps as u128)
+                        .ok_or(ErrorCode::FeeMathOverflow)?,
+                    BPS_DENOMINATOR as u128,
+                ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
+                let protocol_fee = ceil_div(
+                    (swap_fee as u128)
+                        .checked_mul(ctx.accounts.futarchy_authority.revenue_share.swap_bps as u128)
+                        .ok_or(ErrorCode::FeeMathOverflow)?,
+                    BPS_DENOMINATOR as u128,
+                ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
+                let collateral_out = leverage_quote_swap(notional, reserve_in, reserve_out, pair.swap_fee_bps)?;
+                let post_reserve_in = reserve_in
+                    .checked_add(notional.checked_sub(protocol_fee).ok_or(ErrorCode::FeeMathOverflow)?)
+                    .ok_or(ErrorCode::Overflow)?;
+                let post_reserve_out = reserve_out
+                    .checked_sub(collateral_out)
+                    .ok_or(ErrorCode::Overflow)?;
+                let closeout_value = leverage_quote_swap(
+                    collateral_out,
+                    post_reserve_out,
+                    post_reserve_in,
+                    pair.swap_fee_bps,
+                )?;
+                let equity = closeout_value.saturating_sub(debt_amount);
+                let equity_bps = match closeout_value {
+                    0 => 0,
+                    _ => (equity as u128)
+                        .checked_mul(BPS_DENOMINATOR as u128)
+                        .ok_or(ErrorCode::Overflow)?
+                        .checked_div(closeout_value as u128)
+                        .ok_or(ErrorCode::Overflow)? as u64,
+                };
+                (
+                    OptionalUint::from_u64(collateral_out),
+                    OptionalUint::from_u64(closeout_value),
+                    OptionalUint::from_u64(equity_bps),
+                )
             },
             PairViewKind::SimulateLiquidationPrice => {
                 // Simulate liquidation price for a hypothetical new position
@@ -482,4 +579,95 @@ impl ViewUserPositionData<'_> {
 
         Ok(())
     }
+}
+
+impl ViewLeveragePositionData<'_> {
+    pub fn handle_view_data(ctx: Context<Self>, getter: LeveragePositionViewKind) -> Result<()> {
+        let pair_key = ctx.accounts.pair.key();
+        let mut pair = ctx.accounts.pair.clone().into_inner();
+        let user_leverage_position = &ctx.accounts.user_leverage_position;
+
+        pair.update(&ctx.accounts.rate_model, &ctx.accounts.futarchy_authority, pair_key, None)?;
+
+        let empty = || OptionalUint::OptionalU64(None);
+        let debt = user_leverage_position.calculate_debt(&pair)?;
+        let is_collateral_token0 = !user_leverage_position.is_debt_token0;
+        let reserve_in = if is_collateral_token0 { pair.reserve0 } else { pair.reserve1 };
+        let reserve_out = if is_collateral_token0 { pair.reserve1 } else { pair.reserve0 };
+        let closeout_value = match user_leverage_position.collateral_amount {
+            0 => 0,
+            collateral_amount => leverage_quote_swap(
+                collateral_amount,
+                reserve_in,
+                reserve_out,
+                pair.swap_fee_bps,
+            )?,
+        };
+        let equity = closeout_value.saturating_sub(debt);
+        let equity_bps = match closeout_value {
+            0 => 0,
+            _ => (equity as u128)
+                .checked_mul(BPS_DENOMINATOR as u128)
+                .ok_or(ErrorCode::Overflow)?
+                .checked_div(closeout_value as u128)
+                .ok_or(ErrorCode::Overflow)? as u64,
+        };
+        let is_liquidatable = if closeout_value <= debt
+            || equity_bps <= LEVERAGE_MAINTENANCE_BUFFER_BPS as u64
+        {
+            1
+        } else {
+            0
+        };
+
+        let value: (OptionalUint, OptionalUint, OptionalUint) = match getter {
+            LeveragePositionViewKind::PositionHealth => (
+                OptionalUint::from_u64(debt),
+                OptionalUint::from_u64(closeout_value),
+                OptionalUint::from_u64(equity_bps),
+            ),
+            LeveragePositionViewKind::CloseoutValue => (
+                OptionalUint::from_u64(closeout_value),
+                empty(),
+                empty(),
+            ),
+            LeveragePositionViewKind::CurrentDebt => (
+                OptionalUint::from_u64(debt),
+                empty(),
+                empty(),
+            ),
+            LeveragePositionViewKind::IsLiquidatable => (
+                OptionalUint::from_u64(is_liquidatable),
+                OptionalUint::from_u64(debt),
+                OptionalUint::from_u64(closeout_value),
+            ),
+        };
+
+        msg!("{}: {:?}", getter, value);
+
+        Ok(())
+    }
+}
+
+fn leverage_quote_swap(
+    amount_in: u64,
+    reserve_in: u64,
+    reserve_out: u64,
+    swap_fee_bps: u16,
+) -> Result<u64> {
+    require!(amount_in > 0, ErrorCode::AmountZero);
+    require!(reserve_in > 0 && reserve_out > 0, ErrorCode::InsufficientLiquidity);
+
+    let swap_fee = ceil_div(
+        (amount_in as u128)
+            .checked_mul(swap_fee_bps as u128)
+            .ok_or(ErrorCode::FeeMathOverflow)?,
+        BPS_DENOMINATOR as u128,
+    )
+    .ok_or(ErrorCode::FeeMathOverflow)? as u64;
+    let amount_in_after_fee = amount_in
+        .checked_sub(swap_fee)
+        .ok_or(ErrorCode::FeeMathOverflow)?;
+
+    CPCurve::calculate_amount_out(reserve_in, reserve_out, amount_in_after_fee)
 }

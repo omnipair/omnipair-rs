@@ -217,4 +217,26 @@ pub enum ErrorCode {
 
     #[msg("Invalid recipient - address does not match configured revenue recipient")]
     InvalidRecipient,
+
+    #[msg("Leverage multiplier exceeds circuit breaker")]
+    LeverageMultiplierTooHigh,
+
+    #[msg("Leverage position does not have enough initial margin")]
+    LeverageInitialMarginTooLow,
+
+    #[msg("Leverage unwind impact exceeds limit")]
+    LeverageUnwindImpactTooHigh,
+
+    #[msg("Leverage position is not liquidatable")]
+    LeveragePositionNotLiquidatable,
+
+    #[msg("Invalid signer")]
+    InvalidSigner,
+
+    #[msg("Invalid leverage delegation")]
+    InvalidLeverageDelegation,
+
+    #[msg("Leverage liquidation would strand debtless collateral")]
+    LeverageLiquidationDust,
+
 }

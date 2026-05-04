@@ -10,7 +10,10 @@ pub mod utils;
 pub use utils::*;
 pub use instructions::*;
 pub use utils::account::*;
-pub use instructions::emit_value::{EmitValueArgs, PairViewKind, UserPositionViewKind, ViewPairData, ViewUserPositionData};
+pub use instructions::emit_value::{
+    EmitValueArgs, LeveragePositionViewKind, PairViewKind, UserPositionViewKind, ViewLeveragePositionData,
+    ViewPairData, ViewUserPositionData,
+};
 
 #[cfg(not(feature = "no-entrypoint"))]
 use solana_security_txt::security_txt;
@@ -62,6 +65,10 @@ pub mod omnipair {
 
     pub fn view_user_position_data(ctx: Context<ViewUserPositionData>, getter: UserPositionViewKind) -> Result<()> {
         ViewUserPositionData::handle_view_data(ctx, getter)
+    }
+
+    pub fn view_leverage_position_data(ctx: Context<ViewLeveragePositionData>, getter: LeveragePositionViewKind) -> Result<()> {
+        ViewLeveragePositionData::handle_view_data(ctx, getter)
     }
 
     // Futarchy authority instructions
@@ -165,5 +172,122 @@ pub mod omnipair {
     #[access_control(ctx.accounts.update_and_validate(&args))]
     pub fn flashloan<'info>(ctx: Context<'_, '_, '_, 'info, Flashloan<'info>>, args: FlashloanArgs) -> Result<()> {
         Flashloan::handle_flashloan(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.update_and_validate_open(&args))]
+    pub fn open_leverage<'info>(
+        ctx: Context<'_, '_, '_, 'info, OpenLeverage<'info>>,
+        args: OpenLeverageArgs,
+    ) -> Result<()> {
+        OpenLeverage::handle_open_leverage(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.update_and_validate_close(&args))]
+    pub fn close_leverage<'info>(
+        ctx: Context<'_, '_, '_, 'info, CloseLeverage<'info>>,
+        args: CloseLeverageArgs,
+    ) -> Result<()> {
+        CloseLeverage::handle_close_leverage(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.update_and_validate_delegated_close(&args))]
+    pub fn delegated_close_leverage<'info>(
+        ctx: Context<'_, '_, '_, 'info, CloseLeverage<'info>>,
+        args: DelegatedCloseLeverageArgs,
+    ) -> Result<()> {
+        CloseLeverage::handle_delegated_close_leverage(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.update_and_validate_add_margin(&args))]
+    pub fn add_leverage_margin<'info>(
+        ctx: Context<'_, '_, '_, 'info, AddLeverageMargin<'info>>,
+        args: AddLeverageMarginArgs,
+    ) -> Result<()> {
+        AddLeverageMargin::handle_add_leverage_margin(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.update_and_validate_delegated_add_margin(&args))]
+    pub fn delegated_add_leverage_margin<'info>(
+        ctx: Context<'_, '_, '_, 'info, AddLeverageMargin<'info>>,
+        args: DelegatedAddLeverageMarginArgs,
+    ) -> Result<()> {
+        AddLeverageMargin::handle_delegated_add_leverage_margin(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.update_and_validate_remove_margin(&args))]
+    pub fn remove_leverage_margin<'info>(
+        ctx: Context<'_, '_, '_, 'info, RemoveLeverageMargin<'info>>,
+        args: RemoveLeverageMarginArgs,
+    ) -> Result<()> {
+        RemoveLeverageMargin::handle_remove_leverage_margin(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.update_and_validate_delegated_remove_margin(&args))]
+    pub fn delegated_remove_leverage_margin<'info>(
+        ctx: Context<'_, '_, '_, 'info, RemoveLeverageMargin<'info>>,
+        args: DelegatedRemoveLeverageMarginArgs,
+    ) -> Result<()> {
+        RemoveLeverageMargin::handle_delegated_remove_leverage_margin(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.update_and_validate_increase(&args))]
+    pub fn increase_leverage<'info>(
+        ctx: Context<'_, '_, '_, 'info, IncreaseLeverage<'info>>,
+        args: IncreaseLeverageArgs,
+    ) -> Result<()> {
+        IncreaseLeverage::handle_increase_leverage(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.update_and_validate_delegated_increase(&args))]
+    pub fn delegated_increase_leverage<'info>(
+        ctx: Context<'_, '_, '_, 'info, IncreaseLeverage<'info>>,
+        args: DelegatedIncreaseLeverageArgs,
+    ) -> Result<()> {
+        IncreaseLeverage::handle_delegated_increase_leverage(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.update_and_validate_decrease(&args))]
+    pub fn decrease_leverage<'info>(
+        ctx: Context<'_, '_, '_, 'info, DecreaseLeverage<'info>>,
+        args: DecreaseLeverageArgs,
+    ) -> Result<()> {
+        DecreaseLeverage::handle_decrease_leverage(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.update_and_validate_delegated_decrease(&args))]
+    pub fn delegated_decrease_leverage<'info>(
+        ctx: Context<'_, '_, '_, 'info, DecreaseLeverage<'info>>,
+        args: DelegatedDecreaseLeverageArgs,
+    ) -> Result<()> {
+        DecreaseLeverage::handle_delegated_decrease_leverage(ctx, args)
+    }
+
+    pub fn create_leverage_delegation(
+        ctx: Context<CreateLeverageDelegation>,
+        args: CreateLeverageDelegationArgs,
+    ) -> Result<()> {
+        CreateLeverageDelegation::handle_create_leverage_delegation(ctx, args)
+    }
+
+    pub fn update_leverage_delegation(
+        ctx: Context<UpdateLeverageDelegation>,
+        args: UpdateLeverageDelegationArgs,
+    ) -> Result<()> {
+        UpdateLeverageDelegation::handle_update_leverage_delegation(ctx, args)
+    }
+
+    pub fn close_leverage_delegation(
+        ctx: Context<CloseLeverageDelegation>,
+        args: CloseLeverageDelegationArgs,
+    ) -> Result<()> {
+        CloseLeverageDelegation::handle_close_leverage_delegation(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.update_and_validate_liquidate_leverage(&args))]
+    pub fn liquidate_leverage<'info>(
+        ctx: Context<'_, '_, '_, 'info, LiquidateLeverage<'info>>,
+        args: LiquidateLeverageArgs,
+    ) -> Result<()> {
+        LiquidateLeverage::handle_liquidate_leverage(ctx, args)
     }
 }

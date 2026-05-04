@@ -2,6 +2,7 @@
 members = [
     "programs/omnipair",
     "programs/faucet",
+    "programs/leverage_delegate",
     "examples/flashloan_receiver",
     "decoders/omnipair-decoder",
 ]
