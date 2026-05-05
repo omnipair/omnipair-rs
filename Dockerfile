@@ -1,9 +1,8 @@
-FROM ubuntu:24.04
+FROM rust:1-trixie
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG TARGETARCH
 ARG NODE_VERSION=20.19.0
-ARG RUST_TOOLCHAIN=1.86.0
 ARG SOLANA_CLI=2.3.11
 ARG ANCHOR_CLI=0.31.1
 
@@ -24,9 +23,6 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     python3 \
     xz-utils \
     && rm -rf /var/lib/apt/lists/*
-
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain "${RUST_TOOLCHAIN}" \
-    && rustup component add rustfmt clippy
 
 RUN case "${TARGETARCH:-amd64}" in \
         amd64) node_arch="x64" ;; \
@@ -51,7 +47,7 @@ RUN curl -sL https://run.surfpool.run/ | bash
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --include=dev
 
 COPY . .
 
