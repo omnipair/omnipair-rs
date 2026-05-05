@@ -52,6 +52,12 @@ NEXT_PUBLIC_LEVERAGE_ENABLED=true
 
 Create three Railway services from this repo:
 
+Railway should deploy this branch with the root `Dockerfile`. That image pins
+Node/npm, Solana, Anchor, and Surfpool so the service start commands do not
+depend on Railway autodetection. If a service is already crashing with
+`npm: command not found`, redeploy after pulling this branch update and confirm
+the service build logs say it is using the Dockerfile.
+
 1. `surfpool-rpc`
    - start command: `npm run fork-lab:surfpool`
    - expose the RPC port as the service `$PORT`
