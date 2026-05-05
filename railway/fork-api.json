@@ -14,9 +14,9 @@
     ]
   },
   "deploy": {
-    "startCommand": "npm run fork-lab:api",
+    "startCommand": "node dist/fork-lab/api.js",
     "healthcheckPath": "/health",
-    "healthcheckTimeout": 60,
+    "healthcheckTimeout": 180,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }

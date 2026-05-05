@@ -6,9 +6,19 @@ COPY package.json package-lock.json tsconfig.json ./
 RUN npm ci --include=dev
 
 COPY scripts/fork-lab ./scripts/fork-lab
+RUN ./node_modules/.bin/tsc \
+    --target es2022 \
+    --module nodenext \
+    --moduleResolution nodenext \
+    --esModuleInterop \
+    --resolveJsonModule \
+    --skipLibCheck \
+    --types node \
+    --outDir dist/fork-lab \
+    scripts/fork-lab/api.ts
 
 RUN node -e "const { Keypair } = require('@solana/web3.js'); const fs = require('fs'); fs.writeFileSync('/app/deployer-keypair.json', JSON.stringify(Array.from(Keypair.generate().secretKey)))"
 
 EXPOSE 3011
 
-CMD ["npm", "run", "fork-lab:api"]
+CMD ["node", "dist/fork-lab/api.js"]
