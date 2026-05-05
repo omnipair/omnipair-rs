@@ -58,6 +58,19 @@ depend on Railway autodetection. If a service is already crashing with
 `npm: command not found`, redeploy after pulling this branch update and confirm
 the service build logs say it is using the Dockerfile.
 
+For cleaner rebuilds, point each Railway service at its service-specific config
+file instead of the root `railway.json`:
+
+- `surfpool-rpc`: `/railway/surfpool-rpc.json`
+- `surfpool-rpc-proxy`: `/railway/rpc-proxy.json`
+- `fork-api`: `/railway/fork-api.json`
+
+Those config files set service-specific watch patterns. For example,
+`scripts/fork-lab/api.ts` changes rebuild only `fork-api`, and
+`scripts/fork-lab/rpc_proxy.ts` changes rebuild only the proxy. The API and
+proxy also use the lightweight `Dockerfile.fork-lab-node`; only `surfpool-rpc`
+builds the heavier Anchor/Surfpool image.
+
 1. `surfpool-rpc`
    - start command: `npm run fork-lab:surfpool`
    - expose the RPC port as the service `$PORT`
