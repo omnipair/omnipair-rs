@@ -1,0 +1,13 @@
+.git
+.github
+.DS_Store
+.env
+.env.*
+node_modules
+target
+coverage
+audits/ackee/trident-tests/target
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+

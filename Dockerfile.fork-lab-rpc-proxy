@@ -1,0 +1,21 @@
+FROM node:20.19-bookworm-slim
+
+WORKDIR /app
+
+COPY package.json package-lock.json tsconfig.json ./
+RUN npm ci --include=dev
+
+COPY scripts/fork-lab/rpc_proxy.ts ./scripts/fork-lab/rpc_proxy.ts
+RUN ./node_modules/.bin/tsc \
+    --target es2022 \
+    --module nodenext \
+    --moduleResolution nodenext \
+    --esModuleInterop \
+    --skipLibCheck \
+    --types node \
+    --outDir dist/fork-lab \
+    scripts/fork-lab/rpc_proxy.ts
+
+EXPOSE 8898
+
+CMD ["node", "dist/fork-lab/rpc_proxy.js"]
