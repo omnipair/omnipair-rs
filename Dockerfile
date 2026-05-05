@@ -1,16 +1,18 @@
-FROM rust:1.86-bookworm
+FROM ubuntu:24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG NODE_MAJOR=20
+ARG RUST_TOOLCHAIN=1.86.0
 ARG SOLANA_CLI=2.3.11
 ARG ANCHOR_CLI=0.31.1
 
 ENV HOME=/root
-ENV PATH="/root/.local/bin:/root/.cargo/bin:/root/.avm/bin:/root/.local/share/solana/install/active_release/bin:${PATH}"
+ENV PATH="/root/.cargo/bin:/root/.local/bin:/root/.avm/bin:/root/.local/share/solana/install/active_release/bin:${PATH}"
 ENV FORK_LAB_BUILD=false
 
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     bash \
+    build-essential \
     ca-certificates \
     curl \
     git \
@@ -21,6 +23,9 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     python3 \
     xz-utils \
     && rm -rf /var/lib/apt/lists/*
+
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain "${RUST_TOOLCHAIN}" \
+    && rustup component add rustfmt clippy
 
 RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - \
     && apt-get update -qq \
