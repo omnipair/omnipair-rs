@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import http from 'node:http';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as anchor from '@coral-xyz/anchor';
 import BN from 'bn.js';
 import {
@@ -21,8 +22,15 @@ import {
     Transaction,
     TransactionInstruction,
 } from '@solana/web3.js';
-import omnipairIdl from './idl/omnipair.json' with { type: 'json' };
-import leverageDelegateIdl from './idl/leverage_delegate.json' with { type: 'json' };
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+function readJson(path: string): unknown {
+    return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+const omnipairIdl = readJson(resolve(__dirname, 'idl/omnipair.json'));
+const leverageDelegateIdl = readJson(resolve(__dirname, 'idl/leverage_delegate.json'));
 
 const PORT = Number(process.env.PORT ?? process.env.FORK_API_PORT ?? 3011);
 const SURFPOOL_RPC_URL = process.env.SURFPOOL_RPC_URL ?? 'http://127.0.0.1:8899';
