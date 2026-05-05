@@ -1,13 +1,14 @@
 FROM ubuntu:24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG NODE_MAJOR=20
+ARG TARGETARCH
+ARG NODE_VERSION=20.19.0
 ARG RUST_TOOLCHAIN=1.86.0
 ARG SOLANA_CLI=2.3.11
 ARG ANCHOR_CLI=0.31.1
 
 ENV HOME=/root
-ENV PATH="/root/.cargo/bin:/root/.local/bin:/root/.avm/bin:/root/.local/share/solana/install/active_release/bin:${PATH}"
+ENV PATH="/opt/node/bin:/root/.cargo/bin:/root/.local/bin:/root/.avm/bin:/root/.local/share/solana/install/active_release/bin:${PATH}"
 ENV FORK_LAB_BUILD=false
 
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
@@ -27,11 +28,17 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain "${RUST_TOOLCHAIN}" \
     && rustup component add rustfmt clippy
 
-RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - \
-    && apt-get update -qq \
-    && apt-get install -y --no-install-recommends nodejs \
+RUN case "${TARGETARCH:-amd64}" in \
+        amd64) node_arch="x64" ;; \
+        arm64) node_arch="arm64" ;; \
+        *) echo "Unsupported Docker target architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && mkdir -p /opt/node \
+    && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${node_arch}.tar.xz" \
+        | tar -xJ -C /opt/node --strip-components=1 \
     && npm install -g yarn@1.22.22 \
-    && rm -rf /var/lib/apt/lists/*
+    && node --version \
+    && npm --version
 
 RUN sh -c "$(curl -sSfL https://release.anza.xyz/v${SOLANA_CLI}/install)"
 
