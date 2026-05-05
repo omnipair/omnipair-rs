@@ -1,0 +1,12 @@
+FROM node:20.19-bookworm-slim
+
+WORKDIR /app
+
+COPY package.json package-lock.json tsconfig.json ./
+RUN npm ci --include=dev
+
+COPY scripts/fork-lab/rpc_proxy.ts ./scripts/fork-lab/rpc_proxy.ts
+
+EXPOSE 8898
+
+CMD ["npm", "run", "fork-lab:rpc-proxy"]

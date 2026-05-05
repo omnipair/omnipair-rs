@@ -68,8 +68,8 @@ file instead of the root `railway.json`:
 Those config files set service-specific watch patterns. For example,
 `scripts/fork-lab/api.ts` changes rebuild only `fork-api`, and
 `scripts/fork-lab/rpc_proxy.ts` changes rebuild only the proxy. The API and
-proxy also use the lightweight `Dockerfile.fork-lab-node`; only `surfpool-rpc`
-builds the heavier Anchor/Surfpool image.
+proxy also use lightweight Node-only Dockerfiles; only `surfpool-rpc` builds
+the heavier Anchor/Surfpool image.
 
 1. `surfpool-rpc`
    - start command: `npm run fork-lab:surfpool`

@@ -2,9 +2,9 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "DOCKERFILE",
-    "dockerfilePath": "Dockerfile.fork-lab-node",
+    "dockerfilePath": "Dockerfile.fork-lab-rpc-proxy",
     "watchPatterns": [
-      "Dockerfile.fork-lab-node",
+      "Dockerfile.fork-lab-rpc-proxy",
       "package.json",
       "package-lock.json",
       "tsconfig.json",

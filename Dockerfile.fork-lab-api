@@ -9,6 +9,6 @@ COPY scripts/fork-lab ./scripts/fork-lab
 
 RUN node -e "const { Keypair } = require('@solana/web3.js'); const fs = require('fs'); fs.writeFileSync('/app/deployer-keypair.json', JSON.stringify(Array.from(Keypair.generate().secretKey)))"
 
-EXPOSE 3011 8898
+EXPOSE 3011
 
 CMD ["npm", "run", "fork-lab:api"]
