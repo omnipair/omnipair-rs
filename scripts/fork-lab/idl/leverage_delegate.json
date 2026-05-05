@@ -1,0 +1,1114 @@
+{
+  "address": "EPGF9iFrbGnhWgC3To9rC9vxinEYuDHaz4RXgLPvuRkp",
+  "metadata": {
+    "name": "leverage_delegate",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Permissionless leverage delegation strategies for Omnipair"
+  },
+  "instructions": [
+    {
+      "name": "after_close_order",
+      "discriminator": [
+        156,
+        224,
+        238,
+        250,
+        95,
+        229,
+        235,
+        59
+      ],
+      "accounts": [
+        {
+          "name": "order",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  118,
+                  101,
+                  114,
+                  97,
+                  103,
+                  101,
+                  95,
+                  111,
+                  114,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "order.position",
+                "account": "LeverageOrder"
+              },
+              {
+                "kind": "account",
+                "path": "order.owner",
+                "account": "LeverageOrder"
+              },
+              {
+                "kind": "arg",
+                "path": "args.order_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "writable": true
+        },
+        {
+          "name": "user_leverage_position"
+        },
+        {
+          "name": "custody_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  118,
+                  101,
+                  114,
+                  97,
+                  103,
+                  101,
+                  95,
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "order"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custody_token_account",
+          "writable": true
+        },
+        {
+          "name": "executor_token_account",
+          "writable": true
+        },
+        {
+          "name": "owner_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_mint"
+        },
+        {
+          "name": "executor",
+          "signer": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "ExecuteOrderArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "before_stop_loss",
+      "discriminator": [
+        246,
+        62,
+        82,
+        232,
+        168,
+        199,
+        121,
+        78
+      ],
+      "accounts": [
+        {
+          "name": "order",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  118,
+                  101,
+                  114,
+                  97,
+                  103,
+                  101,
+                  95,
+                  111,
+                  114,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_leverage_position"
+              },
+              {
+                "kind": "account",
+                "path": "order.owner",
+                "account": "LeverageOrder"
+              },
+              {
+                "kind": "arg",
+                "path": "args.order_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pair"
+        },
+        {
+          "name": "user_leverage_position"
+        },
+        {
+          "name": "user_leverage_delegation"
+        },
+        {
+          "name": "custody_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  118,
+                  101,
+                  114,
+                  97,
+                  103,
+                  101,
+                  95,
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "order"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custody_token_account"
+        },
+        {
+          "name": "token_mint"
+        },
+        {
+          "name": "executor",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "ExecuteOrderArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "before_take_profit",
+      "discriminator": [
+        5,
+        35,
+        111,
+        0,
+        223,
+        131,
+        193,
+        31
+      ],
+      "accounts": [
+        {
+          "name": "order",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  118,
+                  101,
+                  114,
+                  97,
+                  103,
+                  101,
+                  95,
+                  111,
+                  114,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_leverage_position"
+              },
+              {
+                "kind": "account",
+                "path": "order.owner",
+                "account": "LeverageOrder"
+              },
+              {
+                "kind": "arg",
+                "path": "args.order_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pair"
+        },
+        {
+          "name": "user_leverage_position"
+        },
+        {
+          "name": "user_leverage_delegation"
+        },
+        {
+          "name": "custody_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  118,
+                  101,
+                  114,
+                  97,
+                  103,
+                  101,
+                  95,
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "order"
+              }
+            ]
+          }
+        },
+        {
+          "name": "custody_token_account"
+        },
+        {
+          "name": "token_mint"
+        },
+        {
+          "name": "executor",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "ExecuteOrderArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "cancel_leverage_order",
+      "discriminator": [
+        26,
+        88,
+        173,
+        106,
+        175,
+        242,
+        203,
+        122
+      ],
+      "accounts": [
+        {
+          "name": "order",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  118,
+                  101,
+                  114,
+                  97,
+                  103,
+                  101,
+                  95,
+                  111,
+                  114,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "order.position",
+                "account": "LeverageOrder"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "args.order_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "_args",
+          "type": {
+            "defined": {
+              "name": "CancelLeverageOrderArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "create_leverage_order",
+      "discriminator": [
+        197,
+        206,
+        10,
+        223,
+        89,
+        46,
+        93,
+        17
+      ],
+      "accounts": [
+        {
+          "name": "pair"
+        },
+        {
+          "name": "user_leverage_position"
+        },
+        {
+          "name": "order",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  118,
+                  101,
+                  114,
+                  97,
+                  103,
+                  101,
+                  95,
+                  111,
+                  114,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_leverage_position"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "args.order_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "CreateLeverageOrderArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_leverage_order",
+      "discriminator": [
+        25,
+        101,
+        101,
+        3,
+        125,
+        229,
+        46,
+        242
+      ],
+      "accounts": [
+        {
+          "name": "pair"
+        },
+        {
+          "name": "user_leverage_position"
+        },
+        {
+          "name": "order",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  101,
+                  118,
+                  101,
+                  114,
+                  97,
+                  103,
+                  101,
+                  95,
+                  111,
+                  114,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_leverage_position"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "args.order_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "UpdateLeverageOrderArgs"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "LeverageOrder",
+      "discriminator": [
+        232,
+        162,
+        45,
+        148,
+        106,
+        106,
+        37,
+        132
+      ]
+    },
+    {
+      "name": "Pair",
+      "discriminator": [
+        85,
+        72,
+        49,
+        176,
+        182,
+        228,
+        141,
+        82
+      ]
+    },
+    {
+      "name": "UserLeverageDelegation",
+      "discriminator": [
+        132,
+        100,
+        107,
+        40,
+        242,
+        26,
+        217,
+        104
+      ]
+    },
+    {
+      "name": "UserLeveragePosition",
+      "discriminator": [
+        15,
+        62,
+        31,
+        132,
+        148,
+        77,
+        30,
+        125
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidOrder",
+      "msg": "Invalid leverage order"
+    },
+    {
+      "code": 6001,
+      "name": "TriggerNotMet",
+      "msg": "Order trigger is not met"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidTokenAccount",
+      "msg": "Invalid token account"
+    },
+    {
+      "code": 6003,
+      "name": "MathOverflow",
+      "msg": "Math overflow"
+    },
+    {
+      "code": 6004,
+      "name": "ApprovalSerializationFailed",
+      "msg": "Approval serialization failed"
+    }
+  ],
+  "types": [
+    {
+      "name": "CancelLeverageOrderArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "order_id",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CreateLeverageOrderArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "order_id",
+            "type": "u64"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "trigger_closeout_price_nad",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ExecuteOrderArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "order_id",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LastPriceEMA",
+      "docs": [
+        "Tracks exponential moving averages (EMAs) for the last observed price.",
+        "- `symmetric`: standard two-way EMA (exponential price growth and decay)",
+        "- `directional`: one-way bottom-up asymmetric EMA (exponential price growth, but snaps instantly on price drops)"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "symmetric",
+            "type": "u64"
+          },
+          {
+            "name": "directional",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LeverageOrder",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "pair",
+            "type": "pubkey"
+          },
+          {
+            "name": "position",
+            "type": "pubkey"
+          },
+          {
+            "name": "order_id",
+            "type": "u64"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "trigger_closeout_price_nad",
+            "type": "u64"
+          },
+          {
+            "name": "staged_margin",
+            "type": "u64"
+          },
+          {
+            "name": "staged_custody_token_account",
+            "type": "pubkey"
+          },
+          {
+            "name": "staged_output_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "staged_output_amount",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Pair",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "token0",
+            "type": "pubkey"
+          },
+          {
+            "name": "token1",
+            "type": "pubkey"
+          },
+          {
+            "name": "lp_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "rate_model",
+            "type": "pubkey"
+          },
+          {
+            "name": "swap_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "half_life",
+            "type": "u64"
+          },
+          {
+            "name": "fixed_cf_bps",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "reserve0",
+            "type": "u64"
+          },
+          {
+            "name": "reserve1",
+            "type": "u64"
+          },
+          {
+            "name": "cash_reserve0",
+            "type": "u64"
+          },
+          {
+            "name": "cash_reserve1",
+            "type": "u64"
+          },
+          {
+            "name": "last_price0_ema",
+            "type": {
+              "defined": {
+                "name": "LastPriceEMA"
+              }
+            }
+          },
+          {
+            "name": "last_price1_ema",
+            "type": {
+              "defined": {
+                "name": "LastPriceEMA"
+              }
+            }
+          },
+          {
+            "name": "last_update",
+            "type": "u64"
+          },
+          {
+            "name": "last_rate0",
+            "type": "u64"
+          },
+          {
+            "name": "last_rate1",
+            "type": "u64"
+          },
+          {
+            "name": "total_debt0",
+            "type": "u64"
+          },
+          {
+            "name": "total_debt1",
+            "type": "u64"
+          },
+          {
+            "name": "total_debt0_shares",
+            "type": "u128"
+          },
+          {
+            "name": "total_debt1_shares",
+            "type": "u128"
+          },
+          {
+            "name": "total_supply",
+            "type": "u64"
+          },
+          {
+            "name": "total_collateral0",
+            "type": "u64"
+          },
+          {
+            "name": "total_collateral1",
+            "type": "u64"
+          },
+          {
+            "name": "token0_decimals",
+            "type": "u8"
+          },
+          {
+            "name": "token1_decimals",
+            "type": "u8"
+          },
+          {
+            "name": "params_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault_bumps",
+            "type": {
+              "defined": {
+                "name": "VaultBumps"
+              }
+            }
+          },
+          {
+            "name": "reduce_only",
+            "docs": [
+              "Per-pair reduce-only mode - when enabled, blocks borrowing and adding liquidity for this pair"
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateLeverageOrderArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "order_id",
+            "type": "u64"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "trigger_closeout_price_nad",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UserLeverageDelegation",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "pair",
+            "type": "pubkey"
+          },
+          {
+            "name": "position",
+            "type": "pubkey"
+          },
+          {
+            "name": "is_debt_token0",
+            "type": "bool"
+          },
+          {
+            "name": "delegated_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "approved_actions",
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UserLeveragePosition",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "pair",
+            "type": "pubkey"
+          },
+          {
+            "name": "is_debt_token0",
+            "type": "bool"
+          },
+          {
+            "name": "collateral_amount",
+            "type": "u64"
+          },
+          {
+            "name": "margin_amount",
+            "type": "u64"
+          },
+          {
+            "name": "open_notional",
+            "type": "u64"
+          },
+          {
+            "name": "debt_amount",
+            "type": "u64"
+          },
+          {
+            "name": "debt_shares",
+            "type": "u128"
+          },
+          {
+            "name": "multiplier_bps",
+            "type": "u64"
+          },
+          {
+            "name": "opened_at",
+            "type": "i64"
+          },
+          {
+            "name": "opened_slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VaultBumps",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "reserve0",
+            "type": "u8"
+          },
+          {
+            "name": "reserve1",
+            "type": "u8"
+          },
+          {
+            "name": "collateral0",
+            "type": "u8"
+          },
+          {
+            "name": "collateral1",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}
