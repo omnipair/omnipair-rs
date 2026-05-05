@@ -13,9 +13,9 @@
     ]
   },
   "deploy": {
-    "startCommand": "npm run fork-lab:rpc-proxy",
+    "startCommand": "node dist/fork-lab/rpc_proxy.js",
     "healthcheckPath": "/health",
-    "healthcheckTimeout": 60,
+    "healthcheckTimeout": 180,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }
