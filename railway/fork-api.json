@@ -10,6 +10,7 @@
       "tsconfig.json",
       "railway/fork-api.json",
       "scripts/fork-lab/api.ts",
+      "scripts/fork-lab/api_core.ts",
       "scripts/fork-lab/idl/**"
     ]
   },

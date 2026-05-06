@@ -16,6 +16,7 @@ RUN ./node_modules/.bin/tsc \
     --types node \
     --outDir dist/fork-lab \
     scripts/fork-lab/api.ts \
+    scripts/fork-lab/api_core.ts \
     && mkdir -p dist/fork-lab/idl \
     && cp scripts/fork-lab/idl/*.json dist/fork-lab/idl/
 
