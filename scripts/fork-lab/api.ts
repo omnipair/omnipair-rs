@@ -71,13 +71,43 @@ function loadKeypair(): Keypair {
     return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(path, 'utf8'))));
 }
 
-const payer = loadKeypair();
-const connection = new Connection(SURFPOOL_RPC_URL, 'confirmed');
-const provider = new anchor.AnchorProvider(connection, new anchor.Wallet(payer), { commitment: 'confirmed' });
-anchor.setProvider(provider);
+let payer: Keypair;
+let connection: Connection;
+let provider: anchor.AnchorProvider;
+let omnipair: any;
+let leverageDelegate: any;
+let runtimeError: string | null = null;
 
-const omnipair: any = new anchor.Program(omnipairIdl as anchor.Idl, provider);
-const leverageDelegate: any = new anchor.Program(leverageDelegateIdl as anchor.Idl, provider);
+function initializeRuntime() {
+    if (omnipair && leverageDelegate) {
+        return;
+    }
+
+    try {
+        payer = loadKeypair();
+        connection = new Connection(SURFPOOL_RPC_URL, 'confirmed');
+        provider = new anchor.AnchorProvider(connection, new anchor.Wallet(payer), { commitment: 'confirmed' });
+        anchor.setProvider(provider);
+
+        omnipair = new anchor.Program(omnipairIdl as anchor.Idl, provider);
+        leverageDelegate = new anchor.Program(leverageDelegateIdl as anchor.Idl, provider);
+        runtimeError = null;
+    } catch (error) {
+        runtimeError = error instanceof Error ? error.message : String(error);
+        console.error('fork API runtime initialization failed:', runtimeError);
+        throw error;
+    }
+}
+
+function healthPayload() {
+    return {
+        ok: true,
+        rpcUrl: SURFPOOL_RPC_URL,
+        publicRpcUrl: PUBLIC_RPC_URL,
+        runtimeInitialized: Boolean(omnipair && leverageDelegate),
+        runtimeError,
+    };
+}
 
 function seed(value: string): Buffer {
     return Buffer.from(value);
@@ -563,8 +593,10 @@ async function route(req: http.IncomingMessage, body: any) {
     const pathname = url.pathname;
 
     if (req.method === 'GET' && pathname === '/health') {
-        return { ok: true, rpcUrl: SURFPOOL_RPC_URL, publicRpcUrl: PUBLIC_RPC_URL };
+        return healthPayload();
     }
+
+    initializeRuntime();
 
     if (req.method === 'GET' && pathname === '/api/v1/fork/config') {
         return {
@@ -824,7 +856,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && req.url === '/health') {
-        sendJson(res, 200, { ok: true, rpcUrl: SURFPOOL_RPC_URL, publicRpcUrl: PUBLIC_RPC_URL });
+        sendJson(res, 200, healthPayload());
         return;
     }
 
@@ -843,6 +875,5 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`fork API listening on :${PORT}`);
     console.log(`Surfpool RPC: ${SURFPOOL_RPC_URL}`);
     console.log(`Public RPC: ${PUBLIC_RPC_URL}`);
-    console.log(`Omnipair: ${omnipair.programId.toBase58()}`);
-    console.log(`Leverage delegate: ${leverageDelegate.programId.toBase58()}`);
+    console.log('Solana runtime will initialize on first non-health request');
 });
