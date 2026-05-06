@@ -481,6 +481,33 @@ async function apiPoolPayload(pairKey: PublicKey) {
     };
 }
 
+async function pairedTokensPayload(inputMint: PublicKey) {
+    const pairKey = DEFAULT_PAIR;
+    const pair = await omnipair.account.pair.fetch(pairKey) as PairAccount;
+    const input = inputMint.toBase58();
+    const token0 = pair.token0.toBase58();
+    const token1 = pair.token1.toBase58();
+    const paired = input === token0 ? token1 : input === token1 ? token0 : null;
+
+    return {
+        tokens: paired ? [paired] : [],
+        pools: paired
+            ? [
+                {
+                    pair_address: pairKey.toBase58(),
+                    paired_token: paired,
+                    swap_fee_bps: String(pair.swapFeeBps),
+                    fixed_cf_bps: pair.fixedCfBps === null || pair.fixedCfBps === undefined
+                        ? null
+                        : String(pair.fixedCfBps),
+                },
+            ]
+            : [],
+        inputToken: input,
+        count: paired ? 1 : 0,
+    };
+}
+
 async function forkMarketStatsPayload(pairKey: PublicKey, windowHours: number) {
     return {
         apr: 0,
@@ -715,6 +742,7 @@ export async function route(req: http.IncomingMessage, body: any) {
             ok: true,
             endpoints: [
                 '/api/v1/pools',
+                '/api/v1/pools/paired-tokens/:mint',
                 '/api/v1/fork/config',
                 '/api/v1/fork/pair',
                 '/api/v1/fork/leverage/positions',
@@ -745,6 +773,11 @@ export async function route(req: http.IncomingMessage, body: any) {
     if (req.method === 'GET' && pathname === '/api/v1/pools') {
         const pool = await apiPoolPayload(parsePair(url.searchParams.get('pair')));
         return { success: true, data: { pools: [pool], count: 1 } };
+    }
+
+    if (req.method === 'GET' && pathname.startsWith('/api/v1/pools/paired-tokens/')) {
+        const mint = parsePubkey(pathname.slice('/api/v1/pools/paired-tokens/'.length), 'mint');
+        return { success: true, data: await pairedTokensPayload(mint) };
     }
 
     if (req.method === 'GET' && pathname.startsWith('/api/v1/pools/')) {
