@@ -32,7 +32,7 @@ function readJson(path: string): unknown {
 const omnipairIdl = readJson(resolve(__dirname, 'idl/omnipair.json'));
 const leverageDelegateIdl = readJson(resolve(__dirname, 'idl/leverage_delegate.json'));
 
-const PORT = Number(process.env.PORT ?? process.env.FORK_API_PORT ?? 3011);
+const PORT = Number(process.env.PORT ?? process.env.FORK_API_PORT ?? 8080);
 const SURFPOOL_RPC_URL = process.env.SURFPOOL_RPC_URL ?? 'http://127.0.0.1:8899';
 const PUBLIC_RPC_URL = process.env.PUBLIC_SURFPOOL_RPC_URL ?? process.env.SURFPOOL_RPC_PROXY_URL ?? SURFPOOL_RPC_URL;
 const ADMIN_TOKEN = process.env.FORK_ADMIN_TOKEN ?? '';
@@ -820,6 +820,11 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'OPTIONS') {
         res.writeHead(204, corsHeaders());
         res.end();
+        return;
+    }
+
+    if (req.method === 'GET' && req.url === '/health') {
+        sendJson(res, 200, { ok: true, rpcUrl: SURFPOOL_RPC_URL, publicRpcUrl: PUBLIC_RPC_URL });
         return;
     }
 
