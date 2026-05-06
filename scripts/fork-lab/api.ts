@@ -8,7 +8,7 @@ function corsHeaders() {
     return {
         'access-control-allow-origin': process.env.FORK_API_CORS_ORIGIN ?? '*',
         'access-control-allow-methods': 'GET, POST, OPTIONS',
-        'access-control-allow-headers': 'content-type, authorization, x-fork-admin-token',
+        'access-control-allow-headers': 'content-type, authorization, solana-client, x-fork-admin-token',
     };
 }
 

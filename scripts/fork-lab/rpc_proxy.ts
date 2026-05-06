@@ -16,7 +16,7 @@ function corsHeaders() {
     return {
         'access-control-allow-origin': process.env.FORK_RPC_PROXY_CORS_ORIGIN ?? '*',
         'access-control-allow-methods': 'POST, OPTIONS, GET',
-        'access-control-allow-headers': 'content-type, authorization, x-fork-admin-token',
+        'access-control-allow-headers': 'content-type, authorization, solana-client, x-fork-admin-token',
     };
 }
 
