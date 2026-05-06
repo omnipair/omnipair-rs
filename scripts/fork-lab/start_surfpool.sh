@@ -43,6 +43,10 @@ do
   fi
 done
 
+mkdir -p "$HOME/.config/solana"
+cp "$WALLET_PATH" "$HOME/.config/solana/id.json"
+solana config set --keypair "$HOME/.config/solana/id.json" >/dev/null
+
 echo "Starting Surfpool fork on ${HOST}:${RPC_PORT} with local artifacts:"
 ls -lh target/deploy/omnipair.so target/deploy/leverage_delegate.so
 

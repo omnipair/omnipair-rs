@@ -52,6 +52,9 @@ RUN npm ci --include=dev
 COPY . .
 
 RUN solana-keygen new --no-bip39-passphrase --force -o /app/deployer-keypair.json \
+    && mkdir -p /root/.config/solana \
+    && cp /app/deployer-keypair.json /root/.config/solana/id.json \
+    && solana config set --keypair /root/.config/solana/id.json \
     && anchor build -- --features "development"
 
 EXPOSE 3011 8898 8899 8900

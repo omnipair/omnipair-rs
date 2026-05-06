@@ -75,6 +75,9 @@ the heavier Anchor/Surfpool image.
    - start command: `npm run fork-lab:surfpool`
    - do not set `PORT`; Surfpool must listen on `8899` so its generated
      Anchor deployment runbook upgrades the local Omnipair programs
+   - use the Dockerfile-generated `deployer-keypair.json`; the startup script
+     mirrors it into Solana's default `~/.config/solana/id.json` for the
+     Surfpool deployment runbook
    - set `SURFPOOL_WS_PORT=8900`
 2. `surfpool-rpc-proxy`
    - start command: `npm run fork-lab:rpc-proxy`
