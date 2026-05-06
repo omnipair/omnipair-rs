@@ -32,7 +32,9 @@ const leverageDelegateIdl = parseBase64Json(LEVERAGE_DELEGATE_IDL_BASE64);
 
 const PORT = Number(process.env.PORT ?? process.env.FORK_API_PORT ?? 8080);
 const SURFPOOL_RPC_URL = process.env.SURFPOOL_RPC_URL ?? 'http://127.0.0.1:8899';
-const PUBLIC_RPC_URL = process.env.PUBLIC_SURFPOOL_RPC_URL ?? process.env.SURFPOOL_RPC_PROXY_URL ?? SURFPOOL_RPC_URL;
+const PUBLIC_RPC_URL = normalizePublicUrl(
+    process.env.PUBLIC_SURFPOOL_RPC_URL ?? process.env.SURFPOOL_RPC_PROXY_URL ?? SURFPOOL_RPC_URL,
+);
 const ADMIN_TOKEN = process.env.FORK_ADMIN_TOKEN ?? '';
 const ALLOW_PUBLIC_FUNDING = process.env.FORK_ALLOW_PUBLIC_FUNDING !== 'false';
 const DEFAULT_PAIR = new PublicKey(
@@ -43,6 +45,12 @@ const CLOSE_PERMISSION = 1 << 0;
 const ORDER_KIND_TAKE_PROFIT = 1;
 const BPS_DENOMINATOR = 10_000n;
 const NAD = 1_000_000_000n;
+
+function normalizePublicUrl(value: string): string {
+    if (/^https?:\/\//i.test(value)) return value;
+    if (value.includes('localhost') || value.includes('127.0.0.1')) return `http://${value}`;
+    return `https://${value}`;
+}
 
 type PairAccount = {
     token0: PublicKey;
@@ -473,6 +481,114 @@ async function apiPoolPayload(pairKey: PublicKey) {
     };
 }
 
+async function forkMarketStatsPayload(pairKey: PublicKey, windowHours: number) {
+    return {
+        apr: 0,
+        apr_breakdown: {
+            swap_apr: 0,
+            interest_apr: 0,
+        },
+        pairAddress: pairKey.toBase58(),
+        windowHours,
+    };
+}
+
+async function forkMarketVolumePayload(pairKey: PublicKey, windowHours: number) {
+    return {
+        volume0: '0',
+        volume1: '0',
+        volumeUsd: '0',
+        period: `${windowHours}h`,
+        hours: windowHours,
+        pairAddress: pairKey.toBase58(),
+    };
+}
+
+async function forkMarketFeesPayload(pairKey: PublicKey, windowHours: number) {
+    return {
+        total_fees_usd: '0',
+        feesUsd: '0',
+        period: `${windowHours}h`,
+        hours: windowHours,
+        pairAddress: pairKey.toBase58(),
+    };
+}
+
+async function forkMarketCandlesPayload(pairKey: PublicKey, resolutionMinutes: number, from: number, to: number) {
+    const pair = await omnipair.account.pair.fetch(pairKey) as PairAccount;
+    const reserve0 = Number(toBigInt(pair.reserve0));
+    const reserve1 = Number(toBigInt(pair.reserve1));
+    const price = reserve0 > 0 ? reserve1 / reserve0 : 0;
+    const step = Math.max(60, resolutionMinutes * 60);
+    const end = Number.isFinite(to) && to > 0 ? to : Math.floor(Date.now() / 1000);
+    const start = Number.isFinite(from) && from > 0 ? from : end - 24 * 60 * 60;
+    const first = Math.floor(start / step) * step;
+    const last = Math.floor(end / step) * step;
+    const maxCandles = 500;
+    const candles = [];
+
+    for (let time = first; time <= last && candles.length < maxCandles; time += step) {
+        candles.push({
+            time,
+            open: price,
+            high: price,
+            low: price,
+            close: price,
+            volume: 0,
+        });
+    }
+
+    if (candles.length === 0) {
+        candles.push({
+            time: last,
+            open: price,
+            high: price,
+            low: price,
+            close: price,
+            volume: 0,
+        });
+    }
+
+    return {
+        candles,
+        pairAddress: pairKey.toBase58(),
+        resolution: String(resolutionMinutes),
+    };
+}
+
+async function forkMarketPriceChartPayload(pairKey: PublicKey, windowHours: number) {
+    const candles = await forkMarketCandlesPayload(
+        pairKey,
+        60,
+        Math.floor(Date.now() / 1000) - windowHours * 60 * 60,
+        Math.floor(Date.now() / 1000),
+    );
+    return {
+        prices: candles.candles.map((candle) => ({
+            bucket: new Date(candle.time * 1000).toISOString(),
+            avg_price: String(candle.close),
+            min_price: String(candle.low),
+            max_price: String(candle.high),
+            volume: '0',
+        })),
+        pairAddress: pairKey.toBase58(),
+        hours: windowHours,
+    };
+}
+
+function forkMarketSwapsPayload(pairKey: PublicKey, limit: number, offset: number) {
+    return {
+        swaps: [],
+        pagination: {
+            total: 0,
+            limit,
+            offset,
+            hasNext: false,
+        },
+        pairAddress: pairKey.toBase58(),
+    };
+}
+
 async function leveragePositionsPayload(owner: PublicKey, pairKey: PublicKey) {
     const pair = await omnipair.account.pair.fetch(pairKey) as PairAccount;
     const results = [];
@@ -629,6 +745,44 @@ export async function route(req: http.IncomingMessage, body: any) {
     if (req.method === 'GET' && pathname === '/api/v1/pools') {
         const pool = await apiPoolPayload(parsePair(url.searchParams.get('pair')));
         return { success: true, data: { pools: [pool], count: 1 } };
+    }
+
+    if (req.method === 'GET' && pathname.startsWith('/api/v1/pools/')) {
+        const segments = pathname.slice('/api/v1/pools/'.length).split('/').filter(Boolean);
+        if (segments.length >= 2) {
+            const pairKey = parsePair(segments[0]);
+            const resource = segments[1];
+            const windowHours = Number(url.searchParams.get('windowHours') ?? 24);
+
+            if (resource === 'stats') {
+                return { success: true, data: await forkMarketStatsPayload(pairKey, windowHours) };
+            }
+
+            if (resource === 'volume') {
+                return { success: true, data: await forkMarketVolumePayload(pairKey, windowHours) };
+            }
+
+            if (resource === 'fees') {
+                return { success: true, data: await forkMarketFeesPayload(pairKey, windowHours) };
+            }
+
+            if (resource === 'candles') {
+                const resolution = Number(url.searchParams.get('resolution') ?? 15);
+                const from = Number(url.searchParams.get('from') ?? 0);
+                const to = Number(url.searchParams.get('to') ?? 0);
+                return { success: true, data: await forkMarketCandlesPayload(pairKey, resolution, from, to) };
+            }
+
+            if (resource === 'price-chart') {
+                return { success: true, data: await forkMarketPriceChartPayload(pairKey, windowHours) };
+            }
+
+            if (resource === 'swaps') {
+                const limit = Number(url.searchParams.get('limit') ?? 100);
+                const offset = Number(url.searchParams.get('offset') ?? 0);
+                return { success: true, data: forkMarketSwapsPayload(pairKey, limit, offset) };
+            }
+        }
     }
 
     if (req.method === 'GET' && pathname.startsWith('/api/v1/pools/')) {
