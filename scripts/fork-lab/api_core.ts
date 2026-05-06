@@ -616,6 +616,18 @@ function forkMarketSwapsPayload(pairKey: PublicKey, limit: number, offset: numbe
     };
 }
 
+function emptyPositionsPayload(limit: number, offset: number) {
+    return {
+        positions: [],
+        pagination: {
+            total: 0,
+            limit,
+            offset,
+            hasNext: false,
+        },
+    };
+}
+
 async function leveragePositionsPayload(owner: PublicKey, pairKey: PublicKey) {
     const pair = await omnipair.account.pair.fetch(pairKey) as PairAccount;
     const results = [];
@@ -743,6 +755,8 @@ export async function route(req: http.IncomingMessage, body: any) {
             endpoints: [
                 '/api/v1/pools',
                 '/api/v1/pools/paired-tokens/:mint',
+                '/api/v1/positions',
+                '/api/v1/positions/liquidity',
                 '/api/v1/fork/config',
                 '/api/v1/fork/pair',
                 '/api/v1/fork/leverage/positions',
@@ -773,6 +787,18 @@ export async function route(req: http.IncomingMessage, body: any) {
     if (req.method === 'GET' && pathname === '/api/v1/pools') {
         const pool = await apiPoolPayload(parsePair(url.searchParams.get('pair')));
         return { success: true, data: { pools: [pool], count: 1 } };
+    }
+
+    if (req.method === 'GET' && pathname === '/api/v1/positions/liquidity') {
+        const limit = Number(url.searchParams.get('limit') ?? 100);
+        const offset = Number(url.searchParams.get('offset') ?? 0);
+        return { success: true, data: emptyPositionsPayload(limit, offset) };
+    }
+
+    if (req.method === 'GET' && pathname === '/api/v1/positions') {
+        const limit = Number(url.searchParams.get('limit') ?? 100);
+        const offset = Number(url.searchParams.get('offset') ?? 0);
+        return { success: true, data: emptyPositionsPayload(limit, offset) };
     }
 
     if (req.method === 'GET' && pathname.startsWith('/api/v1/pools/paired-tokens/')) {
