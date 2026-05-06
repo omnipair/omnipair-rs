@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import http from 'node:http';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import * as anchor from '@coral-xyz/anchor';
 import BN from 'bn.js';
 import {
@@ -22,28 +21,14 @@ import {
     Transaction,
     TransactionInstruction,
 } from '@solana/web3.js';
+import { LEVERAGE_DELEGATE_IDL_BASE64, OMNIPAIR_IDL_BASE64 } from './generated/idls.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-function readJson(path: string): unknown {
-    return JSON.parse(readFileSync(path, 'utf8'));
+function parseBase64Json(value: string): unknown {
+    return JSON.parse(Buffer.from(value, 'base64').toString('utf8'));
 }
 
-function readIdl(filename: string): unknown {
-    const candidates = [
-        resolve(__dirname, 'idl', filename),
-        resolve(process.cwd(), 'scripts/fork-lab/idl', filename),
-    ];
-    for (const candidate of candidates) {
-        if (existsSync(candidate)) {
-            return readJson(candidate);
-        }
-    }
-    throw new Error(`Fork API IDL not found: ${filename}. Tried ${candidates.join(', ')}`);
-}
-
-const omnipairIdl = readIdl('omnipair.json');
-const leverageDelegateIdl = readIdl('leverage_delegate.json');
+const omnipairIdl = parseBase64Json(OMNIPAIR_IDL_BASE64);
+const leverageDelegateIdl = parseBase64Json(LEVERAGE_DELEGATE_IDL_BASE64);
 
 const PORT = Number(process.env.PORT ?? process.env.FORK_API_PORT ?? 8080);
 const SURFPOOL_RPC_URL = process.env.SURFPOOL_RPC_URL ?? 'http://127.0.0.1:8899';
@@ -607,6 +592,23 @@ export async function route(req: http.IncomingMessage, body: any) {
 
     if (req.method === 'GET' && pathname === '/health') {
         return healthPayload();
+    }
+
+    if (req.method === 'GET' && pathname === '/api/v1') {
+        return {
+            ok: true,
+            endpoints: [
+                '/api/v1/pools',
+                '/api/v1/fork/config',
+                '/api/v1/fork/pair',
+                '/api/v1/fork/leverage/positions',
+                '/api/v1/fork/leverage/orders',
+                '/api/v1/fork/fund-wallet',
+                '/api/v1/fork/tx/open-leverage',
+                '/api/v1/fork/tx/create-current-price-take-profit',
+                '/api/v1/fork/keeper/execute-take-profit',
+            ],
+        };
     }
 
     initializeRuntime();
