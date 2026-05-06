@@ -73,15 +73,18 @@ the heavier Anchor/Surfpool image.
 
 1. `surfpool-rpc`
    - start command: `npm run fork-lab:surfpool`
-   - expose the RPC port as the service `$PORT`
+   - do not set `PORT`; Surfpool must listen on `8899` so its generated
+     Anchor deployment runbook upgrades the local Omnipair programs
    - set `SURFPOOL_WS_PORT=8900`
 2. `surfpool-rpc-proxy`
    - start command: `npm run fork-lab:rpc-proxy`
-   - set `SURFPOOL_RPC_URL` to the private URL for `surfpool-rpc`
+   - set `SURFPOOL_RPC_URL` to the private URL for `surfpool-rpc`, including
+     port `8899`
    - set `FORK_ADMIN_TOKEN`
 3. `fork-api`
    - start command: `npm run fork-lab:api`
-   - set `SURFPOOL_RPC_URL` to the private `surfpool-rpc` URL
+   - set `SURFPOOL_RPC_URL` to the private `surfpool-rpc` URL, including
+     port `8899`
    - set `PUBLIC_SURFPOOL_RPC_URL` to the public proxy URL
    - set `FORK_ADMIN_TOKEN`
    - provide `ANCHOR_WALLET` or `FORK_LAB_PAYER_KEYPAIR` for the keeper/payer
