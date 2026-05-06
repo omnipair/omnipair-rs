@@ -29,8 +29,21 @@ function readJson(path: string): unknown {
     return JSON.parse(readFileSync(path, 'utf8'));
 }
 
-const omnipairIdl = readJson(resolve(__dirname, 'idl/omnipair.json'));
-const leverageDelegateIdl = readJson(resolve(__dirname, 'idl/leverage_delegate.json'));
+function readIdl(filename: string): unknown {
+    const candidates = [
+        resolve(__dirname, 'idl', filename),
+        resolve(process.cwd(), 'scripts/fork-lab/idl', filename),
+    ];
+    for (const candidate of candidates) {
+        if (existsSync(candidate)) {
+            return readJson(candidate);
+        }
+    }
+    throw new Error(`Fork API IDL not found: ${filename}. Tried ${candidates.join(', ')}`);
+}
+
+const omnipairIdl = readIdl('omnipair.json');
+const leverageDelegateIdl = readIdl('leverage_delegate.json');
 
 const PORT = Number(process.env.PORT ?? process.env.FORK_API_PORT ?? 8080);
 const SURFPOOL_RPC_URL = process.env.SURFPOOL_RPC_URL ?? 'http://127.0.0.1:8899';
