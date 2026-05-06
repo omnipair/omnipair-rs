@@ -10,6 +10,9 @@ HOST="${SURFPOOL_HOST:-0.0.0.0}"
 NETWORK="${SURFPOOL_NETWORK:-mainnet}"
 LOG_PATH="${SURFPOOL_LOG_PATH:-/tmp/omnipair-surfpool-logs}"
 WALLET_PATH="${ANCHOR_WALLET:-deployer-keypair.json}"
+OMNIPAIR_PROGRAM_ID="omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE"
+LEVERAGE_DELEGATE_PROGRAM_ID="EPGF9iFrbGnhWgC3To9rC9vxinEYuDHaz4RXgLPvuRkp"
+DEPLOYMENT_TIMEOUT_SECONDS="${FORK_LAB_DEPLOYMENT_TIMEOUT_SECONDS:-180}"
 
 if [[ "$RPC_PORT" != "8899" && "${FORK_LAB_ALLOW_NONSTANDARD_SURFPOOL_PORT:-false}" != "true" ]]; then
   cat >&2 <<EOF
@@ -43,7 +46,18 @@ done
 echo "Starting Surfpool fork on ${HOST}:${RPC_PORT} with local artifacts:"
 ls -lh target/deploy/omnipair.so target/deploy/leverage_delegate.so
 
-exec surfpool start \
+BOOT_LOG="$(mktemp -t omnipair-surfpool-start.XXXXXX.log)"
+
+cleanup() {
+  if [[ -n "${SURFPOOL_PID:-}" ]] && kill -0 "$SURFPOOL_PID" 2>/dev/null; then
+    kill "$SURFPOOL_PID" 2>/dev/null || true
+    wait "$SURFPOOL_PID" 2>/dev/null || true
+  fi
+}
+
+trap cleanup INT TERM
+
+surfpool start \
   --network "$NETWORK" \
   --host "$HOST" \
   --port "$RPC_PORT" \
@@ -54,4 +68,34 @@ exec surfpool start \
   --legacy-anchor-compatibility \
   --airdrop-keypair-path "$WALLET_PATH" \
   --artifacts-path target/deploy \
-  --log-path "$LOG_PATH"
+  --log-path "$LOG_PATH" > >(tee "$BOOT_LOG") 2>&1 &
+
+SURFPOOL_PID=$!
+deadline=$((SECONDS + DEPLOYMENT_TIMEOUT_SECONDS))
+
+while kill -0 "$SURFPOOL_PID" 2>/dev/null; do
+  if grep -q "Runbook execution aborted" "$BOOT_LOG"; then
+    echo "Surfpool deployment runbook aborted before local programs were upgraded." >&2
+    cleanup
+    exit 1
+  fi
+
+  if grep -q "Program Upgraded - Program ${OMNIPAIR_PROGRAM_ID}" "$BOOT_LOG" \
+    && grep -Eq "Program (Created|Upgraded) - Program ${LEVERAGE_DELEGATE_PROGRAM_ID}" "$BOOT_LOG"
+  then
+    echo "Surfpool fork is running local Omnipair and leverage delegate artifacts."
+    wait "$SURFPOOL_PID"
+    exit $?
+  fi
+
+  if (( SECONDS >= deadline )); then
+    echo "Timed out waiting for Surfpool to deploy local program artifacts." >&2
+    echo "Expected Omnipair upgrade log for ${OMNIPAIR_PROGRAM_ID} and delegate deploy log for ${LEVERAGE_DELEGATE_PROGRAM_ID}." >&2
+    cleanup
+    exit 1
+  fi
+
+  sleep 1
+done
+
+wait "$SURFPOOL_PID"
