@@ -20,6 +20,9 @@ pub enum ErrorCode {
     #[msg("Invalid futarchy authority")]
     InvalidFutarchyAuthority,
 
+    #[msg("Invalid reduce-only authority")]
+    InvalidReduceOnlyAuthority,
+
     #[msg("Invalid argument")]
     InvalidArgument,
     

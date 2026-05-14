@@ -1,9 +1,6 @@
 use anchor_lang::prelude::*;
-use crate::constants::{
-    FUTARCHY_AUTHORITY_SEED_PREFIX, PAIR_SEED_PREFIX, REDUCE_ONLY_EMERGENCY_AUTHORITY,
-};
-use crate::state::futarchy_authority::FutarchyAuthority;
 use crate::state::pair::Pair;
+use crate::constants::{PAIR_SEED_PREFIX, REDUCE_ONLY_EMERGENCY_AUTHORITY};
 use crate::errors::ErrorCode;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -15,15 +12,9 @@ pub struct SetPairReduceOnlyArgs {
 pub struct SetPairReduceOnly<'info> {
     #[account(
         mut,
-        address = REDUCE_ONLY_EMERGENCY_AUTHORITY @ ErrorCode::InvalidFutarchyAuthority
+        address = REDUCE_ONLY_EMERGENCY_AUTHORITY @ ErrorCode::InvalidReduceOnlyAuthority
     )]
     pub authority_signer: Signer<'info>,
-
-    #[account(
-        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
-        bump = futarchy_authority.bump
-    )]
-    pub futarchy_authority: Account<'info, FutarchyAuthority>,
 
     #[account(
         mut,
@@ -36,13 +27,12 @@ pub struct SetPairReduceOnly<'info> {
         bump = pair.bump
     )]
     pub pair: Account<'info, Pair>,
-
-    pub system_program: Program<'info, System>,
 }
 
 impl<'info> SetPairReduceOnly<'info> {
     pub fn handle_set_pair_reduce_only(ctx: Context<Self>, args: SetPairReduceOnlyArgs) -> Result<()> {
         let pair = &mut ctx.accounts.pair;
+        
         pair.reduce_only = args.reduce_only;
 
         msg!(
