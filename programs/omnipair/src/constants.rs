@@ -108,10 +108,7 @@ pub const COLLATERAL_VAULT_SEED_PREFIX: &[u8] = b"collateral_vault";
 #[constant]
 pub const VERSION: u8 = 1;
 
-/// Emergency signer authorized to toggle reduce-only mode without waiting on the
-/// upgrade-authority timelock.
-///
-/// If this authority is controlled by Squads, this must be the Squads Vault or
-/// another signable Squads-controlled address, not the Squads Multisig account PDA.
+/// Emergency signer authorized to toggle reduce-only mode.
+/// For Squads, use the vault/authority signer address.
 pub const REDUCE_ONLY_EMERGENCY_AUTHORITY: Pubkey =
     pubkey!("3YL87sTCrHMB6DYKorE9CCN4dL45kZPahoREcMLDY6QV");

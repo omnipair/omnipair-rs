@@ -1,6 +1,7 @@
-use crate::constants::REDUCE_ONLY_EMERGENCY_AUTHORITY;
-use crate::errors::ErrorCode;
 use anchor_lang::prelude::*;
+#[allow(unused_imports)]
+use crate::constants::*;
+use crate::errors::ErrorCode;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace)]
 pub struct RevenueShare {
@@ -90,10 +91,7 @@ impl FutarchyAuthority {
             team_treasury_bps,
         };
 
-        require!(
-            revenue_distribution.is_valid(),
-            ErrorCode::InvalidDistribution
-        );
+        require!(revenue_distribution.is_valid(), ErrorCode::InvalidDistribution);
 
         Ok(Self {
             version: Self::CURRENT_VERSION,
@@ -111,27 +109,12 @@ impl FutarchyAuthority {
     }
 }
 
-pub fn validate_reduce_only_emergency_authority(authority: Pubkey) -> Result<()> {
-    require_keys_eq!(
-        authority,
-        REDUCE_ONLY_EMERGENCY_AUTHORITY,
-        ErrorCode::InvalidFutarchyAuthority
-    );
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn validate_reduce_only_emergency_authority_accepts_configured_multisig() {
-        assert!(validate_reduce_only_emergency_authority(REDUCE_ONLY_EMERGENCY_AUTHORITY).is_ok());
-    }
-
-    #[test]
-    fn validate_reduce_only_emergency_authority_rejects_other_signers() {
-        let err = validate_reduce_only_emergency_authority(Pubkey::new_unique()).unwrap_err();
-        assert_eq!(err, ErrorCode::InvalidFutarchyAuthority.into());
-    }
+#[macro_export]
+macro_rules! generate_futarchy_authority_seeds {
+    ($futarchy_authority:expr) => {
+        [
+            FUTARCHY_AUTHORITY_SEED_PREFIX,
+            &[$futarchy_authority.bump],
+        ]
+    };
 }
