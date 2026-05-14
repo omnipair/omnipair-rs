@@ -1,8 +1,9 @@
-use anchor_lang::prelude::*;
-use crate::state::futarchy_authority::FutarchyAuthority;
-use crate::state::pair::Pair;
 use crate::constants::{FUTARCHY_AUTHORITY_SEED_PREFIX, PAIR_SEED_PREFIX};
-use crate::errors::ErrorCode;
+use crate::state::futarchy_authority::{
+    validate_reduce_only_emergency_authority, FutarchyAuthority,
+};
+use crate::state::pair::Pair;
+use anchor_lang::prelude::*;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct SetPairReduceOnlyArgs {
@@ -11,10 +12,7 @@ pub struct SetPairReduceOnlyArgs {
 
 #[derive(Accounts)]
 pub struct SetPairReduceOnly<'info> {
-    #[account(
-        mut,
-        address = futarchy_authority.authority @ ErrorCode::InvalidFutarchyAuthority
-    )]
+    #[account(mut)]
     pub authority_signer: Signer<'info>,
 
     #[account(
@@ -39,9 +37,14 @@ pub struct SetPairReduceOnly<'info> {
 }
 
 impl<'info> SetPairReduceOnly<'info> {
-    pub fn handle_set_pair_reduce_only(ctx: Context<Self>, args: SetPairReduceOnlyArgs) -> Result<()> {
+    pub fn handle_set_pair_reduce_only(
+        ctx: Context<Self>,
+        args: SetPairReduceOnlyArgs,
+    ) -> Result<()> {
+        validate_reduce_only_emergency_authority(ctx.accounts.authority_signer.key())?;
+
         let pair = &mut ctx.accounts.pair;
-        
+
         pair.reduce_only = args.reduce_only;
 
         msg!(
