@@ -1,15 +1,7 @@
 #[allow(unused_imports)]
 use crate::constants::*;
 use crate::errors::ErrorCode;
-use anchor_lang::{prelude::*, solana_program::pubkey};
-
-/// Emergency signer authorized to toggle reduce-only mode without waiting on the
-/// upgrade-authority timelock.
-///
-/// If this authority is controlled by Squads, this must be the Squads Vault or
-/// another signable Squads-controlled address, not the Squads Multisig account PDA.
-pub const REDUCE_ONLY_EMERGENCY_AUTHORITY: Pubkey =
-    pubkey!("3YL87sTCrHMB6DYKorE9CCN4dL45kZPahoREcMLDY6QV");
+use anchor_lang::prelude::*;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace)]
 pub struct RevenueShare {
@@ -139,12 +131,13 @@ macro_rules! generate_futarchy_authority_seeds {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
 
     #[test]
     fn reduce_only_emergency_authority_matches_expected_multisig() {
         assert_eq!(
             REDUCE_ONLY_EMERGENCY_AUTHORITY,
-            pubkey!("3YL87sTCrHMB6DYKorE9CCN4dL45kZPahoREcMLDY6QV")
+            Pubkey::from_str("3YL87sTCrHMB6DYKorE9CCN4dL45kZPahoREcMLDY6QV").unwrap()
         );
     }
 

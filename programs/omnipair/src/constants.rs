@@ -1,4 +1,4 @@
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, solana_program::pubkey};
 
 // GLOBAL CONSTANTS
 /// NAD: Nine-decimal fixed point unit (1e9 scaling), similar to WAD (1e18) by Maker.
@@ -107,3 +107,11 @@ pub const RESERVE_VAULT_SEED_PREFIX: &[u8] = b"reserve_vault";
 pub const COLLATERAL_VAULT_SEED_PREFIX: &[u8] = b"collateral_vault";
 #[constant]
 pub const VERSION: u8 = 1;
+
+/// Emergency signer authorized to toggle reduce-only mode without waiting on the
+/// upgrade-authority timelock.
+///
+/// If this authority is controlled by Squads, this must be the Squads Vault or
+/// another signable Squads-controlled address, not the Squads Multisig account PDA.
+pub const REDUCE_ONLY_EMERGENCY_AUTHORITY: Pubkey =
+    pubkey!("3YL87sTCrHMB6DYKorE9CCN4dL45kZPahoREcMLDY6QV");
