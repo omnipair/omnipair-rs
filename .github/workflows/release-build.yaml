@@ -885,10 +885,25 @@ jobs:
           
           echo "Using decoder source: $DECODER_SRC"
           
-          # Copy generated files (preserves custom graphql/, postgres/ subdirectories)
-          cp -r "$DECODER_SRC/accounts/"* decoders/omnipair-decoder/src/accounts/
-          cp -r "$DECODER_SRC/instructions/"* decoders/omnipair-decoder/src/instructions/
-          cp -r "$DECODER_SRC/types/"* decoders/omnipair-decoder/src/types/
+          DEST_SRC="decoders/omnipair-decoder/src"
+
+          # Replace generated source surfaces so module wiring stays in sync with
+          # the current Carbon output (e.g. events/, graphql/, lib.rs).
+          rm -rf \
+            "$DEST_SRC/accounts" \
+            "$DEST_SRC/instructions" \
+            "$DEST_SRC/types" \
+            "$DEST_SRC/events" \
+            "$DEST_SRC/graphql"
+
+          mkdir -p "$DEST_SRC"
+          cp "$DECODER_SRC/lib.rs" "$DEST_SRC/lib.rs"
+
+          for dir in accounts instructions types events graphql; do
+            if [ -d "$DECODER_SRC/$dir" ]; then
+              cp -r "$DECODER_SRC/$dir" "$DEST_SRC/"
+            fi
+          done
           
           rm -rf temp-decoder
 
