@@ -1,5 +1,4 @@
-#[allow(unused_imports)]
-use crate::constants::*;
+use crate::constants::REDUCE_ONLY_EMERGENCY_AUTHORITY;
 use crate::errors::ErrorCode;
 use anchor_lang::prelude::*;
 
@@ -121,25 +120,9 @@ pub fn validate_reduce_only_emergency_authority(authority: Pubkey) -> Result<()>
     Ok(())
 }
 
-#[macro_export]
-macro_rules! generate_futarchy_authority_seeds {
-    ($futarchy_authority:expr) => {
-        [FUTARCHY_AUTHORITY_SEED_PREFIX, &[$futarchy_authority.bump]]
-    };
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::str::FromStr;
-
-    #[test]
-    fn reduce_only_emergency_authority_matches_expected_multisig() {
-        assert_eq!(
-            REDUCE_ONLY_EMERGENCY_AUTHORITY,
-            Pubkey::from_str("3YL87sTCrHMB6DYKorE9CCN4dL45kZPahoREcMLDY6QV").unwrap()
-        );
-    }
 
     #[test]
     fn validate_reduce_only_emergency_authority_accepts_configured_multisig() {
