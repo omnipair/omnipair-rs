@@ -51,10 +51,19 @@ impl<'info> CommonAdjustCollateral<'info> {
                 .checked_sub(withdraw_amount)
                 .ok_or(ErrorCode::Overflow)?;
             let collateral_token = if is_collateral_token0 { self.pair.token0 } else { self.pair.token1 };
-            let (post_withdraw_borrow_limit, _, _) = self.pair.get_max_debt_and_cf_bps_for_collateral(
+            let total_collateral_for_side = if is_collateral_token0 {
+                self.pair.total_collateral0
+            } else {
+                self.pair.total_collateral1
+            };
+            let post_withdraw_total_collateral = total_collateral_for_side
+                .checked_sub(withdraw_amount)
+                .ok_or(ErrorCode::Overflow)?;
+            let (post_withdraw_borrow_limit, _, _) = self.pair.get_max_debt_and_cf_bps_for_collateral_with_total_collateral(
                 &self.pair,
                 &collateral_token,
                 remaining_collateral,
+                Some(post_withdraw_total_collateral),
             )?;
             require_gte!(
                 post_withdraw_borrow_limit,
@@ -205,6 +214,7 @@ mod tests {
             collateral_reserve,
             debt_reserve,
             total_debt,
+            user_collateral,
             None,
         )
         .unwrap();
@@ -239,6 +249,7 @@ mod tests {
             collateral_reserve,
             debt_reserve,
             total_debt,
+            user_collateral,
             None,
         )
         .unwrap();
@@ -280,6 +291,7 @@ mod tests {
             collateral_reserve,
             debt_reserve,
             total_debt,
+            user_collateral,
             None,
         )
         .unwrap();
@@ -327,6 +339,7 @@ mod tests {
             collateral_reserve,
             debt_reserve,
             total_debt,
+            user_collateral,
             None,
         )
         .unwrap();
@@ -369,6 +382,7 @@ mod tests {
                 collateral_reserve,
                 debt_reserve,
                 0,
+                user_collateral,
                 None,
             )
             .unwrap();

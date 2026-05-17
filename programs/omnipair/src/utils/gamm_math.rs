@@ -192,6 +192,33 @@ fn calculate_stressed_liquidation_debt(total_debt: u64) -> Result<u64> {
         .map_err(|_| ErrorCode::DebtMathOverflow.into())
 }
 
+fn calculate_pro_rata_collateral_value_with_impact(
+    collateral_ema_reserve: u64,
+    debt_ema_reserve: u64,
+    collateral_amount: u64,
+    total_collateral_for_side: u64,
+) -> Result<u128> {
+    if total_collateral_for_side <= collateral_amount {
+        return Ok(CPCurve::calculate_amount_out(
+            collateral_ema_reserve,
+            debt_ema_reserve,
+            collateral_amount,
+        )? as u128);
+    }
+
+    let total_collateral_value_with_impact = CPCurve::calculate_amount_out(
+        collateral_ema_reserve,
+        debt_ema_reserve,
+        total_collateral_for_side,
+    )? as u128;
+
+    total_collateral_value_with_impact
+        .checked_mul(collateral_amount as u128)
+        .ok_or(ErrorCode::OutputAmountOverflow)?
+        .checked_div(total_collateral_for_side as u128)
+        .ok_or(ErrorCode::DenominatorOverflow.into())
+}
+
 /// Maximum borrowable amount of tokenY using either a fixed CF or an impact-aware CF
 ///
 /// Inputs:
@@ -202,6 +229,8 @@ fn calculate_stressed_liquidation_debt(total_debt: u64) -> Result<u64> {
 /// - debt_amm_reserve: R1 (raw Y units)
 /// - total_debt: existing total debt (raw Y units). Dynamic CF prices
 ///   `STRESSED_LIQUIDATION_EXPOSURE_BPS` of this amount as simultaneous liquidation debt.
+/// - total_collateral_for_side: total deposited collateral for this collateral side.
+///   Dynamic CF uses this to cap each position by its pro-rata aggregate impact value.
 /// - fixed_cf_bps: Optional fixed collateral factor. If Some, uses this directly instead of AMM-based CF
 ///
 /// Returns:
@@ -215,6 +244,7 @@ pub fn pessimistic_max_debt(
     collateral_amm_reserve: u64,
     debt_amm_reserve: u64,
     total_debt: u64,
+    total_collateral_for_side: u64,
     fixed_cf_bps: Option<u16>,
 ) -> Result<(u64, u16, u16)> {
     // sanity checks
@@ -249,6 +279,15 @@ pub fn pessimistic_max_debt(
         if debt_amm_reserve == 0 {
             return Ok((0, 0, 0));
         }
+        let pro_rata_collateral_value_with_impact = calculate_pro_rata_collateral_value_with_impact(
+            collateral_ema_reserve,
+            debt_ema_reserve,
+            collateral_amount,
+            total_collateral_for_side,
+        )?;
+        if pro_rata_collateral_value_with_impact == 0 {
+            return Ok((0, 0, 0));
+        }
 
         // 0. Calculate utilized collateral with price impact using virtual reserves at pessimistic price.
         let stressed_liquidation_debt = calculate_stressed_liquidation_debt(total_debt)?;
@@ -275,12 +314,19 @@ pub fn pessimistic_max_debt(
             .checked_sub(stressed_liquidation_debt)
             .unwrap_or(0);
 
-        // 3. Calculate base CF = user max debt * BPS_DENOMINATOR / V_impact
-        //    CF is relative to impact value so it captures only the debt crowding effect.
-        (user_max_debt as u128)
-        .saturating_mul(BPS_DENOMINATOR_U128)
-        .checked_div(collateral_value_with_impact) 
-        .unwrap_or(0) as u64
+        // 3. Cap the user's liquidation debt capacity by their pro-rata share
+        //    of aggregate side collateral value. This keeps the dynamic cap
+        //    additive across split positions while storing a CF that liquidation
+        //    can apply to the position's own impact value.
+        let uncapped_cf_bps = (user_max_debt as u128)
+            .saturating_mul(BPS_DENOMINATOR_U128)
+            .checked_div(collateral_value_with_impact)
+            .unwrap_or(0);
+        let pro_rata_cap_cf_bps = pro_rata_collateral_value_with_impact
+            .saturating_mul(MAX_COLLATERAL_FACTOR_BPS as u128)
+            .checked_div(collateral_value_with_impact)
+            .unwrap_or(0);
+        uncapped_cf_bps.min(pro_rata_cap_cf_bps) as u64
     };
 
     // Apply spot/EMA divergence cap to fixed cf only for preventing EMA lag front-running
@@ -599,7 +645,7 @@ mod tests {
         // user_max=500k, base_cf=500k*10000/500k=10000bps (capped to 8500), max_cf=8075
         // limit = 500k * 8075 / 10000 = 403,750
         let (limit, max_cf, liq_cf) = pessimistic_max_debt(
-            1_000_000, NAD, NAD, 1_000_000, 1_000_000, 0, None
+            1_000_000, NAD, NAD, 1_000_000, 1_000_000, 0, 1_000_000, None
         ).unwrap();
         
         assert_eq!((liq_cf, max_cf, limit), (8500, 8075, 403_750));
@@ -613,13 +659,13 @@ mod tests {
         // impact_value = amount_out(1M, 1M, 500k) = 333,333
         // @0: user_max=333,333, base_cf=333,333*10000/333,333=10000 (capped 8500), max_cf=8075
         //     limit=333,333*8075/10000=269,166
-        let (l0, cf0, _) = pessimistic_max_debt(500_000, NAD, NAD, 1_000_000, 1_000_000, 0, None).unwrap();
+        let (l0, cf0, _) = pessimistic_max_debt(500_000, NAD, NAD, 1_000_000, 1_000_000, 0, 500_000, None).unwrap();
         assert_eq!((l0, cf0), (269_166, 8075));
         
         // @200k: stressed_liquidation_debt=140k, user_max=258,601,
         //        base_cf=258,601*10000/333,333=7758, max_cf=7370
         //        limit=333,333*7370/10000=245,666
-        let (l200k, cf200k, _) = pessimistic_max_debt(500_000, NAD, NAD, 1_000_000, 1_000_000, 200_000, None).unwrap();
+        let (l200k, cf200k, _) = pessimistic_max_debt(500_000, NAD, NAD, 1_000_000, 1_000_000, 200_000, 500_000, None).unwrap();
         assert_eq!((l200k, cf200k), (245_666, 7370));
         
         assert_eq!(l0 - l200k, 23_500);
@@ -642,7 +688,7 @@ mod tests {
             500_000, NAD, NAD, 1_000_000, 1_000_000, 200_000,
         );
         let adjusted = pessimistic_max_debt(
-            500_000, NAD, NAD, 1_000_000, 1_000_000, 200_000, None,
+            500_000, NAD, NAD, 1_000_000, 1_000_000, 200_000, 500_000, None,
         ).unwrap();
 
         assert_eq!(legacy, (217_133, 6514, 6857));
@@ -655,14 +701,83 @@ mod tests {
     #[test]
     fn stressed_liquidation_exposure_does_not_change_fixed_cf_path() {
         let without_debt = pessimistic_max_debt(
-            500_000, NAD, NAD, 1_000_000, 1_000_000, 0, Some(5_000),
+            500_000, NAD, NAD, 1_000_000, 1_000_000, 0, 500_000, Some(5_000),
         ).unwrap();
         let with_debt = pessimistic_max_debt(
-            500_000, NAD, NAD, 1_000_000, 1_000_000, 900_000, Some(5_000),
+            500_000, NAD, NAD, 1_000_000, 1_000_000, 900_000, 500_000, Some(5_000),
         ).unwrap();
 
         assert_eq!(without_debt, (158_333, 4_750, 5_000));
         assert_eq!(with_debt, without_debt);
+    }
+
+    #[test]
+    fn dynamic_cf_split_positions_do_not_exceed_single_capacity() {
+        let test_cases = [
+            (1_000_000, 2),
+            (999_999, 3),
+            (1_000_000, 4),
+            (1_000_000, 5),
+            (1_000_000, 10),
+            (1_000_000, 20),
+        ];
+
+        for (total_collateral, splits) in test_cases {
+            let (single_limit, _, single_liquidation_cf) = pessimistic_max_debt(
+                total_collateral, NAD, NAD, 1_000_000, 1_000_000, 0, total_collateral, None,
+            ).unwrap();
+            let single_impact_value =
+                CPCurve::calculate_amount_out(1_000_000, 1_000_000, total_collateral).unwrap();
+            let single_liquidation_limit = (single_impact_value as u128)
+                .saturating_mul(single_liquidation_cf as u128)
+                .checked_div(BPS_DENOMINATOR_U128)
+                .unwrap_or(0);
+            let split_collateral = total_collateral / splits;
+            let split_total_collateral = split_collateral * splits;
+            let mut accumulated_debt = 0;
+            let mut split_limit = 0;
+            let mut split_liquidation_limit = 0u128;
+
+            for _ in 0..splits {
+                let (borrow_limit, _, split_liquidation_cf) = pessimistic_max_debt(
+                    split_collateral,
+                    NAD,
+                    NAD,
+                    1_000_000,
+                    1_000_000,
+                    accumulated_debt,
+                    split_total_collateral,
+                    None,
+                ).unwrap();
+                let split_impact_value =
+                    CPCurve::calculate_amount_out(1_000_000, 1_000_000, split_collateral).unwrap();
+                split_liquidation_limit = split_liquidation_limit.saturating_add(
+                    (split_impact_value as u128)
+                        .saturating_mul(split_liquidation_cf as u128)
+                        .checked_div(BPS_DENOMINATOR_U128)
+                        .unwrap_or(0),
+                );
+                accumulated_debt = accumulated_debt.saturating_add(borrow_limit);
+                split_limit += borrow_limit;
+            }
+
+            assert!(
+                split_limit <= single_limit,
+                "split {} positions borrowed {} > single {} for collateral {}",
+                splits,
+                split_limit,
+                single_limit,
+                split_total_collateral
+            );
+            assert!(
+                split_liquidation_limit <= single_liquidation_limit,
+                "split {} positions liquidation threshold {} > single {} for collateral {}",
+                splits,
+                split_liquidation_limit,
+                single_liquidation_limit,
+                split_total_collateral
+            );
+        }
     }
 
     #[test]
@@ -790,6 +905,7 @@ mod tests {
             collateral_amm_reserve,
             debt_amm_reserve,
             total_debt,
+            collateral_amount,
             None,
         );
         assert!(result.is_ok(), "Should not overflow for large price asymmetry pools");
@@ -967,7 +1083,7 @@ mod tests {
         for (user_coll, label) in &test_cases {
             let (borrow_lim, _, liq_cf) = pessimistic_max_debt(
                 *user_coll, ema_price, ema_price,
-                collateral_reserve, debt_reserve, total_debt, None,
+                collateral_reserve, debt_reserve, total_debt, *user_coll, None,
             ).unwrap();
             let liq_lim = liquidation_limit(*user_coll, liq_cf);
             let buffer = liq_lim.saturating_sub(borrow_lim);
@@ -993,7 +1109,7 @@ mod tests {
         for (user_coll, label) in &test_cases {
             let (borrow_lim, _, liq_cf) = pessimistic_max_debt(
                 *user_coll, ema_price, ema_price,
-                collateral_reserve, debt_reserve, total_debt, Some(fixed_cf),
+                collateral_reserve, debt_reserve, total_debt, *user_coll, Some(fixed_cf),
             ).unwrap();
             let liq_lim = liquidation_limit(*user_coll, liq_cf);
             let buffer = liq_lim.saturating_sub(borrow_lim);
@@ -1017,7 +1133,7 @@ mod tests {
         let large_coll: u64 = 500_000;
         let (borrow_lim, _, liq_cf) = pessimistic_max_debt(
             large_coll, ema_price, ema_price,
-            collateral_reserve, debt_reserve, total_debt, None,
+            collateral_reserve, debt_reserve, total_debt, large_coll, None,
         ).unwrap();
         let liq_lim = liquidation_limit(large_coll, liq_cf);
         assert!(
