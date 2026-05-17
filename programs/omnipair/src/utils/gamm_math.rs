@@ -6,6 +6,7 @@ use std::cmp::min;
 
 const NAD_U128: u128 = NAD as u128;
 const BPS_DENOMINATOR_U128: u128 = BPS_DENOMINATOR as u128;
+const EFFECTIVE_DEBT_MULTIPLIER_BPS_U128: u128 = EFFECTIVE_DEBT_MULTIPLIER_BPS as u128;
 
 /// Constant Product Curve (invariant: x * y = k)
 ///
@@ -174,6 +175,22 @@ fn calculate_max_allowed_total_debt(
     CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, total_collateral_amount)
 }
 
+/// Applies the dynamic-CF global debt unwind assumption.
+///
+/// The dynamic path does not assume that every open loan liquidates at once.
+/// Instead, it prices the crowding impact from a fixed fraction of aggregate
+/// debt, rounded up so positive debt is not rounded away.
+fn calculate_effective_total_debt(total_debt: u64) -> Result<u64> {
+    let scaled_debt = (total_debt as u128)
+        .checked_mul(EFFECTIVE_DEBT_MULTIPLIER_BPS_U128)
+        .ok_or(ErrorCode::DebtMathOverflow)?;
+
+    ceil_div(scaled_debt, BPS_DENOMINATOR_U128)
+        .ok_or(ErrorCode::DebtMathOverflow)?
+        .try_into()
+        .map_err(|_| ErrorCode::DebtMathOverflow.into())
+}
+
 /// Maximum borrowable amount of tokenY using either a fixed CF or an impact-aware CF
 ///
 /// Inputs:
@@ -182,7 +199,8 @@ fn calculate_max_allowed_total_debt(
 /// - collateral_directional_ema_price_nad: P_directional_ema (NAD-scaled, Y/X) [~50 slots lagging behind inflated spot price]
 /// - collateral_amm_reserve: R0 (raw X units)
 /// - debt_amm_reserve: R1 (raw Y units)
-/// - total_debt: existing total debt (raw Y units)
+/// - total_debt: existing total debt (raw Y units). Dynamic CF prices
+///   `EFFECTIVE_DEBT_MULTIPLIER_BPS` of this amount as simultaneous unwind debt.
 /// - fixed_cf_bps: Optional fixed collateral factor. If Some, uses this directly instead of AMM-based CF
 ///
 /// Returns:
@@ -232,8 +250,9 @@ pub fn pessimistic_max_debt(
         }
 
         // 0. Calculate utilized collateral with price impact using virtual reserves at pessimistic price.
+        let effective_total_debt = calculate_effective_total_debt(total_debt)?;
         let utilized_collateral = calculate_utilized_collateral_with_impact(
-            total_debt, 
+            effective_total_debt,
             collateral_amm_reserve, 
             debt_amm_reserve,
             collateral_directional_ema_price_nad,
@@ -251,7 +270,9 @@ pub fn pessimistic_max_debt(
         )?;
 
         // 2. Calculate user max debt.
-        let user_max_debt = max_allowed_total_debt.checked_sub(total_debt).unwrap_or(0);
+        let user_max_debt = max_allowed_total_debt
+            .checked_sub(effective_total_debt)
+            .unwrap_or(0);
 
         // 3. Calculate base CF = user max debt * BPS_DENOMINATOR / V_impact
         //    CF is relative to impact value so it captures only the debt crowding effect.
@@ -333,6 +354,56 @@ mod tests {
             utilized_collateral, user_collateral, collateral_reserve, debt_reserve, price, price,
         ).unwrap();
         max_total_debt.saturating_sub(existing_total_debt)
+    }
+
+    fn legacy_dynamic_pessimistic_max_debt(
+        collateral_amount: u64,
+        collateral_ema_price_nad: u64,
+        collateral_directional_ema_price_nad: u64,
+        collateral_amm_reserve: u64,
+        debt_amm_reserve: u64,
+        total_debt: u64,
+    ) -> (u64, u16, u16) {
+        let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
+            collateral_amm_reserve,
+            debt_amm_reserve,
+            collateral_ema_price_nad,
+            collateral_directional_ema_price_nad,
+        ).unwrap();
+        let collateral_value_with_impact =
+            CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, collateral_amount)
+                .unwrap() as u128;
+        let utilized_collateral = calculate_utilized_collateral_with_impact(
+            total_debt,
+            collateral_amm_reserve,
+            debt_amm_reserve,
+            collateral_directional_ema_price_nad,
+            collateral_ema_price_nad,
+        ).unwrap();
+        let max_allowed_total_debt = calculate_max_allowed_total_debt(
+            utilized_collateral,
+            collateral_amount,
+            collateral_amm_reserve,
+            debt_amm_reserve,
+            collateral_directional_ema_price_nad,
+            collateral_ema_price_nad,
+        ).unwrap();
+        let user_max_debt = max_allowed_total_debt.saturating_sub(total_debt);
+        let base_cf_bps = (user_max_debt as u128)
+            .saturating_mul(BPS_DENOMINATOR_U128)
+            .checked_div(collateral_value_with_impact)
+            .unwrap_or(0) as u64;
+        let liquidation_cf_bps = base_cf_bps.min(MAX_COLLATERAL_FACTOR_BPS as u64) as u16;
+        let max_allowed_cf_bps = ((liquidation_cf_bps as u32)
+            .saturating_mul((BPS_DENOMINATOR - LTV_BUFFER_BPS) as u32)
+            / BPS_DENOMINATOR as u32) as u16;
+        let final_borrow_limit: u64 = collateral_value_with_impact
+            .saturating_mul(max_allowed_cf_bps as u128)
+            .checked_div(BPS_DENOMINATOR_U128)
+            .unwrap_or(0)
+            .min(u64::MAX as u128) as u64;
+
+        (final_borrow_limit, max_allowed_cf_bps, liquidation_cf_bps)
     }
 
     /// Check that split accounts cannot borrow more than a single account.
@@ -544,15 +615,53 @@ mod tests {
         let (l0, cf0, _) = pessimistic_max_debt(500_000, NAD, NAD, 1_000_000, 1_000_000, 0, None).unwrap();
         assert_eq!((l0, cf0), (269_166, 8075));
         
-        // @200k: user_max=228,571, base_cf=228,571*10000/333,333=6857, max_cf=6514
-        //        limit=333,333*6514/10000=217,133
+        // @200k: effective_debt=140k, user_max=258,601,
+        //        base_cf=258,601*10000/333,333=7758, max_cf=7370
+        //        limit=333,333*7370/10000=245,666
         let (l200k, cf200k, _) = pessimistic_max_debt(500_000, NAD, NAD, 1_000_000, 1_000_000, 200_000, None).unwrap();
-        assert_eq!((l200k, cf200k), (217_133, 6514));
+        assert_eq!((l200k, cf200k), (245_666, 7370));
         
-        assert_eq!(l0 - l200k, 52_033);
+        assert_eq!(l0 - l200k, 23_500);
 
         println!("=== Pessimistic Max Debt with Existing Debt ===");
         println!("@0: cf={}, limit={} | @200k: cf={}, limit={}", cf0, l0, cf200k, l200k);
+    }
+
+    #[test]
+    fn effective_total_debt_uses_7000_bps() {
+        assert_eq!(calculate_effective_total_debt(0).unwrap(), 0);
+        assert_eq!(calculate_effective_total_debt(1).unwrap(), 1);
+        assert_eq!(calculate_effective_total_debt(200_000).unwrap(), 140_000);
+        assert_eq!(calculate_effective_total_debt(200_001).unwrap(), 140_001);
+    }
+
+    #[test]
+    fn effective_debt_multiplier_raises_uncapped_dynamic_cf() {
+        let legacy = legacy_dynamic_pessimistic_max_debt(
+            500_000, NAD, NAD, 1_000_000, 1_000_000, 200_000,
+        );
+        let adjusted = pessimistic_max_debt(
+            500_000, NAD, NAD, 1_000_000, 1_000_000, 200_000, None,
+        ).unwrap();
+
+        assert_eq!(legacy, (217_133, 6514, 6857));
+        assert_eq!(adjusted, (245_666, 7370, 7758));
+        assert!(adjusted.0 > legacy.0);
+        assert!(adjusted.1 > legacy.1);
+        assert!(adjusted.2 > legacy.2);
+    }
+
+    #[test]
+    fn effective_debt_multiplier_does_not_change_fixed_cf_path() {
+        let without_debt = pessimistic_max_debt(
+            500_000, NAD, NAD, 1_000_000, 1_000_000, 0, Some(5_000),
+        ).unwrap();
+        let with_debt = pessimistic_max_debt(
+            500_000, NAD, NAD, 1_000_000, 1_000_000, 900_000, Some(5_000),
+        ).unwrap();
+
+        assert_eq!(without_debt, (158_333, 4_750, 5_000));
+        assert_eq!(with_debt, without_debt);
     }
 
     #[test]

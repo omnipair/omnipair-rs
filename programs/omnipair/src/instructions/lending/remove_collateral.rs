@@ -457,7 +457,7 @@ mod tests {
             directional_ema_price,
         );
 
-        assert_eq!(remaining, 208_039);
+        assert_eq!(remaining, 200_001);
         assert!(
             post_withdraw_borrow_limit(
                 remaining,
@@ -470,8 +470,8 @@ mod tests {
             "post-withdraw borrow-limit check should reject the one-step impact inverse"
         );
         assert!(
-            user_debt >= refreshed_limit,
-            "one-step impact inverse should reproduce the dynamic-CF liquidation regression"
+            user_debt < refreshed_limit,
+            "70% effective debt keeps this inverse withdrawal above liquidation, while borrow-limit validation still rejects it"
         );
     }
 
@@ -485,7 +485,7 @@ mod tests {
         let user_debt = 134_583;
         let total_debt = user_debt;
 
-        let safe_remaining = 226_185;
+        let safe_remaining = 204_685;
         let safe_withdrawal = user_collateral - safe_remaining;
         let refreshed_limit = refreshed_liquidation_limit(
             safe_remaining,
@@ -496,7 +496,7 @@ mod tests {
             directional_ema_price,
         );
 
-        assert_eq!(safe_withdrawal, 1_773_815);
+        assert_eq!(safe_withdrawal, 1_795_315);
         assert!(
             post_withdraw_borrow_limit(
                 safe_remaining,
