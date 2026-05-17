@@ -15,7 +15,7 @@ pub const MAX_COLLATERAL_FACTOR_BPS: u16 = 8_500; // 85% cap for dynamic collate
 #[constant]
 pub const LTV_BUFFER_BPS: u16 = 500; // 5% buffer between borrow limit and liquidation threshold
 #[constant]
-pub const EFFECTIVE_DEBT_MULTIPLIER_BPS: u16 = 7_000; // Dynamic CF assumes 70% of total debt unwinds at once
+pub const STRESSED_LIQUIDATION_EXPOSURE_BPS: u16 = 7_000; // Dynamic CF prices 70% of debt as liquidation exposure
 #[constant]
 pub const FLASHLOAN_FEE_BPS: u16 = 5; // 0.05%
 #[constant]

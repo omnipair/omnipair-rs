@@ -6,7 +6,8 @@ use std::cmp::min;
 
 const NAD_U128: u128 = NAD as u128;
 const BPS_DENOMINATOR_U128: u128 = BPS_DENOMINATOR as u128;
-const EFFECTIVE_DEBT_MULTIPLIER_BPS_U128: u128 = EFFECTIVE_DEBT_MULTIPLIER_BPS as u128;
+const STRESSED_LIQUIDATION_EXPOSURE_BPS_U128: u128 =
+    STRESSED_LIQUIDATION_EXPOSURE_BPS as u128;
 
 /// Constant Product Curve (invariant: x * y = k)
 ///
@@ -175,14 +176,14 @@ fn calculate_max_allowed_total_debt(
     CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, total_collateral_amount)
 }
 
-/// Applies the dynamic-CF global debt unwind assumption.
+/// Applies the dynamic-CF liquidation exposure assumption.
 ///
 /// The dynamic path does not assume that every open loan liquidates at once.
 /// Instead, it prices the crowding impact from a fixed fraction of aggregate
 /// debt, rounded up so positive debt is not rounded away.
-fn calculate_effective_total_debt(total_debt: u64) -> Result<u64> {
+fn calculate_stressed_liquidation_debt(total_debt: u64) -> Result<u64> {
     let scaled_debt = (total_debt as u128)
-        .checked_mul(EFFECTIVE_DEBT_MULTIPLIER_BPS_U128)
+        .checked_mul(STRESSED_LIQUIDATION_EXPOSURE_BPS_U128)
         .ok_or(ErrorCode::DebtMathOverflow)?;
 
     ceil_div(scaled_debt, BPS_DENOMINATOR_U128)
@@ -200,7 +201,7 @@ fn calculate_effective_total_debt(total_debt: u64) -> Result<u64> {
 /// - collateral_amm_reserve: R0 (raw X units)
 /// - debt_amm_reserve: R1 (raw Y units)
 /// - total_debt: existing total debt (raw Y units). Dynamic CF prices
-///   `EFFECTIVE_DEBT_MULTIPLIER_BPS` of this amount as simultaneous unwind debt.
+///   `STRESSED_LIQUIDATION_EXPOSURE_BPS` of this amount as simultaneous liquidation debt.
 /// - fixed_cf_bps: Optional fixed collateral factor. If Some, uses this directly instead of AMM-based CF
 ///
 /// Returns:
@@ -250,9 +251,9 @@ pub fn pessimistic_max_debt(
         }
 
         // 0. Calculate utilized collateral with price impact using virtual reserves at pessimistic price.
-        let effective_total_debt = calculate_effective_total_debt(total_debt)?;
+        let stressed_liquidation_debt = calculate_stressed_liquidation_debt(total_debt)?;
         let utilized_collateral = calculate_utilized_collateral_with_impact(
-            effective_total_debt,
+            stressed_liquidation_debt,
             collateral_amm_reserve, 
             debt_amm_reserve,
             collateral_directional_ema_price_nad,
@@ -271,7 +272,7 @@ pub fn pessimistic_max_debt(
 
         // 2. Calculate user max debt.
         let user_max_debt = max_allowed_total_debt
-            .checked_sub(effective_total_debt)
+            .checked_sub(stressed_liquidation_debt)
             .unwrap_or(0);
 
         // 3. Calculate base CF = user max debt * BPS_DENOMINATOR / V_impact
@@ -615,7 +616,7 @@ mod tests {
         let (l0, cf0, _) = pessimistic_max_debt(500_000, NAD, NAD, 1_000_000, 1_000_000, 0, None).unwrap();
         assert_eq!((l0, cf0), (269_166, 8075));
         
-        // @200k: effective_debt=140k, user_max=258,601,
+        // @200k: stressed_liquidation_debt=140k, user_max=258,601,
         //        base_cf=258,601*10000/333,333=7758, max_cf=7370
         //        limit=333,333*7370/10000=245,666
         let (l200k, cf200k, _) = pessimistic_max_debt(500_000, NAD, NAD, 1_000_000, 1_000_000, 200_000, None).unwrap();
@@ -628,15 +629,15 @@ mod tests {
     }
 
     #[test]
-    fn effective_total_debt_uses_7000_bps() {
-        assert_eq!(calculate_effective_total_debt(0).unwrap(), 0);
-        assert_eq!(calculate_effective_total_debt(1).unwrap(), 1);
-        assert_eq!(calculate_effective_total_debt(200_000).unwrap(), 140_000);
-        assert_eq!(calculate_effective_total_debt(200_001).unwrap(), 140_001);
+    fn stressed_liquidation_debt_uses_7000_bps() {
+        assert_eq!(calculate_stressed_liquidation_debt(0).unwrap(), 0);
+        assert_eq!(calculate_stressed_liquidation_debt(1).unwrap(), 1);
+        assert_eq!(calculate_stressed_liquidation_debt(200_000).unwrap(), 140_000);
+        assert_eq!(calculate_stressed_liquidation_debt(200_001).unwrap(), 140_001);
     }
 
     #[test]
-    fn effective_debt_multiplier_raises_uncapped_dynamic_cf() {
+    fn stressed_liquidation_exposure_raises_uncapped_dynamic_cf() {
         let legacy = legacy_dynamic_pessimistic_max_debt(
             500_000, NAD, NAD, 1_000_000, 1_000_000, 200_000,
         );
@@ -652,7 +653,7 @@ mod tests {
     }
 
     #[test]
-    fn effective_debt_multiplier_does_not_change_fixed_cf_path() {
+    fn stressed_liquidation_exposure_does_not_change_fixed_cf_path() {
         let without_debt = pessimistic_max_debt(
             500_000, NAD, NAD, 1_000_000, 1_000_000, 0, Some(5_000),
         ).unwrap();

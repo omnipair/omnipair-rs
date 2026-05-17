@@ -471,7 +471,7 @@ mod tests {
         );
         assert!(
             user_debt < refreshed_limit,
-            "70% effective debt keeps this inverse withdrawal above liquidation, while borrow-limit validation still rejects it"
+            "70% stressed liquidation debt keeps this inverse withdrawal above liquidation, while borrow-limit validation still rejects it"
         );
     }
 
