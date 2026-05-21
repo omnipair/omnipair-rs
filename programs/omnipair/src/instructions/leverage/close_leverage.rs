@@ -14,8 +14,9 @@ use crate::{
 };
 
 use super::common::{
-    approved_for, invoke_delegated_approval_callback, invoke_delegated_callback, quote_swap,
-    split_delegated_accounts, token_program_for_mint, DelegatedCpiArgs, LEVERAGE_DELEGATE_CLOSE,
+    approved_for, invoke_delegated_approval_callback, quote_swap, split_delegated_accounts,
+    token_program_for_mint, DelegatedCpiArgs, LEVERAGE_DELEGATE_CLOSE,
+    LEVERAGE_DELEGATE_CLOSE_SETTLED,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -422,16 +423,34 @@ impl<'info> CloseLeverage<'info> {
                     accounts.recipient_token_out_account.key(),
                 ];
                 let writable_protected_accounts = [accounts.recipient_token_out_account.key()];
+                let position_owner = position.owner;
+                let position_key = position.key();
+                let pair_key = pair.key();
                 pair.exit(&crate::ID)?;
                 position.exit(&crate::ID)?;
                 let (_, after_accounts) =
                     split_delegated_accounts(ctx.remaining_accounts, delegated.before_accounts_len)?;
-                invoke_delegated_callback(
+                // The after-hook must drain the staged residual to the owner-bound
+                // recipient. Validating a SETTLED approval prevents a permissionless
+                // executor from substituting an unrelated success-returning instruction
+                // (e.g. a `before_*` hook for a different order) and leaving the
+                // proceeds stranded in the custody PDA after this transaction closes
+                // the position account.
+                invoke_delegated_approval_callback(
                     delegated_program,
                     delegated.after_ix_data,
                     after_accounts,
                     &protected_accounts,
                     &writable_protected_accounts,
+                    LEVERAGE_DELEGATE_CLOSE_SETTLED,
+                    pair_key,
+                    position_owner,
+                    position_key,
+                    delegation_key,
+                    args.is_debt_token0,
+                    accounts.recipient_token_out_account.key(),
+                    accounts.token_out_mint.key(),
+                    residual,
                 )
             }
         }
