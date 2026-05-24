@@ -77,7 +77,7 @@ pub fn construct_virtual_reserves_at_pessimistic_price(
     
     let pessimistic_price = min(collateral_directional_ema_price_nad, collateral_ema_price_nad) as u128;
     if pessimistic_price == 0 {
-        return Ok((collateral_spot_reserve, debt_spot_reserve));
+        return Ok((0, 0));
     }
 
     let spot_k = (collateral_spot_reserve as u128)
@@ -613,6 +613,14 @@ mod tests {
         let k_spot = x_spot as u128 * y_spot as u128;
         let k_virt = collateral_ema_reserve as u128 * debt_ema_reserve as u128;
         assert_eq!(k_spot, k_virt);
+    }
+
+    #[test]
+    fn zero_pessimistic_price_returns_zero_virtual_reserves() {
+        let (collateral_ema_reserve, debt_ema_reserve) =
+            construct_virtual_reserves_at_pessimistic_price(1_000, 1_000, NAD, 0).unwrap();
+
+        assert_eq!((collateral_ema_reserve, debt_ema_reserve), (0, 0));
     }
 
     #[test]

@@ -1,5 +1,6 @@
 use anchor_lang::{
     prelude::*,
+    solana_program::sysvar,
 };
 use anchor_spl::{
     token::{Token, TokenAccount, Mint},
@@ -115,6 +116,10 @@ pub struct AdjustLiquidity<'info> {
     pub token_2022_program: Program<'info, Token2022>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
+
+    /// CHECK: Instructions sysvar used by the liquidity delta circuit breaker.
+    #[account(address = sysvar::instructions::ID @ ErrorCode::InvalidInstructionsSysvar)]
+    pub instructions_sysvar: UncheckedAccount<'info>,
 }
 
 impl<'info> AdjustLiquidity<'info> {
@@ -130,4 +135,3 @@ impl<'info> AdjustLiquidity<'info> {
         Ok(())
     }
 }
-
