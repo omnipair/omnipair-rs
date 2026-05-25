@@ -430,6 +430,11 @@ fn required_collateral_with_impact(
         return Ok(0);
     }
 
+    require!(
+        collateral_ema_price_nad > 0 && collateral_directional_ema_price_nad > 0,
+        ErrorCode::InsufficientPostWithdrawDebtCoverage
+    );
+
     let (collateral_ema_reserve, debt_ema_reserve) =
         construct_virtual_reserves_at_pessimistic_price(
             collateral_spot_reserve,
