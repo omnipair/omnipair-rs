@@ -155,6 +155,7 @@ mod tests {
     use super::*;
     use anchor_lang::solana_program::{
         account_info::AccountInfo,
+        hash::hash,
         instruction::AccountMeta,
         sysvar::instructions::{
             construct_instructions_data, store_current_index, BorrowedAccountMeta,
@@ -209,6 +210,23 @@ mod tests {
         );
 
         require_no_matching_liquidity_delta(pair, &account_info, include_remove_liquidity)
+    }
+
+    fn anchor_global_discriminator(name: &str) -> [u8; 8] {
+        let digest = hash(format!("global:{name}").as_bytes()).to_bytes();
+        digest[..8].try_into().unwrap()
+    }
+
+    #[test]
+    fn liquidity_delta_discriminators_match_anchor_instruction_names() {
+        assert_eq!(
+            ADD_LIQUIDITY_DISCRIMINATOR,
+            anchor_global_discriminator("add_liquidity")
+        );
+        assert_eq!(
+            REMOVE_LIQUIDITY_DISCRIMINATOR,
+            anchor_global_discriminator("remove_liquidity")
+        );
     }
 
     #[test]
