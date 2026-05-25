@@ -78,6 +78,8 @@ impl UserPosition {
     /// With 10^6 scaling, the first borrow of 1 unit creates 1,000,000 shares,
     /// making subsequent rounding errors negligible (<0.0001% instead of potentially >10%).
     pub fn increase_debt(&mut self, pair: &mut Pair, debt_token: &Pubkey, amount: u64) -> Result<()> {
+        require!(amount > 0, ErrorCode::AmountZero);
+
         match *debt_token == pair.token0 {
             true => {
                 if pair.total_debt0_shares == 0 {
@@ -389,4 +391,61 @@ macro_rules! generate_user_position_seeds {
             &[$position.bump],
         ]
     };
-} 
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::VaultBumps;
+
+    fn test_pair() -> Pair {
+        Pair::initialize(
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            6,
+            6,
+            Pubkey::new_unique(),
+            30,
+            60_000,
+            Some(8_000),
+            0,
+            [0; 32],
+            VERSION,
+            1,
+            VaultBumps::default(),
+            0,
+        )
+    }
+
+    fn test_position() -> UserPosition {
+        UserPosition {
+            owner: Pubkey::new_unique(),
+            pair: Pubkey::new_unique(),
+            collateral0_liquidation_cf_bps: 0,
+            collateral1_liquidation_cf_bps: 0,
+            collateral0: 0,
+            collateral1: 0,
+            debt0_shares: 0,
+            debt1_shares: 0,
+            bump: 1,
+        }
+    }
+
+    #[test]
+    fn increase_debt_rejects_zero_amount() {
+        let mut pair = test_pair();
+        pair.cash_reserve0 = 123;
+        let token0 = pair.token0;
+        let mut user_position = test_position();
+
+        let err = user_position
+            .increase_debt(&mut pair, &token0, 0)
+            .unwrap_err();
+
+        assert_eq!(err, error!(ErrorCode::AmountZero));
+        assert_eq!(pair.total_debt0, 0);
+        assert_eq!(pair.cash_reserve0, 123);
+        assert_eq!(user_position.debt0_shares, 0);
+    }
+}

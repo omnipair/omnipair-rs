@@ -74,7 +74,7 @@ pub struct Borrow<'info> {
 
     #[account(
         mut,
-        constraint = user_reserve_token_account.mint == pair.token0 || user_reserve_token_account.mint == pair.token1,
+        constraint = user_reserve_token_account.mint == reserve_token_mint.key() @ ErrorCode::InvalidMint,
         token::authority = user,
     )]
     pub user_reserve_token_account: Box<Account<'info, TokenAccount>>,
@@ -92,6 +92,18 @@ pub struct Borrow<'info> {
     /// CHECK: Instructions sysvar used by the liquidity delta circuit breaker.
     #[account(address = sysvar::instructions::ID @ ErrorCode::InvalidInstructionsSysvar)]
     pub instructions_sysvar: UncheckedAccount<'info>,
+}
+
+fn resolve_borrow_amount(requested_amount: u64, borrow_limit: u64, user_debt: u64) -> Result<u64> {
+    let borrow_amount = if requested_amount == u64::MAX {
+        borrow_limit
+            .checked_sub(user_debt)
+            .ok_or(ErrorCode::DebtMathOverflow)?
+    } else {
+        requested_amount
+    };
+    require!(borrow_amount > 0, ErrorCode::AmountZero);
+    Ok(borrow_amount)
 }
 
 impl<'info> Borrow<'info> {
@@ -157,7 +169,8 @@ impl<'info> Borrow<'info> {
         } = ctx.accounts;
         let pair = &mut ctx.accounts.pair;
         let debt_token_vault = &ctx.accounts.reserve_vault;
-        let is_token0 = user_reserve_token_account.mint == pair.token0;
+        let debt_token = reserve_token_mint.key();
+        let is_token0 = debt_token == pair.token0;
 
         let user_debt = match is_token0 {
             true => user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
@@ -168,7 +181,7 @@ impl<'info> Borrow<'info> {
         // To prevent bad debt, we compute a pessimistic collateral factor:
         // CF_pessimistic = min(CF_base, P_spot / P_EMA * CF_base)
         // This ensures the solvency invariant: P_spot >= P_EMA * CF
-        let collateral_token = pair.get_collateral_token(&debt_token_vault.mint);
+        let collateral_token = pair.get_collateral_token(&debt_token);
         let collateral_amount = match collateral_token == pair.token0 {
             true => user_position.collateral0,
             false => user_position.collateral1,
@@ -178,15 +191,7 @@ impl<'info> Borrow<'info> {
             &collateral_token,
             collateral_amount,
         )?;
-        let is_max_borrow = args.amount == u64::MAX;
-        let remaining_borrow_limit = borrow_limit
-            .checked_sub(user_debt)
-            .ok_or(ErrorCode::DebtMathOverflow)?;
-        let borrow_amount = if is_max_borrow {
-            remaining_borrow_limit
-        } else {
-            args.amount
-        };
+        let borrow_amount = resolve_borrow_amount(args.amount, borrow_limit, user_debt)?;
 
         let new_debt = user_debt
             .checked_add(borrow_amount)
@@ -223,12 +228,8 @@ impl<'info> Borrow<'info> {
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
 
-        user_position.increase_debt(pair, &reserve_token_mint.key(), borrow_amount)?;
-        user_position.set_liquidation_cf_for_debt_token(
-            &reserve_token_mint.key(),
-            &pair,
-            liquidation_cf_bps,
-        );
+        user_position.increase_debt(pair, &debt_token, borrow_amount)?;
+        user_position.set_liquidation_cf_for_debt_token(&debt_token, &pair, liquidation_cf_bps);
 
         // Emit debt adjustment event
         let (amount0, amount1) = if is_token0 {
@@ -258,5 +259,33 @@ impl<'info> Borrow<'info> {
         });
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn max_borrow_rejects_zero_resolved_amount() {
+        let err = resolve_borrow_amount(u64::MAX, 100, 100).unwrap_err();
+        assert_eq!(err, error!(ErrorCode::AmountZero));
+    }
+
+    #[test]
+    fn max_borrow_rejects_debt_above_limit() {
+        let err = resolve_borrow_amount(u64::MAX, 100, 101).unwrap_err();
+        assert_eq!(err, error!(ErrorCode::DebtMathOverflow));
+    }
+
+    #[test]
+    fn explicit_borrow_rejects_zero_amount() {
+        let err = resolve_borrow_amount(0, 100, 0).unwrap_err();
+        assert_eq!(err, error!(ErrorCode::AmountZero));
+    }
+
+    #[test]
+    fn max_borrow_resolves_positive_remaining_limit() {
+        assert_eq!(resolve_borrow_amount(u64::MAX, 100, 40).unwrap(), 60);
     }
 }
