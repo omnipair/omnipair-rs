@@ -4,6 +4,7 @@ use crate::{
     errors::ErrorCode,
     events::{AdjustCollateralEvent, EventMetadata, UserPositionUpdatedEvent},
     utils::token::transfer_from_vault_to_user,
+    utils::liquidity_delta_circuit_breaker::require_no_same_tx_liquidity_delta,
     generate_gamm_pair_seeds,
     instructions::lending::common::{CommonAdjustCollateral, AdjustCollateralArgs},
 };
@@ -12,6 +13,11 @@ impl<'info> CommonAdjustCollateral<'info> {
     pub fn validate_remove(&self, args: &AdjustCollateralArgs) -> Result<()> {
         let AdjustCollateralArgs { amount } = args;
         
+        require_no_same_tx_liquidity_delta(
+            &self.pair.key(),
+            &self.instructions_sysvar.to_account_info(),
+        )?;
+
         require!(*amount > 0, ErrorCode::AmountZero);
 
         let collateral_token = self.user_collateral_token_account.mint;

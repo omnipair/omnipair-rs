@@ -218,6 +218,18 @@ pub enum ErrorCode {
     #[msg("Cannot remove collateral in reduce-only mode while debt exists")]
     ReduceOnlyHasDebt,
 
+    #[msg("Operation blocked: same-transaction liquidity delta detected")]
+    LiquidityDeltaCircuitBreaker,
+
+    #[msg("Operation blocked: liquidity delta instruction must be top-level")]
+    LiquidityDeltaCircuitBreakerCpi,
+
+    #[msg("Invalid instructions sysvar")]
+    InvalidInstructionsSysvar,
+
+    #[msg("Insufficient post-withdraw debt coverage")]
+    InsufficientPostWithdrawDebtCoverage,
+
     #[msg("Invalid recipient - address does not match configured revenue recipient")]
     InvalidRecipient,
 }

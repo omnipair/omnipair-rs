@@ -3,6 +3,7 @@ use crate::errors::ErrorCode;
 use crate::constants::*;
 use crate::utils::token::{transfer_from_user_to_vault, token_mint_to};
 use crate::utils::math::ceil_div;
+use crate::utils::liquidity_delta_circuit_breaker::{require_top_level_liquidity_delta_ix, LiquidityDeltaInstruction};
 use crate::generate_gamm_pair_seeds;
 use crate::liquidity::common::{AdjustLiquidity, AddLiquidityArgs};
 use crate::events::{MintEvent, UserLiquidityPositionUpdatedEvent, EventMetadata};
@@ -14,8 +15,15 @@ impl<'info> AdjustLiquidity<'info> {
             user_token1_account,
             futarchy_authority,
             pair,
+            instructions_sysvar,
             .. 
         } = self;
+
+        require_top_level_liquidity_delta_ix(
+            &pair.key(),
+            &instructions_sysvar.to_account_info(),
+            LiquidityDeltaInstruction::AddLiquidity,
+        )?;
 
         // Check reduce-only mode (global or per-pair)
         require!(
