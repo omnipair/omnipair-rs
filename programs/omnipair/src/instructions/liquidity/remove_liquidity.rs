@@ -13,8 +13,8 @@ use crate::generate_gamm_pair_seeds;
 use crate::state::{futarchy_authority::FutarchyAuthority, pair::Pair, rate_model::RateModel};
 use crate::utils::gamm_math::{construct_virtual_reserves_at_pessimistic_price, CPCurve};
 use crate::utils::liquidity_delta_circuit_breaker::{
-    require_no_same_tx_add_liquidity, require_top_level_liquidity_delta_ix,
-    LiquidityDeltaInstruction,
+    require_current_ix_is_final, require_no_same_tx_add_liquidity,
+    require_top_level_liquidity_delta_ix, LiquidityDeltaInstruction,
 };
 use crate::utils::math::ceil_div;
 use crate::utils::token::{token_burn, transfer_from_vault_to_user};
@@ -133,6 +133,7 @@ impl<'info> RemoveLiquidity<'info> {
             &self.instructions_sysvar.to_account_info(),
             LiquidityDeltaInstruction::RemoveLiquidity,
         )?;
+        require_current_ix_is_final(&self.instructions_sysvar.to_account_info())?;
         require_no_same_tx_add_liquidity(
             &self.pair.key(),
             &self.instructions_sysvar.to_account_info(),
