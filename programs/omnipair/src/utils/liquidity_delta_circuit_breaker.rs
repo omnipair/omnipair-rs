@@ -40,28 +40,6 @@ pub fn require_top_level_liquidity_delta_ix(
     Ok(())
 }
 
-pub fn require_current_ix_is_final(instructions_sysvar: &AccountInfo) -> Result<()> {
-    require_keys_eq!(
-        *instructions_sysvar.key,
-        sysvar::instructions::ID,
-        ErrorCode::InvalidInstructionsSysvar
-    );
-
-    let current_index = load_current_index_checked(instructions_sysvar)
-        .map_err(|_| error!(ErrorCode::InvalidInstructionsSysvar))?
-        as usize;
-    let instruction_count = load_instruction_count(instructions_sysvar)?;
-
-    require!(
-        current_index
-            .checked_add(1)
-            .ok_or(ErrorCode::InvalidInstructionsSysvar)?
-            == instruction_count,
-        ErrorCode::LiquidityDeltaCircuitBreaker
-    );
-    Ok(())
-}
-
 pub fn require_no_same_tx_liquidity_delta(
     pair: &Pubkey,
     instructions_sysvar: &AccountInfo,
@@ -396,32 +374,7 @@ mod tests {
     }
 
     #[test]
-    fn current_ix_final_allows_last_top_level_ix() {
-        let pair = Pubkey::new_unique();
-        let first_program = Pubkey::new_unique();
-        let first_ix = borrowed_instruction(&first_program, &pair, &[9; 8]);
-        let remove_ix = borrowed_instruction(&crate::ID, &pair, &REMOVE_LIQUIDITY_DISCRIMINATOR);
-        let key = sysvar::instructions::ID;
-        let owner = sysvar::ID;
-        let mut lamports = 0;
-        let mut data = construct_instructions_data(&[first_ix, remove_ix]);
-        store_current_index(&mut data, 1);
-        let account_info = AccountInfo::new(
-            &key,
-            false,
-            false,
-            &mut lamports,
-            &mut data,
-            &owner,
-            false,
-            0,
-        );
-
-        require_current_ix_is_final(&account_info).unwrap();
-    }
-
-    #[test]
-    fn current_ix_final_rejects_following_top_level_ix() {
+    fn top_level_liquidity_delta_allows_following_sibling_ix() {
         let pair = Pubkey::new_unique();
         let remove_ix = borrowed_instruction(&crate::ID, &pair, &REMOVE_LIQUIDITY_DISCRIMINATOR);
         let following_program = Pubkey::new_unique();
@@ -442,7 +395,11 @@ mod tests {
             0,
         );
 
-        let err = require_current_ix_is_final(&account_info).unwrap_err();
-        assert_eq!(err, error!(ErrorCode::LiquidityDeltaCircuitBreaker));
+        require_top_level_liquidity_delta_ix(
+            &pair,
+            &account_info,
+            LiquidityDeltaInstruction::RemoveLiquidity,
+        )
+        .unwrap();
     }
 }
