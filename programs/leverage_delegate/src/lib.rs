@@ -1,5 +1,9 @@
 use anchor_lang::{prelude::*, solana_program::program::set_return_data};
-use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
+use anchor_spl::{
+    token::{self, Token},
+    token_2022::{self, Token2022},
+    token_interface::{Mint, TokenAccount},
+};
 use omnipair::{
     constants::{BPS_DENOMINATOR, NAD},
     instructions::{LeverageDelegationApproval, LEVERAGE_DELEGATE_CLOSE},
@@ -41,11 +45,17 @@ pub mod leverage_delegate {
         CancelLeverageOrder::handle_cancel(ctx)
     }
 
-    pub fn before_take_profit(ctx: Context<BeforeLeverageOrder>, args: ExecuteOrderArgs) -> Result<()> {
+    pub fn before_take_profit(
+        ctx: Context<BeforeLeverageOrder>,
+        args: ExecuteOrderArgs,
+    ) -> Result<()> {
         BeforeLeverageOrder::handle_before(ctx, args, ORDER_KIND_TAKE_PROFIT)
     }
 
-    pub fn before_stop_loss(ctx: Context<BeforeLeverageOrder>, args: ExecuteOrderArgs) -> Result<()> {
+    pub fn before_stop_loss(
+        ctx: Context<BeforeLeverageOrder>,
+        args: ExecuteOrderArgs,
+    ) -> Result<()> {
         BeforeLeverageOrder::handle_before(ctx, args, ORDER_KIND_STOP_LOSS)
     }
 
@@ -208,8 +218,8 @@ pub struct BeforeLeverageOrder<'info> {
         constraint = custody_token_account.owner == custody_authority.key() @ LeverageDelegateError::InvalidTokenAccount,
         constraint = custody_token_account.mint == token_mint.key() @ LeverageDelegateError::InvalidTokenAccount,
     )]
-    pub custody_token_account: Account<'info, TokenAccount>,
-    pub token_mint: Account<'info, Mint>,
+    pub custody_token_account: InterfaceAccount<'info, TokenAccount>,
+    pub token_mint: InterfaceAccount<'info, Mint>,
     pub executor: Signer<'info>,
 }
 
@@ -245,34 +255,38 @@ pub struct AfterCloseOrder<'info> {
     pub custody_authority: AccountInfo<'info>,
     #[account(
         mut,
-        token::authority = custody_authority,
-        token::mint = token_mint,
         constraint = custody_token_account.key() == order.staged_custody_token_account @ LeverageDelegateError::InvalidTokenAccount,
+        constraint = custody_token_account.owner == custody_authority.key() @ LeverageDelegateError::InvalidTokenAccount,
+        constraint = custody_token_account.mint == token_mint.key() @ LeverageDelegateError::InvalidTokenAccount,
     )]
-    pub custody_token_account: Account<'info, TokenAccount>,
+    pub custody_token_account: InterfaceAccount<'info, TokenAccount>,
     #[account(
         mut,
         constraint = executor_token_account.mint == token_mint.key() @ LeverageDelegateError::InvalidTokenAccount,
     )]
-    pub executor_token_account: Account<'info, TokenAccount>,
+    pub executor_token_account: InterfaceAccount<'info, TokenAccount>,
     #[account(
         mut,
         constraint = owner_token_account.mint == token_mint.key() @ LeverageDelegateError::InvalidTokenAccount,
         constraint = owner_token_account.owner == owner.key() @ LeverageDelegateError::InvalidTokenAccount,
     )]
-    pub owner_token_account: Account<'info, TokenAccount>,
+    pub owner_token_account: InterfaceAccount<'info, TokenAccount>,
     #[account(
         constraint = token_mint.key() == order.staged_output_mint @ LeverageDelegateError::InvalidTokenAccount,
     )]
-    pub token_mint: Account<'info, Mint>,
+    pub token_mint: InterfaceAccount<'info, Mint>,
     pub executor: Signer<'info>,
     pub token_program: Program<'info, Token>,
+    pub token_2022_program: Program<'info, Token2022>,
 }
 
 impl<'info> CreateLeverageOrder<'info> {
     pub fn handle_create(ctx: Context<Self>, args: CreateLeverageOrderArgs) -> Result<()> {
         validate_order_kind(args.kind)?;
-        require!(args.trigger_closeout_price_nad > 0, LeverageDelegateError::InvalidOrder);
+        require!(
+            args.trigger_closeout_price_nad > 0,
+            LeverageDelegateError::InvalidOrder
+        );
         let order = &mut ctx.accounts.order;
         order.owner = ctx.accounts.owner.key();
         order.pair = ctx.accounts.pair.key();
@@ -289,7 +303,10 @@ impl<'info> CreateLeverageOrder<'info> {
 impl<'info> UpdateLeverageOrder<'info> {
     pub fn handle_update(ctx: Context<Self>, args: UpdateLeverageOrderArgs) -> Result<()> {
         validate_order_kind(args.kind)?;
-        require!(args.trigger_closeout_price_nad > 0, LeverageDelegateError::InvalidOrder);
+        require!(
+            args.trigger_closeout_price_nad > 0,
+            LeverageDelegateError::InvalidOrder
+        );
         let order = &mut ctx.accounts.order;
         order.kind = args.kind;
         order.trigger_closeout_price_nad = args.trigger_closeout_price_nad;
@@ -305,14 +322,23 @@ impl<'info> CancelLeverageOrder<'info> {
 }
 
 impl<'info> BeforeLeverageOrder<'info> {
-    pub fn handle_before(ctx: Context<Self>, _args: ExecuteOrderArgs, expected_kind: u8) -> Result<()> {
+    pub fn handle_before(
+        ctx: Context<Self>,
+        _args: ExecuteOrderArgs,
+        expected_kind: u8,
+    ) -> Result<()> {
         let order = &mut ctx.accounts.order;
-        require!(order.kind == expected_kind, LeverageDelegateError::InvalidOrder);
-        let closeout_price_nad = closeout_price_per_unit_nad(
-            &ctx.accounts.pair,
-            &ctx.accounts.user_leverage_position,
+        require!(
+            order.kind == expected_kind,
+            LeverageDelegateError::InvalidOrder
+        );
+        let closeout_price_nad =
+            closeout_price_per_unit_nad(&ctx.accounts.pair, &ctx.accounts.user_leverage_position)?;
+        require_trigger_met(
+            expected_kind,
+            closeout_price_nad,
+            order.trigger_closeout_price_nad,
         )?;
-        require_trigger_met(expected_kind, closeout_price_nad, order.trigger_closeout_price_nad)?;
         let debt_token = match ctx.accounts.user_leverage_position.is_debt_token0 {
             true => ctx.accounts.pair.token0,
             false => ctx.accounts.pair.token1,
@@ -326,10 +352,8 @@ impl<'info> BeforeLeverageOrder<'info> {
             ctx.accounts.custody_token_account.amount == 0,
             LeverageDelegateError::InvalidTokenAccount
         );
-        let closeout_value = closeout_value(
-            &ctx.accounts.pair,
-            &ctx.accounts.user_leverage_position,
-        )?;
+        let closeout_value =
+            closeout_value(&ctx.accounts.pair, &ctx.accounts.user_leverage_position)?;
         let debt_amount = ctx
             .accounts
             .user_leverage_position
@@ -384,43 +408,39 @@ impl<'info> AfterCloseOrder<'info> {
             .ok_or(LeverageDelegateError::MathOverflow)?;
         let order_key = ctx.accounts.order.key();
         let bump = ctx.bumps.custody_authority;
-        let signer_seeds = &[
-            CUSTODY_AUTHORITY_SEED_PREFIX,
-            order_key.as_ref(),
-            &[bump],
-        ];
+        let signer_seeds = &[CUSTODY_AUTHORITY_SEED_PREFIX, order_key.as_ref(), &[bump]];
         let signer = &[&signer_seeds[..]];
 
         if incentive > 0 {
-            token::transfer_checked(
-                CpiContext::new_with_signer(
-                    ctx.accounts.token_program.to_account_info(),
-                    TransferChecked {
-                        from: ctx.accounts.custody_token_account.to_account_info(),
-                        mint: ctx.accounts.token_mint.to_account_info(),
-                        to: ctx.accounts.executor_token_account.to_account_info(),
-                        authority: ctx.accounts.custody_authority.to_account_info(),
-                    },
-                    signer,
+            transfer_checked_with_signer(
+                token_program_for_mint(
+                    &ctx.accounts.token_mint.to_account_info(),
+                    &ctx.accounts.token_program.to_account_info(),
+                    &ctx.accounts.token_2022_program.to_account_info(),
                 ),
+                ctx.accounts.custody_token_account.to_account_info(),
+                ctx.accounts.token_mint.to_account_info(),
+                ctx.accounts.executor_token_account.to_account_info(),
+                ctx.accounts.custody_authority.to_account_info(),
                 incentive,
                 ctx.accounts.token_mint.decimals,
+                signer,
             )?;
         }
         if owner_amount > 0 {
-            token::transfer_checked(
-                CpiContext::new_with_signer(
-                    ctx.accounts.token_program.to_account_info(),
-                    TransferChecked {
-                        from: ctx.accounts.custody_token_account.to_account_info(),
-                        mint: ctx.accounts.token_mint.to_account_info(),
-                        to: ctx.accounts.owner_token_account.to_account_info(),
-                        authority: ctx.accounts.custody_authority.to_account_info(),
-                    },
-                    signer,
+            transfer_checked_with_signer(
+                token_program_for_mint(
+                    &ctx.accounts.token_mint.to_account_info(),
+                    &ctx.accounts.token_program.to_account_info(),
+                    &ctx.accounts.token_2022_program.to_account_info(),
                 ),
+                ctx.accounts.custody_token_account.to_account_info(),
+                ctx.accounts.token_mint.to_account_info(),
+                ctx.accounts.owner_token_account.to_account_info(),
+                ctx.accounts.custody_authority.to_account_info(),
                 owner_amount,
                 ctx.accounts.token_mint.decimals,
+                signer,
             )?;
         }
         Ok(())
@@ -470,6 +490,61 @@ fn require_staged_settlement(
     Ok(())
 }
 
+fn token_program_for_mint<'info>(
+    mint: &AccountInfo<'info>,
+    token_program: &AccountInfo<'info>,
+    token_2022_program: &AccountInfo<'info>,
+) -> AccountInfo<'info> {
+    if mint.owner == token_program.key {
+        token_program.clone()
+    } else {
+        token_2022_program.clone()
+    }
+}
+
+fn transfer_checked_with_signer<'info>(
+    token_program: AccountInfo<'info>,
+    from: AccountInfo<'info>,
+    mint: AccountInfo<'info>,
+    to: AccountInfo<'info>,
+    authority: AccountInfo<'info>,
+    amount: u64,
+    decimals: u8,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    if *token_program.key == Token2022::id() {
+        token_2022::transfer_checked(
+            CpiContext::new_with_signer(
+                token_program,
+                token_2022::TransferChecked {
+                    from,
+                    mint,
+                    to,
+                    authority,
+                },
+                signer_seeds,
+            ),
+            amount,
+            decimals,
+        )
+    } else {
+        token::transfer_checked(
+            CpiContext::new_with_signer(
+                token_program,
+                token::TransferChecked {
+                    from,
+                    mint,
+                    to,
+                    authority,
+                },
+                signer_seeds,
+            ),
+            amount,
+            decimals,
+        )
+    }
+}
+
 fn validate_order_kind(kind: u8) -> Result<()> {
     require!(
         kind == ORDER_KIND_TAKE_PROFIT || kind == ORDER_KIND_STOP_LOSS,
@@ -478,7 +553,11 @@ fn validate_order_kind(kind: u8) -> Result<()> {
     Ok(())
 }
 
-fn require_trigger_met(kind: u8, closeout_price_nad: u64, trigger_closeout_price_nad: u64) -> Result<()> {
+fn require_trigger_met(
+    kind: u8,
+    closeout_price_nad: u64,
+    trigger_closeout_price_nad: u64,
+) -> Result<()> {
     match kind {
         ORDER_KIND_TAKE_PROFIT => require!(
             closeout_price_nad >= trigger_closeout_price_nad,
@@ -515,10 +594,21 @@ fn require_closed_leverage_position(position: &UserLeveragePosition) -> Result<(
 }
 
 fn closeout_value(pair: &Pair, position: &UserLeveragePosition) -> Result<u64> {
-    require!(position.collateral_amount > 0, LeverageDelegateError::InvalidOrder);
+    require!(
+        position.collateral_amount > 0,
+        LeverageDelegateError::InvalidOrder
+    );
     let is_collateral_token0 = !position.is_debt_token0;
-    let reserve_in = if is_collateral_token0 { pair.reserve0 } else { pair.reserve1 };
-    let reserve_out = if is_collateral_token0 { pair.reserve1 } else { pair.reserve0 };
+    let reserve_in = if is_collateral_token0 {
+        pair.reserve0
+    } else {
+        pair.reserve1
+    };
+    let reserve_out = if is_collateral_token0 {
+        pair.reserve1
+    } else {
+        pair.reserve0
+    };
     let swap_fee = ceil_div(
         (position.collateral_amount as u128)
             .checked_mul(pair.swap_fee_bps as u128)

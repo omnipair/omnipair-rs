@@ -87,7 +87,10 @@ pub fn quote_swap(
     protocol_share_bps: u16,
 ) -> Result<SwapQuote> {
     require!(amount_in > 0, ErrorCode::AmountZero);
-    require!(reserve_in > 0 && reserve_out > 0, ErrorCode::InsufficientLiquidity);
+    require!(
+        reserve_in > 0 && reserve_out > 0,
+        ErrorCode::InsufficientLiquidity
+    );
 
     let swap_fee = ceil_div(
         (amount_in as u128)
@@ -170,7 +173,11 @@ pub fn require_initial_leverage_health(
     closeout_value: u64,
     debt_amount: u64,
 ) -> Result<()> {
-    require_gt!(closeout_value, debt_amount, ErrorCode::LeverageInitialMarginTooLow);
+    require_gt!(
+        closeout_value,
+        debt_amount,
+        ErrorCode::LeverageInitialMarginTooLow
+    );
     let margin_bps = equity_bps(closeout_value, debt_amount)?;
     require_gte!(
         margin_bps,
@@ -197,15 +204,12 @@ pub fn require_leverage_not_liquidatable(closeout_value: u64, debt_amount: u64) 
     Ok(())
 }
 
-pub fn token_program_for_mint<'info>(
+pub(crate) fn leverage_token_program_for_mint<'info>(
     mint: &AccountInfo<'info>,
     token_program: &AccountInfo<'info>,
     token_2022_program: &AccountInfo<'info>,
-) -> AccountInfo<'info> {
-    match mint.owner == token_program.key {
-        true => token_program.clone(),
-        false => token_2022_program.clone(),
-    }
+) -> Result<AccountInfo<'info>> {
+    crate::utils::token::token_program_for_mint(mint, token_program, token_2022_program)
 }
 
 pub fn approved_for(approved_actions: u32, action: u32) -> Result<()> {
@@ -314,7 +318,11 @@ pub fn validate_delegation_approval(
     expected_output_mint: Pubkey,
     expected_output_amount: u64,
 ) -> Result<()> {
-    require_keys_eq!(program_id, expected_program, ErrorCode::InvalidLeverageDelegation);
+    require_keys_eq!(
+        program_id,
+        expected_program,
+        ErrorCode::InvalidLeverageDelegation
+    );
     let mut data_ref = data;
     let approval = LeverageDelegationApproval::deserialize(&mut data_ref)
         .map_err(|_| ErrorCode::InvalidLeverageDelegation)?;
@@ -327,9 +335,20 @@ pub fn validate_delegation_approval(
         approval.version == LEVERAGE_DELEGATION_APPROVAL_VERSION,
         ErrorCode::InvalidLeverageDelegation
     );
-    require!(approval.action == expected_action, ErrorCode::InvalidLeverageDelegation);
-    require_keys_eq!(approval.pair, expected_pair, ErrorCode::InvalidLeverageDelegation);
-    require_keys_eq!(approval.owner, expected_owner, ErrorCode::InvalidLeverageDelegation);
+    require!(
+        approval.action == expected_action,
+        ErrorCode::InvalidLeverageDelegation
+    );
+    require_keys_eq!(
+        approval.pair,
+        expected_pair,
+        ErrorCode::InvalidLeverageDelegation
+    );
+    require_keys_eq!(
+        approval.owner,
+        expected_owner,
+        ErrorCode::InvalidLeverageDelegation
+    );
     require_keys_eq!(
         approval.position,
         expected_position,
@@ -368,7 +387,11 @@ fn delegated_account_metas(
 ) -> Result<Vec<AccountMeta>> {
     for (index, account) in accounts.iter().enumerate() {
         for prior in accounts.iter().take(index) {
-            require_keys_neq!(account.key(), prior.key(), ErrorCode::InvalidLeverageDelegation);
+            require_keys_neq!(
+                account.key(),
+                prior.key(),
+                ErrorCode::InvalidLeverageDelegation
+            );
         }
     }
 
