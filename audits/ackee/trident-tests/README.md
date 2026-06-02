@@ -4,7 +4,8 @@
 - Build from the program repo root (one level up):
   - Anchor: `anchor build`
   - Or Solana: `cargo build-sbf`
-- Ensure `../target/deploy/omnipair.so` and `../target/deploy/flashloan_receiver_example.so` exist (paths are in `Trident.toml`).
+- Ensure `../target/deploy/omnipair.so` exists (path is in `Trident.toml`).
+- Instruction-level flashloan support was dropped from the current program scope; see `FLASHLOAN_DROPPED.md`.
 
 ### Install Trident CLI
 ```bash
@@ -24,4 +25,3 @@ trident fuzz run fuzz_liquidity_swaps
 
 ### Docs
 - Trident Documentation: [https://ackee.xyz/trident/docs/latest/](https://ackee.xyz/trident/docs/latest/)
-
