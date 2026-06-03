@@ -4,7 +4,7 @@ use crate::{
     utils::{
         gamm_math::CPCurve,
         math::ceil_div,
-        token::{transfer_amounts_from_net, TransferAmounts},
+        token::{transfer_amounts_from_gross, transfer_amounts_from_net, TransferAmounts},
     },
 };
 use anchor_lang::prelude::*;
@@ -77,23 +77,29 @@ pub fn solvent_liquidation_plan_for_shares(
 
     let collateral_base =
         CPCurve::calculate_amount_in(collateral_reserve, debt_reserve, debt_to_writeoff)?;
-    let collateral_with_penalty = liquidation_collateral_with_penalty(collateral_base)?;
-    let caller_incentive = raw_liquidation_incentive(collateral_base)?;
-    let reserve_net_target = collateral_with_penalty
+
+    // Gross up collateral_base for Token-2022 transfer fees so the
+    // reserve vault receives at least collateral_base net after fees.
+    // Penalty and incentive are applied on the grossed-up amount so the
+    // borrower covers the fee as part of the economic cost.
+    let collateral_base_grossed =
+        transfer_amounts_from_net(collateral_mint, collateral_base)?.gross;
+    let collateral_with_penalty = liquidation_collateral_with_penalty(collateral_base_grossed)?;
+    let caller_incentive = raw_liquidation_incentive(collateral_base_grossed)?;
+    let reserve_gross = collateral_with_penalty
         .checked_sub(caller_incentive)
         .ok_or(ErrorCode::DebtMathOverflow)?;
+
+    let collateral_to_reserves_transfer =
+        transfer_amounts_from_gross(collateral_mint, reserve_gross)?;
+
     require_gte!(
-        reserve_net_target,
+        collateral_to_reserves_transfer.net,
         collateral_base,
         ErrorCode::BrokenInvariant
     );
 
-    let collateral_to_reserves_transfer =
-        transfer_amounts_from_net(collateral_mint, reserve_net_target)?;
-    let collateral_final = collateral_to_reserves_transfer
-        .gross
-        .checked_add(caller_incentive)
-        .ok_or(ErrorCode::DebtMathOverflow)?;
+    let collateral_final = collateral_with_penalty;
 
     if collateral_final > available_collateral {
         return Ok(None);
