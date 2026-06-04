@@ -2,7 +2,9 @@ use anchor_lang::{prelude::*, solana_program::program::set_return_data};
 use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
 use omnipair::{
     constants::{BPS_DENOMINATOR, NAD},
-    instructions::{LeverageDelegationApproval, LEVERAGE_DELEGATE_CLOSE},
+    instructions::{
+        LeverageDelegationApproval, LEVERAGE_DELEGATE_CLOSE, LEVERAGE_DELEGATE_CLOSE_SETTLED,
+    },
     state::{Pair, UserLeverageDelegation, UserLeveragePosition},
     utils::{gamm_math::CPCurve, math::ceil_div},
 };
@@ -237,6 +239,19 @@ pub struct AfterCloseOrder<'info> {
         constraint = user_leverage_position.pair == order.pair @ LeverageDelegateError::InvalidOrder,
     )]
     pub user_leverage_position: Account<'info, UserLeveragePosition>,
+    // Required so the settlement approval Omnipair validates after the CPI is bound
+    // to the same delegation key that authorized the close. Omnipair calls
+    // `invoke_delegated_approval_callback` for the after-hook with this delegation key
+    // as `expected_delegation`, so an attempt to substitute a different instruction
+    // (without this account, or with a mismatching delegation) will fail the close.
+    #[account(
+        constraint = user_leverage_delegation.owner == order.owner @ LeverageDelegateError::InvalidOrder,
+        constraint = user_leverage_delegation.pair == order.pair @ LeverageDelegateError::InvalidOrder,
+        constraint = user_leverage_delegation.position == order.position @ LeverageDelegateError::InvalidOrder,
+        constraint = user_leverage_delegation.is_debt_token0 == user_leverage_position.is_debt_token0 @ LeverageDelegateError::InvalidOrder,
+        constraint = user_leverage_delegation.delegated_program == crate::ID @ LeverageDelegateError::InvalidOrder,
+    )]
+    pub user_leverage_delegation: Account<'info, UserLeverageDelegation>,
     /// CHECK: PDA authority for the custody token account.
     #[account(
         seeds = [CUSTODY_AUTHORITY_SEED_PREFIX, order.key().as_ref()],
@@ -373,56 +388,90 @@ impl<'info> AfterCloseOrder<'info> {
             ctx.accounts.token_mint.key(),
             ctx.accounts.custody_token_account.amount,
         )?;
-        let amount = ctx.accounts.custody_token_account.amount;
-        if amount == 0 {
-            return Ok(());
-        }
 
-        let incentive = executor_incentive(amount, ctx.accounts.order.staged_margin)?;
-        let owner_amount = amount
-            .checked_sub(incentive)
-            .ok_or(LeverageDelegateError::MathOverflow)?;
+        // Capture order fields up front: the order account is closed via `close = owner`
+        // when this handler returns, and we still need its values to (a) sign the SPL
+        // transfers below using the custody PDA derivation and (b) emit the settlement
+        // approval Omnipair will validate as the after-hook return data.
         let order_key = ctx.accounts.order.key();
-        let bump = ctx.bumps.custody_authority;
-        let signer_seeds = &[
-            CUSTODY_AUTHORITY_SEED_PREFIX,
-            order_key.as_ref(),
-            &[bump],
-        ];
-        let signer = &[&signer_seeds[..]];
+        let order_pair = ctx.accounts.order.pair;
+        let order_owner = ctx.accounts.order.owner;
+        let order_position = ctx.accounts.order.position;
+        let staged_margin = ctx.accounts.order.staged_margin;
+        let staged_output_amount = ctx.accounts.order.staged_output_amount;
+        let custody_token_account_key = ctx.accounts.custody_token_account.key();
+        let token_mint_key = ctx.accounts.token_mint.key();
+        let delegation_key = ctx.accounts.user_leverage_delegation.key();
+        let is_debt_token0 = ctx.accounts.user_leverage_delegation.is_debt_token0;
+        let amount = ctx.accounts.custody_token_account.amount;
 
-        if incentive > 0 {
-            token::transfer_checked(
-                CpiContext::new_with_signer(
-                    ctx.accounts.token_program.to_account_info(),
-                    TransferChecked {
-                        from: ctx.accounts.custody_token_account.to_account_info(),
-                        mint: ctx.accounts.token_mint.to_account_info(),
-                        to: ctx.accounts.executor_token_account.to_account_info(),
-                        authority: ctx.accounts.custody_authority.to_account_info(),
-                    },
-                    signer,
-                ),
-                incentive,
-                ctx.accounts.token_mint.decimals,
-            )?;
+        if amount > 0 {
+            let incentive = executor_incentive(amount, staged_margin)?;
+            let owner_amount = amount
+                .checked_sub(incentive)
+                .ok_or(LeverageDelegateError::MathOverflow)?;
+            let bump = ctx.bumps.custody_authority;
+            let signer_seeds = &[
+                CUSTODY_AUTHORITY_SEED_PREFIX,
+                order_key.as_ref(),
+                &[bump],
+            ];
+            let signer = &[&signer_seeds[..]];
+
+            if incentive > 0 {
+                token::transfer_checked(
+                    CpiContext::new_with_signer(
+                        ctx.accounts.token_program.to_account_info(),
+                        TransferChecked {
+                            from: ctx.accounts.custody_token_account.to_account_info(),
+                            mint: ctx.accounts.token_mint.to_account_info(),
+                            to: ctx.accounts.executor_token_account.to_account_info(),
+                            authority: ctx.accounts.custody_authority.to_account_info(),
+                        },
+                        signer,
+                    ),
+                    incentive,
+                    ctx.accounts.token_mint.decimals,
+                )?;
+            }
+            if owner_amount > 0 {
+                token::transfer_checked(
+                    CpiContext::new_with_signer(
+                        ctx.accounts.token_program.to_account_info(),
+                        TransferChecked {
+                            from: ctx.accounts.custody_token_account.to_account_info(),
+                            mint: ctx.accounts.token_mint.to_account_info(),
+                            to: ctx.accounts.owner_token_account.to_account_info(),
+                            authority: ctx.accounts.custody_authority.to_account_info(),
+                        },
+                        signer,
+                    ),
+                    owner_amount,
+                    ctx.accounts.token_mint.decimals,
+                )?;
+            }
         }
-        if owner_amount > 0 {
-            token::transfer_checked(
-                CpiContext::new_with_signer(
-                    ctx.accounts.token_program.to_account_info(),
-                    TransferChecked {
-                        from: ctx.accounts.custody_token_account.to_account_info(),
-                        mint: ctx.accounts.token_mint.to_account_info(),
-                        to: ctx.accounts.owner_token_account.to_account_info(),
-                        authority: ctx.accounts.custody_authority.to_account_info(),
-                    },
-                    signer,
-                ),
-                owner_amount,
-                ctx.accounts.token_mint.decimals,
-            )?;
-        }
+
+        // Settlement-completion approval Omnipair re-validates as the after-hook return
+        // data. The bound recipient/mint/amount mirror the staged values from the
+        // before-hook, which Omnipair already pinned against its own
+        // `recipient_token_out_account`, so an after-hook substitution cannot pass.
+        let approval = LeverageDelegationApproval::new(
+            LEVERAGE_DELEGATE_CLOSE_SETTLED,
+            order_pair,
+            order_owner,
+            order_position,
+            delegation_key,
+            is_debt_token0,
+            custody_token_account_key,
+            token_mint_key,
+            staged_output_amount,
+        );
+        let mut data = Vec::new();
+        approval
+            .serialize(&mut data)
+            .map_err(|_| LeverageDelegateError::ApprovalSerializationFailed)?;
+        set_return_data(&data);
         Ok(())
     }
 }
@@ -733,6 +782,52 @@ mod tests {
         assert!(require_trigger_met(ORDER_KIND_STOP_LOSS, 99, 100).is_ok());
         assert!(require_trigger_met(ORDER_KIND_STOP_LOSS, 101, 100).is_err());
         assert!(require_trigger_met(0, 100, 100).is_err());
+    }
+
+    #[test]
+    fn settled_payload_binds_close_completion_to_order_context() {
+        // The after-hook return data must bind the delegation key, the staged
+        // residual, the custody recipient, and the output mint. Omnipair validates
+        // each of these against its own view of the close (recipient_token_out_account,
+        // token_out_mint, residual, delegation). Any mismatch — for instance, an
+        // attacker pointing the after-hook at a foreign entrypoint that returns a
+        // CLOSE-action payload instead — is detectable on the omnipair side because
+        // these fields are produced by the *delegate program itself* off of its own
+        // verified accounts (custody_token_account, user_leverage_delegation),
+        // not off of caller-supplied data.
+        let order_pair = Pubkey::new_unique();
+        let order_owner = Pubkey::new_unique();
+        let order_position = Pubkey::new_unique();
+        let delegation = Pubkey::new_unique();
+        let custody = Pubkey::new_unique();
+        let mint = Pubkey::new_unique();
+        let staged_amount: u64 = 9_876;
+
+        let approval = LeverageDelegationApproval::new(
+            LEVERAGE_DELEGATE_CLOSE_SETTLED,
+            order_pair,
+            order_owner,
+            order_position,
+            delegation,
+            true,
+            custody,
+            mint,
+            staged_amount,
+        );
+
+        let mut data = Vec::new();
+        approval.serialize(&mut data).unwrap();
+        let decoded = LeverageDelegationApproval::deserialize(&mut data.as_slice()).unwrap();
+
+        assert_eq!(decoded.action, LEVERAGE_DELEGATE_CLOSE_SETTLED);
+        assert_eq!(decoded.pair, order_pair);
+        assert_eq!(decoded.owner, order_owner);
+        assert_eq!(decoded.position, order_position);
+        assert_eq!(decoded.delegation, delegation);
+        assert!(decoded.is_debt_token0);
+        assert_eq!(decoded.recipient_token_account, custody);
+        assert_eq!(decoded.output_mint, mint);
+        assert_eq!(decoded.output_amount, staged_amount);
     }
 
     #[test]
