@@ -216,7 +216,6 @@ impl<'info> CloseLeverage<'info> {
         let pair = &mut accounts.pair;
         let position = &mut accounts.user_leverage_position;
         let debt_amount = position.calculate_debt(pair)?;
-        require_gt!(debt_amount, 0, ErrorCode::ZeroDebtAmount);
 
         let is_token0_in = !args.is_debt_token0;
         let reserve_in = if is_token0_in { pair.reserve0 } else { pair.reserve1 };
