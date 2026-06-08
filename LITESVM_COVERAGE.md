@@ -14,18 +14,18 @@ Output shows:
 📊 INSTRUCTION COVERAGE REPORT
 ════════════════════════════════
 
-✅ Covered Instructions: 2/16 (12.50%)
+✅ Covered Instructions: 2/15 (13.33%)
   ✓ initFutarchyAuthority    [1 test(s)]
     └─ should calculate correct PDA
   ✓ viewPairData             [1 test(s)]
 
-❌ Untested Instructions: 14/16
+❌ Untested Instructions: 13/15
   ✗ swap
   ✗ addCollateral
   ✗ borrow
   ... (14 more)
 
-Coverage: 12.50% | Tests: 2/16
+Coverage: 13.33% | Tests: 2/15
 ════════════════════════════════
 ```
 
@@ -56,7 +56,7 @@ Reports are displayed automatically after tests run, showing:
 
 ## Tracked Instructions
 
-The tracker monitors all 16 Omnipair instructions:
+The tracker monitors all 15 Omnipair instructions:
 
 | Instruction | Category | Status |
 |------------|----------|--------|
@@ -75,7 +75,6 @@ The tracker monitors all 16 Omnipair instructions:
 | `borrow` | Lending | - |
 | `repay` | Lending | - |
 | `liquidate` | Lending | - |
-| `flashloan` | Lending | - |
 
 ## Usage Examples
 

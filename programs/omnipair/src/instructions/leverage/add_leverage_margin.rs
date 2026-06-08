@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    token::{Mint, Token, TokenAccount},
-    token_interface::Token2022,
+    token::Token,
+    token_interface::{Mint, Token2022, TokenAccount},
 };
 
 use crate::{
@@ -9,13 +9,15 @@ use crate::{
     errors::ErrorCode,
     events::{EventMetadata, LeveragePositionUpdatedEvent},
     state::{FutarchyAuthority, Pair, RateModel, UserLeverageDelegation, UserLeveragePosition},
-    utils::token::transfer_from_user_to_vault,
+    utils::token::{
+        require_supported_mint, transfer_amounts_from_net, transfer_from_user_to_vault,
+    },
 };
 
 use super::common::{
-    approved_for, invoke_delegated_approval_callback, invoke_delegated_callback, quote_swap,
-    require_leverage_not_liquidatable, split_delegated_accounts, token_program_for_mint,
-    DelegatedCpiArgs, LEVERAGE_DELEGATE_ADD_MARGIN,
+    approved_for, invoke_delegated_approval_callback, invoke_delegated_callback,
+    leverage_token_program_for_mint, quote_swap, require_leverage_not_liquidatable,
+    split_delegated_accounts, DelegatedCpiArgs, LEVERAGE_DELEGATE_ADD_MARGIN,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -86,18 +88,18 @@ pub struct AddLeverageMargin<'info> {
         ],
         bump = pair.get_reserve_vault_bump(&debt_token_mint.key())
     )]
-    pub debt_token_vault: Box<Account<'info, TokenAccount>>,
+    pub debt_token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
         constraint = source_token_account.mint == debt_token_mint.key() @ ErrorCode::InvalidTokenAccount,
     )]
-    pub source_token_account: Box<Account<'info, TokenAccount>>,
+    pub source_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         constraint = debt_token_mint.key() == pair.token0 || debt_token_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub debt_token_mint: Box<Account<'info, Mint>>,
+    pub debt_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
     pub user_leverage_delegation: Option<Account<'info, UserLeverageDelegation>>,
 
@@ -112,10 +114,7 @@ pub struct AddLeverageMargin<'info> {
 }
 
 impl<'info> AddLeverageMargin<'info> {
-    pub fn update_and_validate_add_margin(
-        &mut self,
-        args: &AddLeverageMarginArgs,
-    ) -> Result<()> {
+    pub fn update_and_validate_add_margin(&mut self, args: &AddLeverageMarginArgs) -> Result<()> {
         let pair_key = self.pair.key();
         self.pair.update(
             &self.rate_model,
@@ -124,10 +123,22 @@ impl<'info> AddLeverageMargin<'info> {
             Some(self.event_authority.to_account_info()),
         )?;
 
-        let debt_token = if args.is_debt_token0 { self.pair.token0 } else { self.pair.token1 };
-        require_keys_eq!(self.debt_token_mint.key(), debt_token, ErrorCode::InvalidMint);
+        let debt_token = if args.is_debt_token0 {
+            self.pair.token0
+        } else {
+            self.pair.token1
+        };
+        require_keys_eq!(
+            self.debt_token_mint.key(),
+            debt_token,
+            ErrorCode::InvalidMint
+        );
         require!(args.amount > 0, ErrorCode::AmountZero);
-        require!(self.user_leverage_position.debt_shares > 0, ErrorCode::ZeroDebtAmount);
+        require_supported_mint(&self.debt_token_mint)?;
+        require!(
+            self.user_leverage_position.debt_shares > 0,
+            ErrorCode::ZeroDebtAmount
+        );
         require!(
             self.user_leverage_position.collateral_amount > 0,
             ErrorCode::InsufficientAmount
@@ -183,8 +194,16 @@ impl<'info> AddLeverageMargin<'info> {
         let debt_amount = position.calculate_debt(pair)?;
         require_gt!(debt_amount, args.amount, ErrorCode::InsufficientDebt);
         let collateral_token0 = !args.is_debt_token0;
-        let reserve_in = if collateral_token0 { pair.reserve0 } else { pair.reserve1 };
-        let reserve_out = if collateral_token0 { pair.reserve1 } else { pair.reserve0 };
+        let reserve_in = if collateral_token0 {
+            pair.reserve0
+        } else {
+            pair.reserve1
+        };
+        let reserve_out = if collateral_token0 {
+            pair.reserve1
+        } else {
+            pair.reserve0
+        };
         let closeout_value = quote_swap(
             position.collateral_amount,
             reserve_in,
@@ -225,10 +244,25 @@ impl<'info> AddLeverageMargin<'info> {
                     .delegated_program
                     .as_ref()
                     .ok_or(ErrorCode::InvalidLeverageDelegation)?;
-                require_keys_eq!(delegation.owner, position.owner, ErrorCode::InvalidLeverageDelegation);
-                require_keys_eq!(delegation.pair, pair.key(), ErrorCode::InvalidLeverageDelegation);
-                require_keys_eq!(delegation.position, position.key(), ErrorCode::InvalidLeverageDelegation);
-                require!(delegation.is_debt_token0 == args.is_debt_token0, ErrorCode::InvalidLeverageDelegation);
+                require_keys_eq!(
+                    delegation.owner,
+                    position.owner,
+                    ErrorCode::InvalidLeverageDelegation
+                );
+                require_keys_eq!(
+                    delegation.pair,
+                    pair.key(),
+                    ErrorCode::InvalidLeverageDelegation
+                );
+                require_keys_eq!(
+                    delegation.position,
+                    position.key(),
+                    ErrorCode::InvalidLeverageDelegation
+                );
+                require!(
+                    delegation.is_debt_token0 == args.is_debt_token0,
+                    ErrorCode::InvalidLeverageDelegation
+                );
                 require_keys_eq!(
                     delegation.delegated_program,
                     delegated_program.key(),
@@ -236,8 +270,10 @@ impl<'info> AddLeverageMargin<'info> {
                 );
                 approved_for(delegation.approved_actions, LEVERAGE_DELEGATE_ADD_MARGIN)?;
                 let vault_balance_before = accounts.debt_token_vault.amount;
-                let (before_accounts, _) =
-                    split_delegated_accounts(ctx.remaining_accounts, delegated.before_accounts_len)?;
+                let (before_accounts, _) = split_delegated_accounts(
+                    ctx.remaining_accounts,
+                    delegated.before_accounts_len,
+                )?;
                 let protected_accounts = [
                     pair.key(),
                     position.key(),
@@ -265,7 +301,10 @@ impl<'info> AddLeverageMargin<'info> {
                 )?;
                 accounts.debt_token_vault.reload()?;
                 require_gte!(
-                    accounts.debt_token_vault.amount.saturating_sub(vault_balance_before),
+                    accounts
+                        .debt_token_vault
+                        .amount
+                        .saturating_sub(vault_balance_before),
                     args.amount,
                     ErrorCode::InvalidLeverageDelegation
                 );
@@ -273,17 +312,21 @@ impl<'info> AddLeverageMargin<'info> {
         }
 
         if matches!(mode, AddMarginMode::Owner) {
+            let transfer_amount = transfer_amounts_from_net(
+                &accounts.debt_token_mint.to_account_info(),
+                args.amount,
+            )?;
             transfer_from_user_to_vault(
                 accounts.authority.to_account_info(),
                 accounts.source_token_account.to_account_info(),
                 accounts.debt_token_vault.to_account_info(),
                 accounts.debt_token_mint.to_account_info(),
-                token_program_for_mint(
+                leverage_token_program_for_mint(
                     &accounts.debt_token_mint.to_account_info(),
                     &accounts.token_program.to_account_info(),
                     &accounts.token_2022_program.to_account_info(),
-                ),
-                args.amount,
+                )?,
+                transfer_amount.gross,
                 accounts.debt_token_mint.decimals,
             )?;
         }
@@ -328,8 +371,10 @@ impl<'info> AddLeverageMargin<'info> {
                 ];
                 pair.exit(&crate::ID)?;
                 position.exit(&crate::ID)?;
-                let (_, after_accounts) =
-                    split_delegated_accounts(ctx.remaining_accounts, delegated.before_accounts_len)?;
+                let (_, after_accounts) = split_delegated_accounts(
+                    ctx.remaining_accounts,
+                    delegated.before_accounts_len,
+                )?;
                 invoke_delegated_callback(
                     delegated_program,
                     delegated.after_ix_data,

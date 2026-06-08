@@ -56,7 +56,6 @@ impl FuzzTest {
 
         // Advanced operations
         self.liquidate();
-        self.flashloan();
     }
 
     #[end]

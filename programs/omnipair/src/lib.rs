@@ -168,12 +168,6 @@ pub mod omnipair {
         Liquidate::handle_liquidate(ctx)
     }
 
-    // Flash loan instruction
-    #[access_control(ctx.accounts.update_and_validate(&args))]
-    pub fn flashloan<'info>(ctx: Context<'_, '_, '_, 'info, Flashloan<'info>>, args: FlashloanArgs) -> Result<()> {
-        Flashloan::handle_flashloan(ctx, args)
-    }
-
     #[access_control(ctx.accounts.update_and_validate_open(&args))]
     pub fn open_leverage<'info>(
         ctx: Context<'_, '_, '_, 'info, OpenLeverage<'info>>,
