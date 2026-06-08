@@ -17,6 +17,63 @@ impl EventMetadata {
     }
 }
 
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct MarketEventMetadataV2 {
+    pub signer: Pubkey,
+    pub market: Pubkey,
+    pub slot: u64,
+}
+
+impl MarketEventMetadataV2 {
+    pub fn new(signer: Pubkey, market: Pubkey) -> Self {
+        Self {
+            signer,
+            market,
+            slot: Clock::get().unwrap().slot,
+        }
+    }
+}
+
+#[event]
+pub struct MarketCreatedV2 {
+    pub market: Pubkey,
+    pub asset0_mint: Pubkey,
+    pub asset1_mint: Pubkey,
+    pub claim0_mint: Pubkey,
+    pub claim1_mint: Pubkey,
+    pub hedge0_mint: Pubkey,
+    pub hedge1_mint: Pubkey,
+    pub operator: Pubkey,
+    pub manager: Pubkey,
+    pub buffer_ratio_bps: u16,
+    pub swap_fee_bps: u16,
+    pub params_hash: [u8; 32],
+    pub version: u8,
+    pub metadata: MarketEventMetadataV2,
+}
+
+#[event]
+pub struct MarketUpdatedV2 {
+    pub market: Pubkey,
+    pub reduce_only: bool,
+    pub buffer_ratio_bps: u16,
+    pub swap_fee_bps: u16,
+    pub operator_fee_bps: u16,
+    pub metadata: MarketEventMetadataV2,
+}
+
+#[event]
+pub struct MarketHealthUpdatedV2 {
+    pub market: Pubkey,
+    pub recognized_collateral0_for_debt1: u64,
+    pub recognized_collateral1_for_debt0: u64,
+    pub effective_debt0_nad: u128,
+    pub effective_debt1_nad: u128,
+    pub health0_bps: u64,
+    pub health1_bps: u64,
+    pub metadata: MarketEventMetadataV2,
+}
+
 #[event]
 pub struct SwapEvent {
     pub reserve0: u64,

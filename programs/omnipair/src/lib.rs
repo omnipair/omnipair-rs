@@ -105,6 +105,24 @@ pub mod omnipair {
         CreateRateModel::handle_create_rate_model(ctx, args)
     }
 
+    // V2 market instructions
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn v2_initialize_market(ctx: Context<InitializeMarketV2>, args: InitializeMarketV2Args) -> Result<()> {
+        InitializeMarketV2::handle_initialize(ctx, args)
+    }
+
+    pub fn v2_update_market_config(ctx: Context<UpdateMarketConfigV2>, args: UpdateMarketConfigV2Args) -> Result<()> {
+        UpdateMarketConfigV2::handle_update(ctx, args)
+    }
+
+    pub fn v2_set_market_reduce_only(ctx: Context<SetMarketReduceOnlyV2>, args: SetMarketReduceOnlyV2Args) -> Result<()> {
+        SetMarketReduceOnlyV2::handle_set(ctx, args)
+    }
+
+    pub fn v2_get_market_state(ctx: Context<ViewMarketStateV2>) -> Result<()> {
+        ViewMarketStateV2::handle_view(ctx)
+    }
+
     // Pair instructions
     #[access_control(ctx.accounts.validate(&args))]
     pub fn initialize(ctx: Context<InitializeAndBootstrap>, args: InitializeAndBootstrapArgs) -> Result<()> {

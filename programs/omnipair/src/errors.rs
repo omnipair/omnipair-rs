@@ -232,4 +232,31 @@ pub enum ErrorCode {
 
     #[msg("Invalid recipient - address does not match configured revenue recipient")]
     InvalidRecipient,
+
+    #[msg("Invalid V2 market")]
+    InvalidMarketV2,
+
+    #[msg("Invalid V2 market config")]
+    InvalidMarketConfigV2,
+
+    #[msg("Invalid V2 market buffer ratio")]
+    InvalidMarketBufferRatioV2,
+
+    #[msg("V2 market claim coverage is insufficient")]
+    InsufficientMarketClaimCoverageV2,
+
+    #[msg("V2 fee liability is not backed by fee vault balance")]
+    UnbackedFeeLiabilityV2,
+
+    #[msg("V2 market is reduce-only")]
+    MarketReduceOnlyV2,
+
+    #[msg("V2 market has not started")]
+    MarketNotStartedV2,
+
+    #[msg("V2 market math overflow")]
+    MarketMathOverflowV2,
+
+    #[msg("V2 instruction is intentionally not live yet")]
+    V2InstructionNotLive,
 }
