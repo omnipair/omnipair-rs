@@ -291,6 +291,7 @@ mod tests {
     ) -> MarketSideV2 {
         MarketSideV2 {
             asset_mint: Pubkey::new_unique(),
+            asset_decimals: 6,
             claim_mint: Pubkey::new_unique(),
             hedge_mint: Pubkey::new_unique(),
             hedge_vault: Pubkey::new_unique(),

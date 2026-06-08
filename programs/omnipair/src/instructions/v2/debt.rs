@@ -596,10 +596,10 @@ fn apply_borrow_state(
     } else {
         DebtBookV2::debt_to_shares(borrow_amount, market.debt_book.borrow_index1_nad)?
     };
-    let (debt_side, collateral_side_index) = if borrow_asset_is_asset0 {
-        (&mut market.side0, 1_u8)
+    let debt_side = if borrow_asset_is_asset0 {
+        &mut market.side0
     } else {
-        (&mut market.side1, 0_u8)
+        &mut market.side1
     };
     require_borrow_headroom(debt_side, borrow_amount)?;
     debt_side.reserve_ledger.live_reserve = debt_side
@@ -663,13 +663,14 @@ fn apply_borrow_state(
             .ok_or(ErrorCode::MarketMathOverflowV2)?;
     }
     market.recognition_ledger.last_recognition_slot = Clock::get()?.slot;
-    let _ = collateral_side_index;
     market.refresh_market_health()?;
     market.assert_market_health()?;
+    market.assert_recognition_cap(margin_position, borrow_asset_is_asset0)?;
+    market.assert_position_health(margin_position, borrow_asset_is_asset0, min_health_bps)?;
     let health = if borrow_asset_is_asset0 {
-        market.health.health0_bps
+        market.position_health_bps(margin_position, true)?
     } else {
-        market.health.health1_bps
+        market.position_health_bps(margin_position, false)?
     };
     require_gte!(
         health,

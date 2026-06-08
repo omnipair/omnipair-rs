@@ -114,6 +114,7 @@ impl<'info> InitializeMarketV2<'info> {
         market.manager = args.manager;
         market.side0 = MarketSideV2 {
             asset_mint: ctx.accounts.asset0_mint.key(),
+            asset_decimals: ctx.accounts.asset0_mint.decimals,
             claim_mint: ctx.accounts.claim0_mint.key(),
             hedge_mint: ctx.accounts.hedge0_mint.key(),
             hedge_vault: ctx.accounts.hedge0_vault.key(),
@@ -129,6 +130,7 @@ impl<'info> InitializeMarketV2<'info> {
         };
         market.side1 = MarketSideV2 {
             asset_mint: ctx.accounts.asset1_mint.key(),
+            asset_decimals: ctx.accounts.asset1_mint.decimals,
             claim_mint: ctx.accounts.claim1_mint.key(),
             hedge_mint: ctx.accounts.hedge1_mint.key(),
             hedge_vault: ctx.accounts.hedge1_vault.key(),

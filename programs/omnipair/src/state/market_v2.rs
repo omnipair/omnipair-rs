@@ -5,7 +5,7 @@ use crate::errors::ErrorCode;
 use crate::utils::market_v2_math::{
     accrue_fee_liability, active_stake_units, required_buffer_for_claims, split_claim_minus_buffer,
 };
-use crate::utils::math::ceil_div;
+use crate::utils::math::{ceil_div, slots_to_ms, taylor_exp, SqrtU128};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct MarketConfigV2 {
@@ -121,6 +121,7 @@ pub struct DailyLimitBookV2 {
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct MarketSideV2 {
     pub asset_mint: Pubkey,
+    pub asset_decimals: u8,
     pub claim_mint: Pubkey,
     pub hedge_mint: Pubkey,
     pub hedge_vault: Pubkey,
@@ -405,6 +406,74 @@ pub struct RiskBookV2 {
     pub k_ema: u128,
     pub liquidity_ema: u128,
     pub last_snapshot_slot: u64,
+}
+
+impl RiskBookV2 {
+    pub fn refreshed(
+        &self,
+        side0: &MarketSideV2,
+        side1: &MarketSideV2,
+        config: &MarketConfigV2,
+        current_slot: u64,
+    ) -> Result<Self> {
+        let spot_price0_nad = market_spot_price_nad(side0, side1)?;
+        let spot_price1_nad = market_spot_price_nad(side1, side0)?;
+        let liquidity = market_liquidity_nad(side0, side1)?;
+        let k = market_k_nad(side0, side1)?;
+
+        let price0_ema_nad = ema_u64(
+            self.price0_ema_nad,
+            spot_price0_nad,
+            self.last_snapshot_slot,
+            current_slot,
+            config.ema_half_life_ms,
+        );
+        let price1_ema_nad = ema_u64(
+            self.price1_ema_nad,
+            spot_price1_nad,
+            self.last_snapshot_slot,
+            current_slot,
+            config.ema_half_life_ms,
+        );
+        let directional_price0_ema_nad = directional_ema_u64(
+            self.directional_price0_ema_nad,
+            spot_price0_nad,
+            self.last_snapshot_slot,
+            current_slot,
+            config.directional_ema_half_life_ms,
+        );
+        let directional_price1_ema_nad = directional_ema_u64(
+            self.directional_price1_ema_nad,
+            spot_price1_nad,
+            self.last_snapshot_slot,
+            current_slot,
+            config.directional_ema_half_life_ms,
+        );
+        let liquidity_ema = ema_u128(
+            self.liquidity_ema,
+            liquidity,
+            self.last_snapshot_slot,
+            current_slot,
+            config.k_ema_half_life_ms,
+        );
+        let k_ema = ema_u128(
+            self.k_ema,
+            k,
+            self.last_snapshot_slot,
+            current_slot,
+            config.k_ema_half_life_ms,
+        );
+
+        Ok(Self {
+            price0_ema_nad,
+            price1_ema_nad,
+            directional_price0_ema_nad,
+            directional_price1_ema_nad,
+            k_ema,
+            liquidity_ema,
+            last_snapshot_slot: current_slot,
+        })
+    }
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
@@ -789,22 +858,19 @@ impl MarketV2 {
     }
 
     pub fn refresh_market_health(&mut self) -> Result<()> {
-        let effective_debt0_nad = self
-            .debt_book
-            .total_debt0()?
-            .checked_mul(NAD as u128)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
-        let effective_debt1_nad = self
-            .debt_book
-            .total_debt1()?
-            .checked_mul(NAD as u128)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        self.refresh_risk_book()?;
+        let effective_debt0_nad = self.effective_debt0_nad()?;
+        let effective_debt1_nad = self.effective_debt1_nad()?;
+        let collateral1_value_for_debt0_nad =
+            self.collateral_value_for_debt0_nad(self.recognition_ledger.debt_bearing_collateral1_for_debt0)?;
+        let collateral0_value_for_debt1_nad =
+            self.collateral_value_for_debt1_nad(self.recognition_ledger.debt_bearing_collateral0_for_debt1)?;
         let health0_bps = health_bps(
-            self.recognition_ledger.debt_bearing_collateral1_for_debt0,
+            collateral1_value_for_debt0_nad,
             effective_debt0_nad,
         )?;
         let health1_bps = health_bps(
-            self.recognition_ledger.debt_bearing_collateral0_for_debt1,
+            collateral0_value_for_debt1_nad,
             effective_debt1_nad,
         )?;
         self.health = MarketHealthV2 {
@@ -819,6 +885,140 @@ impl MarketV2 {
             health0_bps,
             health1_bps,
         };
+        Ok(())
+    }
+
+    pub fn current_risk_book(&self) -> Result<RiskBookV2> {
+        let current_slot = Clock::get()
+            .map(|clock| clock.slot)
+            .unwrap_or(self.last_update_slot);
+        self.risk_book.refreshed(
+            &self.side0,
+            &self.side1,
+            &self.config,
+            current_slot,
+        )
+    }
+
+    pub fn refresh_risk_book(&mut self) -> Result<()> {
+        self.risk_book = self.current_risk_book()?;
+        self.last_update_slot = self.risk_book.last_snapshot_slot;
+        Ok(())
+    }
+
+    pub fn effective_debt0_nad(&self) -> Result<u128> {
+        self.effective_debt_nad(true)
+    }
+
+    pub fn effective_debt1_nad(&self) -> Result<u128> {
+        self.effective_debt_nad(false)
+    }
+
+    pub fn collateral_value_for_debt0_nad(&self, collateral1_amount: u64) -> Result<u128> {
+        self.collateral_value_nad(false, collateral1_amount, &self.risk_book)
+    }
+
+    pub fn collateral_value_for_debt1_nad(&self, collateral0_amount: u64) -> Result<u128> {
+        self.collateral_value_nad(true, collateral0_amount, &self.risk_book)
+    }
+
+    pub fn collateral_amount_for_debt_value(
+        &self,
+        debt_asset_is_asset0: bool,
+        debt_amount: u64,
+    ) -> Result<u64> {
+        self.collateral_amount_for_debt_value_with_risk(
+            debt_asset_is_asset0,
+            debt_amount,
+            &self.current_risk_book()?,
+        )
+    }
+
+    pub fn position_health_bps(
+        &self,
+        margin_position: &MarginPositionV2,
+        debt_asset_is_asset0: bool,
+    ) -> Result<u64> {
+        let risk_book = self.current_risk_book()?;
+        if debt_asset_is_asset0 {
+            health_bps(
+                self.collateral_value_nad(
+                    false,
+                    margin_position.recognized_collateral1_for_debt0,
+                    &risk_book,
+                )?,
+                normalize_to_nad(
+                    margin_position.fixed_debt0(&self.debt_book)?,
+                    self.side0.asset_decimals,
+                )?,
+            )
+        } else {
+            health_bps(
+                self.collateral_value_nad(
+                    true,
+                    margin_position.recognized_collateral0_for_debt1,
+                    &risk_book,
+                )?,
+                normalize_to_nad(
+                    margin_position.fixed_debt1(&self.debt_book)?,
+                    self.side1.asset_decimals,
+                )?,
+            )
+        }
+    }
+
+    pub fn assert_position_health(
+        &self,
+        margin_position: &MarginPositionV2,
+        debt_asset_is_asset0: bool,
+        min_health_bps: u64,
+    ) -> Result<()> {
+        require_gte!(
+            self.position_health_bps(margin_position, debt_asset_is_asset0)?,
+            min_health_bps,
+            ErrorCode::InsufficientMarketHealthV2
+        );
+        Ok(())
+    }
+
+    pub fn assert_recognition_cap(
+        &self,
+        margin_position: &MarginPositionV2,
+        debt_asset_is_asset0: bool,
+    ) -> Result<()> {
+        let risk_book = self.current_risk_book()?;
+        let cap_bps = self.config.recognized_collateral_cap_bps as u128;
+        if debt_asset_is_asset0 {
+            let recognized = self.collateral_value_nad(
+                false,
+                margin_position.recognized_collateral1_for_debt0,
+                &risk_book,
+            )?;
+            let total = self.collateral_value_nad(false, margin_position.collateral1, &risk_book)?;
+            require_gte!(
+                total
+                    .checked_mul(cap_bps)
+                    .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
+                    .ok_or(ErrorCode::MarketMathOverflowV2)?,
+                recognized,
+                ErrorCode::InsufficientRecognizedCollateralV2
+            );
+        } else {
+            let recognized = self.collateral_value_nad(
+                true,
+                margin_position.recognized_collateral0_for_debt1,
+                &risk_book,
+            )?;
+            let total = self.collateral_value_nad(true, margin_position.collateral0, &risk_book)?;
+            require_gte!(
+                total
+                    .checked_mul(cap_bps)
+                    .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
+                    .ok_or(ErrorCode::MarketMathOverflowV2)?,
+                recognized,
+                ErrorCode::InsufficientRecognizedCollateralV2
+            );
+        }
         Ok(())
     }
 
@@ -841,16 +1041,377 @@ impl MarketV2 {
     }
 }
 
-fn health_bps(recognized_collateral: u64, effective_debt_nad: u128) -> Result<u64> {
+impl MarketV2 {
+    fn effective_debt_nad(&self, debt_asset_is_asset0: bool) -> Result<u128> {
+        let (fixed_debt, soft_debt, hedged_debt_nad, debt_side) = if debt_asset_is_asset0 {
+            (
+                self.debt_book.fixed_debt0()?,
+                self.debt_book.soft_debt0()?,
+                self.debt_book.hedged_debt0_nad,
+                &self.side0,
+            )
+        } else {
+            (
+                self.debt_book.fixed_debt1()?,
+                self.debt_book.soft_debt1()?,
+                self.debt_book.hedged_debt1_nad,
+                &self.side1,
+            )
+        };
+        let fixed_debt_nad = normalize_to_nad(fixed_debt, debt_side.asset_decimals)?;
+        let soft_debt_nad = normalize_to_nad(soft_debt, debt_side.asset_decimals)?;
+        let hedged_debt_nad = effective_hedged_debt_nad(
+            hedged_debt_nad,
+            self.risk_book.liquidity_ema,
+            self.config.effective_debt_weight_min_bps,
+            self.config.effective_debt_gamma_nad,
+        )?;
+
+        fixed_debt_nad
+            .checked_add(soft_debt_nad)
+            .and_then(|value| value.checked_add(hedged_debt_nad))
+            .ok_or(ErrorCode::MarketMathOverflowV2.into())
+    }
+
+    fn collateral_value_nad(
+        &self,
+        collateral_is_asset0: bool,
+        collateral_amount: u64,
+        risk_book: &RiskBookV2,
+    ) -> Result<u128> {
+        if collateral_amount == 0 {
+            return Ok(0);
+        }
+        let (collateral_side, debt_side, price_ema_nad, directional_price_ema_nad) =
+            if collateral_is_asset0 {
+                (
+                    &self.side0,
+                    &self.side1,
+                    risk_book.price0_ema_nad,
+                    risk_book.directional_price0_ema_nad,
+                )
+            } else {
+                (
+                    &self.side1,
+                    &self.side0,
+                    risk_book.price1_ema_nad,
+                    risk_book.directional_price1_ema_nad,
+                )
+            };
+        let collateral_reserve = normalize_to_nad(
+            collateral_side.reserve_ledger.live_reserve as u128,
+            collateral_side.asset_decimals,
+        )?;
+        let debt_reserve = normalize_to_nad(
+            debt_side.reserve_ledger.live_reserve as u128,
+            debt_side.asset_decimals,
+        )?;
+        let collateral_amount = normalize_to_nad(collateral_amount as u128, collateral_side.asset_decimals)?;
+        let (collateral_virtual_reserve, debt_virtual_reserve) =
+            virtual_reserves_at_pessimistic_price(
+                collateral_reserve,
+                debt_reserve,
+                price_ema_nad,
+                directional_price_ema_nad,
+            )?;
+        constant_product_amount_out(
+            collateral_virtual_reserve,
+            debt_virtual_reserve,
+            collateral_amount,
+        )
+    }
+
+    fn collateral_amount_for_debt_value_with_risk(
+        &self,
+        debt_asset_is_asset0: bool,
+        debt_amount: u64,
+        risk_book: &RiskBookV2,
+    ) -> Result<u64> {
+        let debt_with_incentive = ceil_div(
+            (debt_amount as u128)
+                .checked_mul((BPS_DENOMINATOR + LIQUIDATION_INCENTIVE_BPS) as u128)
+                .ok_or(ErrorCode::MarketMathOverflowV2)?,
+            BPS_DENOMINATOR as u128,
+        )
+        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        let (collateral_side, debt_side, price_ema_nad, directional_price_ema_nad) =
+            if debt_asset_is_asset0 {
+                (
+                    &self.side1,
+                    &self.side0,
+                    risk_book.price1_ema_nad,
+                    risk_book.directional_price1_ema_nad,
+                )
+            } else {
+                (
+                    &self.side0,
+                    &self.side1,
+                    risk_book.price0_ema_nad,
+                    risk_book.directional_price0_ema_nad,
+                )
+            };
+        let collateral_reserve = normalize_to_nad(
+            collateral_side.reserve_ledger.live_reserve as u128,
+            collateral_side.asset_decimals,
+        )?;
+        let debt_reserve = normalize_to_nad(
+            debt_side.reserve_ledger.live_reserve as u128,
+            debt_side.asset_decimals,
+        )?;
+        let debt_amount_nad = normalize_to_nad(debt_with_incentive, debt_side.asset_decimals)?;
+        let (collateral_virtual_reserve, debt_virtual_reserve) =
+            virtual_reserves_at_pessimistic_price(
+                collateral_reserve,
+                debt_reserve,
+                price_ema_nad,
+                directional_price_ema_nad,
+            )?;
+        let collateral_amount_nad = constant_product_amount_in(
+            collateral_virtual_reserve,
+            debt_virtual_reserve,
+            debt_amount_nad,
+        )?;
+        denormalize_from_nad_ceil(collateral_amount_nad, collateral_side.asset_decimals)
+    }
+}
+
+fn health_bps(recognized_collateral_value_nad: u128, effective_debt_nad: u128) -> Result<u64> {
     if effective_debt_nad == 0 {
         return Ok(u64::MAX);
     }
-    let health = (recognized_collateral as u128)
+    let health = recognized_collateral_value_nad
         .checked_mul(BPS_DENOMINATOR as u128)
-        .and_then(|value| value.checked_mul(NAD as u128))
         .and_then(|value| value.checked_div(effective_debt_nad))
         .ok_or(ErrorCode::MarketMathOverflowV2)?;
     u64::try_from(health).map_err(|_| ErrorCode::MarketMathOverflowV2.into())
+}
+
+fn effective_hedged_debt_nad(
+    hedged_debt_nad: u128,
+    liquidity_ema: u128,
+    min_weight_bps: u16,
+    gamma_nad: u64,
+) -> Result<u128> {
+    if hedged_debt_nad == 0 {
+        return Ok(0);
+    }
+    let min_weight = min_weight_bps as u128;
+    let variable_weight = (BPS_DENOMINATOR as u128)
+        .checked_sub(min_weight)
+        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+    let gamma_pressure_nad = if liquidity_ema == 0 {
+        NAD as u128
+    } else {
+        (gamma_nad as u128)
+            .checked_mul(hedged_debt_nad)
+            .and_then(|value| value.checked_div(liquidity_ema))
+            .ok_or(ErrorCode::MarketMathOverflowV2)?
+            .min(NAD as u128)
+    };
+    let weight_bps = min_weight
+        .checked_add(
+            variable_weight
+                .checked_mul(gamma_pressure_nad)
+                .and_then(|value| value.checked_div(NAD as u128))
+                .ok_or(ErrorCode::MarketMathOverflowV2)?,
+        )
+        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+    hedged_debt_nad
+        .checked_mul(weight_bps)
+        .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
+        .ok_or(ErrorCode::MarketMathOverflowV2.into())
+}
+
+fn market_spot_price_nad(collateral_side: &MarketSideV2, debt_side: &MarketSideV2) -> Result<u64> {
+    let collateral_reserve = normalize_to_nad(
+        collateral_side.reserve_ledger.live_reserve as u128,
+        collateral_side.asset_decimals,
+    )?;
+    let debt_reserve = normalize_to_nad(
+        debt_side.reserve_ledger.live_reserve as u128,
+        debt_side.asset_decimals,
+    )?;
+    if collateral_reserve == 0 {
+        return Ok(0);
+    }
+    let price = debt_reserve
+        .checked_mul(NAD as u128)
+        .and_then(|value| value.checked_div(collateral_reserve))
+        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+    u64::try_from(price).map_err(|_| ErrorCode::MarketMathOverflowV2.into())
+}
+
+fn market_k_nad(side0: &MarketSideV2, side1: &MarketSideV2) -> Result<u128> {
+    normalize_to_nad(side0.reserve_ledger.live_reserve as u128, side0.asset_decimals)?
+        .checked_mul(normalize_to_nad(
+            side1.reserve_ledger.live_reserve as u128,
+            side1.asset_decimals,
+        )?)
+        .ok_or(ErrorCode::MarketMathOverflowV2.into())
+}
+
+fn market_liquidity_nad(side0: &MarketSideV2, side1: &MarketSideV2) -> Result<u128> {
+    market_k_nad(side0, side1)?
+        .sqrt()
+        .ok_or(ErrorCode::MarketMathOverflowV2.into())
+}
+
+fn normalize_to_nad(amount: u128, decimals: u8) -> Result<u128> {
+    match decimals.cmp(&NAD_DECIMALS) {
+        std::cmp::Ordering::Equal => Ok(amount),
+        std::cmp::Ordering::Less => amount
+            .checked_mul(
+                10_u128
+                    .checked_pow((NAD_DECIMALS - decimals) as u32)
+                    .ok_or(ErrorCode::MarketMathOverflowV2)?,
+            )
+            .ok_or(ErrorCode::MarketMathOverflowV2.into()),
+        std::cmp::Ordering::Greater => Ok(amount
+            .checked_div(
+                10_u128
+                    .checked_pow((decimals - NAD_DECIMALS) as u32)
+                    .ok_or(ErrorCode::MarketMathOverflowV2)?,
+            )
+            .ok_or(ErrorCode::MarketMathOverflowV2)?),
+    }
+}
+
+fn denormalize_from_nad_ceil(amount_nad: u128, decimals: u8) -> Result<u64> {
+    let value = match decimals.cmp(&NAD_DECIMALS) {
+        std::cmp::Ordering::Equal => amount_nad,
+        std::cmp::Ordering::Less => ceil_div(
+            amount_nad,
+            10_u128
+                .checked_pow((NAD_DECIMALS - decimals) as u32)
+                .ok_or(ErrorCode::MarketMathOverflowV2)?,
+        )
+        .ok_or(ErrorCode::MarketMathOverflowV2)?,
+        std::cmp::Ordering::Greater => amount_nad
+            .checked_mul(
+                10_u128
+                    .checked_pow((decimals - NAD_DECIMALS) as u32)
+                    .ok_or(ErrorCode::MarketMathOverflowV2)?,
+            )
+            .ok_or(ErrorCode::MarketMathOverflowV2)?,
+    };
+    u64::try_from(value).map_err(|_| ErrorCode::MarketMathOverflowV2.into())
+}
+
+fn virtual_reserves_at_pessimistic_price(
+    collateral_reserve: u128,
+    debt_reserve: u128,
+    collateral_ema_price_nad: u64,
+    collateral_directional_ema_price_nad: u64,
+) -> Result<(u128, u128)> {
+    if collateral_reserve == 0 || debt_reserve == 0 {
+        return err!(ErrorCode::InsufficientLiquidity);
+    }
+    let pessimistic_price = collateral_ema_price_nad
+        .min(collateral_directional_ema_price_nad) as u128;
+    require!(pessimistic_price > 0, ErrorCode::InvalidMarketConfigV2);
+    let k = collateral_reserve
+        .checked_mul(debt_reserve)
+        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+    let collateral_squared = k
+        .checked_mul(NAD as u128)
+        .and_then(|value| value.checked_div(pessimistic_price))
+        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+    let debt_squared = k
+        .checked_mul(pessimistic_price)
+        .and_then(|value| value.checked_div(NAD as u128))
+        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+    Ok((
+        collateral_squared
+            .sqrt()
+            .ok_or(ErrorCode::MarketMathOverflowV2)?,
+        debt_squared
+            .sqrt()
+            .ok_or(ErrorCode::MarketMathOverflowV2)?,
+    ))
+}
+
+fn constant_product_amount_out(reserve_in: u128, reserve_out: u128, amount_in: u128) -> Result<u128> {
+    if amount_in == 0 {
+        return Ok(0);
+    }
+    let denominator = reserve_in
+        .checked_add(amount_in)
+        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+    amount_in
+        .checked_mul(reserve_out)
+        .and_then(|value| value.checked_div(denominator))
+        .ok_or(ErrorCode::MarketMathOverflowV2.into())
+}
+
+fn constant_product_amount_in(reserve_in: u128, reserve_out: u128, amount_out: u128) -> Result<u128> {
+    require_gte!(reserve_out, amount_out, ErrorCode::InsufficientLiquidity);
+    let denominator = reserve_out
+        .checked_sub(amount_out)
+        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+    require!(denominator > 0, ErrorCode::InsufficientLiquidity);
+    ceil_div(
+        amount_out
+            .checked_mul(reserve_in)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?,
+        denominator,
+    )
+    .ok_or(ErrorCode::MarketMathOverflowV2.into())
+}
+
+fn ema_u64(last_ema: u64, input: u64, last_slot: u64, current_slot: u64, half_life_ms: u64) -> u64 {
+    if last_ema == 0 || input == 0 {
+        return input;
+    }
+    u64::try_from(ema_u128(
+        last_ema as u128,
+        input as u128,
+        last_slot,
+        current_slot,
+        half_life_ms,
+    ))
+    .unwrap_or(u64::MAX)
+}
+
+fn directional_ema_u64(
+    last_ema: u64,
+    input: u64,
+    last_slot: u64,
+    current_slot: u64,
+    half_life_ms: u64,
+) -> u64 {
+    if last_ema == 0 || input == 0 {
+        return input;
+    }
+    input.min(ema_u64(last_ema, input, last_slot, current_slot, half_life_ms))
+}
+
+fn ema_u128(
+    last_ema: u128,
+    input: u128,
+    last_slot: u64,
+    current_slot: u64,
+    half_life_ms: u64,
+) -> u128 {
+    if last_ema == 0 || input == 0 {
+        return input;
+    }
+    let Some(dt) = slots_to_ms(last_slot, current_slot) else {
+        return last_ema;
+    };
+    if dt == 0 || half_life_ms == 0 {
+        return last_ema;
+    }
+    let x = (dt as u128)
+        .saturating_mul(NATURAL_LOG_OF_TWO_NAD as u128)
+        .checked_div(half_life_ms as u128)
+        .unwrap_or(u128::MAX)
+        .min(i64::MAX as u128) as i64;
+    let alpha = taylor_exp(-x, NAD, TAYLOR_TERMS) as u128;
+    input
+        .saturating_mul((NAD as u128).saturating_sub(alpha))
+        .saturating_add(last_ema.saturating_mul(alpha))
+        .checked_div(NAD as u128)
+        .unwrap_or(last_ema)
 }
 
 #[macro_export]
@@ -873,6 +1434,7 @@ mod tests {
     fn test_market_side(asset_mint: Pubkey, buffer_ratio_bps: u16) -> MarketSideV2 {
         MarketSideV2 {
             asset_mint,
+            asset_decimals: 6,
             claim_mint: Pubkey::new_unique(),
             hedge_mint: Pubkey::new_unique(),
             hedge_vault: Pubkey::new_unique(),
@@ -1075,6 +1637,8 @@ mod tests {
     #[test]
     fn market_health_uses_recognized_collateral_not_idle_inventory() {
         let mut market = test_market();
+        market.side0.reserve_ledger.live_reserve = 1_000_000_000;
+        market.side1.reserve_ledger.live_reserve = 1_000_000_000;
         market.debt_book.fixed_debt0_shares =
             DebtBookV2::debt_to_shares(1_000, NAD as u128).unwrap();
 
@@ -1089,8 +1653,65 @@ mod tests {
             .recognition_ledger
             .debt_bearing_collateral1_for_debt0 = 1_500;
         market.refresh_market_health().unwrap();
-        assert_eq!(market.health.health0_bps, 15_000);
+        assert!(market.health.health0_bps >= 14_900);
         market.assert_market_health().unwrap();
+    }
+
+    #[test]
+    fn market_health_rejects_raw_unit_decimal_pump() {
+        let asset0_mint = Pubkey::new_unique();
+        let asset1_mint = Pubkey::new_unique();
+        let mut side0 = test_market_side(asset0_mint, 2_000);
+        let mut side1 = test_market_side(asset1_mint, 2_000);
+        side0.asset_decimals = 6;
+        side1.asset_decimals = 9;
+        side0.reserve_ledger.live_reserve = 1_000_000_000;
+        side1.reserve_ledger.live_reserve = 1_000_000_000_000_000;
+        let mut market = MarketV2::initialize(
+            asset0_mint,
+            asset1_mint,
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            side0,
+            side1,
+            MarketConfigV2 {
+                recognized_collateral_cap_bps: 10_000,
+                ..test_market().config
+            },
+            [8_u8; 32],
+            42,
+            253,
+        )
+        .unwrap();
+        market.debt_book.fixed_debt0_shares =
+            DebtBookV2::debt_to_shares(900_000_000, NAD as u128).unwrap();
+        market
+            .recognition_ledger
+            .debt_bearing_collateral1_for_debt0 = 1_000_000_000;
+        market.refresh_market_health().unwrap();
+
+        assert!(market.health.health0_bps < market.config.market_health_min_bps as u64);
+        assert_eq!(
+            market.assert_market_health().unwrap_err(),
+            error!(ErrorCode::InsufficientMarketHealthV2)
+        );
+    }
+
+    #[test]
+    fn effective_debt_applies_gamma_only_to_hedged_overlay() {
+        let mut market = test_market();
+        market.side0.reserve_ledger.live_reserve = 2_000_000_000;
+        market.side1.reserve_ledger.live_reserve = 2_000_000_000;
+        market.config.effective_debt_weight_min_bps = 5_000;
+        market.config.effective_debt_gamma_nad = 2 * NAD;
+        market.risk_book.liquidity_ema = 1_000 * NAD as u128;
+        market.debt_book.fixed_debt0_shares =
+            DebtBookV2::debt_to_shares(100_000_000, NAD as u128).unwrap();
+        market.debt_book.hedged_debt0_nad = 100 * NAD as u128;
+
+        let effective = market.effective_debt0_nad().unwrap();
+
+        assert_eq!(effective, 160 * NAD as u128);
     }
 
     #[test]

@@ -10,11 +10,8 @@ use crate::{
     events::{MarketEventMetadataV2, MarketInsuranceFundedV2, MarketLiquidatedV2},
     generate_market_v2_seeds,
     state::{DebtBookV2, MarginPositionV2, MarketV2},
-    utils::{
-        math::ceil_div,
-        token::{
-            transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault,
-        },
+    utils::token::{
+        transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault,
     },
 };
 
@@ -513,25 +510,7 @@ fn position_health_bps(
     margin_position: &MarginPositionV2,
     debt_asset_is_asset0: bool,
 ) -> Result<u64> {
-    let (recognized_collateral, debt_amount) = if debt_asset_is_asset0 {
-        (
-            margin_position.recognized_collateral1_for_debt0,
-            margin_position.fixed_debt0(&market.debt_book)?,
-        )
-    } else {
-        (
-            margin_position.recognized_collateral0_for_debt1,
-            margin_position.fixed_debt1(&market.debt_book)?,
-        )
-    };
-    if debt_amount == 0 {
-        return Ok(u64::MAX);
-    }
-    let health = (recognized_collateral as u128)
-        .checked_mul(BPS_DENOMINATOR as u128)
-        .and_then(|value| value.checked_div(debt_amount))
-        .ok_or(ErrorCode::MarketMathOverflowV2)?;
-    u64::try_from(health).map_err(|_| ErrorCode::MarketMathOverflowV2.into())
+    market.position_health_bps(margin_position, debt_asset_is_asset0)
 }
 
 fn insurance_request_for_liquidation(
@@ -548,7 +527,8 @@ fn insurance_request_for_liquidation(
         ErrorCode::InsufficientDebt
     );
     let collateral_before = position_collateral(margin_position, debt_asset_is_asset0);
-    let collateral_seized = collateral_to_seize(repay_credit, collateral_before)?;
+    let collateral_seized =
+        collateral_to_seize(market, debt_asset_is_asset0, repay_credit, collateral_before)?;
     let remaining_debt = debt_before
         .checked_sub(repay_credit as u128)
         .ok_or(ErrorCode::MarketMathOverflowV2)?;
@@ -581,7 +561,8 @@ fn apply_liquidation_state(
         ErrorCode::InsufficientDebt
     );
     let collateral_before = position_collateral(margin_position, debt_asset_is_asset0);
-    let collateral_seized = collateral_to_seize(repay_credit, collateral_before)?;
+    let collateral_seized =
+        collateral_to_seize(market, debt_asset_is_asset0, repay_credit, collateral_before)?;
     let collateral_exhausted = collateral_seized == collateral_before;
     let repay_plus_insurance = (repay_credit as u128)
         .checked_add(insurance_credit as u128)
@@ -769,15 +750,13 @@ fn position_collateral(margin_position: &MarginPositionV2, debt_asset_is_asset0:
     }
 }
 
-fn collateral_to_seize(repay_credit: u64, collateral_before: u64) -> Result<u64> {
-    let seizure = ceil_div(
-        (repay_credit as u128)
-            .checked_mul((BPS_DENOMINATOR + LIQUIDATION_INCENTIVE_BPS) as u128)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?,
-        BPS_DENOMINATOR as u128,
-    )
-    .ok_or(ErrorCode::MarketMathOverflowV2)?;
-    let seizure = u64::try_from(seizure).map_err(|_| ErrorCode::MarketMathOverflowV2)?;
+fn collateral_to_seize(
+    market: &MarketV2,
+    debt_asset_is_asset0: bool,
+    repay_credit: u64,
+    collateral_before: u64,
+) -> Result<u64> {
+    let seizure = market.collateral_amount_for_debt_value(debt_asset_is_asset0, repay_credit)?;
     Ok(seizure.min(collateral_before))
 }
 
@@ -837,6 +816,7 @@ mod tests {
     fn market_side(asset_mint: Pubkey) -> MarketSideV2 {
         MarketSideV2 {
             asset_mint,
+            asset_decimals: 6,
             claim_mint: Pubkey::new_unique(),
             hedge_mint: Pubkey::new_unique(),
             hedge_vault: Pubkey::new_unique(),
