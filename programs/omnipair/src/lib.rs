@@ -153,6 +153,21 @@ pub mod omnipair {
         SwapV2::handle_swap(ctx, args)
     }
 
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn v2_deposit_collateral(ctx: Context<DepositCollateralV2>, args: DepositCollateralV2Args) -> Result<()> {
+        DepositCollateralV2::handle_deposit(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn v2_borrow(ctx: Context<BorrowV2>, args: BorrowV2Args) -> Result<()> {
+        BorrowV2::handle_borrow(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn v2_repay(ctx: Context<RepayV2>, args: RepayV2Args) -> Result<()> {
+        RepayV2::handle_repay(ctx, args)
+    }
+
     // Pair instructions
     #[access_control(ctx.accounts.validate(&args))]
     pub fn initialize(ctx: Context<InitializeAndBootstrap>, args: InitializeAndBootstrapArgs) -> Result<()> {

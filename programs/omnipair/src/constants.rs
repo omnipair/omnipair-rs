@@ -102,11 +102,15 @@ pub const MARKET_V2_SEED_PREFIX: &[u8] = b"market_v2";
 #[constant]
 pub const MARKET_RESERVE_VAULT_V2_SEED_PREFIX: &[u8] = b"market_reserve_v2";
 #[constant]
+pub const MARKET_COLLATERAL_VAULT_V2_SEED_PREFIX: &[u8] = b"market_collateral_v2";
+#[constant]
 pub const MARKET_FEE_VAULT_V2_SEED_PREFIX: &[u8] = b"market_fee_v2";
 #[constant]
 pub const MARKET_STAKE_VAULT_V2_SEED_PREFIX: &[u8] = b"market_stake_v2";
 #[constant]
 pub const STAKE_POSITION_V2_SEED_PREFIX: &[u8] = b"stake_v2";
+#[constant]
+pub const MARGIN_POSITION_V2_SEED_PREFIX: &[u8] = b"margin_v2";
 #[constant]
 pub const HEDGE_VAULT_V2_SEED_PREFIX: &[u8] = b"hedged_v2";
 #[constant]

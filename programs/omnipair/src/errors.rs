@@ -254,6 +254,18 @@ pub enum ErrorCode {
     #[msg("V2 buffer shares are insufficient")]
     InsufficientBufferSharesV2,
 
+    #[msg("V2 borrow headroom is insufficient")]
+    InsufficientBorrowHeadroomV2,
+
+    #[msg("V2 market health is insufficient")]
+    InsufficientMarketHealthV2,
+
+    #[msg("Invalid V2 margin position")]
+    InvalidMarginPositionV2,
+
+    #[msg("V2 recognized collateral is insufficient")]
+    InsufficientRecognizedCollateralV2,
+
     #[msg("V2 claim mint must not charge transfer fees")]
     InvalidClaimMintV2,
 

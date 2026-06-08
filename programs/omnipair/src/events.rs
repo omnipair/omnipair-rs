@@ -43,6 +43,8 @@ pub struct MarketCreatedV2 {
     pub claim1_mint: Pubkey,
     pub claim0_stake_vault: Pubkey,
     pub claim1_stake_vault: Pubkey,
+    pub collateral0_vault: Pubkey,
+    pub collateral1_vault: Pubkey,
     pub hedge0_mint: Pubkey,
     pub hedge1_mint: Pubkey,
     pub operator: Pubkey,
@@ -132,6 +134,30 @@ pub struct MarketSwapV2 {
     pub amount_in_after_fee: u64,
     pub amount_out: u64,
     pub fee_credit: u64,
+    pub metadata: MarketEventMetadataV2,
+}
+
+#[event]
+pub struct MarketCollateralDepositedV2 {
+    pub market: Pubkey,
+    pub owner: Pubkey,
+    pub asset_mint: Pubkey,
+    pub collateral_credit: u64,
+    pub collateral0: u64,
+    pub collateral1: u64,
+    pub metadata: MarketEventMetadataV2,
+}
+
+#[event]
+pub struct MarketDebtUpdatedV2 {
+    pub market: Pubkey,
+    pub owner: Pubkey,
+    pub debt_asset_mint: Pubkey,
+    pub debt_delta: i64,
+    pub fixed_debt0: u128,
+    pub fixed_debt1: u128,
+    pub health0_bps: u64,
+    pub health1_bps: u64,
     pub metadata: MarketEventMetadataV2,
 }
 

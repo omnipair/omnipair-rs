@@ -63,6 +63,10 @@ pub struct InitializeMarketV2<'info> {
     pub reserve0_vault: UncheckedAccount<'info>,
     /// CHECK: Stored as the reserve vault for asset1; PDA/token-account validation is added in the reserve layer.
     pub reserve1_vault: UncheckedAccount<'info>,
+    /// CHECK: Stored as the collateral vault for asset0; validation is added in the margin layer.
+    pub collateral0_vault: UncheckedAccount<'info>,
+    /// CHECK: Stored as the collateral vault for asset1; validation is added in the margin layer.
+    pub collateral1_vault: UncheckedAccount<'info>,
     /// CHECK: Stored as the non-compounding fee vault for asset0; validation is added in the fee layer.
     pub fee0_vault: UncheckedAccount<'info>,
     /// CHECK: Stored as the non-compounding fee vault for asset1; validation is added in the fee layer.
@@ -99,6 +103,7 @@ impl<'info> InitializeMarketV2<'info> {
             claim_mint: ctx.accounts.claim0_mint.key(),
             hedge_mint: ctx.accounts.hedge0_mint.key(),
             reserve_vault: ctx.accounts.reserve0_vault.key(),
+            collateral_vault: ctx.accounts.collateral0_vault.key(),
             fee_vault: ctx.accounts.fee0_vault.key(),
             stake_vault: ctx.accounts.claim0_stake_vault.key(),
             buffer_book: crate::state::BufferBookV2 {
@@ -112,6 +117,7 @@ impl<'info> InitializeMarketV2<'info> {
             claim_mint: ctx.accounts.claim1_mint.key(),
             hedge_mint: ctx.accounts.hedge1_mint.key(),
             reserve_vault: ctx.accounts.reserve1_vault.key(),
+            collateral_vault: ctx.accounts.collateral1_vault.key(),
             fee_vault: ctx.accounts.fee1_vault.key(),
             stake_vault: ctx.accounts.claim1_stake_vault.key(),
             buffer_book: crate::state::BufferBookV2 {
@@ -142,6 +148,8 @@ impl<'info> InitializeMarketV2<'info> {
             claim1_mint: ctx.accounts.claim1_mint.key(),
             claim0_stake_vault: ctx.accounts.claim0_stake_vault.key(),
             claim1_stake_vault: ctx.accounts.claim1_stake_vault.key(),
+            collateral0_vault: ctx.accounts.collateral0_vault.key(),
+            collateral1_vault: ctx.accounts.collateral1_vault.key(),
             hedge0_mint: ctx.accounts.hedge0_mint.key(),
             hedge1_mint: ctx.accounts.hedge1_mint.key(),
             operator: args.operator,

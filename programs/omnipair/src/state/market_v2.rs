@@ -5,6 +5,7 @@ use crate::errors::ErrorCode;
 use crate::utils::market_v2_math::{
     accrue_fee_liability, active_stake_units, required_buffer_for_claims, split_claim_minus_buffer,
 };
+use crate::utils::math::ceil_div;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct MarketConfigV2 {
@@ -123,6 +124,7 @@ pub struct MarketSideV2 {
     pub claim_mint: Pubkey,
     pub hedge_mint: Pubkey,
     pub reserve_vault: Pubkey,
+    pub collateral_vault: Pubkey,
     pub fee_vault: Pubkey,
     pub stake_vault: Pubkey,
     pub reserve_ledger: ReserveLedgerV2,
@@ -338,18 +340,30 @@ pub struct DebtBookV2 {
 }
 
 impl DebtBookV2 {
-    pub fn fixed_debt0(&self) -> Result<u128> {
-        self.fixed_debt0_shares
-            .checked_mul(self.borrow_index0_nad)
+    pub fn debt_to_shares(amount: u64, borrow_index_nad: u128) -> Result<u128> {
+        require!(amount > 0, ErrorCode::AmountZero);
+        ceil_div(
+            (amount as u128)
+                .checked_mul(NAD as u128)
+                .ok_or(ErrorCode::MarketMathOverflowV2)?,
+            borrow_index_nad,
+        )
+        .ok_or(ErrorCode::MarketMathOverflowV2.into())
+    }
+
+    pub fn shares_to_debt(shares: u128, borrow_index_nad: u128) -> Result<u128> {
+        shares
+            .checked_mul(borrow_index_nad)
             .and_then(|value| value.checked_div(NAD as u128))
             .ok_or(ErrorCode::MarketMathOverflowV2.into())
     }
 
+    pub fn fixed_debt0(&self) -> Result<u128> {
+        Self::shares_to_debt(self.fixed_debt0_shares, self.borrow_index0_nad)
+    }
+
     pub fn fixed_debt1(&self) -> Result<u128> {
-        self.fixed_debt1_shares
-            .checked_mul(self.borrow_index1_nad)
-            .and_then(|value| value.checked_div(NAD as u128))
-            .ok_or(ErrorCode::MarketMathOverflowV2.into())
+        Self::shares_to_debt(self.fixed_debt1_shares, self.borrow_index1_nad)
     }
 
     pub fn soft_debt0(&self) -> Result<u128> {
@@ -408,6 +422,65 @@ pub struct InsuranceReserveV2 {
     pub vault1: Pubkey,
     pub available0: u64,
     pub available1: u64,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
+pub struct RecognitionLedgerV2 {
+    pub debt_bearing_collateral0_for_debt1: u64,
+    pub debt_bearing_collateral1_for_debt0: u64,
+    pub last_recognition_slot: u64,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct MarginPositionV2 {
+    pub owner: Pubkey,
+    pub market: Pubkey,
+    pub collateral0: u64,
+    pub collateral1: u64,
+    pub recognized_collateral0_for_debt1: u64,
+    pub recognized_collateral1_for_debt0: u64,
+    pub fixed_debt0_shares: u128,
+    pub fixed_debt1_shares: u128,
+    pub bump: u8,
+}
+
+impl MarginPositionV2 {
+    pub fn initialize(&mut self, owner: Pubkey, market: Pubkey, bump: u8) {
+        self.owner = owner;
+        self.market = market;
+        self.bump = bump;
+    }
+
+    pub fn is_initialized(&self) -> bool {
+        self.owner != Pubkey::default() && self.market != Pubkey::default()
+    }
+
+    pub fn assert_position(&self, owner: Pubkey, market: Pubkey) -> Result<()> {
+        require_keys_eq!(self.owner, owner, ErrorCode::InvalidMarginPositionV2);
+        require_keys_eq!(self.market, market, ErrorCode::InvalidMarginPositionV2);
+        Ok(())
+    }
+
+    pub fn idle_collateral0(&self) -> Result<u64> {
+        self.collateral0
+            .checked_sub(self.recognized_collateral0_for_debt1)
+            .ok_or(ErrorCode::InsufficientRecognizedCollateralV2.into())
+    }
+
+    pub fn idle_collateral1(&self) -> Result<u64> {
+        self.collateral1
+            .checked_sub(self.recognized_collateral1_for_debt0)
+            .ok_or(ErrorCode::InsufficientRecognizedCollateralV2.into())
+    }
+
+    pub fn fixed_debt0(&self, debt_book: &DebtBookV2) -> Result<u128> {
+        DebtBookV2::shares_to_debt(self.fixed_debt0_shares, debt_book.borrow_index0_nad)
+    }
+
+    pub fn fixed_debt1(&self, debt_book: &DebtBookV2) -> Result<u128> {
+        DebtBookV2::shares_to_debt(self.fixed_debt1_shares, debt_book.borrow_index1_nad)
+    }
 }
 
 #[account]
@@ -544,6 +617,7 @@ pub struct MarketV2 {
     pub debt_book: DebtBookV2,
     pub risk_book: RiskBookV2,
     pub health: MarketHealthV2,
+    pub recognition_ledger: RecognitionLedgerV2,
     pub insurance_reserve: InsuranceReserveV2,
     pub params_hash: [u8; 32],
     pub last_update_slot: u64,
@@ -589,6 +663,10 @@ impl MarketV2 {
                 ..RiskBookV2::default()
             },
             health: MarketHealthV2::default(),
+            recognition_ledger: RecognitionLedgerV2 {
+                last_recognition_slot: current_slot,
+                ..RecognitionLedgerV2::default()
+            },
             insurance_reserve: InsuranceReserveV2::default(),
             params_hash,
             last_update_slot: current_slot,
@@ -651,6 +729,70 @@ impl MarketV2 {
         self.side1.fee_ledger.assert_backed()?;
         Ok(())
     }
+
+    pub fn refresh_market_health(&mut self) -> Result<()> {
+        let effective_debt0_nad = self
+            .debt_book
+            .total_debt0()?
+            .checked_mul(NAD as u128)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        let effective_debt1_nad = self
+            .debt_book
+            .total_debt1()?
+            .checked_mul(NAD as u128)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        let health0_bps = health_bps(
+            self.recognition_ledger.debt_bearing_collateral1_for_debt0,
+            effective_debt0_nad,
+        )?;
+        let health1_bps = health_bps(
+            self.recognition_ledger.debt_bearing_collateral0_for_debt1,
+            effective_debt1_nad,
+        )?;
+        self.health = MarketHealthV2 {
+            recognized_collateral0_for_debt1: self
+                .recognition_ledger
+                .debt_bearing_collateral0_for_debt1,
+            recognized_collateral1_for_debt0: self
+                .recognition_ledger
+                .debt_bearing_collateral1_for_debt0,
+            effective_debt0_nad,
+            effective_debt1_nad,
+            health0_bps,
+            health1_bps,
+        };
+        Ok(())
+    }
+
+    pub fn assert_market_health(&self) -> Result<()> {
+        if self.health.effective_debt0_nad > 0 {
+            require_gte!(
+                self.health.health0_bps,
+                self.config.market_health_min_bps as u64,
+                ErrorCode::InsufficientMarketHealthV2
+            );
+        }
+        if self.health.effective_debt1_nad > 0 {
+            require_gte!(
+                self.health.health1_bps,
+                self.config.market_health_min_bps as u64,
+                ErrorCode::InsufficientMarketHealthV2
+            );
+        }
+        Ok(())
+    }
+}
+
+fn health_bps(recognized_collateral: u64, effective_debt_nad: u128) -> Result<u64> {
+    if effective_debt_nad == 0 {
+        return Ok(u64::MAX);
+    }
+    let health = (recognized_collateral as u128)
+        .checked_mul(BPS_DENOMINATOR as u128)
+        .and_then(|value| value.checked_mul(NAD as u128))
+        .and_then(|value| value.checked_div(effective_debt_nad))
+        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+    u64::try_from(health).map_err(|_| ErrorCode::MarketMathOverflowV2.into())
 }
 
 #[macro_export]
