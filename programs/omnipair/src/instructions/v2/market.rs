@@ -218,9 +218,8 @@ impl<'info> UpdateMarketConfigV2<'info> {
     pub fn handle_update(ctx: Context<Self>, args: UpdateMarketConfigV2Args) -> Result<()> {
         args.config.validate()?;
         let market = &mut ctx.accounts.market;
+        market.apply_buffer_ratio_update(args.config.buffer_ratio_bps)?;
         market.config = args.config;
-        market.side0.buffer_book.buffer_ratio_bps = args.config.buffer_ratio_bps;
-        market.side1.buffer_book.buffer_ratio_bps = args.config.buffer_ratio_bps;
 
         emit_cpi!(MarketUpdatedV2 {
             market: market.key(),

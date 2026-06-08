@@ -160,6 +160,33 @@ impl MarketSideV2 {
         Ok(())
     }
 
+    pub fn required_buffer_for_ratio(&self, buffer_ratio_bps: u16) -> Result<u64> {
+        required_buffer_for_claims(self.claim_ledger.protected_claim_supply, buffer_ratio_bps)
+    }
+
+    pub fn assert_buffer_floor_for_ratio(&self, buffer_ratio_bps: u16) -> Result<u64> {
+        let required_buffer = self.required_buffer_for_ratio(buffer_ratio_bps)?;
+        require_gte!(
+            self.buffer_book.buffer_shares,
+            required_buffer,
+            ErrorCode::InsufficientBufferSharesV2
+        );
+        require_gte!(
+            self.reserve_ledger.live_reserve,
+            self.claim_ledger
+                .protected_claim_supply
+                .checked_add(required_buffer)
+                .ok_or(ErrorCode::MarketMathOverflowV2)?,
+            ErrorCode::InsufficientMarketClaimCoverageV2
+        );
+        Ok(required_buffer)
+    }
+
+    pub fn apply_buffer_ratio(&mut self, buffer_ratio_bps: u16, required_buffer: u64) {
+        self.buffer_book.buffer_ratio_bps = buffer_ratio_bps;
+        self.buffer_book.required_buffer = required_buffer;
+    }
+
     pub fn apply_reserve_deposit(&mut self, reserve_credit: u64) -> Result<(u64, u64)> {
         require!(reserve_credit > 0, ErrorCode::AmountZero);
         let (claim_amount, buffer_amount) =
@@ -1039,6 +1066,16 @@ impl MarketV2 {
         }
         Ok(())
     }
+
+    pub fn apply_buffer_ratio_update(&mut self, buffer_ratio_bps: u16) -> Result<()> {
+        let required_buffer0 = self.side0.assert_buffer_floor_for_ratio(buffer_ratio_bps)?;
+        let required_buffer1 = self.side1.assert_buffer_floor_for_ratio(buffer_ratio_bps)?;
+        self.side0
+            .apply_buffer_ratio(buffer_ratio_bps, required_buffer0);
+        self.side1
+            .apply_buffer_ratio(buffer_ratio_bps, required_buffer1);
+        Ok(())
+    }
 }
 
 impl MarketV2 {
@@ -1695,6 +1732,36 @@ mod tests {
             market.assert_market_health().unwrap_err(),
             error!(ErrorCode::InsufficientMarketHealthV2)
         );
+    }
+
+    #[test]
+    fn buffer_ratio_update_recomputes_required_floor() {
+        let mut market = test_market();
+        market.side0.apply_reserve_deposit(1_000_000).unwrap();
+        market.side1.apply_reserve_deposit(2_000_000).unwrap();
+        market.side0.buffer_book.buffer_shares += 100_000;
+        market.side0.reserve_ledger.live_reserve += 100_000;
+        market.side1.buffer_book.buffer_shares += 200_000;
+        market.side1.reserve_ledger.live_reserve += 200_000;
+
+        market.apply_buffer_ratio_update(2_500).unwrap();
+
+        assert_eq!(market.side0.buffer_book.buffer_ratio_bps, 2_500);
+        assert_eq!(market.side0.buffer_book.required_buffer, 266_667);
+        assert_eq!(market.side1.buffer_book.required_buffer, 533_334);
+    }
+
+    #[test]
+    fn buffer_ratio_update_rejects_uncovered_floor() {
+        let mut market = test_market();
+        market.side0.apply_reserve_deposit(1_000_000).unwrap();
+        market.side1.apply_reserve_deposit(1_000_000).unwrap();
+
+        let err = market.apply_buffer_ratio_update(2_500).unwrap_err();
+
+        assert_eq!(err, error!(ErrorCode::InsufficientBufferSharesV2));
+        assert_eq!(market.side0.buffer_book.buffer_ratio_bps, 2_000);
+        assert_eq!(market.side0.buffer_book.required_buffer, 200_000);
     }
 
     #[test]
