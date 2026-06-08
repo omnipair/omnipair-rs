@@ -43,29 +43,29 @@ pub struct SwapV2<'info> {
         ],
         bump = market.bump
     )]
-    pub market: Account<'info, MarketV2>,
+    pub market: Box<Account<'info, MarketV2>>,
 
     #[account(mut)]
     pub trader: Signer<'info>,
 
-    pub asset_in_mint: InterfaceAccount<'info, Mint>,
+    pub asset_in_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    pub asset_out_mint: InterfaceAccount<'info, Mint>,
-
-    #[account(mut)]
-    pub reserve_in_vault: InterfaceAccount<'info, TokenAccount>,
+    pub asset_out_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub reserve_out_vault: InterfaceAccount<'info, TokenAccount>,
+    pub reserve_in_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub fee_in_vault: InterfaceAccount<'info, TokenAccount>,
+    pub reserve_out_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub trader_asset_in_account: InterfaceAccount<'info, TokenAccount>,
+    pub fee_in_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub trader_asset_out_account: InterfaceAccount<'info, TokenAccount>,
+    pub trader_asset_in_account: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub trader_asset_out_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,

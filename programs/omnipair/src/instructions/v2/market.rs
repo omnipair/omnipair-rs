@@ -34,8 +34,8 @@ pub struct InitializeMarketV2<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    pub asset0_mint: InterfaceAccount<'info, Mint>,
-    pub asset1_mint: InterfaceAccount<'info, Mint>,
+    pub asset0_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub asset1_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         init,
@@ -49,7 +49,7 @@ pub struct InitializeMarketV2<'info> {
         ],
         bump
     )]
-    pub market: Account<'info, MarketV2>,
+    pub market: Box<Account<'info, MarketV2>>,
 
     /// CHECK: Stored as the protected claim mint for asset0; initialized in a later token-layer instruction.
     pub claim0_mint: UncheckedAccount<'info>,
@@ -106,7 +106,13 @@ impl<'info> InitializeMarketV2<'info> {
         let current_slot = Clock::get()?.slot;
         let market_key = ctx.accounts.market.key();
 
-        let side0 = MarketSideV2 {
+        let market = &mut ctx.accounts.market;
+        market.version = MARKET_V2_VERSION;
+        market.asset0_mint = ctx.accounts.asset0_mint.key();
+        market.asset1_mint = ctx.accounts.asset1_mint.key();
+        market.operator = args.operator;
+        market.manager = args.manager;
+        market.side0 = MarketSideV2 {
             asset_mint: ctx.accounts.asset0_mint.key(),
             claim_mint: ctx.accounts.claim0_mint.key(),
             hedge_mint: ctx.accounts.hedge0_mint.key(),
@@ -121,7 +127,7 @@ impl<'info> InitializeMarketV2<'info> {
             },
             ..MarketSideV2::default()
         };
-        let side1 = MarketSideV2 {
+        market.side1 = MarketSideV2 {
             asset_mint: ctx.accounts.asset1_mint.key(),
             claim_mint: ctx.accounts.claim1_mint.key(),
             hedge_mint: ctx.accounts.hedge1_mint.key(),
@@ -136,22 +142,27 @@ impl<'info> InitializeMarketV2<'info> {
             },
             ..MarketSideV2::default()
         };
-
-        let mut market = MarketV2::initialize(
-            ctx.accounts.asset0_mint.key(),
-            ctx.accounts.asset1_mint.key(),
-            args.operator,
-            args.manager,
-            side0,
-            side1,
-            args.config,
-            args.params_hash,
-            current_slot,
-            ctx.bumps.market,
-        )?;
         market.insurance_reserve.vault0 = ctx.accounts.insurance0_vault.key();
         market.insurance_reserve.vault1 = ctx.accounts.insurance1_vault.key();
-        ctx.accounts.market.set_inner(market);
+        market.config = args.config;
+        market.debt_book = crate::state::DebtBookV2 {
+            borrow_index0_nad: NAD as u128,
+            borrow_index1_nad: NAD as u128,
+            ..crate::state::DebtBookV2::default()
+        };
+        market.risk_book = crate::state::RiskBookV2 {
+            last_snapshot_slot: current_slot,
+            ..crate::state::RiskBookV2::default()
+        };
+        market.health = crate::state::MarketHealthV2::default();
+        market.recognition_ledger = crate::state::RecognitionLedgerV2 {
+            last_recognition_slot: current_slot,
+            ..crate::state::RecognitionLedgerV2::default()
+        };
+        market.params_hash = args.params_hash;
+        market.last_update_slot = current_slot;
+        market.reduce_only = false;
+        market.bump = ctx.bumps.market;
 
         emit_cpi!(MarketCreatedV2 {
             market: market_key,
@@ -195,7 +206,7 @@ pub struct UpdateMarketConfigV2<'info> {
         ],
         bump = market.bump
     )]
-    pub market: Account<'info, MarketV2>,
+    pub market: Box<Account<'info, MarketV2>>,
 
     #[account(address = market.operator @ ErrorCode::InvalidMarketV2)]
     pub operator: Signer<'info>,
@@ -235,7 +246,7 @@ pub struct SetMarketReduceOnlyV2<'info> {
         ],
         bump = market.bump
     )]
-    pub market: Account<'info, MarketV2>,
+    pub market: Box<Account<'info, MarketV2>>,
 
     #[account(address = market.operator @ ErrorCode::InvalidMarketV2)]
     pub operator: Signer<'info>,
@@ -270,7 +281,7 @@ pub struct ViewMarketStateV2<'info> {
         ],
         bump = market.bump
     )]
-    pub market: Account<'info, MarketV2>,
+    pub market: Box<Account<'info, MarketV2>>,
 }
 
 impl ViewMarketStateV2<'_> {

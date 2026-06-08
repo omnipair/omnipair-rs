@@ -48,26 +48,26 @@ pub struct OpenHedgeV2<'info> {
         ],
         bump = market.bump
     )]
-    pub market: Account<'info, MarketV2>,
+    pub market: Box<Account<'info, MarketV2>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
 
-    pub asset_mint: InterfaceAccount<'info, Mint>,
+    pub asset_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    pub claim_mint: InterfaceAccount<'info, Mint>,
-
-    #[account(mut)]
-    pub hedge_mint: InterfaceAccount<'info, Mint>,
+    pub claim_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub hedge_vault: InterfaceAccount<'info, TokenAccount>,
+    pub hedge_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub owner_claim_account: InterfaceAccount<'info, TokenAccount>,
+    pub hedge_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub owner_hedge_account: InterfaceAccount<'info, TokenAccount>,
+    pub owner_claim_account: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub owner_hedge_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -81,7 +81,7 @@ pub struct OpenHedgeV2<'info> {
         ],
         bump
     )]
-    pub hedge_position: Account<'info, HedgePositionV2>,
+    pub hedge_position: Box<Account<'info, HedgePositionV2>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
@@ -221,26 +221,26 @@ pub struct CloseHedgeV2<'info> {
         ],
         bump = market.bump
     )]
-    pub market: Account<'info, MarketV2>,
+    pub market: Box<Account<'info, MarketV2>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
 
-    pub asset_mint: InterfaceAccount<'info, Mint>,
+    pub asset_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    pub claim_mint: InterfaceAccount<'info, Mint>,
-
-    #[account(mut)]
-    pub hedge_mint: InterfaceAccount<'info, Mint>,
+    pub claim_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub hedge_vault: InterfaceAccount<'info, TokenAccount>,
+    pub hedge_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub owner_claim_account: InterfaceAccount<'info, TokenAccount>,
+    pub hedge_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub owner_hedge_account: InterfaceAccount<'info, TokenAccount>,
+    pub owner_claim_account: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub owner_hedge_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -252,7 +252,7 @@ pub struct CloseHedgeV2<'info> {
         ],
         bump = hedge_position.bump
     )]
-    pub hedge_position: Account<'info, HedgePositionV2>,
+    pub hedge_position: Box<Account<'info, HedgePositionV2>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,

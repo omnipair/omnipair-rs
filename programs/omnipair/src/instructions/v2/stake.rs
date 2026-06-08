@@ -56,20 +56,20 @@ pub struct StakeV2<'info> {
         ],
         bump = market.bump
     )]
-    pub market: Account<'info, MarketV2>,
+    pub market: Box<Account<'info, MarketV2>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
 
-    pub asset_mint: InterfaceAccount<'info, Mint>,
+    pub asset_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    pub claim_mint: InterfaceAccount<'info, Mint>,
-
-    #[account(mut)]
-    pub stake_vault: InterfaceAccount<'info, TokenAccount>,
+    pub claim_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub owner_claim_account: InterfaceAccount<'info, TokenAccount>,
+    pub stake_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub owner_claim_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -81,7 +81,7 @@ pub struct StakeV2<'info> {
         ],
         bump = stake_position.bump
     )]
-    pub stake_position: Account<'info, StakePositionV2>,
+    pub stake_position: Box<Account<'info, StakePositionV2>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
@@ -218,20 +218,20 @@ pub struct UnstakeV2<'info> {
         ],
         bump = market.bump
     )]
-    pub market: Account<'info, MarketV2>,
+    pub market: Box<Account<'info, MarketV2>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
 
-    pub asset_mint: InterfaceAccount<'info, Mint>,
+    pub asset_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    pub claim_mint: InterfaceAccount<'info, Mint>,
-
-    #[account(mut)]
-    pub stake_vault: InterfaceAccount<'info, TokenAccount>,
+    pub claim_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub owner_claim_account: InterfaceAccount<'info, TokenAccount>,
+    pub stake_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub owner_claim_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -243,7 +243,7 @@ pub struct UnstakeV2<'info> {
         ],
         bump = stake_position.bump
     )]
-    pub stake_position: Account<'info, StakePositionV2>,
+    pub stake_position: Box<Account<'info, StakePositionV2>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
@@ -363,18 +363,18 @@ pub struct ClaimFeesV2<'info> {
         ],
         bump = market.bump
     )]
-    pub market: Account<'info, MarketV2>,
+    pub market: Box<Account<'info, MarketV2>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
 
-    pub asset_mint: InterfaceAccount<'info, Mint>,
+    pub asset_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub fee_vault: InterfaceAccount<'info, TokenAccount>,
+    pub fee_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub owner_fee_account: InterfaceAccount<'info, TokenAccount>,
+    pub owner_fee_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -386,7 +386,7 @@ pub struct ClaimFeesV2<'info> {
         ],
         bump = stake_position.bump
     )]
-    pub stake_position: Account<'info, StakePositionV2>,
+    pub stake_position: Box<Account<'info, StakePositionV2>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,

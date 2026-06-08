@@ -56,18 +56,18 @@ pub struct DepositCollateralV2<'info> {
         ],
         bump = market.bump
     )]
-    pub market: Account<'info, MarketV2>,
+    pub market: Box<Account<'info, MarketV2>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
 
-    pub asset_mint: InterfaceAccount<'info, Mint>,
+    pub asset_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub collateral_vault: InterfaceAccount<'info, TokenAccount>,
+    pub collateral_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub owner_asset_account: InterfaceAccount<'info, TokenAccount>,
+    pub owner_asset_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -80,7 +80,7 @@ pub struct DepositCollateralV2<'info> {
         ],
         bump
     )]
-    pub margin_position: Account<'info, MarginPositionV2>,
+    pub margin_position: Box<Account<'info, MarginPositionV2>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
@@ -196,20 +196,20 @@ pub struct BorrowV2<'info> {
         ],
         bump = market.bump
     )]
-    pub market: Account<'info, MarketV2>,
+    pub market: Box<Account<'info, MarketV2>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
 
-    pub debt_asset_mint: InterfaceAccount<'info, Mint>,
+    pub debt_asset_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    pub collateral_asset_mint: InterfaceAccount<'info, Mint>,
-
-    #[account(mut)]
-    pub reserve_vault: InterfaceAccount<'info, TokenAccount>,
+    pub collateral_asset_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub owner_debt_account: InterfaceAccount<'info, TokenAccount>,
+    pub reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub owner_debt_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -220,7 +220,7 @@ pub struct BorrowV2<'info> {
         ],
         bump = margin_position.bump
     )]
-    pub margin_position: Account<'info, MarginPositionV2>,
+    pub margin_position: Box<Account<'info, MarginPositionV2>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
@@ -331,18 +331,18 @@ pub struct RepayV2<'info> {
         ],
         bump = market.bump
     )]
-    pub market: Account<'info, MarketV2>,
+    pub market: Box<Account<'info, MarketV2>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
 
-    pub debt_asset_mint: InterfaceAccount<'info, Mint>,
+    pub debt_asset_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub reserve_vault: InterfaceAccount<'info, TokenAccount>,
+    pub reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub owner_debt_account: InterfaceAccount<'info, TokenAccount>,
+    pub owner_debt_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -353,7 +353,7 @@ pub struct RepayV2<'info> {
         ],
         bump = margin_position.bump
     )]
-    pub margin_position: Account<'info, MarginPositionV2>,
+    pub margin_position: Box<Account<'info, MarginPositionV2>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,

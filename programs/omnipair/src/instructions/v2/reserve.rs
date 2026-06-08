@@ -52,24 +52,24 @@ pub struct DepositReserveV2<'info> {
         ],
         bump = market.bump
     )]
-    pub market: Account<'info, MarketV2>,
+    pub market: Box<Account<'info, MarketV2>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
 
-    pub asset_mint: InterfaceAccount<'info, Mint>,
+    pub asset_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub claim_mint: InterfaceAccount<'info, Mint>,
+    pub claim_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub reserve_vault: InterfaceAccount<'info, TokenAccount>,
+    pub reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub owner_asset_account: InterfaceAccount<'info, TokenAccount>,
+    pub owner_asset_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub owner_claim_account: InterfaceAccount<'info, TokenAccount>,
+    pub owner_claim_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -83,7 +83,7 @@ pub struct DepositReserveV2<'info> {
         ],
         bump
     )]
-    pub stake_position: Account<'info, StakePositionV2>,
+    pub stake_position: Box<Account<'info, StakePositionV2>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
@@ -234,24 +234,24 @@ pub struct RedeemClaimV2<'info> {
         ],
         bump = market.bump
     )]
-    pub market: Account<'info, MarketV2>,
+    pub market: Box<Account<'info, MarketV2>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
 
-    pub asset_mint: InterfaceAccount<'info, Mint>,
+    pub asset_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub claim_mint: InterfaceAccount<'info, Mint>,
+    pub claim_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub reserve_vault: InterfaceAccount<'info, TokenAccount>,
+    pub reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub owner_asset_account: InterfaceAccount<'info, TokenAccount>,
+    pub owner_asset_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub owner_claim_account: InterfaceAccount<'info, TokenAccount>,
+    pub owner_claim_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,

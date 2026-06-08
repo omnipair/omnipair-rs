@@ -49,18 +49,18 @@ pub struct DepositInsuranceV2<'info> {
         ],
         bump = market.bump
     )]
-    pub market: Account<'info, MarketV2>,
+    pub market: Box<Account<'info, MarketV2>>,
 
     #[account(mut)]
     pub sponsor: Signer<'info>,
 
-    pub asset_mint: InterfaceAccount<'info, Mint>,
+    pub asset_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub insurance_vault: InterfaceAccount<'info, TokenAccount>,
+    pub insurance_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub sponsor_asset_account: InterfaceAccount<'info, TokenAccount>,
+    pub sponsor_asset_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
@@ -163,29 +163,29 @@ pub struct LiquidateV2<'info> {
         ],
         bump = market.bump
     )]
-    pub market: Account<'info, MarketV2>,
+    pub market: Box<Account<'info, MarketV2>>,
 
     #[account(mut)]
     pub liquidator: Signer<'info>,
 
-    pub debt_asset_mint: InterfaceAccount<'info, Mint>,
+    pub debt_asset_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    pub collateral_asset_mint: InterfaceAccount<'info, Mint>,
-
-    #[account(mut)]
-    pub reserve_vault: InterfaceAccount<'info, TokenAccount>,
+    pub collateral_asset_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub collateral_vault: InterfaceAccount<'info, TokenAccount>,
+    pub reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub insurance_vault: InterfaceAccount<'info, TokenAccount>,
+    pub collateral_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub liquidator_debt_account: InterfaceAccount<'info, TokenAccount>,
+    pub insurance_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub liquidator_collateral_account: InterfaceAccount<'info, TokenAccount>,
+    pub liquidator_debt_account: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub liquidator_collateral_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -196,7 +196,7 @@ pub struct LiquidateV2<'info> {
         ],
         bump = margin_position.bump
     )]
-    pub margin_position: Account<'info, MarginPositionV2>,
+    pub margin_position: Box<Account<'info, MarginPositionV2>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
