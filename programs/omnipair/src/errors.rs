@@ -25,31 +25,31 @@ pub enum ErrorCode {
 
     #[msg("Invalid argument")]
     InvalidArgument,
-    
+
     #[msg("Amount cannot be zero")]
     AmountZero,
 
     #[msg("Insufficient amount0 in")]
     InsufficientAmount0In,
-    
+
     #[msg("Insufficient amount1 in")]
     InsufficientAmount1In,
-    
+
     #[msg("Borrowing power exceeded")]
     BorrowingPowerExceeded,
-    
+
     #[msg("Invalid token account")]
     InvalidTokenAccount,
-    
+
     #[msg("Invalid token program")]
     InvalidTokenProgram,
-    
+
     #[msg("Borrow exceeds reserve")]
     BorrowExceedsReserve,
 
     #[msg("Insufficient amount0")]
     InsufficientAmount0,
-    
+
     #[msg("Insufficient amount1")]
     InsufficientAmount1,
 
@@ -94,7 +94,7 @@ pub enum ErrorCode {
 
     #[msg("Not undercollateralized")]
     NotUndercollateralized,
-    
+
     #[msg("Broken invariant")]
     BrokenInvariant,
 
@@ -184,7 +184,7 @@ pub enum ErrorCode {
 
     #[msg("Wrong LP decimals")]
     WrongLpDecimals,
-    
+
     #[msg("Invalid vault - token_in_vault and token_out_vault must be different")]
     InvalidVaultSameAccount,
 
@@ -292,6 +292,12 @@ pub enum ErrorCode {
 
     #[msg("V2 market math overflow")]
     MarketMathOverflowV2,
+
+    #[msg("V2 daily liquidity limit exceeded")]
+    DailyLimitExceededV2,
+
+    #[msg("V2 market risk circuit breaker triggered")]
+    MarketRiskCircuitBreakerV2,
 
     #[msg("V2 instruction is intentionally not live yet")]
     V2InstructionNotLive,

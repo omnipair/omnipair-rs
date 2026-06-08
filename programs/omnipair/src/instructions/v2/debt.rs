@@ -596,6 +596,8 @@ fn apply_borrow_state(
     } else {
         DebtBookV2::debt_to_shares(borrow_amount, market.debt_book.borrow_index1_nad)?
     };
+    let debt_side_index = if borrow_asset_is_asset0 { 0 } else { 1 };
+    market.enforce_daily_borrow_limit(debt_side_index, borrow_amount)?;
     let debt_side = if borrow_asset_is_asset0 {
         &mut market.side0
     } else {
@@ -665,6 +667,7 @@ fn apply_borrow_state(
     market.recognition_ledger.last_recognition_slot = Clock::get()?.slot;
     market.refresh_market_health()?;
     market.assert_market_health()?;
+    market.assert_spot_ema_divergence()?;
     market.assert_recognition_cap(margin_position, borrow_asset_is_asset0)?;
     market.assert_position_health(margin_position, borrow_asset_is_asset0, min_health_bps)?;
     let health = if borrow_asset_is_asset0 {

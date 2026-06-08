@@ -159,6 +159,8 @@ impl<'info> SwapV2<'info> {
                 operator_fee_bps,
             )?;
         }
+        ctx.accounts.market.refresh_risk_book()?;
+        ctx.accounts.market.assert_spot_ema_divergence()?;
 
         emit_cpi!(MarketSwapV2 {
             market: market_key,
@@ -322,33 +324,15 @@ mod tests {
         let mut market_side_in = market_side(10_000, 10_000, 8_000, 2_000);
         let mut market_side_out = market_side(12_000, 12_000, 8_000, 2_000);
 
-        apply_swap_state(
-            &mut market_side_in,
-            &mut market_side_out,
-            500,
-            2_000,
-            0,
-            0,
-        )
-        .unwrap();
+        apply_swap_state(&mut market_side_in, &mut market_side_out, 500, 2_000, 0, 0).unwrap();
         assert_eq!(market_side_out.reserve_ledger.live_reserve, 10_000);
         assert_eq!(market_side_out.reserve_ledger.cash_reserve, 10_000);
 
         let mut market_side_in = market_side(10_000, 10_000, 8_000, 2_000);
         let mut market_side_out = market_side(12_000, 12_000, 8_000, 2_000);
-        let err = apply_swap_state(
-            &mut market_side_in,
-            &mut market_side_out,
-            500,
-            2_001,
-            0,
-            0,
-        )
-        .unwrap_err();
-        assert_eq!(
-            err,
-            error!(ErrorCode::InsufficientMarketClaimCoverageV2)
-        );
+        let err = apply_swap_state(&mut market_side_in, &mut market_side_out, 500, 2_001, 0, 0)
+            .unwrap_err();
+        assert_eq!(err, error!(ErrorCode::InsufficientMarketClaimCoverageV2));
     }
 
     #[test]

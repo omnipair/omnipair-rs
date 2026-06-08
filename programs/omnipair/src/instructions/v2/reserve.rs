@@ -291,6 +291,10 @@ impl<'info> RedeemClaimV2<'info> {
         let owner_key = ctx.accounts.owner.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
 
+        ctx.accounts
+            .market
+            .enforce_daily_withdraw_limit(args.market_side_index, args.claim_amount)?;
+
         let claim_token_program = token_program_for_mint(
             &ctx.accounts.claim_mint,
             &ctx.accounts.token_program,
@@ -329,6 +333,8 @@ impl<'info> RedeemClaimV2<'info> {
                 market_side.buffer_book.required_buffer,
             )
         };
+        ctx.accounts.market.refresh_risk_book()?;
+        ctx.accounts.market.assert_spot_ema_divergence()?;
 
         emit_cpi!(MarketClaimRedeemedV2 {
             market: market_key,
