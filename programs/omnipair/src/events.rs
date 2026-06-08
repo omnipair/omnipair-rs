@@ -41,6 +41,8 @@ pub struct MarketCreatedV2 {
     pub asset1_mint: Pubkey,
     pub claim0_mint: Pubkey,
     pub claim1_mint: Pubkey,
+    pub claim0_stake_vault: Pubkey,
+    pub claim1_stake_vault: Pubkey,
     pub hedge0_mint: Pubkey,
     pub hedge1_mint: Pubkey,
     pub operator: Pubkey,
@@ -95,6 +97,28 @@ pub struct MarketClaimRedeemedV2 {
     pub claim_amount: u64,
     pub protected_claim_supply: u64,
     pub required_buffer: u64,
+    pub metadata: MarketEventMetadataV2,
+}
+
+#[event]
+pub struct MarketStakeUpdatedV2 {
+    pub market: Pubkey,
+    pub owner: Pubkey,
+    pub asset_mint: Pubkey,
+    pub staked_claim_amount: u64,
+    pub staked_buffer_shares: u64,
+    pub active_stake_units: u64,
+    pub accrued_fee_amount: u64,
+    pub metadata: MarketEventMetadataV2,
+}
+
+#[event]
+pub struct MarketFeesClaimedV2 {
+    pub market: Pubkey,
+    pub owner: Pubkey,
+    pub asset_mint: Pubkey,
+    pub fee_amount: u64,
+    pub remaining_fee_liability: u64,
     pub metadata: MarketEventMetadataV2,
 }
 

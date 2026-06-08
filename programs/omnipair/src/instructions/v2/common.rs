@@ -1,0 +1,173 @@
+use anchor_lang::{prelude::*, solana_program::program_option::COption};
+use anchor_spl::{
+    token::Token,
+    token_interface::{Mint, Token2022, TokenAccount},
+};
+
+use crate::{
+    errors::ErrorCode,
+    state::MarketV2,
+    utils::token::{is_fee_free_mint, is_supported_mint},
+};
+
+pub fn token_program_for_mint<'info>(
+    mint: &InterfaceAccount<'info, Mint>,
+    token_program: &Program<'info, Token>,
+    token_2022_program: &Program<'info, Token2022>,
+) -> Result<AccountInfo<'info>> {
+    let mint_info = mint.to_account_info();
+    if *mint_info.owner == token_program.key() {
+        Ok(token_program.to_account_info())
+    } else if *mint_info.owner == token_2022_program.key() {
+        Ok(token_2022_program.to_account_info())
+    } else {
+        err!(ErrorCode::InvalidTokenProgram)
+    }
+}
+
+pub fn require_supported_asset_mint(mint: &InterfaceAccount<Mint>) -> Result<()> {
+    require!(is_supported_mint(mint)?, ErrorCode::InvalidTokenProgram);
+    Ok(())
+}
+
+pub fn require_fee_free_claim_mint(mint: &InterfaceAccount<Mint>) -> Result<()> {
+    require!(is_fee_free_mint(mint)?, ErrorCode::InvalidClaimMintV2);
+    Ok(())
+}
+
+pub fn validate_reserve_accounts<'info>(
+    market: &Account<'info, MarketV2>,
+    market_side_index: u8,
+    owner: Pubkey,
+    asset_mint: &InterfaceAccount<'info, Mint>,
+    claim_mint: &InterfaceAccount<'info, Mint>,
+    reserve_vault: &InterfaceAccount<'info, TokenAccount>,
+    owner_asset_account: &InterfaceAccount<'info, TokenAccount>,
+    owner_claim_account: &InterfaceAccount<'info, TokenAccount>,
+) -> Result<()> {
+    let market_side = market.side(market_side_index)?;
+    require_keys_eq!(
+        market_side.asset_mint,
+        asset_mint.key(),
+        ErrorCode::InvalidMint
+    );
+    require_keys_eq!(
+        market_side.claim_mint,
+        claim_mint.key(),
+        ErrorCode::InvalidClaimMintV2
+    );
+    require_keys_eq!(
+        market_side.reserve_vault,
+        reserve_vault.key(),
+        ErrorCode::InvalidVault
+    );
+    require_keys_eq!(
+        reserve_vault.mint,
+        asset_mint.key(),
+        ErrorCode::InvalidVault
+    );
+    require_keys_eq!(reserve_vault.owner, market.key(), ErrorCode::InvalidVault);
+    require_keys_eq!(
+        owner_asset_account.mint,
+        asset_mint.key(),
+        ErrorCode::InvalidTokenAccount
+    );
+    require_keys_eq!(
+        owner_asset_account.owner,
+        owner,
+        ErrorCode::InvalidTokenAccount
+    );
+    require_keys_eq!(
+        owner_claim_account.mint,
+        claim_mint.key(),
+        ErrorCode::InvalidTokenAccount
+    );
+    require_keys_eq!(
+        owner_claim_account.owner,
+        owner,
+        ErrorCode::InvalidTokenAccount
+    );
+    require!(
+        claim_mint.mint_authority == COption::Some(market.key()),
+        ErrorCode::InvalidClaimMintV2
+    );
+    Ok(())
+}
+
+pub fn validate_stake_accounts<'info>(
+    market: &Account<'info, MarketV2>,
+    market_side_index: u8,
+    owner: Pubkey,
+    asset_mint: &InterfaceAccount<'info, Mint>,
+    claim_mint: &InterfaceAccount<'info, Mint>,
+    stake_vault: &InterfaceAccount<'info, TokenAccount>,
+    owner_claim_account: &InterfaceAccount<'info, TokenAccount>,
+) -> Result<()> {
+    let market_side = market.side(market_side_index)?;
+    require_keys_eq!(
+        market_side.asset_mint,
+        asset_mint.key(),
+        ErrorCode::InvalidMint
+    );
+    require_keys_eq!(
+        market_side.claim_mint,
+        claim_mint.key(),
+        ErrorCode::InvalidClaimMintV2
+    );
+    require_keys_eq!(
+        market_side.stake_vault,
+        stake_vault.key(),
+        ErrorCode::InvalidVault
+    );
+    require_keys_eq!(stake_vault.mint, claim_mint.key(), ErrorCode::InvalidVault);
+    require_keys_eq!(stake_vault.owner, market.key(), ErrorCode::InvalidVault);
+    require_keys_eq!(
+        owner_claim_account.mint,
+        claim_mint.key(),
+        ErrorCode::InvalidTokenAccount
+    );
+    require_keys_eq!(
+        owner_claim_account.owner,
+        owner,
+        ErrorCode::InvalidTokenAccount
+    );
+    require!(
+        claim_mint.mint_authority == COption::Some(market.key()),
+        ErrorCode::InvalidClaimMintV2
+    );
+    Ok(())
+}
+
+pub fn validate_fee_accounts<'info>(
+    market: &Account<'info, MarketV2>,
+    market_side_index: u8,
+    owner: Pubkey,
+    asset_mint: &InterfaceAccount<'info, Mint>,
+    fee_vault: &InterfaceAccount<'info, TokenAccount>,
+    owner_fee_account: &InterfaceAccount<'info, TokenAccount>,
+) -> Result<()> {
+    let market_side = market.side(market_side_index)?;
+    require_keys_eq!(
+        market_side.asset_mint,
+        asset_mint.key(),
+        ErrorCode::InvalidMint
+    );
+    require_keys_eq!(
+        market_side.fee_vault,
+        fee_vault.key(),
+        ErrorCode::InvalidVault
+    );
+    require_keys_eq!(fee_vault.mint, asset_mint.key(), ErrorCode::InvalidVault);
+    require_keys_eq!(fee_vault.owner, market.key(), ErrorCode::InvalidVault);
+    require_keys_eq!(
+        owner_fee_account.mint,
+        asset_mint.key(),
+        ErrorCode::InvalidTokenAccount
+    );
+    require_keys_eq!(
+        owner_fee_account.owner,
+        owner,
+        ErrorCode::InvalidTokenAccount
+    );
+    Ok(())
+}

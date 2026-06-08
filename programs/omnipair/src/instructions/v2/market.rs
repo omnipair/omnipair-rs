@@ -67,14 +67,26 @@ pub struct InitializeMarketV2<'info> {
     pub fee0_vault: UncheckedAccount<'info>,
     /// CHECK: Stored as the non-compounding fee vault for asset1; validation is added in the fee layer.
     pub fee1_vault: UncheckedAccount<'info>,
+    /// CHECK: Stored as the staked claim escrow for asset0; validation is added in the staking layer.
+    pub claim0_stake_vault: UncheckedAccount<'info>,
+    /// CHECK: Stored as the staked claim escrow for asset1; validation is added in the staking layer.
+    pub claim1_stake_vault: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
 }
 
 impl<'info> InitializeMarketV2<'info> {
     pub fn validate(&self, args: &InitializeMarketV2Args) -> Result<()> {
-        require_gt!(self.asset1_mint.key(), self.asset0_mint.key(), ErrorCode::InvalidTokenOrder);
-        require_keys_neq!(args.operator, Pubkey::default(), ErrorCode::InvalidMarketConfigV2);
+        require_gt!(
+            self.asset1_mint.key(),
+            self.asset0_mint.key(),
+            ErrorCode::InvalidTokenOrder
+        );
+        require_keys_neq!(
+            args.operator,
+            Pubkey::default(),
+            ErrorCode::InvalidMarketConfigV2
+        );
         args.config.validate()
     }
 
@@ -88,6 +100,7 @@ impl<'info> InitializeMarketV2<'info> {
             hedge_mint: ctx.accounts.hedge0_mint.key(),
             reserve_vault: ctx.accounts.reserve0_vault.key(),
             fee_vault: ctx.accounts.fee0_vault.key(),
+            stake_vault: ctx.accounts.claim0_stake_vault.key(),
             buffer_book: crate::state::BufferBookV2 {
                 buffer_ratio_bps: args.config.buffer_ratio_bps,
                 ..crate::state::BufferBookV2::default()
@@ -100,6 +113,7 @@ impl<'info> InitializeMarketV2<'info> {
             hedge_mint: ctx.accounts.hedge1_mint.key(),
             reserve_vault: ctx.accounts.reserve1_vault.key(),
             fee_vault: ctx.accounts.fee1_vault.key(),
+            stake_vault: ctx.accounts.claim1_stake_vault.key(),
             buffer_book: crate::state::BufferBookV2 {
                 buffer_ratio_bps: args.config.buffer_ratio_bps,
                 ..crate::state::BufferBookV2::default()
@@ -126,6 +140,8 @@ impl<'info> InitializeMarketV2<'info> {
             asset1_mint: ctx.accounts.asset1_mint.key(),
             claim0_mint: ctx.accounts.claim0_mint.key(),
             claim1_mint: ctx.accounts.claim1_mint.key(),
+            claim0_stake_vault: ctx.accounts.claim0_stake_vault.key(),
+            claim1_stake_vault: ctx.accounts.claim1_stake_vault.key(),
             hedge0_mint: ctx.accounts.hedge0_mint.key(),
             hedge1_mint: ctx.accounts.hedge1_mint.key(),
             operator: args.operator,

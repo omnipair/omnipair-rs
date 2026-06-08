@@ -2,7 +2,9 @@ use anchor_lang::prelude::*;
 
 use crate::constants::*;
 use crate::errors::ErrorCode;
-use crate::utils::market_v2_math::{required_buffer_for_claims, split_claim_minus_buffer};
+use crate::utils::market_v2_math::{
+    accrue_fee_liability, active_stake_units, required_buffer_for_claims, split_claim_minus_buffer,
+};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct MarketConfigV2 {
@@ -120,6 +122,7 @@ pub struct MarketSideV2 {
     pub hedge_mint: Pubkey,
     pub reserve_vault: Pubkey,
     pub fee_vault: Pubkey,
+    pub stake_vault: Pubkey,
     pub reserve_ledger: ReserveLedgerV2,
     pub claim_ledger: ClaimLedgerV2,
     pub buffer_book: BufferBookV2,
@@ -335,7 +338,7 @@ pub struct StakePositionV2 {
     pub staked_claim_amount: u64,
     pub staked_buffer_shares: u64,
     pub fee_growth_checkpoint_nad: u128,
-    pub accrued_fee_claim: u64,
+    pub accrued_fee_amount: u64,
     pub bump: u8,
 }
 
@@ -368,6 +371,78 @@ impl StakePositionV2 {
         self.available_buffer_shares = self
             .available_buffer_shares
             .checked_add(amount)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        Ok(())
+    }
+
+    pub fn active_stake_units(&self, buffer_ratio_bps: u16) -> Result<u64> {
+        active_stake_units(
+            self.staked_claim_amount,
+            self.staked_buffer_shares,
+            buffer_ratio_bps,
+        )
+    }
+
+    pub fn accrue_fees(&mut self, fee_growth_index_nad: u128, buffer_ratio_bps: u16) -> Result<()> {
+        let active_units = self.active_stake_units(buffer_ratio_bps)?;
+        let accrued_amount = accrue_fee_liability(
+            active_units,
+            fee_growth_index_nad,
+            self.fee_growth_checkpoint_nad,
+        )?;
+        self.accrued_fee_amount = self
+            .accrued_fee_amount
+            .checked_add(accrued_amount)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        self.fee_growth_checkpoint_nad = fee_growth_index_nad;
+        Ok(())
+    }
+
+    pub fn stake(&mut self, claim_amount: u64, buffer_shares: u64) -> Result<()> {
+        require!(claim_amount > 0 && buffer_shares > 0, ErrorCode::AmountZero);
+        require_gte!(
+            self.available_buffer_shares,
+            buffer_shares,
+            ErrorCode::InsufficientBufferSharesV2
+        );
+        self.available_buffer_shares = self
+            .available_buffer_shares
+            .checked_sub(buffer_shares)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        self.staked_claim_amount = self
+            .staked_claim_amount
+            .checked_add(claim_amount)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        self.staked_buffer_shares = self
+            .staked_buffer_shares
+            .checked_add(buffer_shares)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        Ok(())
+    }
+
+    pub fn unstake(&mut self, claim_amount: u64, buffer_shares: u64) -> Result<()> {
+        require!(claim_amount > 0 && buffer_shares > 0, ErrorCode::AmountZero);
+        require_gte!(
+            self.staked_claim_amount,
+            claim_amount,
+            ErrorCode::InsufficientBalance
+        );
+        require_gte!(
+            self.staked_buffer_shares,
+            buffer_shares,
+            ErrorCode::InsufficientBufferSharesV2
+        );
+        self.staked_claim_amount = self
+            .staked_claim_amount
+            .checked_sub(claim_amount)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        self.staked_buffer_shares = self
+            .staked_buffer_shares
+            .checked_sub(buffer_shares)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        self.available_buffer_shares = self
+            .available_buffer_shares
+            .checked_add(buffer_shares)
             .ok_or(ErrorCode::MarketMathOverflowV2)?;
         Ok(())
     }

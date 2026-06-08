@@ -133,6 +133,21 @@ pub mod omnipair {
         RedeemClaimV2::handle_redeem(ctx, args)
     }
 
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn v2_stake(ctx: Context<StakeV2>, args: StakeV2Args) -> Result<()> {
+        StakeV2::handle_stake(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn v2_unstake(ctx: Context<UnstakeV2>, args: UnstakeV2Args) -> Result<()> {
+        UnstakeV2::handle_unstake(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn v2_claim_fees(ctx: Context<ClaimFeesV2>, args: ClaimFeesV2Args) -> Result<()> {
+        ClaimFeesV2::handle_claim(ctx, args)
+    }
+
     // Pair instructions
     #[access_control(ctx.accounts.validate(&args))]
     pub fn initialize(ctx: Context<InitializeAndBootstrap>, args: InitializeAndBootstrapArgs) -> Result<()> {

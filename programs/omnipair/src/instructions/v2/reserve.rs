@@ -1,4 +1,4 @@
-use anchor_lang::{prelude::*, solana_program::program_option::COption};
+use anchor_lang::prelude::*;
 use anchor_spl::{
     token::Token,
     token_interface::{Mint, Token2022, TokenAccount},
@@ -13,10 +13,14 @@ use crate::{
     utils::{
         account::get_size_with_discriminator,
         token::{
-            is_fee_free_mint, is_supported_mint, token_burn, token_mint_to,
-            transfer_from_user_to_vault, transfer_from_vault_to_user,
+            token_burn, token_mint_to, transfer_from_user_to_vault, transfer_from_vault_to_user,
         },
     },
+};
+
+use super::common::{
+    require_fee_free_claim_mint, require_supported_asset_mint, token_program_for_mint,
+    validate_reserve_accounts,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -105,14 +109,8 @@ impl<'info> DepositReserveV2<'info> {
             &self.owner_asset_account,
             &self.owner_claim_account,
         )?;
-        require!(
-            is_supported_mint(&self.asset_mint)?,
-            ErrorCode::InvalidTokenProgram
-        );
-        require!(
-            is_fee_free_mint(&self.claim_mint)?,
-            ErrorCode::InvalidClaimMintV2
-        );
+        require_supported_asset_mint(&self.asset_mint)?;
+        require_fee_free_claim_mint(&self.claim_mint)?;
 
         if self.stake_position.is_initialized() {
             self.stake_position.assert_position(
@@ -283,14 +281,8 @@ impl<'info> RedeemClaimV2<'info> {
             &self.owner_asset_account,
             &self.owner_claim_account,
         )?;
-        require!(
-            is_supported_mint(&self.asset_mint)?,
-            ErrorCode::InvalidTokenProgram
-        );
-        require!(
-            is_fee_free_mint(&self.claim_mint)?,
-            ErrorCode::InvalidClaimMintV2
-        );
+        require_supported_asset_mint(&self.asset_mint)?;
+        require_fee_free_claim_mint(&self.claim_mint)?;
         Ok(())
     }
 
@@ -349,79 +341,5 @@ impl<'info> RedeemClaimV2<'info> {
         });
 
         Ok(())
-    }
-}
-
-fn validate_reserve_accounts<'info>(
-    market: &Account<'info, MarketV2>,
-    market_side_index: u8,
-    owner: Pubkey,
-    asset_mint: &InterfaceAccount<'info, Mint>,
-    claim_mint: &InterfaceAccount<'info, Mint>,
-    reserve_vault: &InterfaceAccount<'info, TokenAccount>,
-    owner_asset_account: &InterfaceAccount<'info, TokenAccount>,
-    owner_claim_account: &InterfaceAccount<'info, TokenAccount>,
-) -> Result<()> {
-    let market_side = market.side(market_side_index)?;
-    require_keys_eq!(
-        market_side.asset_mint,
-        asset_mint.key(),
-        ErrorCode::InvalidMint
-    );
-    require_keys_eq!(
-        market_side.claim_mint,
-        claim_mint.key(),
-        ErrorCode::InvalidClaimMintV2
-    );
-    require_keys_eq!(
-        market_side.reserve_vault,
-        reserve_vault.key(),
-        ErrorCode::InvalidVault
-    );
-    require_keys_eq!(
-        reserve_vault.mint,
-        asset_mint.key(),
-        ErrorCode::InvalidVault
-    );
-    require_keys_eq!(reserve_vault.owner, market.key(), ErrorCode::InvalidVault);
-    require_keys_eq!(
-        owner_asset_account.mint,
-        asset_mint.key(),
-        ErrorCode::InvalidTokenAccount
-    );
-    require_keys_eq!(
-        owner_asset_account.owner,
-        owner,
-        ErrorCode::InvalidTokenAccount
-    );
-    require_keys_eq!(
-        owner_claim_account.mint,
-        claim_mint.key(),
-        ErrorCode::InvalidTokenAccount
-    );
-    require_keys_eq!(
-        owner_claim_account.owner,
-        owner,
-        ErrorCode::InvalidTokenAccount
-    );
-    require!(
-        claim_mint.mint_authority == COption::Some(market.key()),
-        ErrorCode::InvalidClaimMintV2
-    );
-    Ok(())
-}
-
-fn token_program_for_mint<'info>(
-    mint: &InterfaceAccount<'info, Mint>,
-    token_program: &Program<'info, Token>,
-    token_2022_program: &Program<'info, Token2022>,
-) -> Result<AccountInfo<'info>> {
-    let mint_info = mint.to_account_info();
-    if *mint_info.owner == token_program.key() {
-        Ok(token_program.to_account_info())
-    } else if *mint_info.owner == token_2022_program.key() {
-        Ok(token_2022_program.to_account_info())
-    } else {
-        err!(ErrorCode::InvalidTokenProgram)
     }
 }
