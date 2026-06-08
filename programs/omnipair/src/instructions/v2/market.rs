@@ -67,6 +67,10 @@ pub struct InitializeMarketV2<'info> {
     pub collateral0_vault: UncheckedAccount<'info>,
     /// CHECK: Stored as the collateral vault for asset1; validation is added in the margin layer.
     pub collateral1_vault: UncheckedAccount<'info>,
+    /// CHECK: Stored as the junior insurance reserve vault for asset0; validation is added in the insurance layer.
+    pub insurance0_vault: UncheckedAccount<'info>,
+    /// CHECK: Stored as the junior insurance reserve vault for asset1; validation is added in the insurance layer.
+    pub insurance1_vault: UncheckedAccount<'info>,
     /// CHECK: Stored as the non-compounding fee vault for asset0; validation is added in the fee layer.
     pub fee0_vault: UncheckedAccount<'info>,
     /// CHECK: Stored as the non-compounding fee vault for asset1; validation is added in the fee layer.
@@ -127,7 +131,7 @@ impl<'info> InitializeMarketV2<'info> {
             ..MarketSideV2::default()
         };
 
-        ctx.accounts.market.set_inner(MarketV2::initialize(
+        let mut market = MarketV2::initialize(
             ctx.accounts.asset0_mint.key(),
             ctx.accounts.asset1_mint.key(),
             args.operator,
@@ -138,7 +142,10 @@ impl<'info> InitializeMarketV2<'info> {
             args.params_hash,
             current_slot,
             ctx.bumps.market,
-        )?);
+        )?;
+        market.insurance_reserve.vault0 = ctx.accounts.insurance0_vault.key();
+        market.insurance_reserve.vault1 = ctx.accounts.insurance1_vault.key();
+        ctx.accounts.market.set_inner(market);
 
         emit_cpi!(MarketCreatedV2 {
             market: market_key,
@@ -150,6 +157,8 @@ impl<'info> InitializeMarketV2<'info> {
             claim1_stake_vault: ctx.accounts.claim1_stake_vault.key(),
             collateral0_vault: ctx.accounts.collateral0_vault.key(),
             collateral1_vault: ctx.accounts.collateral1_vault.key(),
+            insurance0_vault: ctx.accounts.insurance0_vault.key(),
+            insurance1_vault: ctx.accounts.insurance1_vault.key(),
             hedge0_mint: ctx.accounts.hedge0_mint.key(),
             hedge1_mint: ctx.accounts.hedge1_mint.key(),
             operator: args.operator,

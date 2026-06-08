@@ -168,6 +168,16 @@ pub mod omnipair {
         RepayV2::handle_repay(ctx, args)
     }
 
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn v2_deposit_insurance(ctx: Context<DepositInsuranceV2>, args: DepositInsuranceV2Args) -> Result<()> {
+        DepositInsuranceV2::handle_deposit(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn v2_liquidate(ctx: Context<LiquidateV2>, args: LiquidateV2Args) -> Result<()> {
+        LiquidateV2::handle_liquidate(ctx, args)
+    }
+
     // Pair instructions
     #[access_control(ctx.accounts.validate(&args))]
     pub fn initialize(ctx: Context<InitializeAndBootstrap>, args: InitializeAndBootstrapArgs) -> Result<()> {

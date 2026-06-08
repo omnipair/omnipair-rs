@@ -266,6 +266,15 @@ pub enum ErrorCode {
     #[msg("V2 recognized collateral is insufficient")]
     InsufficientRecognizedCollateralV2,
 
+    #[msg("V2 position is not liquidatable")]
+    PositionNotLiquidatableV2,
+
+    #[msg("V2 insurance reserve is insufficient")]
+    InsufficientInsuranceReserveV2,
+
+    #[msg("V2 socialized liquidation loss exceeds caller cap")]
+    LiquidationSocializationExceededV2,
+
     #[msg("V2 claim mint must not charge transfer fees")]
     InvalidClaimMintV2,
 
