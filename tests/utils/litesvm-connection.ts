@@ -79,7 +79,7 @@ export class LiteSVMConnection extends Connection {
       }
     }
     
-    const result = this.svm.sendTransaction(transaction);
+    const result = this.svm.sendTransaction(transaction as any);
     
     // Check if result has err method (FailedTransactionMetadata)
     if (result && typeof (result as any).err === 'function') {
@@ -116,7 +116,7 @@ export class LiteSVMConnection extends Connection {
       if (!tx.signature) {
         throw new Error("Transaction is not signed");
       }
-      const result = this.svm.sendTransaction(tx);
+      const result = this.svm.sendTransaction(tx as any);
       
       // Check if result has err method (FailedTransactionMetadata)
       if (result && typeof (result as any).err === 'function') {
@@ -216,7 +216,6 @@ export class LiteSVMConnection extends Connection {
     return { value: { err: null } };
   }
 }
-
 
 
 
