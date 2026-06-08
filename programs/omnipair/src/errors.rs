@@ -284,6 +284,9 @@ pub enum ErrorCode {
     #[msg("V2 fee liability is not backed by fee vault balance")]
     UnbackedFeeLiabilityV2,
 
+    #[msg("Invalid V2 market fee authority")]
+    InvalidMarketFeeAuthorityV2,
+
     #[msg("V2 market is reduce-only")]
     MarketReduceOnlyV2,
 

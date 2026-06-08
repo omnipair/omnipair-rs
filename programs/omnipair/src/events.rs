@@ -129,6 +129,17 @@ pub struct MarketFeesClaimedV2 {
 }
 
 #[event]
+pub struct MarketFeeLiabilityClaimedV2 {
+    pub market: Pubkey,
+    pub authority: Pubkey,
+    pub asset_mint: Pubkey,
+    pub claim_kind: u8,
+    pub fee_amount: u64,
+    pub remaining_fee_liability: u64,
+    pub metadata: MarketEventMetadataV2,
+}
+
+#[event]
 pub struct MarketSwapV2 {
     pub market: Pubkey,
     pub trader: Pubkey,

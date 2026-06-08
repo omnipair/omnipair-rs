@@ -92,6 +92,21 @@ pub struct FeeLedgerV2 {
     pub operator_fee_liability: u64,
 }
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
+pub enum MarketFeeClaimKindV2 {
+    Operator,
+    Protocol,
+}
+
+impl MarketFeeClaimKindV2 {
+    pub fn event_code(self) -> u8 {
+        match self {
+            Self::Operator => 0,
+            Self::Protocol => 1,
+        }
+    }
+}
+
 impl FeeLedgerV2 {
     pub fn total_liability(&self) -> Result<u64> {
         self.fee_liability
@@ -108,6 +123,23 @@ impl FeeLedgerV2 {
             ErrorCode::UnbackedFeeLiabilityV2
         );
         Ok(())
+    }
+
+    pub fn market_fee_liability(&self, claim_kind: MarketFeeClaimKindV2) -> u64 {
+        match claim_kind {
+            MarketFeeClaimKindV2::Operator => self.operator_fee_liability,
+            MarketFeeClaimKindV2::Protocol => self.protocol_fee_liability,
+        }
+    }
+
+    pub fn claim_market_fee_liability(&mut self, claim_kind: MarketFeeClaimKindV2) -> Result<u64> {
+        let fee_amount = self.market_fee_liability(claim_kind);
+        require!(fee_amount > 0, ErrorCode::AmountZero);
+        match claim_kind {
+            MarketFeeClaimKindV2::Operator => self.operator_fee_liability = 0,
+            MarketFeeClaimKindV2::Protocol => self.protocol_fee_liability = 0,
+        }
+        Ok(fee_amount)
     }
 }
 
@@ -344,19 +376,35 @@ impl MarketSideV2 {
             self.buffer_book.staked_buffer_shares,
             self.buffer_book.buffer_ratio_bps,
         )?;
-        if lp_fee == 0 {
-            return Ok(());
-        }
-        if active_units == 0 {
+        if lp_fee > 0 {
             self.fee_ledger.unallocated_fee_liability = self
                 .fee_ledger
                 .unallocated_fee_liability
                 .checked_add(lp_fee)
                 .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        }
+
+        self.carry_forward_unallocated_fee_with_units(active_units)?;
+        self.fee_ledger.assert_backed()
+    }
+
+    pub fn carry_forward_unallocated_fee(&mut self) -> Result<()> {
+        let active_units = active_stake_units(
+            self.claim_ledger.staked_claim_supply,
+            self.buffer_book.staked_buffer_shares,
+            self.buffer_book.buffer_ratio_bps,
+        )?;
+        self.carry_forward_unallocated_fee_with_units(active_units)
+    }
+
+    fn carry_forward_unallocated_fee_with_units(&mut self, active_units: u64) -> Result<()> {
+        if active_units == 0 || self.fee_ledger.unallocated_fee_liability == 0 {
             return Ok(());
         }
 
-        let index_delta = (lp_fee as u128)
+        let fee_amount = self.fee_ledger.unallocated_fee_liability;
+        self.fee_ledger.unallocated_fee_liability = 0;
+        let index_delta = (fee_amount as u128)
             .checked_mul(NAD as u128)
             .and_then(|value| value.checked_div(active_units as u128))
             .ok_or(ErrorCode::MarketMathOverflowV2)?;
@@ -366,7 +414,7 @@ impl MarketSideV2 {
             .ok_or(ErrorCode::MarketMathOverflowV2)?;
         let allocated_fee =
             u64::try_from(allocated_fee).map_err(|_| ErrorCode::MarketMathOverflowV2)?;
-        let unallocated_fee = lp_fee
+        let unallocated_fee = fee_amount
             .checked_sub(allocated_fee)
             .ok_or(ErrorCode::MarketMathOverflowV2)?;
 
@@ -1821,6 +1869,65 @@ mod tests {
         assert_eq!(market_side.fee_ledger.fee_liability, 0);
         assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 1_000);
         market_side.fee_ledger.assert_backed().unwrap();
+    }
+
+    #[test]
+    fn unallocated_fees_carry_forward_to_next_active_stake() {
+        let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
+
+        market_side.record_fee_credit(1_000, 0).unwrap();
+        assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 0);
+        assert_eq!(market_side.fee_ledger.fee_liability, 0);
+        assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 1_000);
+
+        market_side.claim_ledger.staked_claim_supply = 800_000;
+        market_side.buffer_book.staked_buffer_shares = 200_000;
+        market_side.carry_forward_unallocated_fee().unwrap();
+
+        assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 1_000_000);
+        assert_eq!(market_side.fee_ledger.fee_liability, 1_000);
+        assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 0);
+        market_side.fee_ledger.assert_backed().unwrap();
+    }
+
+    #[test]
+    fn unallocated_fee_rounding_dust_stays_carried_forward() {
+        let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
+        market_side.claim_ledger.staked_claim_supply = 1_600_000_000;
+        market_side.buffer_book.staked_buffer_shares = 400_000_000;
+
+        market_side.record_fee_credit(1, 0).unwrap();
+
+        assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 0);
+        assert_eq!(market_side.fee_ledger.fee_liability, 0);
+        assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 1);
+        market_side.fee_ledger.assert_backed().unwrap();
+    }
+
+    #[test]
+    fn market_fee_liabilities_settle_operator_and_protocol_buckets() {
+        let mut fee_ledger = FeeLedgerV2 {
+            fee_vault_balance: 700,
+            operator_fee_liability: 400,
+            protocol_fee_liability: 300,
+            ..FeeLedgerV2::default()
+        };
+
+        let operator_fee = fee_ledger
+            .claim_market_fee_liability(MarketFeeClaimKindV2::Operator)
+            .unwrap();
+        let protocol_fee = fee_ledger
+            .claim_market_fee_liability(MarketFeeClaimKindV2::Protocol)
+            .unwrap();
+        let err = fee_ledger
+            .claim_market_fee_liability(MarketFeeClaimKindV2::Operator)
+            .unwrap_err();
+
+        assert_eq!(operator_fee, 400);
+        assert_eq!(protocol_fee, 300);
+        assert_eq!(fee_ledger.operator_fee_liability, 0);
+        assert_eq!(fee_ledger.protocol_fee_liability, 0);
+        assert_eq!(err, error!(ErrorCode::AmountZero));
     }
 
     #[test]
