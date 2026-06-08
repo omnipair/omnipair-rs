@@ -251,6 +251,9 @@ pub enum ErrorCode {
     #[msg("Invalid V2 stake position")]
     InvalidStakePositionV2,
 
+    #[msg("Invalid V2 hedge position")]
+    InvalidHedgePositionV2,
+
     #[msg("V2 buffer shares are insufficient")]
     InsufficientBufferSharesV2,
 

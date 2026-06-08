@@ -114,6 +114,8 @@ pub const MARGIN_POSITION_V2_SEED_PREFIX: &[u8] = b"margin_v2";
 #[constant]
 pub const HEDGE_VAULT_V2_SEED_PREFIX: &[u8] = b"hedged_v2";
 #[constant]
+pub const HEDGE_POSITION_V2_SEED_PREFIX: &[u8] = b"hedge_position_v2";
+#[constant]
 pub const INSURANCE_RESERVE_V2_SEED_PREFIX: &[u8] = b"insurance_v2";
 #[constant]
 pub const RECOGNITION_LEDGER_V2_SEED_PREFIX: &[u8] = b"recognized_collateral_v2";

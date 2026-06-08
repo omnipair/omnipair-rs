@@ -49,6 +49,8 @@ pub struct MarketCreatedV2 {
     pub insurance1_vault: Pubkey,
     pub hedge0_mint: Pubkey,
     pub hedge1_mint: Pubkey,
+    pub hedge0_vault: Pubkey,
+    pub hedge1_vault: Pubkey,
     pub operator: Pubkey,
     pub manager: Pubkey,
     pub buffer_ratio_bps: u16,
@@ -186,6 +188,28 @@ pub struct MarketLiquidatedV2 {
     pub insurance_drawn: u64,
     pub socialized_loss: u64,
     pub remaining_debt: u128,
+    pub metadata: MarketEventMetadataV2,
+}
+
+#[event]
+pub struct MarketHedgeOpenedV2 {
+    pub market: Pubkey,
+    pub owner: Pubkey,
+    pub asset_mint: Pubkey,
+    pub claim_amount: u64,
+    pub hedge_amount: u64,
+    pub hedged_claim_supply: u64,
+    pub metadata: MarketEventMetadataV2,
+}
+
+#[event]
+pub struct MarketHedgeClosedV2 {
+    pub market: Pubkey,
+    pub owner: Pubkey,
+    pub asset_mint: Pubkey,
+    pub hedge_amount: u64,
+    pub claim_amount: u64,
+    pub hedged_claim_supply: u64,
     pub metadata: MarketEventMetadataV2,
 }
 

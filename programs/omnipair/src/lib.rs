@@ -178,6 +178,16 @@ pub mod omnipair {
         LiquidateV2::handle_liquidate(ctx, args)
     }
 
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn v2_open_hedge(ctx: Context<OpenHedgeV2>, args: OpenHedgeV2Args) -> Result<()> {
+        OpenHedgeV2::handle_open(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn v2_close_hedge(ctx: Context<CloseHedgeV2>, args: CloseHedgeV2Args) -> Result<()> {
+        CloseHedgeV2::handle_close(ctx, args)
+    }
+
     // Pair instructions
     #[access_control(ctx.accounts.validate(&args))]
     pub fn initialize(ctx: Context<InitializeAndBootstrap>, args: InitializeAndBootstrapArgs) -> Result<()> {

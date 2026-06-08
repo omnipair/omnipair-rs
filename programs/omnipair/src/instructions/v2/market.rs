@@ -59,6 +59,10 @@ pub struct InitializeMarketV2<'info> {
     pub hedge0_mint: UncheckedAccount<'info>,
     /// CHECK: Stored as the hedged wrapper mint for asset1; initialized in a later token-layer instruction.
     pub hedge1_mint: UncheckedAccount<'info>,
+    /// CHECK: Stored as the base claim escrow for h-omLP asset0 wrappers; validation is added in the hedge layer.
+    pub hedge0_vault: UncheckedAccount<'info>,
+    /// CHECK: Stored as the base claim escrow for h-omLP asset1 wrappers; validation is added in the hedge layer.
+    pub hedge1_vault: UncheckedAccount<'info>,
     /// CHECK: Stored as the reserve vault for asset0; PDA/token-account validation is added in the reserve layer.
     pub reserve0_vault: UncheckedAccount<'info>,
     /// CHECK: Stored as the reserve vault for asset1; PDA/token-account validation is added in the reserve layer.
@@ -106,6 +110,7 @@ impl<'info> InitializeMarketV2<'info> {
             asset_mint: ctx.accounts.asset0_mint.key(),
             claim_mint: ctx.accounts.claim0_mint.key(),
             hedge_mint: ctx.accounts.hedge0_mint.key(),
+            hedge_vault: ctx.accounts.hedge0_vault.key(),
             reserve_vault: ctx.accounts.reserve0_vault.key(),
             collateral_vault: ctx.accounts.collateral0_vault.key(),
             fee_vault: ctx.accounts.fee0_vault.key(),
@@ -120,6 +125,7 @@ impl<'info> InitializeMarketV2<'info> {
             asset_mint: ctx.accounts.asset1_mint.key(),
             claim_mint: ctx.accounts.claim1_mint.key(),
             hedge_mint: ctx.accounts.hedge1_mint.key(),
+            hedge_vault: ctx.accounts.hedge1_vault.key(),
             reserve_vault: ctx.accounts.reserve1_vault.key(),
             collateral_vault: ctx.accounts.collateral1_vault.key(),
             fee_vault: ctx.accounts.fee1_vault.key(),
@@ -161,6 +167,8 @@ impl<'info> InitializeMarketV2<'info> {
             insurance1_vault: ctx.accounts.insurance1_vault.key(),
             hedge0_mint: ctx.accounts.hedge0_mint.key(),
             hedge1_mint: ctx.accounts.hedge1_mint.key(),
+            hedge0_vault: ctx.accounts.hedge0_vault.key(),
+            hedge1_vault: ctx.accounts.hedge1_vault.key(),
             operator: args.operator,
             manager: args.manager,
             buffer_ratio_bps: args.config.buffer_ratio_bps,

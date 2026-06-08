@@ -123,6 +123,7 @@ pub struct MarketSideV2 {
     pub asset_mint: Pubkey,
     pub claim_mint: Pubkey,
     pub hedge_mint: Pubkey,
+    pub hedge_vault: Pubkey,
     pub reserve_vault: Pubkey,
     pub collateral_vault: Pubkey,
     pub fee_vault: Pubkey,
@@ -598,6 +599,63 @@ impl StakePositionV2 {
         self.available_buffer_shares = self
             .available_buffer_shares
             .checked_add(buffer_shares)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        Ok(())
+    }
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct HedgePositionV2 {
+    pub owner: Pubkey,
+    pub market: Pubkey,
+    pub asset_mint: Pubkey,
+    pub hedged_claim_amount: u64,
+    pub bump: u8,
+}
+
+impl HedgePositionV2 {
+    pub fn initialize(&mut self, owner: Pubkey, market: Pubkey, asset_mint: Pubkey, bump: u8) {
+        self.owner = owner;
+        self.market = market;
+        self.asset_mint = asset_mint;
+        self.bump = bump;
+    }
+
+    pub fn is_initialized(&self) -> bool {
+        self.owner != Pubkey::default()
+            && self.market != Pubkey::default()
+            && self.asset_mint != Pubkey::default()
+    }
+
+    pub fn assert_position(&self, owner: Pubkey, market: Pubkey, asset_mint: Pubkey) -> Result<()> {
+        require_keys_eq!(self.owner, owner, ErrorCode::InvalidHedgePositionV2);
+        require_keys_eq!(self.market, market, ErrorCode::InvalidHedgePositionV2);
+        require_keys_eq!(
+            self.asset_mint,
+            asset_mint,
+            ErrorCode::InvalidHedgePositionV2
+        );
+        Ok(())
+    }
+
+    pub fn increase(&mut self, amount: u64) -> Result<()> {
+        self.hedged_claim_amount = self
+            .hedged_claim_amount
+            .checked_add(amount)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        Ok(())
+    }
+
+    pub fn decrease(&mut self, amount: u64) -> Result<()> {
+        require_gte!(
+            self.hedged_claim_amount,
+            amount,
+            ErrorCode::InvalidHedgePositionV2
+        );
+        self.hedged_claim_amount = self
+            .hedged_claim_amount
+            .checked_sub(amount)
             .ok_or(ErrorCode::MarketMathOverflowV2)?;
         Ok(())
     }
