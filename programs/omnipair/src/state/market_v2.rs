@@ -1068,12 +1068,31 @@ impl MarketV2 {
     }
 
     pub fn apply_buffer_ratio_update(&mut self, buffer_ratio_bps: u16) -> Result<()> {
+        self.assert_buffer_ratio_change_unlocked(buffer_ratio_bps)?;
         let required_buffer0 = self.side0.assert_buffer_floor_for_ratio(buffer_ratio_bps)?;
         let required_buffer1 = self.side1.assert_buffer_floor_for_ratio(buffer_ratio_bps)?;
         self.side0
             .apply_buffer_ratio(buffer_ratio_bps, required_buffer0);
         self.side1
             .apply_buffer_ratio(buffer_ratio_bps, required_buffer1);
+        Ok(())
+    }
+
+    fn assert_buffer_ratio_change_unlocked(&self, buffer_ratio_bps: u16) -> Result<()> {
+        if buffer_ratio_bps == self.side0.buffer_book.buffer_ratio_bps
+            && buffer_ratio_bps == self.side1.buffer_book.buffer_ratio_bps
+        {
+            return Ok(());
+        }
+        require!(
+            self.side0.claim_ledger.staked_claim_supply == 0
+                && self.side1.claim_ledger.staked_claim_supply == 0
+                && self.side0.buffer_book.staked_buffer_shares == 0
+                && self.side1.buffer_book.staked_buffer_shares == 0
+                && self.side0.fee_ledger.fee_liability == 0
+                && self.side1.fee_ledger.fee_liability == 0,
+            ErrorCode::InvalidMarketConfigV2
+        );
         Ok(())
     }
 }
@@ -1762,6 +1781,33 @@ mod tests {
         assert_eq!(err, error!(ErrorCode::InsufficientBufferSharesV2));
         assert_eq!(market.side0.buffer_book.buffer_ratio_bps, 2_000);
         assert_eq!(market.side0.buffer_book.required_buffer, 200_000);
+    }
+
+    #[test]
+    fn buffer_ratio_update_rejects_active_stake() {
+        let mut market = test_market();
+        market.side0.apply_reserve_deposit(1_000_000).unwrap();
+        market.side1.apply_reserve_deposit(1_000_000).unwrap();
+        market.side0.claim_ledger.staked_claim_supply = 800_000;
+        market.side0.buffer_book.staked_buffer_shares = 200_000;
+
+        let err = market.apply_buffer_ratio_update(1_500).unwrap_err();
+
+        assert_eq!(err, error!(ErrorCode::InvalidMarketConfigV2));
+        assert_eq!(market.side0.buffer_book.buffer_ratio_bps, 2_000);
+    }
+
+    #[test]
+    fn buffer_ratio_update_rejects_staker_fee_liability() {
+        let mut market = test_market();
+        market.side0.apply_reserve_deposit(1_000_000).unwrap();
+        market.side1.apply_reserve_deposit(1_000_000).unwrap();
+        market.side1.fee_ledger.fee_liability = 1;
+
+        let err = market.apply_buffer_ratio_update(1_500).unwrap_err();
+
+        assert_eq!(err, error!(ErrorCode::InvalidMarketConfigV2));
+        assert_eq!(market.side1.buffer_book.buffer_ratio_bps, 2_000);
     }
 
     #[test]
