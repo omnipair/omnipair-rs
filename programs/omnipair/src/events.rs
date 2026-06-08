@@ -75,6 +75,30 @@ pub struct MarketHealthUpdatedV2 {
 }
 
 #[event]
+pub struct MarketReserveDepositedV2 {
+    pub market: Pubkey,
+    pub owner: Pubkey,
+    pub asset_mint: Pubkey,
+    pub reserve_credit: u64,
+    pub claim_amount: u64,
+    pub buffer_amount: u64,
+    pub protected_claim_supply: u64,
+    pub required_buffer: u64,
+    pub metadata: MarketEventMetadataV2,
+}
+
+#[event]
+pub struct MarketClaimRedeemedV2 {
+    pub market: Pubkey,
+    pub owner: Pubkey,
+    pub asset_mint: Pubkey,
+    pub claim_amount: u64,
+    pub protected_claim_supply: u64,
+    pub required_buffer: u64,
+    pub metadata: MarketEventMetadataV2,
+}
+
+#[event]
 pub struct SwapEvent {
     pub reserve0: u64,
     pub reserve1: u64,

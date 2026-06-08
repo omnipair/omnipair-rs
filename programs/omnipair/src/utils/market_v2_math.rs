@@ -2,6 +2,7 @@ use anchor_lang::error;
 
 use crate::constants::*;
 use crate::errors::ErrorCode;
+use crate::utils::math::ceil_div;
 
 pub fn split_claim_minus_buffer(
     deposit_amount: u64,
@@ -12,16 +13,43 @@ pub fn split_claim_minus_buffer(
         ErrorCode::InvalidMarketBufferRatioV2
     );
 
-    let buffer_amount = (deposit_amount as u128)
-        .checked_mul(buffer_ratio_bps as u128)
-        .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
-        .ok_or(ErrorCode::MarketMathOverflowV2)?;
-    let buffer_amount = u64::try_from(buffer_amount).map_err(|_| ErrorCode::MarketMathOverflowV2)?;
+    let buffer_amount = ceil_div(
+        (deposit_amount as u128)
+            .checked_mul(buffer_ratio_bps as u128)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?,
+        BPS_DENOMINATOR as u128,
+    )
+    .ok_or(ErrorCode::MarketMathOverflowV2)?;
+    let buffer_amount =
+        u64::try_from(buffer_amount).map_err(|_| ErrorCode::MarketMathOverflowV2)?;
     let claim_amount = deposit_amount
         .checked_sub(buffer_amount)
         .ok_or(ErrorCode::MarketMathOverflowV2)?;
 
     Ok((claim_amount, buffer_amount))
+}
+
+pub fn required_buffer_for_claims(
+    protected_claim_supply: u64,
+    buffer_ratio_bps: u16,
+) -> anchor_lang::prelude::Result<u64> {
+    anchor_lang::prelude::require!(
+        buffer_ratio_bps > 0 && buffer_ratio_bps < BPS_DENOMINATOR,
+        ErrorCode::InvalidMarketBufferRatioV2
+    );
+
+    let claim_ratio_bps = BPS_DENOMINATOR
+        .checked_sub(buffer_ratio_bps)
+        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+    let required_buffer = ceil_div(
+        (protected_claim_supply as u128)
+            .checked_mul(buffer_ratio_bps as u128)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?,
+        claim_ratio_bps as u128,
+    )
+    .ok_or(ErrorCode::MarketMathOverflowV2)?;
+
+    u64::try_from(required_buffer).map_err(|_| ErrorCode::MarketMathOverflowV2.into())
 }
 
 pub fn active_stake_units(
@@ -93,6 +121,14 @@ mod tests {
     }
 
     #[test]
+    fn claim_minus_buffer_rounds_buffer_up_for_dust() {
+        let (claim, buffer) = split_claim_minus_buffer(2, 2_000).unwrap();
+        assert_eq!(claim, 1);
+        assert_eq!(buffer, 1);
+        assert_eq!(required_buffer_for_claims(claim, 2_000).unwrap(), 1);
+    }
+
+    #[test]
     fn active_stake_requires_matched_claim_and_buffer() {
         let full = active_stake_units(800_000, 200_000, 2_000).unwrap();
         let claim_short = active_stake_units(400_000, 200_000, 2_000).unwrap();
@@ -113,6 +149,9 @@ mod tests {
     fn reserve_floor_protects_claims_and_required_buffer() {
         require_market_reserve_floor(1_150, 1_000, 150).unwrap();
         let err = require_market_reserve_floor(1_149, 1_000, 150).unwrap_err();
-        assert_eq!(err, anchor_lang::prelude::error!(ErrorCode::InsufficientMarketClaimCoverageV2));
+        assert_eq!(
+            err,
+            anchor_lang::prelude::error!(ErrorCode::InsufficientMarketClaimCoverageV2)
+        );
     }
 }

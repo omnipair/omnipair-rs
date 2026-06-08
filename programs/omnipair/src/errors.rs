@@ -245,6 +245,18 @@ pub enum ErrorCode {
     #[msg("V2 market claim coverage is insufficient")]
     InsufficientMarketClaimCoverageV2,
 
+    #[msg("Invalid V2 market side")]
+    InvalidMarketSideV2,
+
+    #[msg("Invalid V2 stake position")]
+    InvalidStakePositionV2,
+
+    #[msg("V2 buffer shares are insufficient")]
+    InsufficientBufferSharesV2,
+
+    #[msg("V2 claim mint must not charge transfer fees")]
+    InvalidClaimMintV2,
+
     #[msg("V2 fee liability is not backed by fee vault balance")]
     UnbackedFeeLiabilityV2,
 

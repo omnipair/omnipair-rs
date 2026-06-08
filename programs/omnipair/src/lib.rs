@@ -123,6 +123,16 @@ pub mod omnipair {
         ViewMarketStateV2::handle_view(ctx)
     }
 
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn v2_deposit_reserve(ctx: Context<DepositReserveV2>, args: DepositReserveV2Args) -> Result<()> {
+        DepositReserveV2::handle_deposit(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn v2_redeem_claim(ctx: Context<RedeemClaimV2>, args: RedeemClaimV2Args) -> Result<()> {
+        RedeemClaimV2::handle_redeem(ctx, args)
+    }
+
     // Pair instructions
     #[access_control(ctx.accounts.validate(&args))]
     pub fn initialize(ctx: Context<InitializeAndBootstrap>, args: InitializeAndBootstrapArgs) -> Result<()> {

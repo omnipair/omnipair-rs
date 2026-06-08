@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::constants::*;
 use crate::errors::ErrorCode;
+use crate::utils::market_v2_math::{required_buffer_for_claims, split_claim_minus_buffer};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct MarketConfigV2 {
@@ -26,8 +27,16 @@ pub struct MarketConfigV2 {
 
 impl MarketConfigV2 {
     pub fn validate(&self) -> Result<()> {
-        require_gte!(BPS_DENOMINATOR, self.swap_fee_bps, ErrorCode::InvalidSwapFeeBps);
-        require_gte!(BPS_DENOMINATOR, self.operator_fee_bps, ErrorCode::InvalidMarketConfigV2);
+        require_gte!(
+            BPS_DENOMINATOR,
+            self.swap_fee_bps,
+            ErrorCode::InvalidSwapFeeBps
+        );
+        require_gte!(
+            BPS_DENOMINATOR,
+            self.operator_fee_bps,
+            ErrorCode::InvalidMarketConfigV2
+        );
         require!(
             self.buffer_ratio_bps > 0 && self.buffer_ratio_bps < BPS_DENOMINATOR,
             ErrorCode::InvalidMarketBufferRatioV2
@@ -141,6 +150,94 @@ impl MarketSideV2 {
         );
         Ok(())
     }
+
+    pub fn apply_reserve_deposit(&mut self, reserve_credit: u64) -> Result<(u64, u64)> {
+        require!(reserve_credit > 0, ErrorCode::AmountZero);
+        let (claim_amount, buffer_amount) =
+            split_claim_minus_buffer(reserve_credit, self.buffer_book.buffer_ratio_bps)?;
+        require!(claim_amount > 0 && buffer_amount > 0, ErrorCode::AmountZero);
+
+        let next_claim_supply = self
+            .claim_ledger
+            .protected_claim_supply
+            .checked_add(claim_amount)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        let next_buffer_shares = self
+            .buffer_book
+            .buffer_shares
+            .checked_add(buffer_amount)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        let next_required_buffer =
+            required_buffer_for_claims(next_claim_supply, self.buffer_book.buffer_ratio_bps)?;
+        require_gte!(
+            next_buffer_shares,
+            next_required_buffer,
+            ErrorCode::InsufficientBufferSharesV2
+        );
+
+        self.reserve_ledger.live_reserve = self
+            .reserve_ledger
+            .live_reserve
+            .checked_add(reserve_credit)
+            .ok_or(ErrorCode::ReserveOverflow)?;
+        self.reserve_ledger.cash_reserve = self
+            .reserve_ledger
+            .cash_reserve
+            .checked_add(reserve_credit)
+            .ok_or(ErrorCode::ReserveOverflow)?;
+        self.claim_ledger.protected_claim_supply = next_claim_supply;
+        self.buffer_book.buffer_shares = next_buffer_shares;
+        self.buffer_book.required_buffer = next_required_buffer;
+        self.assert_claim_coverage()?;
+
+        Ok((claim_amount, buffer_amount))
+    }
+
+    pub fn apply_claim_redemption(&mut self, claim_amount: u64) -> Result<()> {
+        require!(claim_amount > 0, ErrorCode::AmountZero);
+        require_gte!(
+            self.claim_ledger.protected_claim_supply,
+            claim_amount,
+            ErrorCode::InsufficientMarketClaimCoverageV2
+        );
+        require_gte!(
+            self.reserve_ledger.cash_reserve,
+            claim_amount,
+            ErrorCode::InsufficientMarketClaimCoverageV2
+        );
+
+        let next_claim_supply = self
+            .claim_ledger
+            .protected_claim_supply
+            .checked_sub(claim_amount)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        let next_required_buffer =
+            required_buffer_for_claims(next_claim_supply, self.buffer_book.buffer_ratio_bps)?;
+        let next_live_reserve = self
+            .reserve_ledger
+            .live_reserve
+            .checked_sub(claim_amount)
+            .ok_or(ErrorCode::ReserveUnderflow)?;
+        let reserve_floor = next_claim_supply
+            .checked_add(next_required_buffer)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        require_gte!(
+            next_live_reserve,
+            reserve_floor,
+            ErrorCode::InsufficientMarketClaimCoverageV2
+        );
+
+        self.reserve_ledger.live_reserve = next_live_reserve;
+        self.reserve_ledger.cash_reserve = self
+            .reserve_ledger
+            .cash_reserve
+            .checked_sub(claim_amount)
+            .ok_or(ErrorCode::CashReserveUnderflow)?;
+        self.claim_ledger.protected_claim_supply = next_claim_supply;
+        self.buffer_book.required_buffer = next_required_buffer;
+
+        Ok(())
+    }
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
@@ -230,6 +327,54 @@ pub struct InsuranceReserveV2 {
 
 #[account]
 #[derive(InitSpace)]
+pub struct StakePositionV2 {
+    pub owner: Pubkey,
+    pub market: Pubkey,
+    pub asset_mint: Pubkey,
+    pub available_buffer_shares: u64,
+    pub staked_claim_amount: u64,
+    pub staked_buffer_shares: u64,
+    pub fee_growth_checkpoint_nad: u128,
+    pub accrued_fee_claim: u64,
+    pub bump: u8,
+}
+
+impl StakePositionV2 {
+    pub fn initialize(&mut self, owner: Pubkey, market: Pubkey, asset_mint: Pubkey, bump: u8) {
+        self.owner = owner;
+        self.market = market;
+        self.asset_mint = asset_mint;
+        self.bump = bump;
+    }
+
+    pub fn is_initialized(&self) -> bool {
+        self.owner != Pubkey::default()
+            && self.market != Pubkey::default()
+            && self.asset_mint != Pubkey::default()
+    }
+
+    pub fn assert_position(&self, owner: Pubkey, market: Pubkey, asset_mint: Pubkey) -> Result<()> {
+        require_keys_eq!(self.owner, owner, ErrorCode::InvalidStakePositionV2);
+        require_keys_eq!(self.market, market, ErrorCode::InvalidStakePositionV2);
+        require_keys_eq!(
+            self.asset_mint,
+            asset_mint,
+            ErrorCode::InvalidStakePositionV2
+        );
+        Ok(())
+    }
+
+    pub fn credit_buffer_shares(&mut self, amount: u64) -> Result<()> {
+        self.available_buffer_shares = self
+            .available_buffer_shares
+            .checked_add(amount)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        Ok(())
+    }
+}
+
+#[account]
+#[derive(InitSpace)]
 pub struct MarketV2 {
     pub version: u8,
     pub asset0_mint: Pubkey,
@@ -296,10 +441,31 @@ impl MarketV2 {
     }
 
     pub fn assert_live(&self) -> Result<()> {
-        let now = Clock::get()?.unix_timestamp;
-        require!(now >= self.config.start_time, ErrorCode::MarketNotStartedV2);
+        self.assert_started()?;
         require!(!self.reduce_only, ErrorCode::MarketReduceOnlyV2);
         Ok(())
+    }
+
+    pub fn assert_started(&self) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        require!(now >= self.config.start_time, ErrorCode::MarketNotStartedV2);
+        Ok(())
+    }
+
+    pub fn side(&self, market_side_index: u8) -> Result<&MarketSideV2> {
+        match market_side_index {
+            0 => Ok(&self.side0),
+            1 => Ok(&self.side1),
+            _ => err!(ErrorCode::InvalidMarketSideV2),
+        }
+    }
+
+    pub fn side_mut(&mut self, market_side_index: u8) -> Result<&mut MarketSideV2> {
+        match market_side_index {
+            0 => Ok(&mut self.side0),
+            1 => Ok(&mut self.side1),
+            _ => err!(ErrorCode::InvalidMarketSideV2),
+        }
     }
 
     pub fn assert_market_invariants(&self) -> Result<()> {
