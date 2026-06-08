@@ -86,6 +86,7 @@ pub struct FeeLedgerV2 {
     pub fee_growth_index_nad: u128,
     pub fee_vault_balance: u64,
     pub fee_liability: u64,
+    pub unallocated_fee_liability: u64,
     pub protocol_fee_liability: u64,
     pub operator_fee_liability: u64,
 }
@@ -95,6 +96,7 @@ impl FeeLedgerV2 {
         self.fee_liability
             .checked_add(self.protocol_fee_liability)
             .and_then(|value| value.checked_add(self.operator_fee_liability))
+            .and_then(|value| value.checked_add(self.unallocated_fee_liability))
             .ok_or(ErrorCode::MarketMathOverflowV2.into())
     }
 
@@ -239,6 +241,86 @@ impl MarketSideV2 {
         self.claim_ledger.protected_claim_supply = next_claim_supply;
         self.buffer_book.required_buffer = next_required_buffer;
 
+        Ok(())
+    }
+
+    pub fn record_fee_credit(&mut self, fee_credit: u64, operator_fee_bps: u16) -> Result<()> {
+        if fee_credit == 0 {
+            return Ok(());
+        }
+        require_gte!(
+            BPS_DENOMINATOR,
+            operator_fee_bps,
+            ErrorCode::InvalidMarketConfigV2
+        );
+
+        let operator_fee = (fee_credit as u128)
+            .checked_mul(operator_fee_bps as u128)
+            .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        let operator_fee =
+            u64::try_from(operator_fee).map_err(|_| ErrorCode::MarketMathOverflowV2)?;
+        let lp_fee = fee_credit
+            .checked_sub(operator_fee)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+
+        self.fee_ledger.fee_vault_balance = self
+            .fee_ledger
+            .fee_vault_balance
+            .checked_add(fee_credit)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        self.fee_ledger.operator_fee_liability = self
+            .fee_ledger
+            .operator_fee_liability
+            .checked_add(operator_fee)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+
+        let active_units = active_stake_units(
+            self.claim_ledger.staked_claim_supply,
+            self.buffer_book.staked_buffer_shares,
+            self.buffer_book.buffer_ratio_bps,
+        )?;
+        if lp_fee == 0 {
+            return Ok(());
+        }
+        if active_units == 0 {
+            self.fee_ledger.unallocated_fee_liability = self
+                .fee_ledger
+                .unallocated_fee_liability
+                .checked_add(lp_fee)
+                .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            return Ok(());
+        }
+
+        let index_delta = (lp_fee as u128)
+            .checked_mul(NAD as u128)
+            .and_then(|value| value.checked_div(active_units as u128))
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        let allocated_fee = index_delta
+            .checked_mul(active_units as u128)
+            .and_then(|value| value.checked_div(NAD as u128))
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        let allocated_fee =
+            u64::try_from(allocated_fee).map_err(|_| ErrorCode::MarketMathOverflowV2)?;
+        let unallocated_fee = lp_fee
+            .checked_sub(allocated_fee)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+
+        self.fee_ledger.fee_growth_index_nad = self
+            .fee_ledger
+            .fee_growth_index_nad
+            .checked_add(index_delta)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        self.fee_ledger.fee_liability = self
+            .fee_ledger
+            .fee_liability
+            .checked_add(allocated_fee)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        self.fee_ledger.unallocated_fee_liability = self
+            .fee_ledger
+            .unallocated_fee_liability
+            .checked_add(unallocated_fee)
+            .ok_or(ErrorCode::MarketMathOverflowV2)?;
         Ok(())
     }
 }
@@ -540,6 +622,25 @@ impl MarketV2 {
             0 => Ok(&mut self.side0),
             1 => Ok(&mut self.side1),
             _ => err!(ErrorCode::InvalidMarketSideV2),
+        }
+    }
+
+    pub fn swap_sides(&self, asset_in_is_asset0: bool) -> (&MarketSideV2, &MarketSideV2) {
+        if asset_in_is_asset0 {
+            (&self.side0, &self.side1)
+        } else {
+            (&self.side1, &self.side0)
+        }
+    }
+
+    pub fn swap_sides_mut(
+        &mut self,
+        asset_in_is_asset0: bool,
+    ) -> (&mut MarketSideV2, &mut MarketSideV2) {
+        if asset_in_is_asset0 {
+            (&mut self.side0, &mut self.side1)
+        } else {
+            (&mut self.side1, &mut self.side0)
         }
     }
 

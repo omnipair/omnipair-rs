@@ -171,3 +171,94 @@ pub fn validate_fee_accounts<'info>(
     );
     Ok(())
 }
+
+pub fn validate_swap_accounts<'info>(
+    market: &Account<'info, MarketV2>,
+    asset_in_is_asset0: bool,
+    trader: Pubkey,
+    asset_in_mint: &InterfaceAccount<'info, Mint>,
+    asset_out_mint: &InterfaceAccount<'info, Mint>,
+    reserve_in_vault: &InterfaceAccount<'info, TokenAccount>,
+    reserve_out_vault: &InterfaceAccount<'info, TokenAccount>,
+    fee_in_vault: &InterfaceAccount<'info, TokenAccount>,
+    trader_asset_in_account: &InterfaceAccount<'info, TokenAccount>,
+    trader_asset_out_account: &InterfaceAccount<'info, TokenAccount>,
+) -> Result<()> {
+    let (market_side_in, market_side_out) = if asset_in_is_asset0 {
+        (&market.side0, &market.side1)
+    } else {
+        (&market.side1, &market.side0)
+    };
+    require_keys_eq!(
+        market_side_in.asset_mint,
+        asset_in_mint.key(),
+        ErrorCode::InvalidMint
+    );
+    require_keys_eq!(
+        market_side_out.asset_mint,
+        asset_out_mint.key(),
+        ErrorCode::InvalidMint
+    );
+    require_keys_eq!(
+        market_side_in.reserve_vault,
+        reserve_in_vault.key(),
+        ErrorCode::InvalidVault
+    );
+    require_keys_eq!(
+        market_side_out.reserve_vault,
+        reserve_out_vault.key(),
+        ErrorCode::InvalidVault
+    );
+    require_keys_eq!(
+        market_side_in.fee_vault,
+        fee_in_vault.key(),
+        ErrorCode::InvalidVault
+    );
+    require_keys_eq!(
+        reserve_in_vault.mint,
+        asset_in_mint.key(),
+        ErrorCode::InvalidVault
+    );
+    require_keys_eq!(
+        reserve_out_vault.mint,
+        asset_out_mint.key(),
+        ErrorCode::InvalidVault
+    );
+    require_keys_eq!(
+        fee_in_vault.mint,
+        asset_in_mint.key(),
+        ErrorCode::InvalidVault
+    );
+    require_keys_eq!(
+        reserve_in_vault.owner,
+        market.key(),
+        ErrorCode::InvalidVault
+    );
+    require_keys_eq!(
+        reserve_out_vault.owner,
+        market.key(),
+        ErrorCode::InvalidVault
+    );
+    require_keys_eq!(fee_in_vault.owner, market.key(), ErrorCode::InvalidVault);
+    require_keys_eq!(
+        trader_asset_in_account.mint,
+        asset_in_mint.key(),
+        ErrorCode::InvalidTokenAccount
+    );
+    require_keys_eq!(
+        trader_asset_in_account.owner,
+        trader,
+        ErrorCode::InvalidTokenAccount
+    );
+    require_keys_eq!(
+        trader_asset_out_account.mint,
+        asset_out_mint.key(),
+        ErrorCode::InvalidTokenAccount
+    );
+    require_keys_eq!(
+        trader_asset_out_account.owner,
+        trader,
+        ErrorCode::InvalidTokenAccount
+    );
+    Ok(())
+}

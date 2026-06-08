@@ -123,6 +123,19 @@ pub struct MarketFeesClaimedV2 {
 }
 
 #[event]
+pub struct MarketSwapV2 {
+    pub market: Pubkey,
+    pub trader: Pubkey,
+    pub asset_in_mint: Pubkey,
+    pub asset_out_mint: Pubkey,
+    pub reserve_credit: u64,
+    pub amount_in_after_fee: u64,
+    pub amount_out: u64,
+    pub fee_credit: u64,
+    pub metadata: MarketEventMetadataV2,
+}
+
+#[event]
 pub struct SwapEvent {
     pub reserve0: u64,
     pub reserve1: u64,

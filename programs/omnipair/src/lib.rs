@@ -148,6 +148,11 @@ pub mod omnipair {
         ClaimFeesV2::handle_claim(ctx, args)
     }
 
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn v2_swap(ctx: Context<SwapV2>, args: SwapV2Args) -> Result<()> {
+        SwapV2::handle_swap(ctx, args)
+    }
+
     // Pair instructions
     #[access_control(ctx.accounts.validate(&args))]
     pub fn initialize(ctx: Context<InitializeAndBootstrap>, args: InitializeAndBootstrapArgs) -> Result<()> {
