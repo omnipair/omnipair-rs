@@ -7,7 +7,6 @@ pub mod add_collateral;
 pub mod add_liquidity;
 pub mod borrow;
 pub mod claim_protocol_fees;
-pub mod flashloan;
 pub mod init_futarchy_authority;
 pub mod initialize;
 pub mod liquidate;
@@ -27,7 +26,6 @@ pub mod adjust_debt_event;
 pub mod adjust_liquidity_event;
 pub mod burn_event;
 pub mod claim_protocol_fees_event;
-pub mod flashloan_event;
 pub mod mint_event;
 pub mod pair_created_event;
 pub mod swap_event;
@@ -43,7 +41,6 @@ pub enum OmnipairInstruction {
     AddLiquidity(add_liquidity::AddLiquidity),
     Borrow(borrow::Borrow),
     ClaimProtocolFees(claim_protocol_fees::ClaimProtocolFees),
-    Flashloan(flashloan::Flashloan),
     InitFutarchyAuthority(init_futarchy_authority::InitFutarchyAuthority),
     Initialize(initialize::Initialize),
     Liquidate(liquidate::Liquidate),
@@ -63,7 +60,6 @@ pub enum OmnipairInstruction {
     AdjustLiquidityEvent(adjust_liquidity_event::AdjustLiquidityEvent),
     BurnEvent(burn_event::BurnEvent),
     ClaimProtocolFeesEvent(claim_protocol_fees_event::ClaimProtocolFeesEvent),
-    FlashloanEvent(flashloan_event::FlashloanEvent),
     MintEvent(mint_event::MintEvent),
     PairCreatedEvent(pair_created_event::PairCreatedEvent),
     SwapEvent(swap_event::SwapEvent),
@@ -86,7 +82,6 @@ impl<'a> carbon_core::instruction::InstructionDecoder<'a> for OmnipairDecoder {
             OmnipairInstruction::AddLiquidity => add_liquidity::AddLiquidity,
             OmnipairInstruction::Borrow => borrow::Borrow,
             OmnipairInstruction::ClaimProtocolFees => claim_protocol_fees::ClaimProtocolFees,
-            OmnipairInstruction::Flashloan => flashloan::Flashloan,
             OmnipairInstruction::InitFutarchyAuthority => init_futarchy_authority::InitFutarchyAuthority,
             OmnipairInstruction::Initialize => initialize::Initialize,
             OmnipairInstruction::Liquidate => liquidate::Liquidate,
@@ -106,7 +101,6 @@ impl<'a> carbon_core::instruction::InstructionDecoder<'a> for OmnipairDecoder {
             OmnipairInstruction::AdjustLiquidityEvent => adjust_liquidity_event::AdjustLiquidityEvent,
             OmnipairInstruction::BurnEvent => burn_event::BurnEvent,
             OmnipairInstruction::ClaimProtocolFeesEvent => claim_protocol_fees_event::ClaimProtocolFeesEvent,
-            OmnipairInstruction::FlashloanEvent => flashloan_event::FlashloanEvent,
             OmnipairInstruction::MintEvent => mint_event::MintEvent,
             OmnipairInstruction::PairCreatedEvent => pair_created_event::PairCreatedEvent,
             OmnipairInstruction::SwapEvent => swap_event::SwapEvent,

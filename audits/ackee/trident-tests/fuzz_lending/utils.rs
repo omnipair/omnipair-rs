@@ -7,8 +7,6 @@ pub const DEPLOYER_ADDRESS: Pubkey = pubkey!("C7GKpfqQyBoFR6S13DECwBjdi7aCQKbbeK
 pub const TOKEN_2022_PROGRAM: Pubkey = pubkey!("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 pub const TOKEN_PROGRAM: Pubkey = pubkey!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 pub const MPL_TOKEN_METADATA_ID: Pubkey = pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
-pub const FLASHLOAN_CALLBACK_RECEIVER_PROGRAM: Pubkey =
-    pubkey!("GmtswKBDrFZ9DfUfP7jbPFvbtuG7AJcX73SvoKWGxJbu");
 
 // MINTS
 pub const WSOL_MINT_ADDRESS: Pubkey = pubkey!("So11111111111111111111111111111111111111112");

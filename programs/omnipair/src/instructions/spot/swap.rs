@@ -1,19 +1,21 @@
-use anchor_lang::prelude::*;
-use anchor_spl::{
-    token::{Token, TokenAccount, Mint},
-    token_interface::{Token2022},
-};
 use crate::{
-    state::*,
     constants::*,
     errors::ErrorCode,
     events::*,
-    utils::token::{transfer_from_user_to_vault, transfer_from_vault_to_user},
+    generate_gamm_pair_seeds,
+    state::*,
     utils::gamm_math::CPCurve,
     utils::math::ceil_div,
-    generate_gamm_pair_seeds,
+    utils::token::{
+        require_supported_mint, token_program_for_mint, transfer_amounts_from_gross,
+        transfer_from_user_to_vault, transfer_from_vault_to_user,
+    },
 };
-
+use anchor_lang::prelude::*;
+use anchor_spl::{
+    token::Token,
+    token_interface::{Mint, Token2022, TokenAccount},
+};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct SwapArgs {
@@ -23,7 +25,7 @@ pub struct SwapArgs {
 
 #[event_cpi]
 #[derive(Accounts)]
-pub struct Swap<'info> { 
+pub struct Swap<'info> {
     #[account(
         mut,
         seeds = [PAIR_SEED_PREFIX, pair.token0.as_ref(), pair.token1.as_ref(), pair.params_hash.as_ref()],
@@ -43,7 +45,7 @@ pub struct Swap<'info> {
         bump = futarchy_authority.bump
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
-    
+
     #[account(
         mut,
         seeds = [
@@ -53,8 +55,8 @@ pub struct Swap<'info> {
         ],
         bump = pair.get_reserve_vault_bump(&token_in_mint.key())
     )]
-    pub token_in_vault: Account<'info, TokenAccount>,
-    
+    pub token_in_vault: InterfaceAccount<'info, TokenAccount>,
+
     #[account(
         mut,
         seeds = [
@@ -64,29 +66,29 @@ pub struct Swap<'info> {
         ],
         bump = pair.get_reserve_vault_bump(&token_out_mint.key())
     )]
-    pub token_out_vault: Account<'info, TokenAccount>,
-    
+    pub token_out_vault: InterfaceAccount<'info, TokenAccount>,
+
     #[account(
         mut,
         constraint = user_token_in_account.mint == token_in_mint.key() @ ErrorCode::InvalidTokenAccount,
-        token::authority = user,
+        constraint = user_token_in_account.owner == user.key() @ ErrorCode::InvalidTokenAccount,
     )]
-    pub user_token_in_account: Account<'info, TokenAccount>,
+    pub user_token_in_account: InterfaceAccount<'info, TokenAccount>,
     #[account(mut,
         constraint = user_token_out_account.mint == token_out_mint.key() @ ErrorCode::InvalidTokenAccount,
-        token::authority = user,
+        constraint = user_token_out_account.owner == user.key() @ ErrorCode::InvalidTokenAccount,
     )]
-    pub user_token_out_account: Account<'info, TokenAccount>,
+    pub user_token_out_account: InterfaceAccount<'info, TokenAccount>,
 
     #[account(
         constraint = token_in_mint.key() == pair.token0 || token_in_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub token_in_mint: Box<Account<'info, Mint>>,
+    pub token_in_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(
         constraint = token_out_mint.key() == pair.token0 || token_out_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub token_out_mint: Box<Account<'info, Mint>>,
-    
+    pub token_out_mint: Box<InterfaceAccount<'info, Mint>>,
+
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
@@ -97,18 +99,24 @@ impl<'info> Swap<'info> {
         let amount_in = args.amount_in;
 
         require!(amount_in > 0, ErrorCode::AmountZero);
-        require_gte!(self.user_token_in_account.amount, amount_in, ErrorCode::InsufficientBalance);
-        
+        require_supported_mint(&self.token_in_mint)?;
+        require_supported_mint(&self.token_out_mint)?;
+        require_gte!(
+            self.user_token_in_account.amount,
+            amount_in,
+            ErrorCode::InsufficientBalance
+        );
+
         // Ensure token_in_vault and token_out_vault are different accounts
         require_keys_neq!(
             self.token_in_vault.key(),
             self.token_out_vault.key(),
             ErrorCode::InvalidVaultSameAccount
         );
-        
+
         // Verify vaults match the correct tokens based on swap direction
         let is_token0_in = self.user_token_in_account.mint == self.pair.token0;
-        
+
         if is_token0_in {
             // Swapping token0 -> token1
             require_keys_eq!(
@@ -134,7 +142,7 @@ impl<'info> Swap<'info> {
                 ErrorCode::InvalidTokenAccount
             );
         }
-        
+
         Ok(())
     }
 
@@ -156,7 +164,10 @@ impl<'info> Swap<'info> {
     }
 
     pub fn handle_swap(ctx: Context<Self>, args: SwapArgs) -> Result<()> {
-        let SwapArgs { amount_in, min_amount_out } = args;
+        let SwapArgs {
+            amount_in,
+            min_amount_out,
+        } = args;
         let Swap {
             pair,
             futarchy_authority,
@@ -171,43 +182,84 @@ impl<'info> Swap<'info> {
             user,
             ..
         } = ctx.accounts;
-        let last_k = (pair.reserve0 as u128).checked_mul(pair.reserve1 as u128).ok_or(ErrorCode::InvariantOverflow)?;
+        let last_k = (pair.reserve0 as u128)
+            .checked_mul(pair.reserve1 as u128)
+            .ok_or(ErrorCode::InvariantOverflow)?;
         let is_token0_in = user_token_in_account.mint == pair.token0;
+        let token_in_mint_info = token_in_mint.to_account_info();
+        let token_out_mint_info = token_out_mint.to_account_info();
+        let token_in_transfer = transfer_amounts_from_gross(&token_in_mint_info, amount_in)?;
+        let actual_amount_in = token_in_transfer.net;
+        require!(actual_amount_in > 0, ErrorCode::AmountZero);
 
         // Swap fee = LP fee + Futarchy fee
-        let swap_fee = ceil_div((amount_in as u128)
-            .checked_mul(pair.swap_fee_bps as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)?,
+        let swap_fee = ceil_div(
+            (actual_amount_in as u128)
+                .checked_mul(pair.swap_fee_bps as u128)
+                .ok_or(ErrorCode::FeeMathOverflow)?,
             BPS_DENOMINATOR as u128,
-        ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
+        )
+        .ok_or(ErrorCode::FeeMathOverflow)? as u64;
 
         // Calculate futarchy fee portion of the swap fee
-        let futarchy_fee = ceil_div((swap_fee as u128)
-            .checked_mul(futarchy_authority.revenue_share.swap_bps as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)?,
+        let futarchy_fee = ceil_div(
+            (swap_fee as u128)
+                .checked_mul(futarchy_authority.revenue_share.swap_bps as u128)
+                .ok_or(ErrorCode::FeeMathOverflow)?,
             BPS_DENOMINATOR as u128,
-        ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
+        )
+        .ok_or(ErrorCode::FeeMathOverflow)? as u64;
 
-        // amount_in_after_swap_fee = amount_in - swap_fee
-        let amount_in_after_swap_fee = amount_in.checked_sub(swap_fee).ok_or(ErrorCode::FeeMathOverflow)?;
+        // amount_in_after_swap_fee = actual_amount_in - swap_fee
+        let amount_in_after_swap_fee = actual_amount_in
+            .checked_sub(swap_fee)
+            .ok_or(ErrorCode::FeeMathOverflow)?;
 
-        let reserve_in = if is_token0_in { pair.reserve0 } else { pair.reserve1 };
-        let reserve_out = if is_token0_in { pair.reserve1 } else { pair.reserve0 };
+        let reserve_in = if is_token0_in {
+            pair.reserve0
+        } else {
+            pair.reserve1
+        };
+        let reserve_out = if is_token0_in {
+            pair.reserve1
+        } else {
+            pair.reserve0
+        };
 
         // Δy = (Δx * y) / (x + Δx)
-        let amount_out = CPCurve::calculate_amount_out(reserve_in, reserve_out, amount_in_after_swap_fee)?;
+        let amount_out =
+            CPCurve::calculate_amount_out(reserve_in, reserve_out, amount_in_after_swap_fee)?;
 
         // Calculate the amount in with the LP portion of the fee:
         // amount_in_with_lp_fee = amount_in - swap_fee + lp_fee = amount_in - futarchy_fee
-        let amount_in_with_lp_fee = amount_in.checked_sub(futarchy_fee).ok_or(ErrorCode::Overflow)?;
-        let new_reserve_in = reserve_in.checked_add(amount_in_with_lp_fee).ok_or(ErrorCode::Overflow)?;
-        let new_reserve_out = reserve_out.checked_sub(amount_out).ok_or(ErrorCode::Overflow)?;
+        let amount_in_with_lp_fee = actual_amount_in
+            .checked_sub(futarchy_fee)
+            .ok_or(ErrorCode::Overflow)?;
+        let new_reserve_in = reserve_in
+            .checked_add(amount_in_with_lp_fee)
+            .ok_or(ErrorCode::Overflow)?;
+        let new_reserve_out = reserve_out
+            .checked_sub(amount_out)
+            .ok_or(ErrorCode::Overflow)?;
+        let amount_out_transfer = transfer_amounts_from_gross(&token_out_mint_info, amount_out)?;
 
-        require_gte!(amount_out, min_amount_out, ErrorCode::SlippageExceeded);
+        require_gte!(
+            amount_out_transfer.net,
+            min_amount_out,
+            ErrorCode::SlippageExceeded
+        );
         // 1. r_cash >= r_out
         match is_token0_in {
-            true => require_gte!(pair.cash_reserve1, amount_out, ErrorCode::InsufficientCashReserve1),
-            false => require_gte!(pair.cash_reserve0, amount_out, ErrorCode::InsufficientCashReserve0),
+            true => require_gte!(
+                pair.cash_reserve1,
+                amount_out,
+                ErrorCode::InsufficientCashReserve1
+            ),
+            false => require_gte!(
+                pair.cash_reserve0,
+                amount_out,
+                ErrorCode::InsufficientCashReserve0
+            ),
         }
 
         // Update reserves
@@ -217,7 +269,7 @@ impl<'info> Swap<'info> {
                 pair.reserve1 = new_reserve_out;
                 pair.cash_reserve0 = pair.cash_reserve0.saturating_add(amount_in_with_lp_fee);
                 pair.cash_reserve1 = pair.cash_reserve1.saturating_sub(amount_out);
-            },
+            }
             false => {
                 pair.reserve1 = new_reserve_in;
                 pair.reserve0 = new_reserve_out;
@@ -227,7 +279,13 @@ impl<'info> Swap<'info> {
         }
 
         // 2. x * y >= last_k
-        require_gte!((pair.reserve0 as u128).checked_mul(pair.reserve1 as u128).ok_or(ErrorCode::Overflow)?, last_k, ErrorCode::BrokenInvariant);
+        require_gte!(
+            (pair.reserve0 as u128)
+                .checked_mul(pair.reserve1 as u128)
+                .ok_or(ErrorCode::Overflow)?,
+            last_k,
+            ErrorCode::BrokenInvariant
+        );
 
         // Transfer tokens
         // First: Transfer user's input tokens into the vault
@@ -236,10 +294,11 @@ impl<'info> Swap<'info> {
             user_token_in_account.to_account_info(),
             token_in_vault.to_account_info(),
             token_in_mint.to_account_info(),
-            match token_in_mint.to_account_info().owner == token_program.key {
-                true => token_program.to_account_info(),
-                false => token_2022_program.to_account_info(),
-            },
+            token_program_for_mint(
+                &token_in_mint.to_account_info(),
+                &token_program.to_account_info(),
+                &token_2022_program.to_account_info(),
+            )?,
             amount_in,
             token_in_mint.decimals,
         )?;
@@ -250,15 +309,16 @@ impl<'info> Swap<'info> {
             token_out_vault.to_account_info(),
             user_token_out_account.to_account_info(),
             token_out_mint.to_account_info(),
-            match token_out_mint.to_account_info().owner == token_program.key {
-                true => token_program.to_account_info(),
-                false => token_2022_program.to_account_info(),
-            },
+            token_program_for_mint(
+                &token_out_mint.to_account_info(),
+                &token_program.to_account_info(),
+                &token_2022_program.to_account_info(),
+            )?,
             amount_out,
             token_out_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
-        
+
         let lp_fee = swap_fee.checked_sub(futarchy_fee).unwrap_or(0);
 
         emit_cpi!(SwapEvent {
@@ -266,13 +326,13 @@ impl<'info> Swap<'info> {
             reserve0: pair.reserve0,
             reserve1: pair.reserve1,
             is_token0_in,
-            amount_in: amount_in,
-            amount_out: amount_out,
+            amount_in,
+            amount_out: amount_out_transfer.net,
             amount_in_after_fee: amount_in_after_swap_fee as u64,
             lp_fee,
             protocol_fee: futarchy_fee,
         });
-        
+
         Ok(())
     }
 }

@@ -2,12 +2,15 @@
 /// https://github.com/raydium-io/raydium-cp-swap/blob/master/programs/cp-swap/src/utils/token.rs
 /// Handles token transfers and minting with support for old token program and spl_token_2022
 use crate::errors::ErrorCode;
-use anchor_lang::{prelude::*, system_program, solana_program::program::invoke};
+use anchor_lang::{
+    prelude::*,
+    solana_program::{program::invoke, program_pack::Pack},
+    system_program,
+};
 use anchor_spl::{
-    token::{self, Token, TokenAccount},
+    token::{self, Token},
     token_2022::{
         self,
-        Token2022,
         spl_token_2022::{
             self,
             extension::{
@@ -15,12 +18,20 @@ use anchor_spl::{
                 ExtensionType, StateWithExtensions,
             },
         },
+        Token2022,
     },
     token_interface::{
         initialize_account3, spl_token_2022::extension::BaseStateWithExtensions,
         InitializeAccount3, Mint,
     },
 };
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TransferAmounts {
+    pub gross: u64,
+    pub transfer_fee: u64,
+    pub net: u64,
+}
 
 /// Syncs native SOL balance for a WSOL token account if the mint is the native mint.
 /// This ensures the token account's `amount` field reflects any native SOL that was
@@ -32,17 +43,57 @@ pub fn sync_native_if_wsol<'a>(
 ) -> Result<()> {
     if *mint == spl_token::native_mint::id() {
         invoke(
-            &spl_token::instruction::sync_native(
-                token_program.key,
-                token_account.key,
-            )?,
-            &[
-                token_program.clone(),
-                token_account.clone(),
-            ],
+            &spl_token::instruction::sync_native(token_program.key, token_account.key)?,
+            &[token_program.clone(), token_account.clone()],
         )?;
     }
     Ok(())
+}
+
+pub fn token_program_for_mint<'info>(
+    mint: &AccountInfo<'info>,
+    token_program: &AccountInfo<'info>,
+    token_2022_program: &AccountInfo<'info>,
+) -> Result<AccountInfo<'info>> {
+    if mint.owner == token_program.key {
+        return Ok(token_program.clone());
+    }
+    if mint.owner == token_2022_program.key {
+        return Ok(token_2022_program.clone());
+    }
+    err!(ErrorCode::InvalidTokenProgram)
+}
+
+pub fn require_supported_mint(mint_account: &InterfaceAccount<Mint>) -> Result<()> {
+    require!(
+        is_supported_mint(mint_account)?,
+        ErrorCode::UnsupportedTokenExtension
+    );
+    Ok(())
+}
+
+pub fn transfer_amounts_from_gross(mint_info: &AccountInfo, gross: u64) -> Result<TransferAmounts> {
+    let transfer_fee = get_transfer_fee(mint_info, gross)?;
+    let net = gross
+        .checked_sub(transfer_fee)
+        .ok_or(ErrorCode::FeeMathOverflow)?;
+    Ok(TransferAmounts {
+        gross,
+        transfer_fee,
+        net,
+    })
+}
+
+pub fn transfer_amounts_from_net(mint_info: &AccountInfo, net: u64) -> Result<TransferAmounts> {
+    let transfer_fee = get_transfer_inverse_fee(mint_info, net)?;
+    let gross = net
+        .checked_add(transfer_fee)
+        .ok_or(ErrorCode::FeeMathOverflow)?;
+    Ok(TransferAmounts {
+        gross,
+        transfer_fee,
+        net,
+    })
 }
 
 pub fn transfer_from_user_to_vault<'a>(
@@ -87,6 +138,50 @@ pub fn transfer_from_user_to_vault<'a>(
             mint_decimals,
         )
     }
+}
+
+pub fn transfer_from_user_to_vault_gross<'a>(
+    authority: AccountInfo<'a>,
+    from: AccountInfo<'a>,
+    to_vault: AccountInfo<'a>,
+    mint: AccountInfo<'a>,
+    token_program: AccountInfo<'a>,
+    gross_amount: u64,
+    mint_decimals: u8,
+) -> Result<TransferAmounts> {
+    let transfer_amounts = transfer_amounts_from_gross(&mint, gross_amount)?;
+    transfer_from_user_to_vault(
+        authority,
+        from,
+        to_vault,
+        mint,
+        token_program,
+        transfer_amounts.gross,
+        mint_decimals,
+    )?;
+    Ok(transfer_amounts)
+}
+
+pub fn transfer_from_user_to_vault_net<'a>(
+    authority: AccountInfo<'a>,
+    from: AccountInfo<'a>,
+    to_vault: AccountInfo<'a>,
+    mint: AccountInfo<'a>,
+    token_program: AccountInfo<'a>,
+    net_amount: u64,
+    mint_decimals: u8,
+) -> Result<TransferAmounts> {
+    let transfer_amounts = transfer_amounts_from_net(&mint, net_amount)?;
+    transfer_from_user_to_vault(
+        authority,
+        from,
+        to_vault,
+        mint,
+        token_program,
+        transfer_amounts.gross,
+        mint_decimals,
+    )?;
+    Ok(transfer_amounts)
 }
 
 pub fn transfer_from_vault<'a>(
@@ -136,7 +231,7 @@ pub fn transfer_from_vault<'a>(
 }
 
 /// Transfers tokens from one vault account to another vault account.
-/// 
+///
 /// This function is an explicit alias for `transfer_from_vault`, providing clearer intent for vault-to-vault token movement.
 /// Arguments:
 ///   - `authority`: The account authorized to sign for the transfer (typically a PDA).
@@ -166,8 +261,32 @@ pub fn transfer_from_vault_to_vault<'a>(
     )
 }
 
+pub fn transfer_from_vault_to_vault_gross<'a>(
+    authority: AccountInfo<'a>,
+    from_vault: AccountInfo<'a>,
+    to_vault: AccountInfo<'a>,
+    mint: AccountInfo<'a>,
+    token_program: AccountInfo<'a>,
+    gross_amount: u64,
+    mint_decimals: u8,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<TransferAmounts> {
+    let transfer_amounts = transfer_amounts_from_gross(&mint, gross_amount)?;
+    transfer_from_vault_to_vault(
+        authority,
+        from_vault,
+        to_vault,
+        mint,
+        token_program,
+        transfer_amounts.gross,
+        mint_decimals,
+        signer_seeds,
+    )?;
+    Ok(transfer_amounts)
+}
+
 /// Transfers tokens from one vault account to a user's token account.
-/// 
+///
 /// This function is an explicit alias for `transfer_from_vault`, providing clearer intent for vault-to-user token movement.
 /// Arguments:
 ///   - `authority`: The account authorized to sign for the transfer (typically a PDA).
@@ -200,6 +319,30 @@ pub fn transfer_from_vault_to_user<'a>(
         mint_decimals,
         signer_seeds,
     )
+}
+
+pub fn transfer_from_vault_to_user_gross<'a>(
+    authority: AccountInfo<'a>,
+    from_vault: AccountInfo<'a>,
+    to: AccountInfo<'a>,
+    mint: AccountInfo<'a>,
+    token_program: AccountInfo<'a>,
+    gross_amount: u64,
+    mint_decimals: u8,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<TransferAmounts> {
+    let transfer_amounts = transfer_amounts_from_gross(&mint, gross_amount)?;
+    transfer_from_vault_to_user(
+        authority,
+        from_vault,
+        to,
+        mint,
+        token_program,
+        transfer_amounts.gross,
+        mint_decimals,
+        signer_seeds,
+    )?;
+    Ok(transfer_amounts)
 }
 
 /// Issue a spl_token `MintTo` instruction.
@@ -259,7 +402,7 @@ pub fn get_transfer_inverse_fee(mint_info: &AccountInfo, post_fee_amount: u64) -
         return Ok(0);
     }
     if post_fee_amount == 0 {
-        return err!(ErrorCode::AmountZero);
+        return Ok(0);
     }
     let mint_data = mint_info.try_borrow_data()?;
     let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
@@ -273,7 +416,7 @@ pub fn get_transfer_inverse_fee(mint_info: &AccountInfo, post_fee_amount: u64) -
         } else {
             transfer_fee_config
                 .calculate_inverse_epoch_fee(epoch, post_fee_amount)
-                .unwrap()
+                .ok_or(ErrorCode::FeeMathOverflow)?
         }
     } else {
         0
@@ -292,7 +435,7 @@ pub fn get_transfer_fee(mint_info: &AccountInfo, pre_fee_amount: u64) -> Result<
     let fee = if let Ok(transfer_fee_config) = mint.get_extension::<TransferFeeConfig>() {
         transfer_fee_config
             .calculate_epoch_fee(Clock::get()?.epoch, pre_fee_amount)
-            .unwrap()
+            .ok_or(ErrorCode::FeeMathOverflow)?
     } else {
         0
     };
@@ -304,19 +447,28 @@ pub fn is_supported_mint(mint_account: &InterfaceAccount<Mint>) -> Result<bool> 
     if *mint_info.owner == Token::id() {
         return Ok(true);
     }
+    if *mint_info.owner != Token2022::id() {
+        return Ok(false);
+    }
 
     let mint_data = mint_info.try_borrow_data()?;
     let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
     let extensions = mint.get_extension_types()?;
     for e in extensions {
-        if e != ExtensionType::TransferFeeConfig
-            && e != ExtensionType::MetadataPointer
-            && e != ExtensionType::TokenMetadata
-        {
+        if !is_supported_extension_type(e) {
             return Ok(false);
         }
     }
     Ok(true)
+}
+
+fn is_supported_extension_type(extension: ExtensionType) -> bool {
+    matches!(
+        extension,
+        ExtensionType::TransferFeeConfig
+            | ExtensionType::MetadataPointer
+            | ExtensionType::TokenMetadata
+    )
 }
 
 pub fn create_token_account<'a>(
@@ -328,6 +480,23 @@ pub fn create_token_account<'a>(
     token_program: &AccountInfo<'a>,
     signer_seeds: &[&[u8]],
 ) -> Result<()> {
+    if token_account.owner == token_program.key && token_account.data_len() > 0 {
+        let account_data = token_account.try_borrow_data()?;
+        let token_account_state =
+            StateWithExtensions::<spl_token_2022::state::Account>::unpack(&account_data)?;
+        require_keys_eq!(
+            token_account_state.base.mint,
+            mint_account.key(),
+            ErrorCode::InvalidTokenAccount
+        );
+        require_keys_eq!(
+            token_account_state.base.owner,
+            authority.key(),
+            ErrorCode::InvalidTokenAccount
+        );
+        return Ok(());
+    }
+
     let space = {
         let mint_info = mint_account.to_account_info();
         if *mint_info.owner == token_2022::Token2022::id() {
@@ -341,7 +510,7 @@ pub fn create_token_account<'a>(
                 &required_extensions,
             )?
         } else {
-            TokenAccount::LEN
+            spl_token::state::Account::LEN
         }
     };
     create_or_allocate_account(
@@ -415,4 +584,76 @@ pub fn create_or_allocate_account<'a>(
         system_program::assign(cpi_context.with_signer(&[siger_seed]), program_id)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_mint_account(owner: Pubkey) -> AccountInfo<'static> {
+        let key = Box::leak(Box::new(Pubkey::new_unique()));
+        let lamports = Box::leak(Box::new(0));
+        let data = Box::leak(Vec::new().into_boxed_slice());
+        let owner = Box::leak(Box::new(owner));
+        AccountInfo::new(key, false, false, lamports, data, owner, false, 0)
+    }
+
+    #[test]
+    fn supported_extension_filter_allows_declared_safe_set() {
+        assert!(is_supported_extension_type(
+            ExtensionType::TransferFeeConfig
+        ));
+        assert!(is_supported_extension_type(ExtensionType::MetadataPointer));
+        assert!(is_supported_extension_type(ExtensionType::TokenMetadata));
+    }
+
+    #[test]
+    fn supported_extension_filter_rejects_extensions_requiring_extra_handling() {
+        assert!(!is_supported_extension_type(
+            ExtensionType::MintCloseAuthority
+        ));
+        assert!(!is_supported_extension_type(
+            ExtensionType::PermanentDelegate
+        ));
+        assert!(!is_supported_extension_type(
+            ExtensionType::DefaultAccountState
+        ));
+        assert!(!is_supported_extension_type(ExtensionType::TransferHook));
+    }
+
+    #[test]
+    fn classic_spl_transfer_amounts_have_no_fee() {
+        let mint = test_mint_account(Token::id());
+
+        assert_eq!(
+            transfer_amounts_from_gross(&mint, 1_234).unwrap(),
+            TransferAmounts {
+                gross: 1_234,
+                transfer_fee: 0,
+                net: 1_234,
+            }
+        );
+        assert_eq!(
+            transfer_amounts_from_net(&mint, 5_678).unwrap(),
+            TransferAmounts {
+                gross: 5_678,
+                transfer_fee: 0,
+                net: 5_678,
+            }
+        );
+    }
+
+    #[test]
+    fn classic_spl_zero_amount_transfer_math_is_stable() {
+        let mint = test_mint_account(Token::id());
+
+        assert_eq!(
+            transfer_amounts_from_gross(&mint, 0).unwrap(),
+            TransferAmounts::default()
+        );
+        assert_eq!(
+            transfer_amounts_from_net(&mint, 0).unwrap(),
+            TransferAmounts::default()
+        );
+    }
 }

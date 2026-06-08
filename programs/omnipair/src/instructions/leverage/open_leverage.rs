@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    token::{Mint, Token, TokenAccount},
-    token_interface::Token2022,
+    token::Token,
+    token_interface::{Mint, Token2022, TokenAccount},
 };
 
 use crate::{
@@ -12,11 +12,16 @@ use crate::{
     state::{FutarchyAuthority, Pair, RateModel, UserLeveragePosition},
     utils::{
         account::get_size_with_discriminator,
-        token::{transfer_from_user_to_vault, transfer_from_vault_to_vault},
+        token::{
+            create_token_account, require_supported_mint, transfer_amounts_from_gross,
+            transfer_amounts_from_net, transfer_from_user_to_vault, transfer_from_vault_to_vault,
+        },
     },
 };
 
-use super::common::{quote_swap, spot_value_from_reserves, token_program_for_mint, unwind_impact_bps};
+use super::common::{
+    leverage_token_program_for_mint, quote_swap, spot_value_from_reserves, unwind_impact_bps,
+};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct OpenLeverageArgs {
@@ -77,7 +82,7 @@ pub struct OpenLeverage<'info> {
         ],
         bump = pair.get_reserve_vault_bump(&token_in_mint.key())
     )]
-    pub token_in_vault: Box<Account<'info, TokenAccount>>,
+    pub token_in_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -88,13 +93,10 @@ pub struct OpenLeverage<'info> {
         ],
         bump = pair.get_reserve_vault_bump(&token_out_mint.key())
     )]
-    pub token_out_vault: Box<Account<'info, TokenAccount>>,
+    pub token_out_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
-        init_if_needed,
-        payer = user,
-        token::mint = token_out_mint,
-        token::authority = pair,
+        mut,
         seeds = [
             LEVERAGE_COLLATERAL_VAULT_SEED_PREFIX,
             pair.key().as_ref(),
@@ -102,24 +104,25 @@ pub struct OpenLeverage<'info> {
         ],
         bump
     )]
-    pub leverage_collateral_vault: Box<Account<'info, TokenAccount>>,
+    /// CHECK: created and initialized in handler with token_out_mint's token program
+    pub leverage_collateral_vault: UncheckedAccount<'info>,
 
     #[account(
         mut,
         constraint = user_token_in_account.mint == token_in_mint.key() @ ErrorCode::InvalidTokenAccount,
-        token::authority = user,
+        constraint = user_token_in_account.owner == user.key() @ ErrorCode::InvalidTokenAccount,
     )]
-    pub user_token_in_account: Box<Account<'info, TokenAccount>>,
+    pub user_token_in_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         constraint = token_in_mint.key() == pair.token0 || token_in_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub token_in_mint: Box<Account<'info, Mint>>,
+    pub token_in_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         constraint = token_out_mint.key() == pair.token0 || token_out_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub token_out_mint: Box<Account<'info, Mint>>,
+    pub token_out_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -139,7 +142,9 @@ impl<'info> OpenLeverage<'info> {
         )?;
 
         require!(
-            !self.futarchy_authority.is_reduce_only(self.pair.reduce_only),
+            !self
+                .futarchy_authority
+                .is_reduce_only(self.pair.reduce_only),
             ErrorCode::ReduceOnlyMode
         );
         require!(args.margin_amount > 0, ErrorCode::AmountZero);
@@ -151,16 +156,28 @@ impl<'info> OpenLeverage<'info> {
             args.multiplier_bps <= LEVERAGE_MAX_MULTIPLIER_BPS,
             ErrorCode::LeverageMultiplierTooHigh
         );
+        require_supported_mint(&self.token_in_mint)?;
+        require_supported_mint(&self.token_out_mint)?;
+        let margin_transfer =
+            transfer_amounts_from_net(&self.token_in_mint.to_account_info(), args.margin_amount)?;
         require_gte!(
             self.user_token_in_account.amount,
-            args.margin_amount,
+            margin_transfer.gross,
             ErrorCode::InsufficientBalance
         );
 
-        let debt_token = if args.is_debt_token0 { self.pair.token0 } else { self.pair.token1 };
+        let debt_token = if args.is_debt_token0 {
+            self.pair.token0
+        } else {
+            self.pair.token1
+        };
         let collateral_token = self.pair.get_token_y(&debt_token);
         require_keys_eq!(self.token_in_mint.key(), debt_token, ErrorCode::InvalidMint);
-        require_keys_eq!(self.token_out_mint.key(), collateral_token, ErrorCode::InvalidMint);
+        require_keys_eq!(
+            self.token_out_mint.key(),
+            collateral_token,
+            ErrorCode::InvalidMint
+        );
         require_keys_neq!(
             self.token_in_vault.key(),
             self.token_out_vault.key(),
@@ -176,6 +193,10 @@ impl<'info> OpenLeverage<'info> {
         let accounts = &mut ctx.accounts;
         let pair = &mut accounts.pair;
         let clock = Clock::get()?;
+        let margin_transfer = transfer_amounts_from_net(
+            &accounts.token_in_mint.to_account_info(),
+            args.margin_amount,
+        )?;
 
         let debt_amount: u64 = (args.margin_amount as u128)
             .checked_mul(args.multiplier_bps as u128)
@@ -193,13 +214,33 @@ impl<'info> OpenLeverage<'info> {
             .checked_add(debt_amount)
             .ok_or(ErrorCode::Overflow)?;
         let is_token0_in = args.is_debt_token0;
-        let reserve_in = if is_token0_in { pair.reserve0 } else { pair.reserve1 };
-        let reserve_out = if is_token0_in { pair.reserve1 } else { pair.reserve0 };
-        let cash_out = if is_token0_in { pair.cash_reserve1 } else { pair.cash_reserve0 };
+        let reserve_in = if is_token0_in {
+            pair.reserve0
+        } else {
+            pair.reserve1
+        };
+        let reserve_out = if is_token0_in {
+            pair.reserve1
+        } else {
+            pair.reserve0
+        };
+        let cash_out = if is_token0_in {
+            pair.cash_reserve1
+        } else {
+            pair.cash_reserve0
+        };
 
         match args.is_debt_token0 {
-            true => require_gte!(pair.cash_reserve0, debt_amount, ErrorCode::InsufficientCashReserve0),
-            false => require_gte!(pair.cash_reserve1, debt_amount, ErrorCode::InsufficientCashReserve1),
+            true => require_gte!(
+                pair.cash_reserve0,
+                debt_amount,
+                ErrorCode::InsufficientCashReserve0
+            ),
+            false => require_gte!(
+                pair.cash_reserve1,
+                debt_amount,
+                ErrorCode::InsufficientCashReserve1
+            ),
         }
 
         let quote = quote_swap(
@@ -209,8 +250,12 @@ impl<'info> OpenLeverage<'info> {
             pair.swap_fee_bps,
             accounts.futarchy_authority.revenue_share.swap_bps,
         )?;
-        require_gte!(
+        let collateral_transfer = transfer_amounts_from_gross(
+            &accounts.token_out_mint.to_account_info(),
             quote.amount_out,
+        )?;
+        require_gte!(
+            collateral_transfer.net,
             args.min_collateral_out,
             ErrorCode::SlippageExceeded
         );
@@ -223,14 +268,18 @@ impl<'info> OpenLeverage<'info> {
             .checked_sub(quote.amount_out)
             .ok_or(ErrorCode::Overflow)?;
         let closeout_value = quote_swap(
-            quote.amount_out,
+            collateral_transfer.net,
             post_reserve_out,
             post_reserve_in,
             pair.swap_fee_bps,
             accounts.futarchy_authority.revenue_share.swap_bps,
         )?
         .amount_out;
-        require_gt!(closeout_value, debt_amount, ErrorCode::LeverageInitialMarginTooLow);
+        require_gt!(
+            closeout_value,
+            debt_amount,
+            ErrorCode::LeverageInitialMarginTooLow
+        );
         let equity = closeout_value
             .checked_sub(debt_amount)
             .ok_or(ErrorCode::LeverageInitialMarginTooLow)?;
@@ -245,7 +294,8 @@ impl<'info> OpenLeverage<'info> {
             ErrorCode::LeverageInitialMarginTooLow
         );
 
-        let spot_value = spot_value_from_reserves(quote.amount_out, post_reserve_out, post_reserve_in)?;
+        let spot_value =
+            spot_value_from_reserves(collateral_transfer.net, post_reserve_out, post_reserve_in)?;
         let unwind_impact_bps = unwind_impact_bps(spot_value, closeout_value)?;
         require_gte!(
             LEVERAGE_MAX_UNWIND_IMPACT_BPS as u128,
@@ -255,32 +305,60 @@ impl<'info> OpenLeverage<'info> {
 
         require_gte!(
             accounts.user_token_in_account.amount,
-            args.margin_amount,
+            margin_transfer.gross,
             ErrorCode::InsufficientBalance
         );
         match args.is_debt_token0 {
-            true => require_gte!(pair.cash_reserve0, debt_amount, ErrorCode::InsufficientCashReserve0),
-            false => require_gte!(pair.cash_reserve1, debt_amount, ErrorCode::InsufficientCashReserve1),
+            true => require_gte!(
+                pair.cash_reserve0,
+                debt_amount,
+                ErrorCode::InsufficientCashReserve0
+            ),
+            false => require_gte!(
+                pair.cash_reserve1,
+                debt_amount,
+                ErrorCode::InsufficientCashReserve1
+            ),
         }
 
+        let leverage_collateral_token_program = leverage_token_program_for_mint(
+            &accounts.token_out_mint.to_account_info(),
+            &accounts.token_program.to_account_info(),
+            &accounts.token_2022_program.to_account_info(),
+        )?;
+        create_token_account(
+            &pair.to_account_info(),
+            &accounts.user.to_account_info(),
+            &accounts.leverage_collateral_vault.to_account_info(),
+            &accounts.token_out_mint.to_account_info(),
+            &accounts.system_program.to_account_info(),
+            &leverage_collateral_token_program,
+            &[
+                LEVERAGE_COLLATERAL_VAULT_SEED_PREFIX,
+                pair.key().as_ref(),
+                accounts.token_out_mint.key().as_ref(),
+                &[ctx.bumps.leverage_collateral_vault],
+            ],
+        )?;
+
         let last_k = pair.k();
+        accounts.user_leverage_position.initialize(
+            accounts.user.key(),
+            pair.key(),
+            args.is_debt_token0,
+            collateral_transfer.net,
+            args.margin_amount,
+            notional,
+            debt_amount,
+            0,
+            args.multiplier_bps,
+            clock.unix_timestamp,
+            clock.slot,
+            ctx.bumps.user_leverage_position,
+        );
         accounts
             .user_leverage_position
-            .initialize(
-                accounts.user.key(),
-                pair.key(),
-                args.is_debt_token0,
-                quote.amount_out,
-                args.margin_amount,
-                notional,
-                debt_amount,
-                0,
-                args.multiplier_bps,
-                clock.unix_timestamp,
-                clock.slot,
-                ctx.bumps.user_leverage_position,
-            );
-        accounts.user_leverage_position.increase_debt(pair, debt_amount)?;
+            .increase_debt(pair, debt_amount)?;
         let debt_shares = accounts.user_leverage_position.debt_shares;
 
         match is_token0_in {
@@ -316,12 +394,12 @@ impl<'info> OpenLeverage<'info> {
             accounts.user_token_in_account.to_account_info(),
             accounts.token_in_vault.to_account_info(),
             accounts.token_in_mint.to_account_info(),
-            token_program_for_mint(
+            leverage_token_program_for_mint(
                 &accounts.token_in_mint.to_account_info(),
                 &accounts.token_program.to_account_info(),
                 &accounts.token_2022_program.to_account_info(),
-            ),
-            args.margin_amount,
+            )?,
+            margin_transfer.gross,
             accounts.token_in_mint.decimals,
         )?;
 
@@ -330,11 +408,11 @@ impl<'info> OpenLeverage<'info> {
             accounts.token_out_vault.to_account_info(),
             accounts.leverage_collateral_vault.to_account_info(),
             accounts.token_out_mint.to_account_info(),
-            token_program_for_mint(
+            leverage_token_program_for_mint(
                 &accounts.token_out_mint.to_account_info(),
                 &accounts.token_program.to_account_info(),
                 &accounts.token_2022_program.to_account_info(),
-            ),
+            )?,
             quote.amount_out,
             accounts.token_out_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
@@ -346,7 +424,7 @@ impl<'info> OpenLeverage<'info> {
             reserve1: pair.reserve1,
             is_token0_in,
             amount_in: notional,
-            amount_out: quote.amount_out,
+            amount_out: collateral_transfer.net,
             amount_in_after_fee: quote.amount_in_after_swap_fee,
             lp_fee: quote.lp_fee,
             protocol_fee: quote.protocol_fee,
@@ -359,7 +437,7 @@ impl<'info> OpenLeverage<'info> {
             margin_amount: args.margin_amount,
             debt_amount,
             debt_shares,
-            collateral_amount: quote.amount_out,
+            collateral_amount: collateral_transfer.net,
             closeout_value,
             equity,
             multiplier_bps: args.multiplier_bps,

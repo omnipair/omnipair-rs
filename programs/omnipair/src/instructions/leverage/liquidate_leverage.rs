@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    token::{Mint, Token, TokenAccount},
-    token_interface::Token2022,
+    token::Token,
+    token_interface::{Mint, Token2022, TokenAccount},
 };
 use std::cmp::min;
 
@@ -12,13 +12,17 @@ use crate::{
     generate_gamm_pair_seeds,
     state::{FutarchyAuthority, Pair, RateModel, UserLeveragePosition},
     utils::{
-        math::ceil_div,
         gamm_math::CPCurve,
-        token::{transfer_from_vault_to_user, transfer_from_vault_to_vault},
+        liquidation::{debt_to_writeoff_for_shares, solvent_liquidation_plan_for_shares},
+        math::ceil_div,
+        token::{
+            require_supported_mint, transfer_amounts_from_gross, transfer_from_vault_to_user,
+            transfer_from_vault_to_vault,
+        },
     },
 };
 
-use super::common::{equity_bps, quote_swap, token_program_for_mint};
+use super::common::{equity_bps, leverage_token_program_for_mint, quote_swap};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct LiquidateLeverageArgs {
@@ -106,7 +110,7 @@ pub struct LiquidateLeverage<'info> {
         ],
         bump = pair.get_reserve_vault_bump(&collateral_token_mint.key())
     )]
-    pub collateral_token_vault: Box<Account<'info, TokenAccount>>,
+    pub collateral_token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -119,24 +123,24 @@ pub struct LiquidateLeverage<'info> {
         constraint = leverage_collateral_vault.mint == collateral_token_mint.key() @ ErrorCode::InvalidVault,
         constraint = leverage_collateral_vault.owner == pair.key() @ ErrorCode::InvalidVault
     )]
-    pub leverage_collateral_vault: Box<Account<'info, TokenAccount>>,
+    pub leverage_collateral_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
         constraint = liquidator_collateral_token_account.mint == collateral_token_mint.key() @ ErrorCode::InvalidTokenAccount,
-        token::authority = liquidator,
+        constraint = liquidator_collateral_token_account.owner == liquidator.key() @ ErrorCode::InvalidTokenAccount,
     )]
-    pub liquidator_collateral_token_account: Box<Account<'info, TokenAccount>>,
+    pub liquidator_collateral_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         constraint = collateral_token_mint.key() == pair.token0 || collateral_token_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub collateral_token_mint: Box<Account<'info, Mint>>,
+    pub collateral_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         constraint = debt_token_mint.key() == pair.token0 || debt_token_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub debt_token_mint: Box<Account<'info, Mint>>,
+    pub debt_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
     pub liquidator: Signer<'info>,
@@ -158,11 +162,28 @@ impl<'info> LiquidateLeverage<'info> {
             Some(self.event_authority.to_account_info()),
         )?;
 
-        let debt_token = if args.is_debt_token0 { self.pair.token0 } else { self.pair.token1 };
+        let debt_token = if args.is_debt_token0 {
+            self.pair.token0
+        } else {
+            self.pair.token1
+        };
         let collateral_token = self.pair.get_token_y(&debt_token);
-        require_keys_eq!(self.collateral_token_mint.key(), collateral_token, ErrorCode::InvalidMint);
-        require_keys_eq!(self.debt_token_mint.key(), debt_token, ErrorCode::InvalidMint);
-        require!(self.user_leverage_position.debt_shares > 0, ErrorCode::ZeroDebtAmount);
+        require_keys_eq!(
+            self.collateral_token_mint.key(),
+            collateral_token,
+            ErrorCode::InvalidMint
+        );
+        require_keys_eq!(
+            self.debt_token_mint.key(),
+            debt_token,
+            ErrorCode::InvalidMint
+        );
+        require_supported_mint(&self.collateral_token_mint)?;
+        require_supported_mint(&self.debt_token_mint)?;
+        require!(
+            self.user_leverage_position.debt_shares > 0,
+            ErrorCode::ZeroDebtAmount
+        );
         require!(
             self.user_leverage_position.collateral_amount > 0,
             ErrorCode::InsufficientAmount
@@ -179,12 +200,24 @@ impl<'info> LiquidateLeverage<'info> {
         let position = &mut accounts.user_leverage_position;
         let debt_amount = position.calculate_debt(pair)?;
         require_gt!(debt_amount, 0, ErrorCode::ZeroDebtAmount);
+        let total_collateral_input = transfer_amounts_from_gross(
+            &accounts.collateral_token_mint.to_account_info(),
+            position.collateral_amount,
+        )?;
 
         let is_collateral_token0 = !args.is_debt_token0;
-        let collateral_reserve = if is_collateral_token0 { pair.reserve0 } else { pair.reserve1 };
-        let debt_reserve = if is_collateral_token0 { pair.reserve1 } else { pair.reserve0 };
+        let collateral_reserve = if is_collateral_token0 {
+            pair.reserve0
+        } else {
+            pair.reserve1
+        };
+        let debt_reserve = if is_collateral_token0 {
+            pair.reserve1
+        } else {
+            pair.reserve0
+        };
         let quote = quote_swap(
-            position.collateral_amount,
+            total_collateral_input.net,
             collateral_reserve,
             debt_reserve,
             pair.swap_fee_bps,
@@ -199,7 +232,7 @@ impl<'info> LiquidateLeverage<'info> {
 
         // Match normal lending: solvent liquidations use close factor, insolvent ones write off all shares.
         let is_insolvent = debt_amount > quote.amount_out;
-        let shares_to_writeoff = match is_insolvent {
+        let max_shares_to_writeoff = match is_insolvent {
             true => position.debt_shares,
             false => min(
                 position.debt_shares,
@@ -213,44 +246,84 @@ impl<'info> LiquidateLeverage<'info> {
                 .ok_or(ErrorCode::DebtMathOverflow)?,
             ),
         };
-        require!(shares_to_writeoff > 0, ErrorCode::DebtShareDivisionOverflow);
+        require!(
+            max_shares_to_writeoff > 0,
+            ErrorCode::DebtShareDivisionOverflow
+        );
 
         let (total_debt, total_debt_shares) = match args.is_debt_token0 {
             true => (pair.total_debt0, pair.total_debt0_shares),
             false => (pair.total_debt1, pair.total_debt1_shares),
         };
-        let debt_to_writeoff = match total_debt_shares == 0 {
-            true => 0,
-            false => min(
-                debt_amount,
-                shares_to_writeoff
-                    .checked_mul(total_debt as u128)
-                    .ok_or(ErrorCode::DebtMathOverflow)?
-                    .checked_div(total_debt_shares)
-                    .ok_or(ErrorCode::DebtMathOverflow)?
-                    .try_into()
-                    .map_err(|_| ErrorCode::DebtMathOverflow)?,
-            ),
-        };
-        require!(debt_to_writeoff > 0, ErrorCode::DebtMathOverflow);
 
-        // Borrower pays the penalty from escrowed collateral; LPs receive the seized collateral net of caller incentive.
-        let collateral_base =
-            CPCurve::calculate_amount_in(collateral_reserve, debt_reserve, debt_to_writeoff)?;
-        let collateral_with_penalty = ceil_div(
-            (collateral_base as u128)
-                .checked_mul((BPS_DENOMINATOR + LIQUIDATION_PENALTY_BPS) as u128)
-                .ok_or(ErrorCode::DebtMathOverflow)?,
-            BPS_DENOMINATOR as u128,
-        )
-        .ok_or(ErrorCode::DebtMathOverflow)?;
-        let collateral_final = match is_insolvent {
-            true => position.collateral_amount,
-            false => min(collateral_with_penalty, position.collateral_amount as u128)
-                .try_into()
-                .map_err(|_| ErrorCode::DebtMathOverflow)?,
+        let (
+            shares_to_writeoff,
+            debt_to_writeoff,
+            collateral_final,
+            incentive,
+            collateral_to_reserves,
+            collateral_to_reserves_transfer,
+        ) = if is_insolvent {
+            let debt_to_writeoff = debt_to_writeoff_for_shares(
+                max_shares_to_writeoff,
+                total_debt,
+                total_debt_shares,
+                debt_amount,
+            )?;
+            require!(debt_to_writeoff > 0, ErrorCode::DebtMathOverflow);
+
+            // Insolvent liquidations intentionally socialize any shortfall as bad debt.
+            let collateral_base =
+                CPCurve::calculate_amount_in(collateral_reserve, debt_reserve, debt_to_writeoff)?;
+            let collateral_final = position.collateral_amount;
+            require!(collateral_final > 0, ErrorCode::InsufficientAmount);
+            let incentive = liquidation_incentive(collateral_base, collateral_final)?;
+            let collateral_to_reserves = collateral_final
+                .checked_sub(incentive)
+                .ok_or(ErrorCode::DebtMathOverflow)?;
+            let collateral_to_reserves_transfer = transfer_amounts_from_gross(
+                &accounts.collateral_token_mint.to_account_info(),
+                collateral_to_reserves,
+            )?;
+
+            (
+                max_shares_to_writeoff,
+                debt_to_writeoff,
+                collateral_final,
+                incentive,
+                collateral_to_reserves,
+                collateral_to_reserves_transfer,
+            )
+        } else {
+            let plan = match solvent_liquidation_plan_for_shares(
+                &accounts.collateral_token_mint.to_account_info(),
+                max_shares_to_writeoff,
+                total_debt,
+                total_debt_shares,
+                debt_amount,
+                collateral_reserve,
+                debt_reserve,
+                position.collateral_amount,
+            )? {
+                Some(plan) => plan,
+                None => return err!(ErrorCode::InsufficientAmount),
+            };
+            require_gte!(
+                plan.collateral_to_reserves_transfer.net,
+                plan.collateral_base,
+                ErrorCode::BrokenInvariant
+            );
+
+            (
+                plan.shares_to_writeoff,
+                plan.debt_to_writeoff,
+                plan.collateral_final,
+                plan.caller_incentive,
+                plan.collateral_to_reserves,
+                plan.collateral_to_reserves_transfer,
+            )
         };
-        require!(collateral_final > 0, ErrorCode::InsufficientAmount);
+
         require_no_debtless_collateral_stranding(
             is_insolvent,
             shares_to_writeoff,
@@ -258,11 +331,6 @@ impl<'info> LiquidateLeverage<'info> {
             collateral_final,
             position.collateral_amount,
         )?;
-
-        let incentive = liquidation_incentive(collateral_base, collateral_final)?;
-        let collateral_to_reserves = collateral_final
-            .checked_sub(incentive)
-            .ok_or(ErrorCode::DebtMathOverflow)?;
         let shortfall = match is_insolvent {
             true => debt_amount.saturating_sub(quote.amount_out),
             false => 0,
@@ -277,21 +345,21 @@ impl<'info> LiquidateLeverage<'info> {
             true => {
                 pair.reserve0 = pair
                     .reserve0
-                    .checked_add(collateral_to_reserves)
+                    .checked_add(collateral_to_reserves_transfer.net)
                     .ok_or(ErrorCode::ReserveOverflow)?;
                 pair.cash_reserve0 = pair
                     .cash_reserve0
-                    .checked_add(collateral_to_reserves)
+                    .checked_add(collateral_to_reserves_transfer.net)
                     .ok_or(ErrorCode::Overflow)?;
             }
             false => {
                 pair.reserve1 = pair
                     .reserve1
-                    .checked_add(collateral_to_reserves)
+                    .checked_add(collateral_to_reserves_transfer.net)
                     .ok_or(ErrorCode::ReserveOverflow)?;
                 pair.cash_reserve1 = pair
                     .cash_reserve1
-                    .checked_add(collateral_to_reserves)
+                    .checked_add(collateral_to_reserves_transfer.net)
                     .ok_or(ErrorCode::Overflow)?;
             }
         }
@@ -300,13 +368,15 @@ impl<'info> LiquidateLeverage<'info> {
             transfer_from_vault_to_user(
                 pair.to_account_info(),
                 accounts.leverage_collateral_vault.to_account_info(),
-                accounts.liquidator_collateral_token_account.to_account_info(),
+                accounts
+                    .liquidator_collateral_token_account
+                    .to_account_info(),
                 accounts.collateral_token_mint.to_account_info(),
-                token_program_for_mint(
+                leverage_token_program_for_mint(
                     &accounts.collateral_token_mint.to_account_info(),
                     &accounts.token_program.to_account_info(),
                     &accounts.token_2022_program.to_account_info(),
-                ),
+                )?,
                 incentive,
                 accounts.collateral_token_mint.decimals,
                 &[&generate_gamm_pair_seeds!(pair)[..]],
@@ -318,11 +388,11 @@ impl<'info> LiquidateLeverage<'info> {
                 accounts.leverage_collateral_vault.to_account_info(),
                 accounts.collateral_token_vault.to_account_info(),
                 accounts.collateral_token_mint.to_account_info(),
-                token_program_for_mint(
+                leverage_token_program_for_mint(
                     &accounts.collateral_token_mint.to_account_info(),
                     &accounts.token_program.to_account_info(),
                     &accounts.token_2022_program.to_account_info(),
-                ),
+                )?,
                 collateral_to_reserves,
                 accounts.collateral_token_mint.decimals,
                 &[&generate_gamm_pair_seeds!(pair)[..]],
@@ -365,9 +435,7 @@ mod tests {
         let shares_to_writeoff = min(
             debt_shares,
             ceil_div(
-                debt_shares
-                    .checked_mul(CLOSE_FACTOR_BPS as u128)
-                    .unwrap(),
+                debt_shares.checked_mul(CLOSE_FACTOR_BPS as u128).unwrap(),
                 BPS_DENOMINATOR as u128,
             )
             .unwrap(),
@@ -378,8 +446,10 @@ mod tests {
             CPCurve::calculate_amount_out(1_000_000, 1_000_000, collateral_amount).unwrap();
         assert_eq!(closeout_value, 105);
         assert!(debt_amount < closeout_value);
-        assert!(equity_bps(closeout_value, debt_amount).unwrap()
-            <= LEVERAGE_MAINTENANCE_BUFFER_BPS as u128);
+        assert!(
+            equity_bps(closeout_value, debt_amount).unwrap()
+                <= LEVERAGE_MAINTENANCE_BUFFER_BPS as u128
+        );
 
         let collateral_base =
             CPCurve::calculate_amount_in(1_000_000, 1_000_000, debt_amount).unwrap();

@@ -15,7 +15,7 @@ readme = "README.md"
 crate-type = ["rlib"]
 
 [features]
-default = []
+default = ["serde"]
 serde = ["dep:serde", "dep:serde-big-array"]
 postgres = [
     "carbon-core/postgres",
