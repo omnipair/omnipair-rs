@@ -1,15 +1,3 @@
-pub mod spot;
-pub mod liquidity;
-pub mod lending;
-pub mod futarchy;
-pub mod emit_value;
-
-pub use spot::*;
-pub use liquidity::*;
-pub use lending::common::*;
-pub use lending::add_collateral::*;
-pub use lending::borrow::*;
-pub use lending::liquidate::*;
-pub use lending::flashloan::*;
-pub use futarchy::*;
-pub use emit_value::*;
+pub mod v1;
+pub use v1::{emit_value, futarchy, lending, liquidity, spot};
+pub use v1::*;
