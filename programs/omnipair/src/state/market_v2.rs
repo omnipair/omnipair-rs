@@ -865,3 +865,245 @@ macro_rules! generate_market_v2_seeds {
         ]
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_market_side(asset_mint: Pubkey, buffer_ratio_bps: u16) -> MarketSideV2 {
+        MarketSideV2 {
+            asset_mint,
+            claim_mint: Pubkey::new_unique(),
+            hedge_mint: Pubkey::new_unique(),
+            hedge_vault: Pubkey::new_unique(),
+            reserve_vault: Pubkey::new_unique(),
+            collateral_vault: Pubkey::new_unique(),
+            fee_vault: Pubkey::new_unique(),
+            stake_vault: Pubkey::new_unique(),
+            buffer_book: BufferBookV2 {
+                buffer_ratio_bps,
+                ..BufferBookV2::default()
+            },
+            ..MarketSideV2::default()
+        }
+    }
+
+    fn test_market() -> MarketV2 {
+        let asset0_mint = Pubkey::new_unique();
+        let asset1_mint = Pubkey::new_unique();
+        MarketV2::initialize(
+            asset0_mint,
+            asset1_mint,
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            test_market_side(asset0_mint, 2_000),
+            test_market_side(asset1_mint, 2_000),
+            MarketConfigV2 {
+                swap_fee_bps: 30,
+                operator_fee_bps: 1_000,
+                buffer_ratio_bps: 2_000,
+                fee_routing_k_nad: NAD,
+                ema_half_life_ms: 60_000,
+                directional_ema_half_life_ms: 60_000,
+                k_ema_half_life_ms: 60_000,
+                max_daily_borrow_bps: 2_000,
+                max_daily_withdraw_bps: 2_000,
+                spot_ema_divergence_bps: 1_000,
+                recognized_collateral_cap_bps: 10_000,
+                market_health_min_bps: 11_000,
+                effective_debt_weight_min_bps: 10_000,
+                effective_debt_gamma_nad: NAD,
+                soft_borrow_enabled: false,
+                hedged_lp_enabled: true,
+                start_time: 0,
+            },
+            [7_u8; 32],
+            42,
+            254,
+        )
+        .unwrap()
+    }
+
+    fn stake_position() -> StakePositionV2 {
+        StakePositionV2 {
+            owner: Pubkey::new_unique(),
+            market: Pubkey::new_unique(),
+            asset_mint: Pubkey::new_unique(),
+            available_buffer_shares: 0,
+            staked_claim_amount: 0,
+            staked_buffer_shares: 0,
+            fee_growth_checkpoint_nad: 0,
+            accrued_fee_amount: 0,
+            bump: 1,
+        }
+    }
+
+    fn hedge_position() -> HedgePositionV2 {
+        HedgePositionV2 {
+            owner: Pubkey::new_unique(),
+            market: Pubkey::new_unique(),
+            asset_mint: Pubkey::new_unique(),
+            hedged_claim_amount: 0,
+            bump: 1,
+        }
+    }
+
+    fn margin_position() -> MarginPositionV2 {
+        MarginPositionV2 {
+            owner: Pubkey::new_unique(),
+            market: Pubkey::new_unique(),
+            collateral0: 0,
+            collateral1: 0,
+            recognized_collateral0_for_debt1: 0,
+            recognized_collateral1_for_debt0: 0,
+            fixed_debt0_shares: 0,
+            fixed_debt1_shares: 0,
+            bump: 1,
+        }
+    }
+
+    #[test]
+    fn reserve_deposit_mints_claim_minus_buffer() {
+        let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
+
+        let (claim_amount, buffer_amount) =
+            market_side.apply_reserve_deposit(1_000_000).unwrap();
+
+        assert_eq!(claim_amount, 800_000);
+        assert_eq!(buffer_amount, 200_000);
+        assert_eq!(market_side.reserve_ledger.live_reserve, 1_000_000);
+        assert_eq!(market_side.reserve_ledger.cash_reserve, 1_000_000);
+        assert_eq!(market_side.claim_ledger.protected_claim_supply, 800_000);
+        assert_eq!(market_side.buffer_book.buffer_shares, 200_000);
+        assert_eq!(market_side.buffer_book.required_buffer, 200_000);
+        assert_eq!(market_side.claim_floor().unwrap(), 1_000_000);
+        market_side.assert_claim_coverage().unwrap();
+    }
+
+    #[test]
+    fn claim_redemption_is_fixed_one_to_one_principal() {
+        let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
+        market_side.apply_reserve_deposit(1_000_000).unwrap();
+        market_side.record_fee_credit(10_000, 0).unwrap();
+
+        market_side.apply_claim_redemption(100_000).unwrap();
+
+        assert_eq!(market_side.reserve_ledger.live_reserve, 900_000);
+        assert_eq!(market_side.reserve_ledger.cash_reserve, 900_000);
+        assert_eq!(market_side.claim_ledger.protected_claim_supply, 700_000);
+        assert_eq!(market_side.buffer_book.required_buffer, 175_000);
+        assert_eq!(market_side.fee_ledger.fee_vault_balance, 10_000);
+        assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 10_000);
+        market_side.assert_claim_coverage().unwrap();
+    }
+
+    #[test]
+    fn fee_ledger_allocates_only_to_matched_stake() {
+        let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
+        market_side.claim_ledger.staked_claim_supply = 800_000;
+        market_side.buffer_book.staked_buffer_shares = 100_000;
+
+        market_side.record_fee_credit(1_000, 1_000).unwrap();
+
+        assert_eq!(market_side.fee_ledger.fee_vault_balance, 1_000);
+        assert_eq!(market_side.fee_ledger.operator_fee_liability, 100);
+        assert_eq!(market_side.fee_ledger.fee_liability, 900);
+        assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 0);
+        assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 1_800_000);
+        market_side.fee_ledger.assert_backed().unwrap();
+    }
+
+    #[test]
+    fn unstaked_claims_do_not_receive_fee_growth() {
+        let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
+        market_side.claim_ledger.protected_claim_supply = 800_000;
+
+        market_side.record_fee_credit(1_000, 0).unwrap();
+
+        assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 0);
+        assert_eq!(market_side.fee_ledger.fee_liability, 0);
+        assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 1_000);
+        market_side.fee_ledger.assert_backed().unwrap();
+    }
+
+    #[test]
+    fn stake_position_accrues_checkpointed_non_compounding_fees() {
+        let mut position = stake_position();
+        position.credit_buffer_shares(200_000).unwrap();
+        position.stake(800_000, 200_000).unwrap();
+        position.fee_growth_checkpoint_nad = NAD as u128;
+
+        position
+            .accrue_fees(3 * NAD as u128, 2_000)
+            .unwrap();
+        assert_eq!(position.accrued_fee_amount, 2_000_000);
+        assert_eq!(position.fee_growth_checkpoint_nad, 3 * NAD as u128);
+
+        position
+            .accrue_fees(3 * NAD as u128, 2_000)
+            .unwrap();
+        assert_eq!(position.accrued_fee_amount, 2_000_000);
+    }
+
+    #[test]
+    fn hedge_position_tracks_one_to_one_nav_without_stake_rights() {
+        let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
+        let mut position = hedge_position();
+
+        market_side.claim_ledger.hedged_claim_supply = market_side
+            .claim_ledger
+            .hedged_claim_supply
+            .checked_add(500_000)
+            .unwrap();
+        position.increase(500_000).unwrap();
+
+        assert_eq!(position.hedged_claim_amount, 500_000);
+        assert_eq!(market_side.claim_ledger.hedged_claim_supply, 500_000);
+        assert_eq!(market_side.claim_ledger.staked_claim_supply, 0);
+        assert_eq!(market_side.buffer_book.staked_buffer_shares, 0);
+
+        position.decrease(125_000).unwrap();
+        market_side.claim_ledger.hedged_claim_supply = market_side
+            .claim_ledger
+            .hedged_claim_supply
+            .checked_sub(125_000)
+            .unwrap();
+        assert_eq!(position.hedged_claim_amount, 375_000);
+        assert_eq!(market_side.claim_ledger.hedged_claim_supply, 375_000);
+    }
+
+    #[test]
+    fn market_health_uses_recognized_collateral_not_idle_inventory() {
+        let mut market = test_market();
+        market.debt_book.fixed_debt0_shares =
+            DebtBookV2::debt_to_shares(1_000, NAD as u128).unwrap();
+
+        market.refresh_market_health().unwrap();
+        assert_eq!(market.health.health0_bps, 0);
+        assert_eq!(
+            market.assert_market_health().unwrap_err(),
+            error!(ErrorCode::InsufficientMarketHealthV2)
+        );
+
+        market
+            .recognition_ledger
+            .debt_bearing_collateral1_for_debt0 = 1_500;
+        market.refresh_market_health().unwrap();
+        assert_eq!(market.health.health0_bps, 15_000);
+        market.assert_market_health().unwrap();
+    }
+
+    #[test]
+    fn stale_recognition_cannot_exceed_margin_collateral() {
+        let mut position = margin_position();
+        position.collateral0 = 100;
+        position.recognized_collateral0_for_debt1 = 80;
+        assert_eq!(position.idle_collateral0().unwrap(), 20);
+
+        position.recognized_collateral0_for_debt1 = 101;
+        assert_eq!(
+            position.idle_collateral0().unwrap_err(),
+            error!(ErrorCode::InsufficientRecognizedCollateralV2)
+        );
+    }
+}

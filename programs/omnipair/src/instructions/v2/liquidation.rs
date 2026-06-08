@@ -361,7 +361,7 @@ impl<'info> LiquidateV2<'info> {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct LiquidationOutcome {
     repaid_amount: u64,
     collateral_seized: u64,
@@ -826,5 +826,150 @@ fn recognized_decrease_after_seizure(
         proportional
             .checked_add(extra)
             .ok_or(ErrorCode::MarketMathOverflowV2.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::{BufferBookV2, MarketConfigV2, MarketSideV2, ReserveLedgerV2};
+
+    fn market_side(asset_mint: Pubkey) -> MarketSideV2 {
+        MarketSideV2 {
+            asset_mint,
+            claim_mint: Pubkey::new_unique(),
+            hedge_mint: Pubkey::new_unique(),
+            hedge_vault: Pubkey::new_unique(),
+            reserve_vault: Pubkey::new_unique(),
+            collateral_vault: Pubkey::new_unique(),
+            fee_vault: Pubkey::new_unique(),
+            stake_vault: Pubkey::new_unique(),
+            reserve_ledger: ReserveLedgerV2 {
+                live_reserve: 1_000,
+                cash_reserve: 1_000,
+                reserved_liability: 0,
+            },
+            buffer_book: BufferBookV2 {
+                buffer_ratio_bps: 2_000,
+                ..BufferBookV2::default()
+            },
+            ..MarketSideV2::default()
+        }
+    }
+
+    fn test_market() -> MarketV2 {
+        let asset0_mint = Pubkey::new_unique();
+        let asset1_mint = Pubkey::new_unique();
+        let mut market = MarketV2::initialize(
+            asset0_mint,
+            asset1_mint,
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            market_side(asset0_mint),
+            market_side(asset1_mint),
+            MarketConfigV2 {
+                swap_fee_bps: 30,
+                operator_fee_bps: 1_000,
+                buffer_ratio_bps: 2_000,
+                fee_routing_k_nad: NAD,
+                ema_half_life_ms: 60_000,
+                directional_ema_half_life_ms: 60_000,
+                k_ema_half_life_ms: 60_000,
+                max_daily_borrow_bps: 2_000,
+                max_daily_withdraw_bps: 2_000,
+                spot_ema_divergence_bps: 1_000,
+                recognized_collateral_cap_bps: 10_000,
+                market_health_min_bps: 11_000,
+                effective_debt_weight_min_bps: 10_000,
+                effective_debt_gamma_nad: NAD,
+                soft_borrow_enabled: false,
+                hedged_lp_enabled: true,
+                start_time: 0,
+            },
+            [9_u8; 32],
+            42,
+            253,
+        )
+        .unwrap();
+        market.insurance_reserve.available0 = 40;
+        market.insurance_reserve.available1 = 40;
+        market
+    }
+
+    fn insolvent_position(market: &mut MarketV2) -> MarginPositionV2 {
+        let debt_shares = DebtBookV2::debt_to_shares(100, market.debt_book.borrow_index0_nad)
+            .unwrap();
+        market.debt_book.fixed_debt0_shares = debt_shares;
+        market.recognition_ledger.debt_bearing_collateral1_for_debt0 = 50;
+
+        MarginPositionV2 {
+            owner: Pubkey::new_unique(),
+            market: Pubkey::new_unique(),
+            collateral0: 0,
+            collateral1: 50,
+            recognized_collateral0_for_debt1: 0,
+            recognized_collateral1_for_debt0: 50,
+            fixed_debt0_shares: debt_shares,
+            fixed_debt1_shares: 0,
+            bump: 1,
+        }
+    }
+
+    #[test]
+    fn insurance_request_starts_after_collateral_is_exhausted() {
+        let mut market = test_market();
+        let position = insolvent_position(&mut market);
+
+        let partial_request =
+            insurance_request_for_liquidation(&market, &position, true, 25, 30).unwrap();
+        assert_eq!(partial_request, 0);
+
+        let exhausted_request =
+            insurance_request_for_liquidation(&market, &position, true, 50, 30).unwrap();
+        assert_eq!(exhausted_request, 30);
+    }
+
+    #[test]
+    fn liquidation_uses_repay_insurance_then_socialization() {
+        let mut market = test_market();
+        let mut position = insolvent_position(&mut market);
+
+        let outcome =
+            apply_liquidation_state(&mut market, &mut position, true, 50, 30, 30, 20).unwrap();
+
+        assert_eq!(outcome.repaid_amount, 50);
+        assert_eq!(outcome.collateral_seized, 50);
+        assert_eq!(outcome.insurance_drawn, 30);
+        assert_eq!(outcome.socialized_loss, 20);
+        assert_eq!(outcome.remaining_debt, 0);
+        assert_eq!(position.collateral1, 0);
+        assert_eq!(position.recognized_collateral1_for_debt0, 0);
+        assert_eq!(position.fixed_debt0_shares, 0);
+        assert_eq!(market.debt_book.fixed_debt0_shares, 0);
+        assert_eq!(market.insurance_reserve.available0, 10);
+        assert_eq!(market.side0.reserve_ledger.live_reserve, 1_080);
+        assert_eq!(market.side0.reserve_ledger.cash_reserve, 1_080);
+    }
+
+    #[test]
+    fn liquidation_rejects_socialization_above_caller_cap() {
+        let mut market = test_market();
+        let mut position = insolvent_position(&mut market);
+
+        let err = apply_liquidation_state(&mut market, &mut position, true, 50, 30, 30, 19)
+            .unwrap_err();
+
+        assert_eq!(
+            err,
+            error!(ErrorCode::LiquidationSocializationExceededV2)
+        );
+    }
+
+    #[test]
+    fn recognized_decrease_never_exceeds_remaining_collateral() {
+        let decrease = recognized_decrease_after_seizure(80, 25, 250, 1_000).unwrap();
+
+        assert_eq!(decrease, 55);
+        assert_eq!(80 - decrease, 25);
     }
 }

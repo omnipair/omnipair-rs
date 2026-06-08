@@ -278,3 +278,101 @@ fn apply_swap_state(
     market_side_in.fee_ledger.assert_backed()?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn market_side(
+        live_reserve: u64,
+        cash_reserve: u64,
+        protected_claim_supply: u64,
+        required_buffer: u64,
+    ) -> MarketSideV2 {
+        MarketSideV2 {
+            asset_mint: Pubkey::new_unique(),
+            claim_mint: Pubkey::new_unique(),
+            hedge_mint: Pubkey::new_unique(),
+            hedge_vault: Pubkey::new_unique(),
+            reserve_vault: Pubkey::new_unique(),
+            collateral_vault: Pubkey::new_unique(),
+            fee_vault: Pubkey::new_unique(),
+            stake_vault: Pubkey::new_unique(),
+            reserve_ledger: crate::state::ReserveLedgerV2 {
+                live_reserve,
+                cash_reserve,
+                reserved_liability: 0,
+            },
+            claim_ledger: crate::state::ClaimLedgerV2 {
+                protected_claim_supply,
+                ..crate::state::ClaimLedgerV2::default()
+            },
+            buffer_book: crate::state::BufferBookV2 {
+                required_buffer,
+                buffer_ratio_bps: 2_000,
+                ..crate::state::BufferBookV2::default()
+            },
+            ..MarketSideV2::default()
+        }
+    }
+
+    #[test]
+    fn swap_state_enforces_output_market_reserve_floor() {
+        let mut market_side_in = market_side(10_000, 10_000, 8_000, 2_000);
+        let mut market_side_out = market_side(12_000, 12_000, 8_000, 2_000);
+
+        apply_swap_state(
+            &mut market_side_in,
+            &mut market_side_out,
+            500,
+            2_000,
+            0,
+            0,
+        )
+        .unwrap();
+        assert_eq!(market_side_out.reserve_ledger.live_reserve, 10_000);
+        assert_eq!(market_side_out.reserve_ledger.cash_reserve, 10_000);
+
+        let mut market_side_in = market_side(10_000, 10_000, 8_000, 2_000);
+        let mut market_side_out = market_side(12_000, 12_000, 8_000, 2_000);
+        let err = apply_swap_state(
+            &mut market_side_in,
+            &mut market_side_out,
+            500,
+            2_001,
+            0,
+            0,
+        )
+        .unwrap_err();
+        assert_eq!(
+            err,
+            error!(ErrorCode::InsufficientMarketClaimCoverageV2)
+        );
+    }
+
+    #[test]
+    fn swap_state_routes_non_compounding_fee_liabilities() {
+        let mut market_side_in = market_side(10_000, 10_000, 8_000, 2_000);
+        market_side_in.claim_ledger.staked_claim_supply = 8_000;
+        market_side_in.buffer_book.staked_buffer_shares = 2_000;
+        let mut market_side_out = market_side(12_000, 12_000, 8_000, 2_000);
+
+        apply_swap_state(
+            &mut market_side_in,
+            &mut market_side_out,
+            500,
+            100,
+            1_000,
+            1_000,
+        )
+        .unwrap();
+
+        assert_eq!(market_side_in.reserve_ledger.live_reserve, 10_500);
+        assert_eq!(market_side_in.fee_ledger.fee_vault_balance, 1_000);
+        assert_eq!(market_side_in.fee_ledger.operator_fee_liability, 100);
+        assert_eq!(market_side_in.fee_ledger.fee_liability, 900);
+        assert_eq!(market_side_in.fee_ledger.unallocated_fee_liability, 0);
+        assert_eq!(market_side_in.fee_ledger.fee_growth_index_nad, 90_000_000);
+        market_side_in.fee_ledger.assert_backed().unwrap();
+    }
+}

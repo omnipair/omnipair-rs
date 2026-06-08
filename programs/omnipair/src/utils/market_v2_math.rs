@@ -112,6 +112,7 @@ pub fn require_market_reserve_floor(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn claim_minus_buffer_mints_only_protected_claim() {
@@ -153,5 +154,80 @@ mod tests {
             err,
             anchor_lang::prelude::error!(ErrorCode::InsufficientMarketClaimCoverageV2)
         );
+    }
+
+    proptest! {
+        #[test]
+        fn claim_minus_buffer_preserves_deposit_principal(
+            deposit_amount in 2_u64..1_000_000_000_000_u64,
+            buffer_ratio_bps in 1_u16..BPS_DENOMINATOR,
+        ) {
+            let (claim_amount, buffer_amount) =
+                split_claim_minus_buffer(deposit_amount, buffer_ratio_bps).unwrap();
+
+            prop_assert_eq!(claim_amount + buffer_amount, deposit_amount);
+            prop_assert!(buffer_amount > 0);
+
+            let required_buffer =
+                required_buffer_for_claims(claim_amount, buffer_ratio_bps).unwrap();
+            prop_assert!(
+                buffer_amount >= required_buffer,
+                "buffer_amount={} required_buffer={} claim_amount={} ratio={}",
+                buffer_amount,
+                required_buffer,
+                claim_amount,
+                buffer_ratio_bps
+            );
+        }
+
+        #[test]
+        fn reserve_floor_is_exact_claim_plus_required_buffer(
+            protected_claim_supply in 1_u64..1_000_000_000_000_u64,
+            required_buffer in 0_u64..1_000_000_000_000_u64,
+            excess_reserve in 0_u64..1_000_000_000_u64,
+        ) {
+            let floor = protected_claim_supply.checked_add(required_buffer).unwrap();
+            require_market_reserve_floor(
+                floor + excess_reserve,
+                protected_claim_supply,
+                required_buffer,
+            ).unwrap();
+
+            if floor > 0 {
+                let err = require_market_reserve_floor(
+                    floor - 1,
+                    protected_claim_supply,
+                    required_buffer,
+                ).unwrap_err();
+                prop_assert_eq!(
+                    err,
+                    anchor_lang::prelude::error!(ErrorCode::InsufficientMarketClaimCoverageV2)
+                );
+            }
+        }
+
+        #[test]
+        fn active_stake_uses_the_less_covered_side(
+            staked_claim_amount in 1_u64..1_000_000_000_u64,
+            staked_buffer_shares in 1_u64..1_000_000_000_u64,
+            buffer_ratio_bps in 1_u16..BPS_DENOMINATOR,
+        ) {
+            let active_units =
+                active_stake_units(staked_claim_amount, staked_buffer_shares, buffer_ratio_bps)
+                    .unwrap();
+            let claim_ratio_bps = BPS_DENOMINATOR - buffer_ratio_bps;
+            let claim_units = (staked_claim_amount as u128)
+                .checked_mul(BPS_DENOMINATOR as u128)
+                .unwrap()
+                / claim_ratio_bps as u128;
+            let buffer_units = (staked_buffer_shares as u128)
+                .checked_mul(BPS_DENOMINATOR as u128)
+                .unwrap()
+                / buffer_ratio_bps as u128;
+
+            prop_assert_eq!(active_units as u128, claim_units.min(buffer_units));
+            prop_assert!(active_units as u128 <= claim_units);
+            prop_assert!(active_units as u128 <= buffer_units);
+        }
     }
 }
