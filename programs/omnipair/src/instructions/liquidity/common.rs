@@ -1,18 +1,13 @@
-use anchor_lang::{
-    prelude::*,
-    solana_program::sysvar,
-};
-use anchor_spl::{
-    token::{Token, TokenAccount, Mint},
-    token_interface::{Token2022},
-    associated_token::AssociatedToken,
-};
 use crate::{
-    state::pair::Pair,
-    state::rate_model::RateModel,
-    state::futarchy_authority::FutarchyAuthority,
-    constants::*,
-    errors::ErrorCode,
+    constants::*, errors::ErrorCode, state::futarchy_authority::FutarchyAuthority,
+    state::pair::Pair, state::rate_model::RateModel,
+};
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::sysvar;
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token::{Mint as SplMint, Token, TokenAccount as SplTokenAccount},
+    token_interface::{Mint, Token2022, TokenAccount},
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -28,7 +23,7 @@ pub struct AdjustLiquidity<'info> {
     #[account(
         mut,
         seeds = [
-            PAIR_SEED_PREFIX, 
+            PAIR_SEED_PREFIX,
             pair.token0.as_ref(),
             pair.token1.as_ref(),
             pair.params_hash.as_ref()
@@ -48,7 +43,7 @@ pub struct AdjustLiquidity<'info> {
         bump = futarchy_authority.bump
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
-    
+
     #[account(
         mut,
         seeds = [
@@ -58,8 +53,8 @@ pub struct AdjustLiquidity<'info> {
         ],
         bump = pair.vault_bumps.reserve0
     )]
-    pub reserve0_vault: Box<Account<'info, TokenAccount>>,
-    
+    pub reserve0_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+
     #[account(
         mut,
         seeds = [
@@ -69,38 +64,38 @@ pub struct AdjustLiquidity<'info> {
         ],
         bump = pair.vault_bumps.reserve1
     )]
-    pub reserve1_vault: Box<Account<'info, TokenAccount>>,
-    
+    pub reserve1_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+
     #[account(
         mut,
-        token::mint = pair.token0,
-        token::authority = user,
+        constraint = user_token0_account.mint == pair.token0 @ ErrorCode::InvalidTokenAccount,
+        constraint = user_token0_account.owner == user.key() @ ErrorCode::InvalidTokenAccount,
     )]
-    pub user_token0_account: Box<Account<'info, TokenAccount>>,
-    
+    pub user_token0_account: Box<InterfaceAccount<'info, TokenAccount>>,
+
     #[account(
         mut,
-        token::mint = pair.token1,
-        token::authority = user,
+        constraint = user_token1_account.mint == pair.token1 @ ErrorCode::InvalidTokenAccount,
+        constraint = user_token1_account.owner == user.key() @ ErrorCode::InvalidTokenAccount,
     )]
-    pub user_token1_account: Box<Account<'info, TokenAccount>>,
+    pub user_token1_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         address = pair.token0 @ ErrorCode::InvalidMint
     )]
-    pub token0_mint: Box<Account<'info, Mint>>,
+    pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         address = pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub token1_mint: Box<Account<'info, Mint>>,
-    
+    pub token1_mint: Box<InterfaceAccount<'info, Mint>>,
+
     #[account(
         mut,
         address = pair.lp_mint @ ErrorCode::InvalidMint,
     )]
-    pub lp_mint: Box<Account<'info, Mint>>,
-    
+    pub lp_mint: Box<Account<'info, SplMint>>,
+
     #[account(
         init_if_needed,
         associated_token::mint = lp_mint,
@@ -108,8 +103,8 @@ pub struct AdjustLiquidity<'info> {
         payer = user,
         token::token_program = token_program,
     )]
-    pub user_lp_token_account: Box<Account<'info, TokenAccount>>,
-    
+    pub user_lp_token_account: Box<Account<'info, SplTokenAccount>>,
+
     #[account(mut)]
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,

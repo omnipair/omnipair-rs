@@ -2,7 +2,7 @@
 members = [
     "programs/omnipair",
     "programs/faucet",
-    "examples/flashloan_receiver",
+    "programs/leverage_delegate",
     "decoders/omnipair-decoder",
 ]
 resolver = "2"

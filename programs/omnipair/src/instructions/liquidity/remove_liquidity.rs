@@ -2,8 +2,8 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::sysvar;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{Mint, Token, TokenAccount},
-    token_interface::Token2022,
+    token::{Mint as SplMint, Token, TokenAccount as SplTokenAccount},
+    token_interface::{Mint, Token2022, TokenAccount},
 };
 
 use crate::constants::*;
@@ -17,7 +17,10 @@ use crate::utils::liquidity_delta_circuit_breaker::{
     LiquidityDeltaInstruction,
 };
 use crate::utils::math::ceil_div;
-use crate::utils::token::{token_burn, transfer_from_vault_to_user};
+use crate::utils::token::{
+    require_supported_mint, token_burn, token_program_for_mint, transfer_amounts_from_gross,
+    transfer_from_vault_to_user,
+};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct RemoveLiquidityArgs {
@@ -62,7 +65,7 @@ pub struct RemoveLiquidity<'info> {
         ],
         bump = pair.vault_bumps.reserve0
     )]
-    pub reserve0_vault: Box<Account<'info, TokenAccount>>,
+    pub reserve0_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -73,37 +76,37 @@ pub struct RemoveLiquidity<'info> {
         ],
         bump = pair.vault_bumps.reserve1
     )]
-    pub reserve1_vault: Box<Account<'info, TokenAccount>>,
+    pub reserve1_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
         token::mint = pair.token0,
         token::authority = user,
     )]
-    pub user_token0_account: Box<Account<'info, TokenAccount>>,
+    pub user_token0_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
         token::mint = pair.token1,
         token::authority = user,
     )]
-    pub user_token1_account: Box<Account<'info, TokenAccount>>,
+    pub user_token1_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         address = pair.token0 @ ErrorCode::InvalidMint
     )]
-    pub token0_mint: Box<Account<'info, Mint>>,
+    pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         address = pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub token1_mint: Box<Account<'info, Mint>>,
+    pub token1_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         mut,
         address = pair.lp_mint @ ErrorCode::InvalidMint,
     )]
-    pub lp_mint: Box<Account<'info, Mint>>,
+    pub lp_mint: Box<Account<'info, SplMint>>,
 
     #[account(
         init_if_needed,
@@ -112,7 +115,7 @@ pub struct RemoveLiquidity<'info> {
         payer = user,
         token::token_program = token_program,
     )]
-    pub user_lp_token_account: Box<Account<'info, TokenAccount>>,
+    pub user_lp_token_account: Box<Account<'info, SplTokenAccount>>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -139,6 +142,8 @@ impl<'info> RemoveLiquidity<'info> {
         )?;
 
         require!(args.liquidity_in > 0, ErrorCode::AmountZero);
+        require_supported_mint(&self.token0_mint)?;
+        require_supported_mint(&self.token1_mint)?;
         require!(
             args.liquidity_in <= self.pair.total_supply,
             ErrorCode::InsufficientLiquidity
@@ -224,13 +229,18 @@ impl<'info> RemoveLiquidity<'info> {
             .checked_sub(fee1)
             .ok_or(ErrorCode::LiquidityMathOverflow)?;
 
-        // Check if amounts meet minimum (slippage protection)
+        let token0_mint_info = token0_mint.to_account_info();
+        let token1_mint_info = token1_mint.to_account_info();
+        let amount0_transfer = transfer_amounts_from_gross(&token0_mint_info, amount0_out)?;
+        let amount1_transfer = transfer_amounts_from_gross(&token1_mint_info, amount1_out)?;
+
+        // Check if recipient net amounts meet minimum (slippage protection).
         require!(
-            amount0_out >= args.min_amount0_out,
+            amount0_transfer.net >= args.min_amount0_out,
             ErrorCode::SlippageExceeded
         );
         require!(
-            amount1_out >= args.min_amount1_out,
+            amount1_transfer.net >= args.min_amount1_out,
             ErrorCode::SlippageExceeded
         );
 
@@ -266,10 +276,11 @@ impl<'info> RemoveLiquidity<'info> {
             reserve0_vault.to_account_info(),
             user_token0_account.to_account_info(),
             token0_mint.to_account_info(),
-            match token0_mint.to_account_info().owner == token_program.key {
-                true => token_program.to_account_info(),
-                false => token_2022_program.to_account_info(),
-            },
+            token_program_for_mint(
+                &token0_mint.to_account_info(),
+                &token_program.to_account_info(),
+                &token_2022_program.to_account_info(),
+            )?,
             amount0_out,
             token0_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
@@ -280,10 +291,11 @@ impl<'info> RemoveLiquidity<'info> {
             reserve1_vault.to_account_info(),
             user_token1_account.to_account_info(),
             token1_mint.to_account_info(),
-            match token1_mint.to_account_info().owner == token_program.key {
-                true => token_program.to_account_info(),
-                false => token_2022_program.to_account_info(),
-            },
+            token_program_for_mint(
+                &token1_mint.to_account_info(),
+                &token_program.to_account_info(),
+                &token_2022_program.to_account_info(),
+            )?,
             amount1_out,
             token1_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
@@ -344,8 +356,8 @@ impl<'info> RemoveLiquidity<'info> {
         // Emit event
         emit_cpi!(BurnEvent {
             metadata: EventMetadata::new(ctx.accounts.user.key(), pair.key()),
-            amount0: amount0_out,
-            amount1: amount1_out,
+            amount0: amount0_transfer.net,
+            amount1: amount1_transfer.net,
             liquidity: args.liquidity_in,
         });
 

@@ -15,8 +15,6 @@ pub const MAX_COLLATERAL_FACTOR_BPS: u16 = 8_500; // 85% cap for dynamic collate
 #[constant]
 pub const LTV_BUFFER_BPS: u16 = 500; // 5% buffer between borrow limit and liquidation threshold
 #[constant]
-pub const FLASHLOAN_FEE_BPS: u16 = 5; // 0.05%
-#[constant]
 pub const LIQUIDATION_INCENTIVE_BPS: u16 = 50; // 0.5% liquidation incentive for caller
 #[constant]
 pub const LIQUIDATION_PENALTY_BPS: u16 = 300; // 3% total liquidation penalty (0.5% to liquidator, 2.5% to LPs)
@@ -107,6 +105,20 @@ pub const METADATA_SEED_PREFIX: &[u8] = b"metadata";
 pub const RESERVE_VAULT_SEED_PREFIX: &[u8] = b"reserve_vault";
 #[constant]
 pub const COLLATERAL_VAULT_SEED_PREFIX: &[u8] = b"collateral_vault";
+#[constant]
+pub const LEVERAGE_POSITION_SEED_PREFIX: &[u8] = b"leverage_position";
+#[constant]
+pub const LEVERAGE_DELEGATION_SEED_PREFIX: &[u8] = b"leverage_delegation";
+#[constant]
+pub const LEVERAGE_COLLATERAL_VAULT_SEED_PREFIX: &[u8] = b"leverage_collateral_vault";
+#[constant]
+pub const LEVERAGE_MAX_MULTIPLIER_BPS: u64 = 200_000; // 20x circuit breaker
+#[constant]
+pub const LEVERAGE_MAX_UNWIND_IMPACT_BPS: u16 = 200; // 2%
+#[constant]
+pub const LEVERAGE_INITIAL_MARGIN_BPS: u16 = 1_000; // 10%
+#[constant]
+pub const LEVERAGE_MAINTENANCE_BUFFER_BPS: u16 = 700; // 7%
 #[constant]
 pub const VERSION: u8 = 1;
 

@@ -22,8 +22,7 @@ const ALL_INSTRUCTIONS = [
   "removeCollateral",
   "borrow",
   "repay",
-  "liquidate",
-  "flashloan"
+  "liquidate"
 ];
 
 /**
