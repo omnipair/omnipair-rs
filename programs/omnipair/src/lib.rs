@@ -128,10 +128,10 @@ pub mod omnipair {
 
     #[access_control(ctx.accounts.update_and_validate_remove(&args))]
     pub fn remove_liquidity(
-        ctx: Context<AdjustLiquidity>,
+        ctx: Context<RemoveLiquidity>,
         args: RemoveLiquidityArgs,
     ) -> Result<()> {
-        AdjustLiquidity::handle_remove(ctx, args)
+        RemoveLiquidity::handle_remove(ctx, args)
     }
 
     #[access_control(ctx.accounts.update_and_validate_swap(&args))]
@@ -154,8 +154,8 @@ pub mod omnipair {
     }
 
     #[access_control(ctx.accounts.update_and_validate_borrow(&args))]
-    pub fn borrow(ctx: Context<CommonAdjustDebt>, args: AdjustDebtArgs) -> Result<()> {
-        CommonAdjustDebt::handle_borrow(ctx, args)
+    pub fn borrow(ctx: Context<Borrow>, args: AdjustDebtArgs) -> Result<()> {
+        Borrow::handle_borrow(ctx, args)
     }
 
     #[access_control(ctx.accounts.update_and_validate_repay(&args))]

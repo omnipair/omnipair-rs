@@ -3,6 +3,7 @@ use crate::{
     state::pair::Pair, state::rate_model::RateModel,
 };
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::sysvar;
 use anchor_spl::{
     associated_token::AssociatedToken,
     token::{Mint as SplMint, Token, TokenAccount as SplTokenAccount},
@@ -110,6 +111,10 @@ pub struct AdjustLiquidity<'info> {
     pub token_2022_program: Program<'info, Token2022>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
+
+    /// CHECK: Instructions sysvar used by the liquidity delta circuit breaker.
+    #[account(address = sysvar::instructions::ID @ ErrorCode::InvalidInstructionsSysvar)]
+    pub instructions_sysvar: UncheckedAccount<'info>,
 }
 
 impl<'info> AdjustLiquidity<'info> {

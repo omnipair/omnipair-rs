@@ -1,18 +1,121 @@
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::sysvar;
+use anchor_spl::{
+    token::Token,
+    token_interface::{Mint, Token2022, TokenAccount},
+};
+
 use crate::{
     constants::*,
     errors::ErrorCode,
     events::{AdjustDebtEvent, EventMetadata, UserPositionUpdatedEvent},
     generate_gamm_pair_seeds,
-    instructions::lending::common::{AdjustDebtArgs, CommonAdjustDebt},
+    instructions::lending::common::AdjustDebtArgs,
     utils::token::{require_supported_mint, token_program_for_mint, transfer_from_vault_to_user},
+    state::{
+        futarchy_authority::FutarchyAuthority, pair::Pair, rate_model::RateModel,
+        user_position::UserPosition,
+    },
+    utils::{
+        liquidity_delta_circuit_breaker::require_no_same_tx_liquidity_delta,
+    },
 };
-use anchor_lang::prelude::*;
 
-impl<'info> CommonAdjustDebt<'info> {
+#[event_cpi]
+#[derive(Accounts)]
+pub struct Borrow<'info> {
+    #[account(
+        mut,
+        seeds = [
+            PAIR_SEED_PREFIX,
+            pair.token0.as_ref(),
+            pair.token1.as_ref(),
+            pair.params_hash.as_ref()
+        ],
+        bump = pair.bump
+    )]
+    pub pair: Account<'info, Pair>,
+
+    #[account(
+        mut,
+        constraint = user_position.owner == user.key(),
+        constraint = user_position.pair == pair.key(),
+        seeds = [
+            POSITION_SEED_PREFIX,
+            pair.key().as_ref(),
+            user.key().as_ref()
+        ],
+        bump = user_position.bump
+    )]
+    pub user_position: Account<'info, UserPosition>,
+
+    #[account(
+        mut,
+        address = pair.rate_model,
+    )]
+    pub rate_model: Account<'info, RateModel>,
+
+    #[account(
+        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
+        bump = futarchy_authority.bump
+    )]
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
+
+    #[account(
+        mut,
+        seeds = [
+            RESERVE_VAULT_SEED_PREFIX,
+            pair.key().as_ref(),
+            reserve_token_mint.key().as_ref(),
+        ],
+        bump = pair.get_reserve_vault_bump(&reserve_token_mint.key())
+    )]
+    pub reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        constraint = user_reserve_token_account.mint == reserve_token_mint.key() @ ErrorCode::InvalidMint,
+        token::authority = user,
+    )]
+    pub user_reserve_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(
+        constraint = reserve_token_mint.key() == pair.token0 || reserve_token_mint.key() == pair.token1 @ ErrorCode::InvalidMint
+    )]
+    pub reserve_token_mint: Box<InterfaceAccount<'info, Mint>>,
+
+    pub user: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+    pub token_2022_program: Program<'info, Token2022>,
+    pub system_program: Program<'info, System>,
+
+    /// CHECK: Instructions sysvar used by the liquidity delta circuit breaker.
+    #[account(address = sysvar::instructions::ID @ ErrorCode::InvalidInstructionsSysvar)]
+    pub instructions_sysvar: UncheckedAccount<'info>,
+}
+
+fn resolve_borrow_amount(requested_amount: u64, borrow_limit: u64, user_debt: u64) -> Result<u64> {
+    let borrow_amount = if requested_amount == u64::MAX {
+        borrow_limit
+            .checked_sub(user_debt)
+            .ok_or(ErrorCode::DebtMathOverflow)?
+    } else {
+        requested_amount
+    };
+    require!(borrow_amount > 0, ErrorCode::AmountZero);
+    Ok(borrow_amount)
+}
+
+impl<'info> Borrow<'info> {
     pub fn validate_borrow(&self, args: &AdjustDebtArgs) -> Result<()> {
         let AdjustDebtArgs {
             amount: borrow_amount,
         } = args;
+
+        require_no_same_tx_liquidity_delta(
+            &self.pair.key(),
+            &self.instructions_sysvar.to_account_info(),
+        )?;
 
         // Check reduce-only mode (global or per-pair)
         require!(
@@ -24,6 +127,18 @@ impl<'info> CommonAdjustDebt<'info> {
 
         require!(*borrow_amount > 0, ErrorCode::AmountZero);
         require_supported_mint(&self.reserve_token_mint)?;
+
+        Ok(())
+    }
+
+    pub fn update(&mut self) -> Result<()> {
+        let pair_key = self.pair.to_account_info().key();
+        self.pair.update(
+            &self.rate_model,
+            &self.futarchy_authority,
+            pair_key,
+            Some(self.event_authority.to_account_info()),
+        )?;
 
         Ok(())
     }
@@ -43,9 +158,9 @@ impl<'info> CommonAdjustDebt<'info> {
     /// Notes:
     /// Only the specified borrow amount of the `vault_token_mint` is transferred.
     /// Tokens are sourced directly from the AMM's liquidity vault (`token_vault`).
-    /// Assumes that collateral checks have already passed via [`CommonAdjustPosition::validate_borrow`].
+    /// Assumes that collateral checks have already passed via [`Borrow::validate_borrow`].
     pub fn handle_borrow(ctx: Context<Self>, args: AdjustDebtArgs) -> Result<()> {
-        let CommonAdjustDebt {
+        let Borrow {
             user_reserve_token_account,
             reserve_token_mint,
             token_program,
@@ -56,7 +171,8 @@ impl<'info> CommonAdjustDebt<'info> {
         } = ctx.accounts;
         let pair = &mut ctx.accounts.pair;
         let debt_token_vault = &ctx.accounts.reserve_vault;
-        let is_token0 = user_reserve_token_account.mint == pair.token0;
+        let debt_token = reserve_token_mint.key();
+        let is_token0 = debt_token == pair.token0;
 
         let user_debt = match is_token0 {
             true => user_position.calculate_debt0(pair.total_debt0, pair.total_debt0_shares)?,
@@ -67,7 +183,7 @@ impl<'info> CommonAdjustDebt<'info> {
         // To prevent bad debt, we compute a pessimistic collateral factor:
         // CF_pessimistic = min(CF_base, P_spot / P_EMA * CF_base)
         // This ensures the solvency invariant: P_spot >= P_EMA * CF
-        let collateral_token = pair.get_collateral_token(&debt_token_vault.mint);
+        let collateral_token = pair.get_collateral_token(&debt_token);
         let collateral_amount = match collateral_token == pair.token0 {
             true => user_position.collateral0,
             false => user_position.collateral1,
@@ -77,15 +193,8 @@ impl<'info> CommonAdjustDebt<'info> {
             &collateral_token,
             collateral_amount,
         )?;
-        let is_max_borrow = args.amount == u64::MAX;
-        let remaining_borrow_limit = borrow_limit
-            .checked_sub(user_debt)
-            .ok_or(ErrorCode::DebtMathOverflow)?;
-        let borrow_amount = if is_max_borrow {
-            remaining_borrow_limit
-        } else {
-            args.amount
-        };
+
+        let borrow_amount = resolve_borrow_amount(args.amount, borrow_limit, user_debt)?;
 
         let new_debt = user_debt
             .checked_add(borrow_amount)
@@ -123,13 +232,8 @@ impl<'info> CommonAdjustDebt<'info> {
             &[&generate_gamm_pair_seeds!(pair)[..]],
         )?;
 
-        user_position.increase_debt(pair, &reserve_token_mint.key(), borrow_amount)?;
-        // update user position fixed CF
-        user_position.set_liquidation_cf_for_debt_token(
-            &reserve_token_mint.key(),
-            &pair,
-            liquidation_cf_bps,
-        );
+        user_position.increase_debt(pair, &debt_token, borrow_amount)?;
+        user_position.set_liquidation_cf_for_debt_token(&debt_token, &pair, liquidation_cf_bps);
 
         // Emit debt adjustment event
         let (amount0, amount1) = if is_token0 {
@@ -159,5 +263,33 @@ impl<'info> CommonAdjustDebt<'info> {
         });
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn max_borrow_rejects_zero_resolved_amount() {
+        let err = resolve_borrow_amount(u64::MAX, 100, 100).unwrap_err();
+        assert_eq!(err, error!(ErrorCode::AmountZero));
+    }
+
+    #[test]
+    fn max_borrow_rejects_debt_above_limit() {
+        let err = resolve_borrow_amount(u64::MAX, 100, 101).unwrap_err();
+        assert_eq!(err, error!(ErrorCode::DebtMathOverflow));
+    }
+
+    #[test]
+    fn explicit_borrow_rejects_zero_amount() {
+        let err = resolve_borrow_amount(0, 100, 0).unwrap_err();
+        assert_eq!(err, error!(ErrorCode::AmountZero));
+    }
+
+    #[test]
+    fn max_borrow_resolves_positive_remaining_limit() {
+        assert_eq!(resolve_borrow_amount(u64::MAX, 100, 40).unwrap(), 60);
     }
 }

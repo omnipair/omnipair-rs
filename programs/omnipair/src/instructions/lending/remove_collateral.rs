@@ -2,6 +2,7 @@ use crate::{
     constants::PAIR_SEED_PREFIX,
     errors::ErrorCode,
     events::{AdjustCollateralEvent, EventMetadata, UserPositionUpdatedEvent},
+    utils::liquidity_delta_circuit_breaker::require_no_same_tx_liquidity_delta,
     generate_gamm_pair_seeds,
     instructions::lending::common::{AdjustCollateralArgs, CommonAdjustCollateral},
     utils::token::{require_supported_mint, token_program_for_mint, transfer_from_vault_to_user},
@@ -11,6 +12,11 @@ use anchor_lang::prelude::*;
 impl<'info> CommonAdjustCollateral<'info> {
     pub fn validate_remove(&self, args: &AdjustCollateralArgs) -> Result<()> {
         let AdjustCollateralArgs { amount } = args;
+        
+        require_no_same_tx_liquidity_delta(
+            &self.pair.key(),
+            &self.instructions_sysvar.to_account_info(),
+        )?;
 
         require!(*amount > 0, ErrorCode::AmountZero);
         require_supported_mint(&self.collateral_token_mint)?;

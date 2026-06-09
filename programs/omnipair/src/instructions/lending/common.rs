@@ -3,6 +3,7 @@ use crate::{
     state::pair::Pair, state::rate_model::RateModel, state::user_position::UserPosition,
 };
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::sysvar;
 use anchor_spl::{
     token::Token,
     token_interface::{Mint, Token2022, TokenAccount},
@@ -80,6 +81,10 @@ pub struct CommonAdjustCollateral<'info> {
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
     pub system_program: Program<'info, System>,
+
+    /// CHECK: Instructions sysvar used by the liquidity delta circuit breaker.
+    #[account(address = sysvar::instructions::ID @ ErrorCode::InvalidInstructionsSysvar)]
+    pub instructions_sysvar: UncheckedAccount<'info>,
 }
 
 impl<'info> CommonAdjustCollateral<'info> {

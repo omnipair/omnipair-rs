@@ -8,3 +8,4 @@ pub mod account;
 pub mod token;
 pub mod gamm_math;
 pub mod liquidation;
+pub mod liquidity_delta_circuit_breaker;

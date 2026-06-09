@@ -18,7 +18,7 @@ use crate::{
 
 use super::common::{
     approved_for, invoke_delegated_approval_callback, quote_swap, split_delegated_accounts,
-    token_program_for_mint, DelegatedCpiArgs, LEVERAGE_DELEGATE_CLOSE,
+    DelegatedCpiArgs, LEVERAGE_DELEGATE_CLOSE,
     LEVERAGE_DELEGATE_CLOSE_SETTLED, leverage_token_program_for_mint, invoke_delegated_callback
 };
 

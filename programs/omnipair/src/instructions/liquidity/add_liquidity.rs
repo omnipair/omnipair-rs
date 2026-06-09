@@ -1,6 +1,7 @@
 use crate::constants::*;
 use crate::errors::ErrorCode;
 use crate::events::{EventMetadata, MintEvent, UserLiquidityPositionUpdatedEvent};
+use crate::utils::liquidity_delta_circuit_breaker::{require_top_level_liquidity_delta_ix, LiquidityDeltaInstruction};
 use crate::generate_gamm_pair_seeds;
 use crate::liquidity::common::{AddLiquidityArgs, AdjustLiquidity};
 use crate::utils::math::ceil_div;
@@ -19,8 +20,15 @@ impl<'info> AdjustLiquidity<'info> {
             pair,
             token0_mint,
             token1_mint,
-            ..
+            instructions_sysvar,
+            .. 
         } = self;
+
+        require_top_level_liquidity_delta_ix(
+            &pair.key(),
+            &instructions_sysvar.to_account_info(),
+            LiquidityDeltaInstruction::AddLiquidity,
+        )?;
 
         // Check reduce-only mode (global or per-pair)
         require!(

@@ -14,7 +14,6 @@ pub struct SetGlobalReduceOnly{
 pub struct SetGlobalReduceOnlyInstructionAccounts {
     pub authority_signer: solana_pubkey::Pubkey,
     pub futarchy_authority: solana_pubkey::Pubkey,
-    pub system_program: solana_pubkey::Pubkey,
 }
 
 impl carbon_core::deserialize::ArrangeAccounts for SetGlobalReduceOnly {
@@ -24,12 +23,10 @@ impl carbon_core::deserialize::ArrangeAccounts for SetGlobalReduceOnly {
         let mut iter = accounts.iter();
         let authority_signer = next_account(&mut iter)?;
         let futarchy_authority = next_account(&mut iter)?;
-        let system_program = next_account(&mut iter)?;
 
         Some(SetGlobalReduceOnlyInstructionAccounts {
             authority_signer,
             futarchy_authority,
-            system_program,
         })
     }
 }
