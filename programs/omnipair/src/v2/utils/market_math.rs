@@ -2,7 +2,7 @@ use anchor_lang::error;
 
 use crate::constants::*;
 use crate::errors::ErrorCode;
-use crate::utils::math::ceil_div;
+use crate::shared::math::ceil_div;
 
 pub fn split_claim_minus_buffer(
     deposit_amount: u64,
@@ -20,8 +20,7 @@ pub fn split_claim_minus_buffer(
         BPS_DENOMINATOR as u128,
     )
     .ok_or(ErrorCode::MarketMathOverflow)?;
-    let buffer_amount =
-        u64::try_from(buffer_amount).map_err(|_| ErrorCode::MarketMathOverflow)?;
+    let buffer_amount = u64::try_from(buffer_amount).map_err(|_| ErrorCode::MarketMathOverflow)?;
     let claim_amount = deposit_amount
         .checked_sub(buffer_amount)
         .ok_or(ErrorCode::MarketMathOverflow)?;

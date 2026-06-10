@@ -9,13 +9,13 @@ use crate::{
     errors::ErrorCode,
     events::{MarketClaimRedeemed, MarketEventMetadata, MarketReserveDeposited},
     generate_market_seeds,
-    state::{Market, StakePosition},
-    utils::{
+    shared::{
         account::get_size_with_discriminator,
         token::{
             token_burn, token_mint_to, transfer_from_user_to_vault, transfer_from_vault_to_user,
         },
     },
+    state::{Market, StakePosition},
 };
 
 use super::common::{

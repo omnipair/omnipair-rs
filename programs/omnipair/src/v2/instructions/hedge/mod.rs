@@ -9,13 +9,13 @@ use crate::{
     errors::ErrorCode,
     events::{MarketEventMetadata, MarketHedgeClosed, MarketHedgeOpened},
     generate_market_seeds,
-    state::{HedgePosition, Market},
-    utils::{
+    shared::{
         account::get_size_with_discriminator,
         token::{
             token_burn, token_mint_to, transfer_from_user_to_vault, transfer_from_vault_to_user,
         },
     },
+    state::{HedgePosition, Market},
 };
 
 use super::common::{require_fee_free_claim_mint, token_program_for_mint};

@@ -9,10 +9,10 @@ use crate::{
     errors::ErrorCode,
     events::{MarketEventMetadata, MarketInsuranceFunded, MarketLiquidated},
     generate_market_seeds,
-    state::{DebtBook, MarginPosition, Market},
-    utils::token::{
+    shared::token::{
         transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault,
     },
+    state::{DebtBook, MarginPosition, Market},
 };
 
 use super::common::{require_supported_asset_mint, token_program_for_mint};
@@ -527,8 +527,12 @@ fn insurance_request_for_liquidation(
         ErrorCode::InsufficientDebt
     );
     let collateral_before = position_collateral(margin_position, debt_asset_is_asset0);
-    let collateral_seized =
-        collateral_to_seize(market, debt_asset_is_asset0, repay_credit, collateral_before)?;
+    let collateral_seized = collateral_to_seize(
+        market,
+        debt_asset_is_asset0,
+        repay_credit,
+        collateral_before,
+    )?;
     let remaining_debt = debt_before
         .checked_sub(repay_credit as u128)
         .ok_or(ErrorCode::MarketMathOverflow)?;
@@ -561,8 +565,12 @@ fn apply_liquidation_state(
         ErrorCode::InsufficientDebt
     );
     let collateral_before = position_collateral(margin_position, debt_asset_is_asset0);
-    let collateral_seized =
-        collateral_to_seize(market, debt_asset_is_asset0, repay_credit, collateral_before)?;
+    let collateral_seized = collateral_to_seize(
+        market,
+        debt_asset_is_asset0,
+        repay_credit,
+        collateral_before,
+    )?;
     let collateral_exhausted = collateral_seized == collateral_before;
     let repay_plus_insurance = (repay_credit as u128)
         .checked_add(insurance_credit as u128)
@@ -877,8 +885,8 @@ mod tests {
     }
 
     fn insolvent_position(market: &mut Market) -> MarginPosition {
-        let debt_shares = DebtBook::debt_to_shares(100, market.debt_book.borrow_index0_nad)
-            .unwrap();
+        let debt_shares =
+            DebtBook::debt_to_shares(100, market.debt_book.borrow_index0_nad).unwrap();
         market.debt_book.fixed_debt0_shares = debt_shares;
         market.recognition_ledger.debt_bearing_collateral1_for_debt0 = 50;
 
@@ -936,13 +944,10 @@ mod tests {
         let mut market = test_market();
         let mut position = insolvent_position(&mut market);
 
-        let err = apply_liquidation_state(&mut market, &mut position, true, 50, 30, 30, 19)
-            .unwrap_err();
+        let err =
+            apply_liquidation_state(&mut market, &mut position, true, 50, 30, 30, 19).unwrap_err();
 
-        assert_eq!(
-            err,
-            error!(ErrorCode::LiquidationSocializationExceeded)
-        );
+        assert_eq!(err, error!(ErrorCode::LiquidationSocializationExceeded));
     }
 
     #[test]

@@ -4,6 +4,7 @@ pub mod constants;
 pub mod errors;
 pub mod events;
 pub mod instructions;
+pub mod shared;
 pub mod state;
 pub mod utils;
 pub mod v1;

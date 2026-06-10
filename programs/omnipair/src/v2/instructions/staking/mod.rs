@@ -8,14 +8,11 @@ use crate::{
     constants::*,
     errors::ErrorCode,
     events::{
-        MarketEventMetadata, MarketFeeLiabilityClaimed, MarketFeesClaimed,
-        MarketStakeUpdated,
+        MarketEventMetadata, MarketFeeLiabilityClaimed, MarketFeesClaimed, MarketStakeUpdated,
     },
     generate_market_seeds,
-    state::{MarketFeeClaimKind, Market, StakePosition},
-    utils::{
-        token::{transfer_from_user_to_vault, transfer_from_vault_to_user},
-    },
+    shared::token::{transfer_from_user_to_vault, transfer_from_vault_to_user},
+    state::{Market, MarketFeeClaimKind, StakePosition},
     v2::utils::market_math::active_stake_units,
 };
 
@@ -593,11 +590,7 @@ impl<'info> ClaimMarketFees<'info> {
             let claimed_amount = market_side
                 .fee_ledger
                 .claim_market_fee_liability(args.claim_kind)?;
-            require_eq!(
-                claimed_amount,
-                fee_amount,
-                ErrorCode::UnbackedFeeLiability
-            );
+            require_eq!(claimed_amount, fee_amount, ErrorCode::UnbackedFeeLiability);
             market_side.fee_ledger.fee_vault_balance = ctx.accounts.fee_vault.amount;
             market_side.fee_ledger.assert_backed()?;
             market_side.fee_ledger.market_fee_liability(args.claim_kind)

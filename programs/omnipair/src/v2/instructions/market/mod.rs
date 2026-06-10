@@ -5,8 +5,8 @@ use crate::{
     constants::*,
     errors::ErrorCode,
     events::{MarketCreated, MarketEventMetadata, MarketUpdated},
-    state::{MarketConfig, MarketSide, Market},
-    utils::account::get_size_with_discriminator,
+    shared::account::get_size_with_discriminator,
+    state::{Market, MarketConfig, MarketSide},
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]

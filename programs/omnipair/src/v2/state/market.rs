@@ -2,10 +2,10 @@ use anchor_lang::prelude::*;
 
 use crate::constants::*;
 use crate::errors::ErrorCode;
+use crate::shared::math::{ceil_div, slots_to_ms, taylor_exp, SqrtU128};
 use crate::v2::utils::market_math::{
     accrue_fee_liability, active_stake_units, required_buffer_for_claims, split_claim_minus_buffer,
 };
-use crate::utils::math::{ceil_div, slots_to_ms, taylor_exp, SqrtU128};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct MarketConfig {
@@ -718,11 +718,7 @@ impl StakePosition {
     pub fn assert_position(&self, owner: Pubkey, market: Pubkey, asset_mint: Pubkey) -> Result<()> {
         require_keys_eq!(self.owner, owner, ErrorCode::InvalidStakePosition);
         require_keys_eq!(self.market, market, ErrorCode::InvalidStakePosition);
-        require_keys_eq!(
-            self.asset_mint,
-            asset_mint,
-            ErrorCode::InvalidStakePosition
-        );
+        require_keys_eq!(self.asset_mint, asset_mint, ErrorCode::InvalidStakePosition);
         Ok(())
     }
 
@@ -834,11 +830,7 @@ impl HedgePosition {
     pub fn assert_position(&self, owner: Pubkey, market: Pubkey, asset_mint: Pubkey) -> Result<()> {
         require_keys_eq!(self.owner, owner, ErrorCode::InvalidHedgePosition);
         require_keys_eq!(self.market, market, ErrorCode::InvalidHedgePosition);
-        require_keys_eq!(
-            self.asset_mint,
-            asset_mint,
-            ErrorCode::InvalidHedgePosition
-        );
+        require_keys_eq!(self.asset_mint, asset_mint, ErrorCode::InvalidHedgePosition);
         Ok(())
     }
 
@@ -1977,8 +1969,7 @@ mod tests {
         let mut market = test_market();
         market.side0.reserve_ledger.live_reserve = 1_000_000_000;
         market.side1.reserve_ledger.live_reserve = 1_000_000_000;
-        market.debt_book.fixed_debt0_shares =
-            DebtBook::debt_to_shares(1_000, NAD as u128).unwrap();
+        market.debt_book.fixed_debt0_shares = DebtBook::debt_to_shares(1_000, NAD as u128).unwrap();
 
         market.refresh_market_health().unwrap();
         assert_eq!(market.health.health0_bps, 0);

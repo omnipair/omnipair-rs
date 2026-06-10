@@ -6,8 +6,8 @@ use anchor_spl::{
 
 use crate::{
     errors::ErrorCode,
+    shared::token::{is_fee_free_mint, is_supported_mint},
     state::Market,
-    utils::token::{is_fee_free_mint, is_supported_mint},
 };
 
 pub fn token_program_for_mint<'info>(

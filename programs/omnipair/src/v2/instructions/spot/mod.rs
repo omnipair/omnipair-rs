@@ -9,14 +9,14 @@ use crate::{
     errors::ErrorCode,
     events::{MarketEventMetadata, MarketSwapEvent},
     generate_market_seeds,
-    state::{MarketSide, Market},
-    utils::{
+    shared::{
         gamm_math::CPCurve,
         math::ceil_div,
         token::{
             transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault,
         },
     },
+    state::{Market, MarketSide},
     v2::utils::market_math::require_market_reserve_floor,
 };
 

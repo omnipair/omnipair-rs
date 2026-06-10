@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::errors::ErrorCode;
-use crate::utils::math::{ceil_div, SqrtU128};
+use crate::shared::math::{ceil_div, SqrtU128};
 use std::cmp::min;
 
 const NAD_U128: u128 = NAD as u128;

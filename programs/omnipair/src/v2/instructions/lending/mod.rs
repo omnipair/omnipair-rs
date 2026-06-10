@@ -8,15 +8,14 @@ use crate::{
     constants::*,
     errors::ErrorCode,
     events::{
-        MarketCollateralDeposited, MarketDebtUpdated, MarketEventMetadata,
-        MarketHealthUpdated,
+        MarketCollateralDeposited, MarketDebtUpdated, MarketEventMetadata, MarketHealthUpdated,
     },
     generate_market_seeds,
-    state::{DebtBook, MarginPosition, MarketSide, Market},
-    utils::{
+    shared::{
         account::get_size_with_discriminator,
         token::{transfer_from_user_to_vault, transfer_from_vault_to_user},
     },
+    state::{DebtBook, MarginPosition, Market, MarketSide},
     v2::utils::market_math::require_market_reserve_floor,
 };
 
@@ -675,11 +674,7 @@ fn apply_borrow_state(
     } else {
         market.position_health_bps(margin_position, false)?
     };
-    require_gte!(
-        health,
-        min_health_bps,
-        ErrorCode::InsufficientMarketHealth
-    );
+    require_gte!(health, min_health_bps, ErrorCode::InsufficientMarketHealth);
     Ok(())
 }
 
