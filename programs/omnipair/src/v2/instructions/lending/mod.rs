@@ -8,11 +8,11 @@ use crate::{
     constants::*,
     errors::ErrorCode,
     events::{
-        MarketCollateralDepositedV2, MarketDebtUpdatedV2, MarketEventMetadataV2,
-        MarketHealthUpdatedV2,
+        MarketCollateralDeposited, MarketDebtUpdated, MarketEventMetadata,
+        MarketHealthUpdated,
     },
-    generate_market_v2_seeds,
-    state::{DebtBookV2, MarginPositionV2, MarketSideV2, MarketV2},
+    generate_market_seeds,
+    state::{DebtBook, MarginPosition, MarketSide, Market},
     utils::{
         account::get_size_with_discriminator,
         token::{transfer_from_user_to_vault, transfer_from_vault_to_user},
@@ -23,13 +23,13 @@ use crate::{
 use super::common::{require_supported_asset_mint, token_program_for_mint};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct DepositCollateralV2Args {
+pub struct DepositCollateralArgs {
     pub market_side_index: u8,
     pub deposit_amount: u64,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct BorrowV2Args {
+pub struct MarketBorrowArgs {
     pub borrow_asset_is_asset0: bool,
     pub borrow_amount: u64,
     pub collateral_amount_to_recognize: u64,
@@ -37,26 +37,26 @@ pub struct BorrowV2Args {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct RepayV2Args {
+pub struct MarketRepayArgs {
     pub repay_asset_is_asset0: bool,
     pub repay_amount: u64,
 }
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: DepositCollateralV2Args)]
-pub struct DepositCollateralV2<'info> {
+#[instruction(args: DepositCollateralArgs)]
+pub struct DepositCollateral<'info> {
     #[account(
         mut,
         seeds = [
-            MARKET_V2_SEED_PREFIX,
+            MARKET_SEED_PREFIX,
             market.asset0_mint.as_ref(),
             market.asset1_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
     )]
-    pub market: Box<Account<'info, MarketV2>>,
+    pub market: Box<Account<'info, Market>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -72,23 +72,23 @@ pub struct DepositCollateralV2<'info> {
     #[account(
         init_if_needed,
         payer = owner,
-        space = get_size_with_discriminator::<MarginPositionV2>(),
+        space = get_size_with_discriminator::<MarginPosition>(),
         seeds = [
-            MARGIN_POSITION_V2_SEED_PREFIX,
+            MARGIN_POSITION_SEED_PREFIX,
             market.key().as_ref(),
             owner.key().as_ref(),
         ],
         bump
     )]
-    pub margin_position: Box<Account<'info, MarginPositionV2>>,
+    pub margin_position: Box<Account<'info, MarginPosition>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
     pub system_program: Program<'info, System>,
 }
 
-impl<'info> DepositCollateralV2<'info> {
-    pub fn validate(&self, args: &DepositCollateralV2Args) -> Result<()> {
+impl<'info> DepositCollateral<'info> {
+    pub fn validate(&self, args: &DepositCollateralArgs) -> Result<()> {
         self.market.assert_started()?;
         require!(args.deposit_amount > 0, ErrorCode::AmountZero);
         require_gte!(
@@ -112,7 +112,7 @@ impl<'info> DepositCollateralV2<'info> {
         Ok(())
     }
 
-    pub fn handle_deposit(ctx: Context<Self>, args: DepositCollateralV2Args) -> Result<()> {
+    pub fn handle_deposit(ctx: Context<Self>, args: DepositCollateralArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
@@ -149,7 +149,7 @@ impl<'info> DepositCollateralV2<'info> {
             .collateral_vault
             .amount
             .checked_sub(collateral_balance_before)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         require!(collateral_credit > 0, ErrorCode::AmountZero);
 
         if args.market_side_index == 0 {
@@ -158,24 +158,24 @@ impl<'info> DepositCollateralV2<'info> {
                 .margin_position
                 .collateral0
                 .checked_add(collateral_credit)
-                .ok_or(ErrorCode::MarketMathOverflowV2)?;
+                .ok_or(ErrorCode::MarketMathOverflow)?;
         } else {
             ctx.accounts.margin_position.collateral1 = ctx
                 .accounts
                 .margin_position
                 .collateral1
                 .checked_add(collateral_credit)
-                .ok_or(ErrorCode::MarketMathOverflowV2)?;
+                .ok_or(ErrorCode::MarketMathOverflow)?;
         }
 
-        emit_cpi!(MarketCollateralDepositedV2 {
+        emit_cpi!(MarketCollateralDeposited {
             market: market_key,
             owner: owner_key,
             asset_mint: asset_mint_key,
             collateral_credit,
             collateral0: ctx.accounts.margin_position.collateral0,
             collateral1: ctx.accounts.margin_position.collateral1,
-            metadata: MarketEventMetadataV2::new(owner_key, market_key),
+            metadata: MarketEventMetadata::new(owner_key, market_key),
         });
 
         Ok(())
@@ -184,19 +184,19 @@ impl<'info> DepositCollateralV2<'info> {
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: BorrowV2Args)]
-pub struct BorrowV2<'info> {
+#[instruction(args: MarketBorrowArgs)]
+pub struct MarketBorrow<'info> {
     #[account(
         mut,
         seeds = [
-            MARKET_V2_SEED_PREFIX,
+            MARKET_SEED_PREFIX,
             market.asset0_mint.as_ref(),
             market.asset1_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
     )]
-    pub market: Box<Account<'info, MarketV2>>,
+    pub market: Box<Account<'info, Market>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -214,29 +214,29 @@ pub struct BorrowV2<'info> {
     #[account(
         mut,
         seeds = [
-            MARGIN_POSITION_V2_SEED_PREFIX,
+            MARGIN_POSITION_SEED_PREFIX,
             market.key().as_ref(),
             owner.key().as_ref(),
         ],
         bump = margin_position.bump
     )]
-    pub margin_position: Box<Account<'info, MarginPositionV2>>,
+    pub margin_position: Box<Account<'info, MarginPosition>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
 }
 
-impl<'info> BorrowV2<'info> {
-    pub fn validate(&self, args: &BorrowV2Args) -> Result<()> {
+impl<'info> MarketBorrow<'info> {
+    pub fn validate(&self, args: &MarketBorrowArgs) -> Result<()> {
         self.market.assert_live()?;
         require!(
             !self.market.config.soft_borrow_enabled,
-            ErrorCode::InvalidMarketConfigV2
+            ErrorCode::InvalidMarketConfig
         );
         require!(args.borrow_amount > 0, ErrorCode::AmountZero);
         require!(
             args.collateral_amount_to_recognize > 0,
-            ErrorCode::InsufficientRecognizedCollateralV2
+            ErrorCode::InsufficientRecognizedCollateral
         );
         validate_borrow_accounts(
             &self.market,
@@ -253,7 +253,7 @@ impl<'info> BorrowV2<'info> {
         Ok(())
     }
 
-    pub fn handle_borrow(ctx: Context<Self>, args: BorrowV2Args) -> Result<()> {
+    pub fn handle_borrow(ctx: Context<Self>, args: MarketBorrowArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let debt_asset_mint_key = ctx.accounts.debt_asset_mint.key();
@@ -281,10 +281,10 @@ impl<'info> BorrowV2<'info> {
             debt_token_program,
             args.borrow_amount,
             ctx.accounts.debt_asset_mint.decimals,
-            &[&generate_market_v2_seeds!(ctx.accounts.market)[..]],
+            &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
 
-        emit_cpi!(MarketDebtUpdatedV2 {
+        emit_cpi!(MarketDebtUpdated {
             market: market_key,
             owner: owner_key,
             debt_asset_mint: debt_asset_mint_key,
@@ -293,9 +293,9 @@ impl<'info> BorrowV2<'info> {
             fixed_debt1: ctx.accounts.market.debt_book.fixed_debt1()?,
             health0_bps: ctx.accounts.market.health.health0_bps,
             health1_bps: ctx.accounts.market.health.health1_bps,
-            metadata: MarketEventMetadataV2::new(owner_key, market_key),
+            metadata: MarketEventMetadata::new(owner_key, market_key),
         });
-        emit_cpi!(MarketHealthUpdatedV2 {
+        emit_cpi!(MarketHealthUpdated {
             market: market_key,
             recognized_collateral0_for_debt1: ctx
                 .accounts
@@ -311,7 +311,7 @@ impl<'info> BorrowV2<'info> {
             effective_debt1_nad: ctx.accounts.market.health.effective_debt1_nad,
             health0_bps: ctx.accounts.market.health.health0_bps,
             health1_bps: ctx.accounts.market.health.health1_bps,
-            metadata: MarketEventMetadataV2::new(owner_key, market_key),
+            metadata: MarketEventMetadata::new(owner_key, market_key),
         });
         Ok(())
     }
@@ -319,19 +319,19 @@ impl<'info> BorrowV2<'info> {
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: RepayV2Args)]
-pub struct RepayV2<'info> {
+#[instruction(args: MarketRepayArgs)]
+pub struct MarketRepay<'info> {
     #[account(
         mut,
         seeds = [
-            MARKET_V2_SEED_PREFIX,
+            MARKET_SEED_PREFIX,
             market.asset0_mint.as_ref(),
             market.asset1_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
     )]
-    pub market: Box<Account<'info, MarketV2>>,
+    pub market: Box<Account<'info, Market>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -347,20 +347,20 @@ pub struct RepayV2<'info> {
     #[account(
         mut,
         seeds = [
-            MARGIN_POSITION_V2_SEED_PREFIX,
+            MARGIN_POSITION_SEED_PREFIX,
             market.key().as_ref(),
             owner.key().as_ref(),
         ],
         bump = margin_position.bump
     )]
-    pub margin_position: Box<Account<'info, MarginPositionV2>>,
+    pub margin_position: Box<Account<'info, MarginPosition>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
 }
 
-impl<'info> RepayV2<'info> {
-    pub fn validate(&self, args: &RepayV2Args) -> Result<()> {
+impl<'info> MarketRepay<'info> {
+    pub fn validate(&self, args: &MarketRepayArgs) -> Result<()> {
         self.market.assert_started()?;
         require!(args.repay_amount > 0, ErrorCode::AmountZero);
         require_gte!(
@@ -382,7 +382,7 @@ impl<'info> RepayV2<'info> {
         Ok(())
     }
 
-    pub fn handle_repay(ctx: Context<Self>, args: RepayV2Args) -> Result<()> {
+    pub fn handle_repay(ctx: Context<Self>, args: MarketRepayArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let debt_asset_mint_key = ctx.accounts.debt_asset_mint.key();
@@ -407,7 +407,7 @@ impl<'info> RepayV2<'info> {
             .reserve_vault
             .amount
             .checked_sub(reserve_balance_before)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         require!(repay_credit > 0, ErrorCode::AmountZero);
         let debt_delta = -i64::try_from(repay_credit).map_err(|_| ErrorCode::Overflow)?;
 
@@ -418,7 +418,7 @@ impl<'info> RepayV2<'info> {
             repay_credit,
         )?;
 
-        emit_cpi!(MarketDebtUpdatedV2 {
+        emit_cpi!(MarketDebtUpdated {
             market: market_key,
             owner: owner_key,
             debt_asset_mint: debt_asset_mint_key,
@@ -427,9 +427,9 @@ impl<'info> RepayV2<'info> {
             fixed_debt1: ctx.accounts.market.debt_book.fixed_debt1()?,
             health0_bps: ctx.accounts.market.health.health0_bps,
             health1_bps: ctx.accounts.market.health.health1_bps,
-            metadata: MarketEventMetadataV2::new(owner_key, market_key),
+            metadata: MarketEventMetadata::new(owner_key, market_key),
         });
-        emit_cpi!(MarketHealthUpdatedV2 {
+        emit_cpi!(MarketHealthUpdated {
             market: market_key,
             recognized_collateral0_for_debt1: ctx
                 .accounts
@@ -445,14 +445,14 @@ impl<'info> RepayV2<'info> {
             effective_debt1_nad: ctx.accounts.market.health.effective_debt1_nad,
             health0_bps: ctx.accounts.market.health.health0_bps,
             health1_bps: ctx.accounts.market.health.health1_bps,
-            metadata: MarketEventMetadataV2::new(owner_key, market_key),
+            metadata: MarketEventMetadata::new(owner_key, market_key),
         });
         Ok(())
     }
 }
 
 fn validate_collateral_accounts<'info>(
-    market: &Account<'info, MarketV2>,
+    market: &Account<'info, Market>,
     market_side_index: u8,
     owner: Pubkey,
     asset_mint: &InterfaceAccount<'info, Mint>,
@@ -494,7 +494,7 @@ fn validate_collateral_accounts<'info>(
 }
 
 fn validate_borrow_accounts<'info>(
-    market: &Account<'info, MarketV2>,
+    market: &Account<'info, Market>,
     borrow_asset_is_asset0: bool,
     owner: Pubkey,
     debt_asset_mint: &InterfaceAccount<'info, Mint>,
@@ -524,7 +524,7 @@ fn validate_borrow_accounts<'info>(
 }
 
 fn validate_repay_accounts<'info>(
-    market: &Account<'info, MarketV2>,
+    market: &Account<'info, Market>,
     repay_asset_is_asset0: bool,
     owner: Pubkey,
     debt_asset_mint: &InterfaceAccount<'info, Mint>,
@@ -547,8 +547,8 @@ fn validate_repay_accounts<'info>(
 }
 
 fn validate_debt_reserve_accounts<'info>(
-    market: &Account<'info, MarketV2>,
-    debt_side: &MarketSideV2,
+    market: &Account<'info, Market>,
+    debt_side: &MarketSide,
     owner: Pubkey,
     debt_asset_mint: &InterfaceAccount<'info, Mint>,
     reserve_vault: &InterfaceAccount<'info, TokenAccount>,
@@ -584,17 +584,17 @@ fn validate_debt_reserve_accounts<'info>(
 }
 
 fn apply_borrow_state(
-    market: &mut MarketV2,
-    margin_position: &mut MarginPositionV2,
+    market: &mut Market,
+    margin_position: &mut MarginPosition,
     borrow_asset_is_asset0: bool,
     borrow_amount: u64,
     collateral_amount_to_recognize: u64,
     min_health_bps: u64,
 ) -> Result<()> {
     let debt_shares = if borrow_asset_is_asset0 {
-        DebtBookV2::debt_to_shares(borrow_amount, market.debt_book.borrow_index0_nad)?
+        DebtBook::debt_to_shares(borrow_amount, market.debt_book.borrow_index0_nad)?
     } else {
-        DebtBookV2::debt_to_shares(borrow_amount, market.debt_book.borrow_index1_nad)?
+        DebtBook::debt_to_shares(borrow_amount, market.debt_book.borrow_index1_nad)?
     };
     let debt_side_index = if borrow_asset_is_asset0 { 0 } else { 1 };
     market.enforce_daily_borrow_limit(debt_side_index, borrow_amount)?;
@@ -619,50 +619,50 @@ fn apply_borrow_state(
         require_gte!(
             margin_position.idle_collateral1()?,
             collateral_amount_to_recognize,
-            ErrorCode::InsufficientRecognizedCollateralV2
+            ErrorCode::InsufficientRecognizedCollateral
         );
         margin_position.recognized_collateral1_for_debt0 = margin_position
             .recognized_collateral1_for_debt0
             .checked_add(collateral_amount_to_recognize)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         margin_position.fixed_debt0_shares = margin_position
             .fixed_debt0_shares
             .checked_add(debt_shares)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         market.debt_book.fixed_debt0_shares = market
             .debt_book
             .fixed_debt0_shares
             .checked_add(debt_shares)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         market.recognition_ledger.debt_bearing_collateral1_for_debt0 = market
             .recognition_ledger
             .debt_bearing_collateral1_for_debt0
             .checked_add(collateral_amount_to_recognize)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
     } else {
         require_gte!(
             margin_position.idle_collateral0()?,
             collateral_amount_to_recognize,
-            ErrorCode::InsufficientRecognizedCollateralV2
+            ErrorCode::InsufficientRecognizedCollateral
         );
         margin_position.recognized_collateral0_for_debt1 = margin_position
             .recognized_collateral0_for_debt1
             .checked_add(collateral_amount_to_recognize)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         margin_position.fixed_debt1_shares = margin_position
             .fixed_debt1_shares
             .checked_add(debt_shares)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         market.debt_book.fixed_debt1_shares = market
             .debt_book
             .fixed_debt1_shares
             .checked_add(debt_shares)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         market.recognition_ledger.debt_bearing_collateral0_for_debt1 = market
             .recognition_ledger
             .debt_bearing_collateral0_for_debt1
             .checked_add(collateral_amount_to_recognize)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
     }
     market.recognition_ledger.last_recognition_slot = Clock::get()?.slot;
     market.refresh_market_health()?;
@@ -678,14 +678,14 @@ fn apply_borrow_state(
     require_gte!(
         health,
         min_health_bps,
-        ErrorCode::InsufficientMarketHealthV2
+        ErrorCode::InsufficientMarketHealth
     );
     Ok(())
 }
 
 fn apply_repay_state(
-    market: &mut MarketV2,
-    margin_position: &mut MarginPositionV2,
+    market: &mut Market,
+    margin_position: &mut MarginPosition,
     repay_asset_is_asset0: bool,
     repay_credit: u64,
 ) -> Result<()> {
@@ -700,7 +700,7 @@ fn apply_repay_state(
         let shares_to_burn = if repay_credit as u128 == debt_before {
             shares_before
         } else {
-            DebtBookV2::debt_to_shares(repay_credit, market.debt_book.borrow_index0_nad)?
+            DebtBook::debt_to_shares(repay_credit, market.debt_book.borrow_index0_nad)?
                 .min(shares_before)
         };
         let release_collateral = proportional_release(
@@ -711,21 +711,21 @@ fn apply_repay_state(
         margin_position.fixed_debt0_shares = margin_position
             .fixed_debt0_shares
             .checked_sub(shares_to_burn)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         margin_position.recognized_collateral1_for_debt0 = margin_position
             .recognized_collateral1_for_debt0
             .checked_sub(release_collateral)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         market.debt_book.fixed_debt0_shares = market
             .debt_book
             .fixed_debt0_shares
             .checked_sub(shares_to_burn)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         market.recognition_ledger.debt_bearing_collateral1_for_debt0 = market
             .recognition_ledger
             .debt_bearing_collateral1_for_debt0
             .checked_sub(release_collateral)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         market.side0.reserve_ledger.live_reserve = market
             .side0
             .reserve_ledger
@@ -749,7 +749,7 @@ fn apply_repay_state(
         let shares_to_burn = if repay_credit as u128 == debt_before {
             shares_before
         } else {
-            DebtBookV2::debt_to_shares(repay_credit, market.debt_book.borrow_index1_nad)?
+            DebtBook::debt_to_shares(repay_credit, market.debt_book.borrow_index1_nad)?
                 .min(shares_before)
         };
         let release_collateral = proportional_release(
@@ -760,21 +760,21 @@ fn apply_repay_state(
         margin_position.fixed_debt1_shares = margin_position
             .fixed_debt1_shares
             .checked_sub(shares_to_burn)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         margin_position.recognized_collateral0_for_debt1 = margin_position
             .recognized_collateral0_for_debt1
             .checked_sub(release_collateral)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         market.debt_book.fixed_debt1_shares = market
             .debt_book
             .fixed_debt1_shares
             .checked_sub(shares_to_burn)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         market.recognition_ledger.debt_bearing_collateral0_for_debt1 = market
             .recognition_ledger
             .debt_bearing_collateral0_for_debt1
             .checked_sub(release_collateral)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         market.side1.reserve_ledger.live_reserve = market
             .side1
             .reserve_ledger
@@ -792,11 +792,11 @@ fn apply_repay_state(
     Ok(())
 }
 
-fn require_borrow_headroom(debt_side: &MarketSideV2, borrow_amount: u64) -> Result<()> {
+fn require_borrow_headroom(debt_side: &MarketSide, borrow_amount: u64) -> Result<()> {
     require_gte!(
         debt_side.reserve_ledger.cash_reserve,
         borrow_amount,
-        ErrorCode::InsufficientBorrowHeadroomV2
+        ErrorCode::InsufficientBorrowHeadroom
     );
     let next_reserve = debt_side
         .reserve_ledger
@@ -818,6 +818,6 @@ fn proportional_release(recognized: u64, shares_to_burn: u128, shares_before: u1
     let release = (recognized as u128)
         .checked_mul(shares_to_burn)
         .and_then(|value| value.checked_div(shares_before))
-        .ok_or(ErrorCode::MarketMathOverflowV2)?;
-    u64::try_from(release).map_err(|_| ErrorCode::MarketMathOverflowV2.into())
+        .ok_or(ErrorCode::MarketMathOverflow)?;
+    u64::try_from(release).map_err(|_| ErrorCode::MarketMathOverflow.into())
 }

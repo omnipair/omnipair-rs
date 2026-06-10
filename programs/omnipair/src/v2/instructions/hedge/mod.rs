@@ -7,9 +7,9 @@ use anchor_spl::{
 use crate::{
     constants::*,
     errors::ErrorCode,
-    events::{MarketEventMetadataV2, MarketHedgeClosedV2, MarketHedgeOpenedV2},
-    generate_market_v2_seeds,
-    state::{HedgePositionV2, MarketV2},
+    events::{MarketEventMetadata, MarketHedgeClosed, MarketHedgeOpened},
+    generate_market_seeds,
+    state::{HedgePosition, Market},
     utils::{
         account::get_size_with_discriminator,
         token::{
@@ -21,14 +21,14 @@ use crate::{
 use super::common::{require_fee_free_claim_mint, token_program_for_mint};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct OpenHedgeV2Args {
+pub struct OpenHedgeArgs {
     pub market_side_index: u8,
     pub claim_amount: u64,
     pub min_hedge_amount: u64,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct CloseHedgeV2Args {
+pub struct CloseHedgeArgs {
     pub market_side_index: u8,
     pub hedge_amount: u64,
     pub min_claim_amount_out: u64,
@@ -36,19 +36,19 @@ pub struct CloseHedgeV2Args {
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: OpenHedgeV2Args)]
-pub struct OpenHedgeV2<'info> {
+#[instruction(args: OpenHedgeArgs)]
+pub struct OpenHedge<'info> {
     #[account(
         mut,
         seeds = [
-            MARKET_V2_SEED_PREFIX,
+            MARKET_SEED_PREFIX,
             market.asset0_mint.as_ref(),
             market.asset1_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
     )]
-    pub market: Box<Account<'info, MarketV2>>,
+    pub market: Box<Account<'info, Market>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -72,28 +72,28 @@ pub struct OpenHedgeV2<'info> {
     #[account(
         init_if_needed,
         payer = owner,
-        space = get_size_with_discriminator::<HedgePositionV2>(),
+        space = get_size_with_discriminator::<HedgePosition>(),
         seeds = [
-            HEDGE_POSITION_V2_SEED_PREFIX,
+            HEDGE_POSITION_SEED_PREFIX,
             market.key().as_ref(),
             owner.key().as_ref(),
             asset_mint.key().as_ref(),
         ],
         bump
     )]
-    pub hedge_position: Box<Account<'info, HedgePositionV2>>,
+    pub hedge_position: Box<Account<'info, HedgePosition>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
     pub system_program: Program<'info, System>,
 }
 
-impl<'info> OpenHedgeV2<'info> {
-    pub fn validate(&self, args: &OpenHedgeV2Args) -> Result<()> {
+impl<'info> OpenHedge<'info> {
+    pub fn validate(&self, args: &OpenHedgeArgs) -> Result<()> {
         self.market.assert_started()?;
         require!(
             self.market.config.hedged_lp_enabled,
-            ErrorCode::InvalidMarketConfigV2
+            ErrorCode::InvalidMarketConfig
         );
         require!(args.claim_amount > 0, ErrorCode::AmountZero);
         require_gte!(
@@ -122,7 +122,7 @@ impl<'info> OpenHedgeV2<'info> {
         Ok(())
     }
 
-    pub fn handle_open(ctx: Context<Self>, args: OpenHedgeV2Args) -> Result<()> {
+    pub fn handle_open(ctx: Context<Self>, args: OpenHedgeArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
@@ -160,7 +160,7 @@ impl<'info> OpenHedgeV2<'info> {
             .hedge_vault
             .amount
             .checked_sub(hedge_vault_before)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         require_gte!(
             claim_credit,
             args.min_hedge_amount,
@@ -174,7 +174,7 @@ impl<'info> OpenHedgeV2<'info> {
                 .claim_ledger
                 .hedged_claim_supply
                 .checked_add(claim_credit)
-                .ok_or(ErrorCode::MarketMathOverflowV2)?;
+                .ok_or(ErrorCode::MarketMathOverflow)?;
             market_side.claim_ledger.hedged_claim_supply
         };
         ctx.accounts.hedge_position.increase(claim_credit)?;
@@ -190,17 +190,17 @@ impl<'info> OpenHedgeV2<'info> {
             ctx.accounts.hedge_mint.to_account_info(),
             ctx.accounts.owner_hedge_account.to_account_info(),
             claim_credit,
-            &[&generate_market_v2_seeds!(ctx.accounts.market)[..]],
+            &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
 
-        emit_cpi!(MarketHedgeOpenedV2 {
+        emit_cpi!(MarketHedgeOpened {
             market: market_key,
             owner: owner_key,
             asset_mint: asset_mint_key,
             claim_amount: claim_credit,
             hedge_amount: claim_credit,
             hedged_claim_supply,
-            metadata: MarketEventMetadataV2::new(owner_key, market_key),
+            metadata: MarketEventMetadata::new(owner_key, market_key),
         });
 
         Ok(())
@@ -209,19 +209,19 @@ impl<'info> OpenHedgeV2<'info> {
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: CloseHedgeV2Args)]
-pub struct CloseHedgeV2<'info> {
+#[instruction(args: CloseHedgeArgs)]
+pub struct CloseHedge<'info> {
     #[account(
         mut,
         seeds = [
-            MARKET_V2_SEED_PREFIX,
+            MARKET_SEED_PREFIX,
             market.asset0_mint.as_ref(),
             market.asset1_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
     )]
-    pub market: Box<Account<'info, MarketV2>>,
+    pub market: Box<Account<'info, Market>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -245,21 +245,21 @@ pub struct CloseHedgeV2<'info> {
     #[account(
         mut,
         seeds = [
-            HEDGE_POSITION_V2_SEED_PREFIX,
+            HEDGE_POSITION_SEED_PREFIX,
             market.key().as_ref(),
             owner.key().as_ref(),
             asset_mint.key().as_ref(),
         ],
         bump = hedge_position.bump
     )]
-    pub hedge_position: Box<Account<'info, HedgePositionV2>>,
+    pub hedge_position: Box<Account<'info, HedgePosition>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
 }
 
-impl<'info> CloseHedgeV2<'info> {
-    pub fn validate(&self, args: &CloseHedgeV2Args) -> Result<()> {
+impl<'info> CloseHedge<'info> {
+    pub fn validate(&self, args: &CloseHedgeArgs) -> Result<()> {
         self.market.assert_started()?;
         require!(args.hedge_amount > 0, ErrorCode::AmountZero);
         require_gte!(
@@ -286,12 +286,12 @@ impl<'info> CloseHedgeV2<'info> {
         require_gte!(
             self.hedge_position.hedged_claim_amount,
             args.hedge_amount,
-            ErrorCode::InvalidHedgePositionV2
+            ErrorCode::InvalidHedgePosition
         );
         Ok(())
     }
 
-    pub fn handle_close(ctx: Context<Self>, args: CloseHedgeV2Args) -> Result<()> {
+    pub fn handle_close(ctx: Context<Self>, args: CloseHedgeArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
@@ -316,7 +316,7 @@ impl<'info> CloseHedgeV2<'info> {
                 .claim_ledger
                 .hedged_claim_supply
                 .checked_sub(args.hedge_amount)
-                .ok_or(ErrorCode::MarketMathOverflowV2)?;
+                .ok_or(ErrorCode::MarketMathOverflow)?;
             market_side.claim_ledger.hedged_claim_supply
         };
         ctx.accounts.hedge_position.decrease(args.hedge_amount)?;
@@ -334,7 +334,7 @@ impl<'info> CloseHedgeV2<'info> {
             claim_token_program,
             args.hedge_amount,
             ctx.accounts.claim_mint.decimals,
-            &[&generate_market_v2_seeds!(ctx.accounts.market)[..]],
+            &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
         require_gte!(
             args.hedge_amount,
@@ -342,14 +342,14 @@ impl<'info> CloseHedgeV2<'info> {
             ErrorCode::SlippageExceeded
         );
 
-        emit_cpi!(MarketHedgeClosedV2 {
+        emit_cpi!(MarketHedgeClosed {
             market: market_key,
             owner: owner_key,
             asset_mint: asset_mint_key,
             hedge_amount: args.hedge_amount,
             claim_amount: args.hedge_amount,
             hedged_claim_supply,
-            metadata: MarketEventMetadataV2::new(owner_key, market_key),
+            metadata: MarketEventMetadata::new(owner_key, market_key),
         });
 
         Ok(())
@@ -357,7 +357,7 @@ impl<'info> CloseHedgeV2<'info> {
 }
 
 fn validate_hedge_accounts<'info>(
-    market: &Account<'info, MarketV2>,
+    market: &Account<'info, Market>,
     market_side_index: u8,
     owner: Pubkey,
     asset_mint: &InterfaceAccount<'info, Mint>,
@@ -376,7 +376,7 @@ fn validate_hedge_accounts<'info>(
     require_keys_eq!(
         market_side.claim_mint,
         claim_mint.key(),
-        ErrorCode::InvalidClaimMintV2
+        ErrorCode::InvalidClaimMint
     );
     require_keys_eq!(
         market_side.hedge_mint,

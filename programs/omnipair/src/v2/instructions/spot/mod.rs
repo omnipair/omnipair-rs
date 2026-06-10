@@ -7,9 +7,9 @@ use anchor_spl::{
 use crate::{
     constants::*,
     errors::ErrorCode,
-    events::{MarketEventMetadataV2, MarketSwapV2},
-    generate_market_v2_seeds,
-    state::{MarketSideV2, MarketV2},
+    events::{MarketEventMetadata, MarketSwapEvent},
+    generate_market_seeds,
+    state::{MarketSide, Market},
     utils::{
         gamm_math::CPCurve,
         math::ceil_div,
@@ -23,7 +23,7 @@ use crate::{
 use super::common::{require_supported_asset_mint, token_program_for_mint, validate_swap_accounts};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct SwapV2Args {
+pub struct MarketSwapArgs {
     pub asset_in_is_asset0: bool,
     pub exact_asset_in: u64,
     pub min_asset_out: u64,
@@ -31,19 +31,19 @@ pub struct SwapV2Args {
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: SwapV2Args)]
-pub struct SwapV2<'info> {
+#[instruction(args: MarketSwapArgs)]
+pub struct MarketSwap<'info> {
     #[account(
         mut,
         seeds = [
-            MARKET_V2_SEED_PREFIX,
+            MARKET_SEED_PREFIX,
             market.asset0_mint.as_ref(),
             market.asset1_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
     )]
-    pub market: Box<Account<'info, MarketV2>>,
+    pub market: Box<Account<'info, Market>>,
 
     #[account(mut)]
     pub trader: Signer<'info>,
@@ -71,8 +71,8 @@ pub struct SwapV2<'info> {
     pub token_2022_program: Program<'info, Token2022>,
 }
 
-impl<'info> SwapV2<'info> {
-    pub fn validate(&self, args: &SwapV2Args) -> Result<()> {
+impl<'info> MarketSwap<'info> {
+    pub fn validate(&self, args: &MarketSwapArgs) -> Result<()> {
         self.market.assert_live()?;
         require!(args.exact_asset_in > 0, ErrorCode::AmountZero);
         require_gte!(
@@ -97,7 +97,7 @@ impl<'info> SwapV2<'info> {
         Ok(())
     }
 
-    pub fn handle_swap(mut ctx: Context<Self>, args: SwapV2Args) -> Result<()> {
+    pub fn handle_swap(mut ctx: Context<Self>, args: MarketSwapArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let trader_key = ctx.accounts.trader.key();
         let asset_in_mint_key = ctx.accounts.asset_in_mint.key();
@@ -117,7 +117,7 @@ impl<'info> SwapV2<'info> {
         let fee_credit = move_swap_fee(&mut ctx, total_fee)?;
         let amount_in_after_fee = reserve_credit
             .checked_sub(total_fee)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         require!(amount_in_after_fee > 0, ErrorCode::InsufficientOutputAmount);
 
         let amount_out = {
@@ -144,7 +144,7 @@ impl<'info> SwapV2<'info> {
             asset_out_token_program,
             amount_out,
             ctx.accounts.asset_out_mint.decimals,
-            &[&generate_market_v2_seeds!(ctx.accounts.market)[..]],
+            &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
 
         {
@@ -162,7 +162,7 @@ impl<'info> SwapV2<'info> {
         ctx.accounts.market.refresh_risk_book()?;
         ctx.accounts.market.assert_spot_ema_divergence()?;
 
-        emit_cpi!(MarketSwapV2 {
+        emit_cpi!(MarketSwapEvent {
             market: market_key,
             trader: trader_key,
             asset_in_mint: asset_in_mint_key,
@@ -171,7 +171,7 @@ impl<'info> SwapV2<'info> {
             amount_in_after_fee,
             amount_out,
             fee_credit,
-            metadata: MarketEventMetadataV2::new(trader_key, market_key),
+            metadata: MarketEventMetadata::new(trader_key, market_key),
         });
 
         Ok(())
@@ -179,7 +179,7 @@ impl<'info> SwapV2<'info> {
 }
 
 fn receive_swap_inventory<'info>(
-    ctx: &mut Context<SwapV2<'info>>,
+    ctx: &mut Context<MarketSwap<'info>>,
     exact_asset_in: u64,
 ) -> Result<u64> {
     let reserve_balance_before = ctx.accounts.reserve_in_vault.amount;
@@ -202,10 +202,10 @@ fn receive_swap_inventory<'info>(
         .reserve_in_vault
         .amount
         .checked_sub(reserve_balance_before)
-        .ok_or(ErrorCode::MarketMathOverflowV2.into())
+        .ok_or(ErrorCode::MarketMathOverflow.into())
 }
 
-fn move_swap_fee<'info>(ctx: &mut Context<SwapV2<'info>>, total_fee: u64) -> Result<u64> {
+fn move_swap_fee<'info>(ctx: &mut Context<MarketSwap<'info>>, total_fee: u64) -> Result<u64> {
     if total_fee == 0 {
         return Ok(0);
     }
@@ -223,7 +223,7 @@ fn move_swap_fee<'info>(ctx: &mut Context<SwapV2<'info>>, total_fee: u64) -> Res
         asset_in_token_program,
         total_fee,
         ctx.accounts.asset_in_mint.decimals,
-        &[&generate_market_v2_seeds!(ctx.accounts.market)[..]],
+        &[&generate_market_seeds!(ctx.accounts.market)[..]],
     )?;
     ctx.accounts.reserve_in_vault.reload()?;
     ctx.accounts.fee_in_vault.reload()?;
@@ -231,12 +231,12 @@ fn move_swap_fee<'info>(ctx: &mut Context<SwapV2<'info>>, total_fee: u64) -> Res
         .fee_in_vault
         .amount
         .checked_sub(fee_balance_before)
-        .ok_or(ErrorCode::MarketMathOverflowV2.into())
+        .ok_or(ErrorCode::MarketMathOverflow.into())
 }
 
 fn apply_swap_state(
-    market_side_in: &mut MarketSideV2,
-    market_side_out: &mut MarketSideV2,
+    market_side_in: &mut MarketSide,
+    market_side_out: &mut MarketSide,
     amount_in_after_fee: u64,
     amount_out: u64,
     fee_credit: u64,
@@ -245,7 +245,7 @@ fn apply_swap_state(
     require_gte!(
         market_side_out.reserve_ledger.cash_reserve,
         amount_out,
-        ErrorCode::InsufficientMarketClaimCoverageV2
+        ErrorCode::InsufficientMarketClaimCoverage
     );
     let next_out_reserve = market_side_out
         .reserve_ledger
@@ -290,8 +290,8 @@ mod tests {
         cash_reserve: u64,
         protected_claim_supply: u64,
         required_buffer: u64,
-    ) -> MarketSideV2 {
-        MarketSideV2 {
+    ) -> MarketSide {
+        MarketSide {
             asset_mint: Pubkey::new_unique(),
             asset_decimals: 6,
             claim_mint: Pubkey::new_unique(),
@@ -301,21 +301,21 @@ mod tests {
             collateral_vault: Pubkey::new_unique(),
             fee_vault: Pubkey::new_unique(),
             stake_vault: Pubkey::new_unique(),
-            reserve_ledger: crate::state::ReserveLedgerV2 {
+            reserve_ledger: crate::state::ReserveLedger {
                 live_reserve,
                 cash_reserve,
                 reserved_liability: 0,
             },
-            claim_ledger: crate::state::ClaimLedgerV2 {
+            claim_ledger: crate::state::ClaimLedger {
                 protected_claim_supply,
-                ..crate::state::ClaimLedgerV2::default()
+                ..crate::state::ClaimLedger::default()
             },
-            buffer_book: crate::state::BufferBookV2 {
+            buffer_book: crate::state::BufferBook {
                 required_buffer,
                 buffer_ratio_bps: 2_000,
-                ..crate::state::BufferBookV2::default()
+                ..crate::state::BufferBook::default()
             },
-            ..MarketSideV2::default()
+            ..MarketSide::default()
         }
     }
 
@@ -332,7 +332,7 @@ mod tests {
         let mut market_side_out = market_side(12_000, 12_000, 8_000, 2_000);
         let err = apply_swap_state(&mut market_side_in, &mut market_side_out, 500, 2_001, 0, 0)
             .unwrap_err();
-        assert_eq!(err, error!(ErrorCode::InsufficientMarketClaimCoverageV2));
+        assert_eq!(err, error!(ErrorCode::InsufficientMarketClaimCoverage));
     }
 
     #[test]

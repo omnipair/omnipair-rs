@@ -18,13 +18,13 @@ impl EventMetadata {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
-pub struct MarketEventMetadataV2 {
+pub struct MarketEventMetadata {
     pub signer: Pubkey,
     pub market: Pubkey,
     pub slot: u64,
 }
 
-impl MarketEventMetadataV2 {
+impl MarketEventMetadata {
     pub fn new(signer: Pubkey, market: Pubkey) -> Self {
         Self {
             signer,
@@ -35,7 +35,7 @@ impl MarketEventMetadataV2 {
 }
 
 #[event]
-pub struct MarketCreatedV2 {
+pub struct MarketCreated {
     pub market: Pubkey,
     pub asset0_mint: Pubkey,
     pub asset1_mint: Pubkey,
@@ -57,21 +57,21 @@ pub struct MarketCreatedV2 {
     pub swap_fee_bps: u16,
     pub params_hash: [u8; 32],
     pub version: u8,
-    pub metadata: MarketEventMetadataV2,
+    pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketUpdatedV2 {
+pub struct MarketUpdated {
     pub market: Pubkey,
     pub reduce_only: bool,
     pub buffer_ratio_bps: u16,
     pub swap_fee_bps: u16,
     pub operator_fee_bps: u16,
-    pub metadata: MarketEventMetadataV2,
+    pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketHealthUpdatedV2 {
+pub struct MarketHealthUpdated {
     pub market: Pubkey,
     pub recognized_collateral0_for_debt1: u64,
     pub recognized_collateral1_for_debt0: u64,
@@ -79,11 +79,11 @@ pub struct MarketHealthUpdatedV2 {
     pub effective_debt1_nad: u128,
     pub health0_bps: u64,
     pub health1_bps: u64,
-    pub metadata: MarketEventMetadataV2,
+    pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketReserveDepositedV2 {
+pub struct MarketReserveDeposited {
     pub market: Pubkey,
     pub owner: Pubkey,
     pub asset_mint: Pubkey,
@@ -92,22 +92,22 @@ pub struct MarketReserveDepositedV2 {
     pub buffer_amount: u64,
     pub protected_claim_supply: u64,
     pub required_buffer: u64,
-    pub metadata: MarketEventMetadataV2,
+    pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketClaimRedeemedV2 {
+pub struct MarketClaimRedeemed {
     pub market: Pubkey,
     pub owner: Pubkey,
     pub asset_mint: Pubkey,
     pub claim_amount: u64,
     pub protected_claim_supply: u64,
     pub required_buffer: u64,
-    pub metadata: MarketEventMetadataV2,
+    pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketStakeUpdatedV2 {
+pub struct MarketStakeUpdated {
     pub market: Pubkey,
     pub owner: Pubkey,
     pub asset_mint: Pubkey,
@@ -115,32 +115,32 @@ pub struct MarketStakeUpdatedV2 {
     pub staked_buffer_shares: u64,
     pub active_stake_units: u64,
     pub accrued_fee_amount: u64,
-    pub metadata: MarketEventMetadataV2,
+    pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketFeesClaimedV2 {
+pub struct MarketFeesClaimed {
     pub market: Pubkey,
     pub owner: Pubkey,
     pub asset_mint: Pubkey,
     pub fee_amount: u64,
     pub remaining_fee_liability: u64,
-    pub metadata: MarketEventMetadataV2,
+    pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketFeeLiabilityClaimedV2 {
+pub struct MarketFeeLiabilityClaimed {
     pub market: Pubkey,
     pub authority: Pubkey,
     pub asset_mint: Pubkey,
     pub claim_kind: u8,
     pub fee_amount: u64,
     pub remaining_fee_liability: u64,
-    pub metadata: MarketEventMetadataV2,
+    pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketSwapV2 {
+pub struct MarketSwapEvent {
     pub market: Pubkey,
     pub trader: Pubkey,
     pub asset_in_mint: Pubkey,
@@ -149,22 +149,22 @@ pub struct MarketSwapV2 {
     pub amount_in_after_fee: u64,
     pub amount_out: u64,
     pub fee_credit: u64,
-    pub metadata: MarketEventMetadataV2,
+    pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketCollateralDepositedV2 {
+pub struct MarketCollateralDeposited {
     pub market: Pubkey,
     pub owner: Pubkey,
     pub asset_mint: Pubkey,
     pub collateral_credit: u64,
     pub collateral0: u64,
     pub collateral1: u64,
-    pub metadata: MarketEventMetadataV2,
+    pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketDebtUpdatedV2 {
+pub struct MarketDebtUpdated {
     pub market: Pubkey,
     pub owner: Pubkey,
     pub debt_asset_mint: Pubkey,
@@ -173,22 +173,22 @@ pub struct MarketDebtUpdatedV2 {
     pub fixed_debt1: u128,
     pub health0_bps: u64,
     pub health1_bps: u64,
-    pub metadata: MarketEventMetadataV2,
+    pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketInsuranceFundedV2 {
+pub struct MarketInsuranceFunded {
     pub market: Pubkey,
     pub sponsor: Pubkey,
     pub asset_mint: Pubkey,
     pub insurance_credit: u64,
     pub available0: u64,
     pub available1: u64,
-    pub metadata: MarketEventMetadataV2,
+    pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketLiquidatedV2 {
+pub struct MarketLiquidated {
     pub market: Pubkey,
     pub borrower: Pubkey,
     pub liquidator: Pubkey,
@@ -199,29 +199,29 @@ pub struct MarketLiquidatedV2 {
     pub insurance_drawn: u64,
     pub socialized_loss: u64,
     pub remaining_debt: u128,
-    pub metadata: MarketEventMetadataV2,
+    pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketHedgeOpenedV2 {
+pub struct MarketHedgeOpened {
     pub market: Pubkey,
     pub owner: Pubkey,
     pub asset_mint: Pubkey,
     pub claim_amount: u64,
     pub hedge_amount: u64,
     pub hedged_claim_supply: u64,
-    pub metadata: MarketEventMetadataV2,
+    pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketHedgeClosedV2 {
+pub struct MarketHedgeClosed {
     pub market: Pubkey,
     pub owner: Pubkey,
     pub asset_mint: Pubkey,
     pub hedge_amount: u64,
     pub claim_amount: u64,
     pub hedged_claim_supply: u64,
-    pub metadata: MarketEventMetadataV2,
+    pub metadata: MarketEventMetadata,
 }
 
 #[event]

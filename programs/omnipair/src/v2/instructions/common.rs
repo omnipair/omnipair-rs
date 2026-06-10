@@ -6,7 +6,7 @@ use anchor_spl::{
 
 use crate::{
     errors::ErrorCode,
-    state::MarketV2,
+    state::Market,
     utils::token::{is_fee_free_mint, is_supported_mint},
 };
 
@@ -31,12 +31,12 @@ pub fn require_supported_asset_mint(mint: &InterfaceAccount<Mint>) -> Result<()>
 }
 
 pub fn require_fee_free_claim_mint(mint: &InterfaceAccount<Mint>) -> Result<()> {
-    require!(is_fee_free_mint(mint)?, ErrorCode::InvalidClaimMintV2);
+    require!(is_fee_free_mint(mint)?, ErrorCode::InvalidClaimMint);
     Ok(())
 }
 
 pub fn validate_reserve_accounts<'info>(
-    market: &Account<'info, MarketV2>,
+    market: &Account<'info, Market>,
     market_side_index: u8,
     owner: Pubkey,
     asset_mint: &InterfaceAccount<'info, Mint>,
@@ -54,7 +54,7 @@ pub fn validate_reserve_accounts<'info>(
     require_keys_eq!(
         market_side.claim_mint,
         claim_mint.key(),
-        ErrorCode::InvalidClaimMintV2
+        ErrorCode::InvalidClaimMint
     );
     require_keys_eq!(
         market_side.reserve_vault,
@@ -89,13 +89,13 @@ pub fn validate_reserve_accounts<'info>(
     );
     require!(
         claim_mint.mint_authority == COption::Some(market.key()),
-        ErrorCode::InvalidClaimMintV2
+        ErrorCode::InvalidClaimMint
     );
     Ok(())
 }
 
 pub fn validate_stake_accounts<'info>(
-    market: &Account<'info, MarketV2>,
+    market: &Account<'info, Market>,
     market_side_index: u8,
     owner: Pubkey,
     asset_mint: &InterfaceAccount<'info, Mint>,
@@ -112,7 +112,7 @@ pub fn validate_stake_accounts<'info>(
     require_keys_eq!(
         market_side.claim_mint,
         claim_mint.key(),
-        ErrorCode::InvalidClaimMintV2
+        ErrorCode::InvalidClaimMint
     );
     require_keys_eq!(
         market_side.stake_vault,
@@ -133,13 +133,13 @@ pub fn validate_stake_accounts<'info>(
     );
     require!(
         claim_mint.mint_authority == COption::Some(market.key()),
-        ErrorCode::InvalidClaimMintV2
+        ErrorCode::InvalidClaimMint
     );
     Ok(())
 }
 
 pub fn validate_fee_accounts<'info>(
-    market: &Account<'info, MarketV2>,
+    market: &Account<'info, Market>,
     market_side_index: u8,
     owner: Pubkey,
     asset_mint: &InterfaceAccount<'info, Mint>,
@@ -173,7 +173,7 @@ pub fn validate_fee_accounts<'info>(
 }
 
 pub fn validate_swap_accounts<'info>(
-    market: &Account<'info, MarketV2>,
+    market: &Account<'info, Market>,
     asset_in_is_asset0: bool,
     trader: Pubkey,
     asset_in_mint: &InterfaceAccount<'info, Mint>,

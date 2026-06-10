@@ -98,29 +98,29 @@ pub const MAX_TARGET_UTIL_BPS: u64 = 10_000;  // 100% maximum for target_util_en
 #[constant]
 pub const PAIR_SEED_PREFIX: &[u8] = b"gamm_pair";
 #[constant]
-pub const MARKET_V2_SEED_PREFIX: &[u8] = b"market_v2";
+pub const MARKET_SEED_PREFIX: &[u8] = b"market";
 #[constant]
-pub const MARKET_RESERVE_VAULT_V2_SEED_PREFIX: &[u8] = b"market_reserve_v2";
+pub const MARKET_RESERVE_VAULT_SEED_PREFIX: &[u8] = b"market_reserve";
 #[constant]
-pub const MARKET_COLLATERAL_VAULT_V2_SEED_PREFIX: &[u8] = b"market_collateral_v2";
+pub const MARKET_COLLATERAL_VAULT_SEED_PREFIX: &[u8] = b"market_collateral";
 #[constant]
-pub const MARKET_FEE_VAULT_V2_SEED_PREFIX: &[u8] = b"market_fee_v2";
+pub const MARKET_FEE_VAULT_SEED_PREFIX: &[u8] = b"market_fee";
 #[constant]
-pub const MARKET_STAKE_VAULT_V2_SEED_PREFIX: &[u8] = b"market_stake_v2";
+pub const MARKET_STAKE_VAULT_SEED_PREFIX: &[u8] = b"market_stake";
 #[constant]
-pub const STAKE_POSITION_V2_SEED_PREFIX: &[u8] = b"stake_v2";
+pub const STAKE_POSITION_SEED_PREFIX: &[u8] = b"stake";
 #[constant]
-pub const MARGIN_POSITION_V2_SEED_PREFIX: &[u8] = b"margin_v2";
+pub const MARGIN_POSITION_SEED_PREFIX: &[u8] = b"margin";
 #[constant]
-pub const HEDGE_VAULT_V2_SEED_PREFIX: &[u8] = b"hedged_v2";
+pub const HEDGE_VAULT_SEED_PREFIX: &[u8] = b"hedged";
 #[constant]
-pub const HEDGE_POSITION_V2_SEED_PREFIX: &[u8] = b"hedge_position_v2";
+pub const HEDGE_POSITION_SEED_PREFIX: &[u8] = b"hedge_position";
 #[constant]
-pub const INSURANCE_RESERVE_V2_SEED_PREFIX: &[u8] = b"insurance_v2";
+pub const INSURANCE_RESERVE_SEED_PREFIX: &[u8] = b"insurance";
 #[constant]
-pub const RECOGNITION_LEDGER_V2_SEED_PREFIX: &[u8] = b"recognized_collateral_v2";
+pub const RECOGNITION_LEDGER_SEED_PREFIX: &[u8] = b"recognized_collateral";
 #[constant]
-pub const DAILY_LIMIT_V2_SEED_PREFIX: &[u8] = b"daily_limit_v2";
+pub const DAILY_LIMIT_SEED_PREFIX: &[u8] = b"daily_limit";
 #[constant]
 pub const POSITION_SEED_PREFIX: &[u8] = b"gamm_position";
 #[constant]
@@ -134,7 +134,7 @@ pub const COLLATERAL_VAULT_SEED_PREFIX: &[u8] = b"collateral_vault";
 #[constant]
 pub const VERSION: u8 = 1;
 #[constant]
-pub const MARKET_V2_VERSION: u8 = 2;
+pub const MARKET_VERSION: u8 = 2;
 
 /// Emergency signer authorized to toggle reduce-only mode.
 /// For Squads, use the vault/authority signer address.

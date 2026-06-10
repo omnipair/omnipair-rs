@@ -7,9 +7,9 @@ use anchor_spl::{
 use crate::{
     constants::*,
     errors::ErrorCode,
-    events::{MarketEventMetadataV2, MarketInsuranceFundedV2, MarketLiquidatedV2},
-    generate_market_v2_seeds,
-    state::{DebtBookV2, MarginPositionV2, MarketV2},
+    events::{MarketEventMetadata, MarketInsuranceFunded, MarketLiquidated},
+    generate_market_seeds,
+    state::{DebtBook, MarginPosition, Market},
     utils::token::{
         transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault,
     },
@@ -18,13 +18,13 @@ use crate::{
 use super::common::{require_supported_asset_mint, token_program_for_mint};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct DepositInsuranceV2Args {
+pub struct DepositInsuranceArgs {
     pub market_side_index: u8,
     pub deposit_amount: u64,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct LiquidateV2Args {
+pub struct MarketLiquidateArgs {
     pub debt_asset_is_asset0: bool,
     pub repay_amount: u64,
     pub min_collateral_out: u64,
@@ -34,19 +34,19 @@ pub struct LiquidateV2Args {
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: DepositInsuranceV2Args)]
-pub struct DepositInsuranceV2<'info> {
+#[instruction(args: DepositInsuranceArgs)]
+pub struct DepositInsurance<'info> {
     #[account(
         mut,
         seeds = [
-            MARKET_V2_SEED_PREFIX,
+            MARKET_SEED_PREFIX,
             market.asset0_mint.as_ref(),
             market.asset1_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
     )]
-    pub market: Box<Account<'info, MarketV2>>,
+    pub market: Box<Account<'info, Market>>,
 
     #[account(mut)]
     pub sponsor: Signer<'info>,
@@ -63,8 +63,8 @@ pub struct DepositInsuranceV2<'info> {
     pub token_2022_program: Program<'info, Token2022>,
 }
 
-impl<'info> DepositInsuranceV2<'info> {
-    pub fn validate(&self, args: &DepositInsuranceV2Args) -> Result<()> {
+impl<'info> DepositInsurance<'info> {
+    pub fn validate(&self, args: &DepositInsuranceArgs) -> Result<()> {
         self.market.assert_started()?;
         require!(args.deposit_amount > 0, ErrorCode::AmountZero);
         require_gte!(
@@ -84,7 +84,7 @@ impl<'info> DepositInsuranceV2<'info> {
         Ok(())
     }
 
-    pub fn handle_deposit(ctx: Context<Self>, args: DepositInsuranceV2Args) -> Result<()> {
+    pub fn handle_deposit(ctx: Context<Self>, args: DepositInsuranceArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let sponsor_key = ctx.accounts.sponsor.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
@@ -111,7 +111,7 @@ impl<'info> DepositInsuranceV2<'info> {
             .insurance_vault
             .amount
             .checked_sub(vault_balance_before)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         require!(insurance_credit > 0, ErrorCode::AmountZero);
 
         if args.market_side_index == 0 {
@@ -121,7 +121,7 @@ impl<'info> DepositInsuranceV2<'info> {
                 .insurance_reserve
                 .available0
                 .checked_add(insurance_credit)
-                .ok_or(ErrorCode::MarketMathOverflowV2)?;
+                .ok_or(ErrorCode::MarketMathOverflow)?;
         } else {
             ctx.accounts.market.insurance_reserve.available1 = ctx
                 .accounts
@@ -129,17 +129,17 @@ impl<'info> DepositInsuranceV2<'info> {
                 .insurance_reserve
                 .available1
                 .checked_add(insurance_credit)
-                .ok_or(ErrorCode::MarketMathOverflowV2)?;
+                .ok_or(ErrorCode::MarketMathOverflow)?;
         }
 
-        emit_cpi!(MarketInsuranceFundedV2 {
+        emit_cpi!(MarketInsuranceFunded {
             market: market_key,
             sponsor: sponsor_key,
             asset_mint: asset_mint_key,
             insurance_credit,
             available0: ctx.accounts.market.insurance_reserve.available0,
             available1: ctx.accounts.market.insurance_reserve.available1,
-            metadata: MarketEventMetadataV2::new(sponsor_key, market_key),
+            metadata: MarketEventMetadata::new(sponsor_key, market_key),
         });
 
         Ok(())
@@ -148,19 +148,19 @@ impl<'info> DepositInsuranceV2<'info> {
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: LiquidateV2Args)]
-pub struct LiquidateV2<'info> {
+#[instruction(args: MarketLiquidateArgs)]
+pub struct MarketLiquidate<'info> {
     #[account(
         mut,
         seeds = [
-            MARKET_V2_SEED_PREFIX,
+            MARKET_SEED_PREFIX,
             market.asset0_mint.as_ref(),
             market.asset1_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
     )]
-    pub market: Box<Account<'info, MarketV2>>,
+    pub market: Box<Account<'info, Market>>,
 
     #[account(mut)]
     pub liquidator: Signer<'info>,
@@ -187,20 +187,20 @@ pub struct LiquidateV2<'info> {
     #[account(
         mut,
         seeds = [
-            MARGIN_POSITION_V2_SEED_PREFIX,
+            MARGIN_POSITION_SEED_PREFIX,
             market.key().as_ref(),
             margin_position.owner.as_ref(),
         ],
         bump = margin_position.bump
     )]
-    pub margin_position: Box<Account<'info, MarginPositionV2>>,
+    pub margin_position: Box<Account<'info, MarginPosition>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
 }
 
-impl<'info> LiquidateV2<'info> {
-    pub fn validate(&self, args: &LiquidateV2Args) -> Result<()> {
+impl<'info> MarketLiquidate<'info> {
+    pub fn validate(&self, args: &MarketLiquidateArgs) -> Result<()> {
         self.market.assert_started()?;
         require!(args.repay_amount > 0, ErrorCode::AmountZero);
         require_gte!(
@@ -225,7 +225,7 @@ impl<'info> LiquidateV2<'info> {
         require_keys_eq!(
             self.margin_position.market,
             self.market.key(),
-            ErrorCode::InvalidMarginPositionV2
+            ErrorCode::InvalidMarginPosition
         );
         let health_bps = position_health_bps(
             &self.market,
@@ -234,12 +234,12 @@ impl<'info> LiquidateV2<'info> {
         )?;
         require!(
             health_bps < self.market.config.market_health_min_bps as u64,
-            ErrorCode::PositionNotLiquidatableV2
+            ErrorCode::PositionNotLiquidatable
         );
         Ok(())
     }
 
-    pub fn handle_liquidate(ctx: Context<Self>, args: LiquidateV2Args) -> Result<()> {
+    pub fn handle_liquidate(ctx: Context<Self>, args: MarketLiquidateArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let borrower_key = ctx.accounts.margin_position.owner;
         let liquidator_key = ctx.accounts.liquidator.key();
@@ -267,7 +267,7 @@ impl<'info> LiquidateV2<'info> {
             .reserve_vault
             .amount
             .checked_sub(reserve_balance_before_repay)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         require!(repay_credit > 0, ErrorCode::AmountZero);
 
         let insurance_request = insurance_request_for_liquidation(
@@ -289,19 +289,19 @@ impl<'info> LiquidateV2<'info> {
                 debt_token_program,
                 insurance_request,
                 ctx.accounts.debt_asset_mint.decimals,
-                &[&generate_market_v2_seeds!(ctx.accounts.market)[..]],
+                &[&generate_market_seeds!(ctx.accounts.market)[..]],
             )?;
             ctx.accounts.reserve_vault.reload()?;
             ctx.accounts.insurance_vault.reload()?;
             (
                 insurance_balance_before
                     .checked_sub(ctx.accounts.insurance_vault.amount)
-                    .ok_or(ErrorCode::MarketMathOverflowV2)?,
+                    .ok_or(ErrorCode::MarketMathOverflow)?,
                 ctx.accounts
                     .reserve_vault
                     .amount
                     .checked_sub(reserve_balance_before_insurance)
-                    .ok_or(ErrorCode::MarketMathOverflowV2)?,
+                    .ok_or(ErrorCode::MarketMathOverflow)?,
             )
         } else {
             (0, 0)
@@ -336,11 +336,11 @@ impl<'info> LiquidateV2<'info> {
                 collateral_token_program,
                 outcome.collateral_seized,
                 ctx.accounts.collateral_asset_mint.decimals,
-                &[&generate_market_v2_seeds!(ctx.accounts.market)[..]],
+                &[&generate_market_seeds!(ctx.accounts.market)[..]],
             )?;
         }
 
-        emit_cpi!(MarketLiquidatedV2 {
+        emit_cpi!(MarketLiquidated {
             market: market_key,
             borrower: borrower_key,
             liquidator: liquidator_key,
@@ -351,7 +351,7 @@ impl<'info> LiquidateV2<'info> {
             insurance_drawn: outcome.insurance_drawn,
             socialized_loss: outcome.socialized_loss,
             remaining_debt: outcome.remaining_debt,
-            metadata: MarketEventMetadataV2::new(liquidator_key, market_key),
+            metadata: MarketEventMetadata::new(liquidator_key, market_key),
         });
 
         Ok(())
@@ -368,7 +368,7 @@ struct LiquidationOutcome {
 }
 
 fn validate_insurance_accounts<'info>(
-    market: &Account<'info, MarketV2>,
+    market: &Account<'info, Market>,
     market_side_index: u8,
     owner: Pubkey,
     asset_mint: &InterfaceAccount<'info, Mint>,
@@ -411,7 +411,7 @@ fn validate_insurance_accounts<'info>(
 }
 
 fn validate_liquidation_accounts<'info>(
-    market: &Account<'info, MarketV2>,
+    market: &Account<'info, Market>,
     debt_asset_is_asset0: bool,
     liquidator: Pubkey,
     debt_asset_mint: &InterfaceAccount<'info, Mint>,
@@ -506,16 +506,16 @@ fn validate_liquidation_accounts<'info>(
 }
 
 fn position_health_bps(
-    market: &MarketV2,
-    margin_position: &MarginPositionV2,
+    market: &Market,
+    margin_position: &MarginPosition,
     debt_asset_is_asset0: bool,
 ) -> Result<u64> {
     market.position_health_bps(margin_position, debt_asset_is_asset0)
 }
 
 fn insurance_request_for_liquidation(
-    market: &MarketV2,
-    margin_position: &MarginPositionV2,
+    market: &Market,
+    margin_position: &MarginPosition,
     debt_asset_is_asset0: bool,
     repay_credit: u64,
     max_insurance_draw: u64,
@@ -531,7 +531,7 @@ fn insurance_request_for_liquidation(
         collateral_to_seize(market, debt_asset_is_asset0, repay_credit, collateral_before)?;
     let remaining_debt = debt_before
         .checked_sub(repay_credit as u128)
-        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        .ok_or(ErrorCode::MarketMathOverflow)?;
     if collateral_seized < collateral_before || remaining_debt == 0 {
         return Ok(0);
     }
@@ -546,8 +546,8 @@ fn insurance_request_for_liquidation(
 }
 
 fn apply_liquidation_state(
-    market: &mut MarketV2,
-    margin_position: &mut MarginPositionV2,
+    market: &mut Market,
+    margin_position: &mut MarginPosition,
     debt_asset_is_asset0: bool,
     repay_credit: u64,
     insurance_spent: u64,
@@ -566,7 +566,7 @@ fn apply_liquidation_state(
     let collateral_exhausted = collateral_seized == collateral_before;
     let repay_plus_insurance = (repay_credit as u128)
         .checked_add(insurance_credit as u128)
-        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        .ok_or(ErrorCode::MarketMathOverflow)?;
     require_gte!(
         debt_before,
         repay_plus_insurance,
@@ -575,27 +575,27 @@ fn apply_liquidation_state(
 
     let bad_debt = debt_before
         .checked_sub(repay_plus_insurance)
-        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        .ok_or(ErrorCode::MarketMathOverflow)?;
     let socialized_loss = if collateral_exhausted {
-        u64::try_from(bad_debt).map_err(|_| ErrorCode::MarketMathOverflowV2)?
+        u64::try_from(bad_debt).map_err(|_| ErrorCode::MarketMathOverflow)?
     } else {
         0
     };
     require_gte!(
         max_socialized_loss,
         socialized_loss,
-        ErrorCode::LiquidationSocializationExceededV2
+        ErrorCode::LiquidationSocializationExceeded
     );
     if bad_debt > 0 && !collateral_exhausted {
         require!(
             socialized_loss == 0,
-            ErrorCode::InsufficientInsuranceReserveV2
+            ErrorCode::InsufficientInsuranceReserve
         );
     }
 
     let debt_reduction = repay_plus_insurance
         .checked_add(socialized_loss as u128)
-        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        .ok_or(ErrorCode::MarketMathOverflow)?;
     apply_liquidation_debt_reduction(
         market,
         margin_position,
@@ -626,13 +626,13 @@ fn apply_liquidation_state(
             .insurance_reserve
             .available0
             .checked_sub(insurance_spent)
-            .ok_or(ErrorCode::InsufficientInsuranceReserveV2)?;
+            .ok_or(ErrorCode::InsufficientInsuranceReserve)?;
     } else {
         market.insurance_reserve.available1 = market
             .insurance_reserve
             .available1
             .checked_sub(insurance_spent)
-            .ok_or(ErrorCode::InsufficientInsuranceReserveV2)?;
+            .ok_or(ErrorCode::InsufficientInsuranceReserve)?;
     }
 
     market.refresh_market_health()?;
@@ -646,8 +646,8 @@ fn apply_liquidation_state(
 }
 
 fn apply_liquidation_debt_reduction(
-    market: &mut MarketV2,
-    margin_position: &mut MarginPositionV2,
+    market: &mut Market,
+    margin_position: &mut MarginPosition,
     debt_asset_is_asset0: bool,
     debt_reduction: u128,
     collateral_seized: u64,
@@ -664,7 +664,7 @@ fn apply_liquidation_debt_reduction(
         margin_position.collateral1 = margin_position
             .collateral1
             .checked_sub(collateral_seized)
-            .ok_or(ErrorCode::InsufficientRecognizedCollateralV2)?;
+            .ok_or(ErrorCode::InsufficientRecognizedCollateral)?;
         let recognized_decrease = recognized_decrease_after_seizure(
             margin_position.recognized_collateral1_for_debt0,
             margin_position.collateral1,
@@ -674,21 +674,21 @@ fn apply_liquidation_debt_reduction(
         margin_position.recognized_collateral1_for_debt0 = margin_position
             .recognized_collateral1_for_debt0
             .checked_sub(recognized_decrease)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         margin_position.fixed_debt0_shares = margin_position
             .fixed_debt0_shares
             .checked_sub(shares_to_burn)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         market.debt_book.fixed_debt0_shares = market
             .debt_book
             .fixed_debt0_shares
             .checked_sub(shares_to_burn)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         market.recognition_ledger.debt_bearing_collateral1_for_debt0 = market
             .recognition_ledger
             .debt_bearing_collateral1_for_debt0
             .checked_sub(recognized_decrease)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
     } else {
         let shares_before = margin_position.fixed_debt1_shares;
         let debt_before = margin_position.fixed_debt1(&market.debt_book)?;
@@ -701,7 +701,7 @@ fn apply_liquidation_debt_reduction(
         margin_position.collateral0 = margin_position
             .collateral0
             .checked_sub(collateral_seized)
-            .ok_or(ErrorCode::InsufficientRecognizedCollateralV2)?;
+            .ok_or(ErrorCode::InsufficientRecognizedCollateral)?;
         let recognized_decrease = recognized_decrease_after_seizure(
             margin_position.recognized_collateral0_for_debt1,
             margin_position.collateral0,
@@ -711,28 +711,28 @@ fn apply_liquidation_debt_reduction(
         margin_position.recognized_collateral0_for_debt1 = margin_position
             .recognized_collateral0_for_debt1
             .checked_sub(recognized_decrease)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         margin_position.fixed_debt1_shares = margin_position
             .fixed_debt1_shares
             .checked_sub(shares_to_burn)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         market.debt_book.fixed_debt1_shares = market
             .debt_book
             .fixed_debt1_shares
             .checked_sub(shares_to_burn)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         market.recognition_ledger.debt_bearing_collateral0_for_debt1 = market
             .recognition_ledger
             .debt_bearing_collateral0_for_debt1
             .checked_sub(recognized_decrease)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
     }
     Ok(())
 }
 
 fn position_debt(
-    market: &MarketV2,
-    margin_position: &MarginPositionV2,
+    market: &Market,
+    margin_position: &MarginPosition,
     debt_asset_is_asset0: bool,
 ) -> Result<u128> {
     if debt_asset_is_asset0 {
@@ -742,7 +742,7 @@ fn position_debt(
     }
 }
 
-fn position_collateral(margin_position: &MarginPositionV2, debt_asset_is_asset0: bool) -> u64 {
+fn position_collateral(margin_position: &MarginPosition, debt_asset_is_asset0: bool) -> u64 {
     if debt_asset_is_asset0 {
         margin_position.collateral1
     } else {
@@ -751,7 +751,7 @@ fn position_collateral(margin_position: &MarginPositionV2, debt_asset_is_asset0:
 }
 
 fn collateral_to_seize(
-    market: &MarketV2,
+    market: &Market,
     debt_asset_is_asset0: bool,
     repay_credit: u64,
     collateral_before: u64,
@@ -774,8 +774,8 @@ fn shares_to_burn_for_reduction(
         return Ok(shares_before);
     }
     let debt_reduction =
-        u64::try_from(debt_reduction).map_err(|_| ErrorCode::MarketMathOverflowV2)?;
-    DebtBookV2::debt_to_shares(debt_reduction, borrow_index_nad)
+        u64::try_from(debt_reduction).map_err(|_| ErrorCode::MarketMathOverflow)?;
+    DebtBook::debt_to_shares(debt_reduction, borrow_index_nad)
         .map(|shares| shares.min(shares_before))
 }
 
@@ -791,30 +791,30 @@ fn recognized_decrease_after_seizure(
     let proportional = (recognized_before as u128)
         .checked_mul(shares_to_burn)
         .and_then(|value| value.checked_div(shares_before))
-        .ok_or(ErrorCode::MarketMathOverflowV2)?;
-    let proportional = u64::try_from(proportional).map_err(|_| ErrorCode::MarketMathOverflowV2)?;
+        .ok_or(ErrorCode::MarketMathOverflow)?;
+    let proportional = u64::try_from(proportional).map_err(|_| ErrorCode::MarketMathOverflow)?;
     let recognized_after_proportional = recognized_before
         .checked_sub(proportional)
-        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        .ok_or(ErrorCode::MarketMathOverflow)?;
     if recognized_after_proportional <= collateral_after {
         Ok(proportional)
     } else {
         let extra = recognized_after_proportional
             .checked_sub(collateral_after)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         proportional
             .checked_add(extra)
-            .ok_or(ErrorCode::MarketMathOverflowV2.into())
+            .ok_or(ErrorCode::MarketMathOverflow.into())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{BufferBookV2, MarketConfigV2, MarketSideV2, ReserveLedgerV2};
+    use crate::state::{BufferBook, MarketConfig, MarketSide, ReserveLedger};
 
-    fn market_side(asset_mint: Pubkey) -> MarketSideV2 {
-        MarketSideV2 {
+    fn market_side(asset_mint: Pubkey) -> MarketSide {
+        MarketSide {
             asset_mint,
             asset_decimals: 6,
             claim_mint: Pubkey::new_unique(),
@@ -824,30 +824,30 @@ mod tests {
             collateral_vault: Pubkey::new_unique(),
             fee_vault: Pubkey::new_unique(),
             stake_vault: Pubkey::new_unique(),
-            reserve_ledger: ReserveLedgerV2 {
+            reserve_ledger: ReserveLedger {
                 live_reserve: 1_000,
                 cash_reserve: 1_000,
                 reserved_liability: 0,
             },
-            buffer_book: BufferBookV2 {
+            buffer_book: BufferBook {
                 buffer_ratio_bps: 2_000,
-                ..BufferBookV2::default()
+                ..BufferBook::default()
             },
-            ..MarketSideV2::default()
+            ..MarketSide::default()
         }
     }
 
-    fn test_market() -> MarketV2 {
+    fn test_market() -> Market {
         let asset0_mint = Pubkey::new_unique();
         let asset1_mint = Pubkey::new_unique();
-        let mut market = MarketV2::initialize(
+        let mut market = Market::initialize(
             asset0_mint,
             asset1_mint,
             Pubkey::new_unique(),
             Pubkey::new_unique(),
             market_side(asset0_mint),
             market_side(asset1_mint),
-            MarketConfigV2 {
+            MarketConfig {
                 swap_fee_bps: 30,
                 operator_fee_bps: 1_000,
                 buffer_ratio_bps: 2_000,
@@ -876,13 +876,13 @@ mod tests {
         market
     }
 
-    fn insolvent_position(market: &mut MarketV2) -> MarginPositionV2 {
-        let debt_shares = DebtBookV2::debt_to_shares(100, market.debt_book.borrow_index0_nad)
+    fn insolvent_position(market: &mut Market) -> MarginPosition {
+        let debt_shares = DebtBook::debt_to_shares(100, market.debt_book.borrow_index0_nad)
             .unwrap();
         market.debt_book.fixed_debt0_shares = debt_shares;
         market.recognition_ledger.debt_bearing_collateral1_for_debt0 = 50;
 
-        MarginPositionV2 {
+        MarginPosition {
             owner: Pubkey::new_unique(),
             market: Pubkey::new_unique(),
             collateral0: 0,
@@ -941,7 +941,7 @@ mod tests {
 
         assert_eq!(
             err,
-            error!(ErrorCode::LiquidationSocializationExceededV2)
+            error!(ErrorCode::LiquidationSocializationExceeded)
         );
     }
 

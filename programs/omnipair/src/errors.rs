@@ -233,75 +233,75 @@ pub enum ErrorCode {
     #[msg("Invalid recipient - address does not match configured revenue recipient")]
     InvalidRecipient,
 
-    #[msg("Invalid V2 market")]
-    InvalidMarketV2,
+    #[msg("Invalid market")]
+    InvalidMarket,
 
-    #[msg("Invalid V2 market config")]
-    InvalidMarketConfigV2,
+    #[msg("Invalid market config")]
+    InvalidMarketConfig,
 
-    #[msg("Invalid V2 market buffer ratio")]
-    InvalidMarketBufferRatioV2,
+    #[msg("Invalid market buffer ratio")]
+    InvalidMarketBufferRatio,
 
-    #[msg("V2 market claim coverage is insufficient")]
-    InsufficientMarketClaimCoverageV2,
+    #[msg("Market claim coverage is insufficient")]
+    InsufficientMarketClaimCoverage,
 
-    #[msg("Invalid V2 market side")]
-    InvalidMarketSideV2,
+    #[msg("Invalid market side")]
+    InvalidMarketSide,
 
-    #[msg("Invalid V2 stake position")]
-    InvalidStakePositionV2,
+    #[msg("Invalid stake position")]
+    InvalidStakePosition,
 
-    #[msg("Invalid V2 hedge position")]
-    InvalidHedgePositionV2,
+    #[msg("Invalid hedge position")]
+    InvalidHedgePosition,
 
-    #[msg("V2 buffer shares are insufficient")]
-    InsufficientBufferSharesV2,
+    #[msg("Buffer shares are insufficient")]
+    InsufficientBufferShares,
 
-    #[msg("V2 borrow headroom is insufficient")]
-    InsufficientBorrowHeadroomV2,
+    #[msg("Borrow headroom is insufficient")]
+    InsufficientBorrowHeadroom,
 
-    #[msg("V2 market health is insufficient")]
-    InsufficientMarketHealthV2,
+    #[msg("Market health is insufficient")]
+    InsufficientMarketHealth,
 
-    #[msg("Invalid V2 margin position")]
-    InvalidMarginPositionV2,
+    #[msg("Invalid margin position")]
+    InvalidMarginPosition,
 
-    #[msg("V2 recognized collateral is insufficient")]
-    InsufficientRecognizedCollateralV2,
+    #[msg("Recognized collateral is insufficient")]
+    InsufficientRecognizedCollateral,
 
-    #[msg("V2 position is not liquidatable")]
-    PositionNotLiquidatableV2,
+    #[msg("Position is not liquidatable")]
+    PositionNotLiquidatable,
 
-    #[msg("V2 insurance reserve is insufficient")]
-    InsufficientInsuranceReserveV2,
+    #[msg("Insurance reserve is insufficient")]
+    InsufficientInsuranceReserve,
 
-    #[msg("V2 socialized liquidation loss exceeds caller cap")]
-    LiquidationSocializationExceededV2,
+    #[msg("Socialized liquidation loss exceeds caller cap")]
+    LiquidationSocializationExceeded,
 
-    #[msg("V2 claim mint must not charge transfer fees")]
-    InvalidClaimMintV2,
+    #[msg("Claim mint must not charge transfer fees")]
+    InvalidClaimMint,
 
-    #[msg("V2 fee liability is not backed by fee vault balance")]
-    UnbackedFeeLiabilityV2,
+    #[msg("Fee liability is not backed by fee vault balance")]
+    UnbackedFeeLiability,
 
-    #[msg("Invalid V2 market fee authority")]
-    InvalidMarketFeeAuthorityV2,
+    #[msg("Invalid market fee authority")]
+    InvalidMarketFeeAuthority,
 
-    #[msg("V2 market is reduce-only")]
-    MarketReduceOnlyV2,
+    #[msg("Market is reduce-only")]
+    MarketReduceOnly,
 
-    #[msg("V2 market has not started")]
-    MarketNotStartedV2,
+    #[msg("Market has not started")]
+    MarketNotStarted,
 
-    #[msg("V2 market math overflow")]
-    MarketMathOverflowV2,
+    #[msg("Market math overflow")]
+    MarketMathOverflow,
 
-    #[msg("V2 daily liquidity limit exceeded")]
-    DailyLimitExceededV2,
+    #[msg("Daily liquidity limit exceeded")]
+    DailyLimitExceeded,
 
-    #[msg("V2 market risk circuit breaker triggered")]
-    MarketRiskCircuitBreakerV2,
+    #[msg("Market risk circuit breaker triggered")]
+    MarketRiskCircuitBreaker,
 
-    #[msg("V2 instruction is intentionally not live yet")]
-    V2InstructionNotLive,
+    #[msg("Instruction is intentionally not live yet")]
+    InstructionNotLive,
 }

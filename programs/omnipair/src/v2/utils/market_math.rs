@@ -10,21 +10,21 @@ pub fn split_claim_minus_buffer(
 ) -> anchor_lang::prelude::Result<(u64, u64)> {
     anchor_lang::prelude::require!(
         buffer_ratio_bps > 0 && buffer_ratio_bps < BPS_DENOMINATOR,
-        ErrorCode::InvalidMarketBufferRatioV2
+        ErrorCode::InvalidMarketBufferRatio
     );
 
     let buffer_amount = ceil_div(
         (deposit_amount as u128)
             .checked_mul(buffer_ratio_bps as u128)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?,
+            .ok_or(ErrorCode::MarketMathOverflow)?,
         BPS_DENOMINATOR as u128,
     )
-    .ok_or(ErrorCode::MarketMathOverflowV2)?;
+    .ok_or(ErrorCode::MarketMathOverflow)?;
     let buffer_amount =
-        u64::try_from(buffer_amount).map_err(|_| ErrorCode::MarketMathOverflowV2)?;
+        u64::try_from(buffer_amount).map_err(|_| ErrorCode::MarketMathOverflow)?;
     let claim_amount = deposit_amount
         .checked_sub(buffer_amount)
-        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        .ok_or(ErrorCode::MarketMathOverflow)?;
 
     Ok((claim_amount, buffer_amount))
 }
@@ -35,21 +35,21 @@ pub fn required_buffer_for_claims(
 ) -> anchor_lang::prelude::Result<u64> {
     anchor_lang::prelude::require!(
         buffer_ratio_bps > 0 && buffer_ratio_bps < BPS_DENOMINATOR,
-        ErrorCode::InvalidMarketBufferRatioV2
+        ErrorCode::InvalidMarketBufferRatio
     );
 
     let claim_ratio_bps = BPS_DENOMINATOR
         .checked_sub(buffer_ratio_bps)
-        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        .ok_or(ErrorCode::MarketMathOverflow)?;
     let required_buffer = ceil_div(
         (protected_claim_supply as u128)
             .checked_mul(buffer_ratio_bps as u128)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?,
+            .ok_or(ErrorCode::MarketMathOverflow)?,
         claim_ratio_bps as u128,
     )
-    .ok_or(ErrorCode::MarketMathOverflowV2)?;
+    .ok_or(ErrorCode::MarketMathOverflow)?;
 
-    u64::try_from(required_buffer).map_err(|_| ErrorCode::MarketMathOverflowV2.into())
+    u64::try_from(required_buffer).map_err(|_| ErrorCode::MarketMathOverflow.into())
 }
 
 pub fn active_stake_units(
@@ -59,22 +59,22 @@ pub fn active_stake_units(
 ) -> anchor_lang::prelude::Result<u64> {
     anchor_lang::prelude::require!(
         buffer_ratio_bps > 0 && buffer_ratio_bps < BPS_DENOMINATOR,
-        ErrorCode::InvalidMarketBufferRatioV2
+        ErrorCode::InvalidMarketBufferRatio
     );
 
     let claim_ratio_bps = BPS_DENOMINATOR
         .checked_sub(buffer_ratio_bps)
-        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        .ok_or(ErrorCode::MarketMathOverflow)?;
     let claim_units = (staked_claim_amount as u128)
         .checked_mul(BPS_DENOMINATOR as u128)
         .and_then(|value| value.checked_div(claim_ratio_bps as u128))
-        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        .ok_or(ErrorCode::MarketMathOverflow)?;
     let buffer_units = (staked_buffer_shares as u128)
         .checked_mul(BPS_DENOMINATOR as u128)
         .and_then(|value| value.checked_div(buffer_ratio_bps as u128))
-        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        .ok_or(ErrorCode::MarketMathOverflow)?;
 
-    u64::try_from(claim_units.min(buffer_units)).map_err(|_| ErrorCode::MarketMathOverflowV2.into())
+    u64::try_from(claim_units.min(buffer_units)).map_err(|_| ErrorCode::MarketMathOverflow.into())
 }
 
 pub fn accrue_fee_liability(
@@ -84,13 +84,13 @@ pub fn accrue_fee_liability(
 ) -> anchor_lang::prelude::Result<u64> {
     let delta = current_fee_index_nad
         .checked_sub(checkpoint_fee_index_nad)
-        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        .ok_or(ErrorCode::MarketMathOverflow)?;
     let accrued = (active_stake_units as u128)
         .checked_mul(delta)
         .and_then(|value| value.checked_div(NAD as u128))
-        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        .ok_or(ErrorCode::MarketMathOverflow)?;
 
-    u64::try_from(accrued).map_err(|_| ErrorCode::MarketMathOverflowV2.into())
+    u64::try_from(accrued).map_err(|_| ErrorCode::MarketMathOverflow.into())
 }
 
 pub fn require_market_reserve_floor(
@@ -100,11 +100,11 @@ pub fn require_market_reserve_floor(
 ) -> anchor_lang::prelude::Result<()> {
     let floor = protected_claim_supply
         .checked_add(required_buffer)
-        .ok_or(ErrorCode::MarketMathOverflowV2)?;
+        .ok_or(ErrorCode::MarketMathOverflow)?;
     anchor_lang::prelude::require_gte!(
         post_reserve,
         floor,
-        ErrorCode::InsufficientMarketClaimCoverageV2
+        ErrorCode::InsufficientMarketClaimCoverage
     );
     Ok(())
 }
@@ -152,7 +152,7 @@ mod tests {
         let err = require_market_reserve_floor(1_149, 1_000, 150).unwrap_err();
         assert_eq!(
             err,
-            anchor_lang::prelude::error!(ErrorCode::InsufficientMarketClaimCoverageV2)
+            anchor_lang::prelude::error!(ErrorCode::InsufficientMarketClaimCoverage)
         );
     }
 
@@ -201,7 +201,7 @@ mod tests {
                 ).unwrap_err();
                 prop_assert_eq!(
                     err,
-                    anchor_lang::prelude::error!(ErrorCode::InsufficientMarketClaimCoverageV2)
+                    anchor_lang::prelude::error!(ErrorCode::InsufficientMarketClaimCoverage)
                 );
             }
         }

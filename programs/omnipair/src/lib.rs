@@ -107,92 +107,92 @@ pub mod omnipair {
         CreateRateModel::handle_create_rate_model(ctx, args)
     }
 
-    // V2 market instructions
+    // Market instructions
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn v2_initialize_market(ctx: Context<InitializeMarketV2>, args: InitializeMarketV2Args) -> Result<()> {
-        InitializeMarketV2::handle_initialize(ctx, args)
+    pub fn initialize_market(ctx: Context<InitializeMarket>, args: InitializeMarketArgs) -> Result<()> {
+        InitializeMarket::handle_initialize(ctx, args)
     }
 
-    pub fn v2_update_market_config(ctx: Context<UpdateMarketConfigV2>, args: UpdateMarketConfigV2Args) -> Result<()> {
-        UpdateMarketConfigV2::handle_update(ctx, args)
+    pub fn update_market_config(ctx: Context<UpdateMarketConfig>, args: UpdateMarketConfigArgs) -> Result<()> {
+        UpdateMarketConfig::handle_update(ctx, args)
     }
 
-    pub fn v2_set_market_reduce_only(ctx: Context<SetMarketReduceOnlyV2>, args: SetMarketReduceOnlyV2Args) -> Result<()> {
-        SetMarketReduceOnlyV2::handle_set(ctx, args)
+    pub fn set_market_reduce_only(ctx: Context<SetMarketReduceOnly>, args: SetMarketReduceOnlyArgs) -> Result<()> {
+        SetMarketReduceOnly::handle_set(ctx, args)
     }
 
-    pub fn v2_get_market_state(ctx: Context<ViewMarketStateV2>) -> Result<()> {
-        ViewMarketStateV2::handle_view(ctx)
-    }
-
-    #[access_control(ctx.accounts.validate(&args))]
-    pub fn v2_deposit_reserve(ctx: Context<DepositReserveV2>, args: DepositReserveV2Args) -> Result<()> {
-        DepositReserveV2::handle_deposit(ctx, args)
+    pub fn get_market_state(ctx: Context<ViewMarketState>) -> Result<()> {
+        ViewMarketState::handle_view(ctx)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn v2_redeem_claim(ctx: Context<RedeemClaimV2>, args: RedeemClaimV2Args) -> Result<()> {
-        RedeemClaimV2::handle_redeem(ctx, args)
+    pub fn deposit_reserve(ctx: Context<DepositReserve>, args: DepositReserveArgs) -> Result<()> {
+        DepositReserve::handle_deposit(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn v2_stake(ctx: Context<StakeV2>, args: StakeV2Args) -> Result<()> {
-        StakeV2::handle_stake(ctx, args)
+    pub fn redeem_claim(ctx: Context<RedeemClaim>, args: RedeemClaimArgs) -> Result<()> {
+        RedeemClaim::handle_redeem(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn v2_unstake(ctx: Context<UnstakeV2>, args: UnstakeV2Args) -> Result<()> {
-        UnstakeV2::handle_unstake(ctx, args)
+    pub fn stake(ctx: Context<Stake>, args: StakeArgs) -> Result<()> {
+        Stake::handle_stake(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn v2_claim_fees(ctx: Context<ClaimFeesV2>, args: ClaimFeesV2Args) -> Result<()> {
-        ClaimFeesV2::handle_claim(ctx, args)
+    pub fn unstake(ctx: Context<Unstake>, args: UnstakeArgs) -> Result<()> {
+        Unstake::handle_unstake(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn v2_claim_market_fees(ctx: Context<ClaimMarketFeesV2>, args: ClaimMarketFeesV2Args) -> Result<()> {
-        ClaimMarketFeesV2::handle_claim(ctx, args)
+    pub fn claim_fees(ctx: Context<ClaimFees>, args: ClaimFeesArgs) -> Result<()> {
+        ClaimFees::handle_claim(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn v2_swap(ctx: Context<SwapV2>, args: SwapV2Args) -> Result<()> {
-        SwapV2::handle_swap(ctx, args)
+    pub fn claim_market_fees(ctx: Context<ClaimMarketFees>, args: ClaimMarketFeesArgs) -> Result<()> {
+        ClaimMarketFees::handle_claim(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn v2_deposit_collateral(ctx: Context<DepositCollateralV2>, args: DepositCollateralV2Args) -> Result<()> {
-        DepositCollateralV2::handle_deposit(ctx, args)
+    pub fn market_swap(ctx: Context<MarketSwap>, args: MarketSwapArgs) -> Result<()> {
+        MarketSwap::handle_swap(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn v2_borrow(ctx: Context<BorrowV2>, args: BorrowV2Args) -> Result<()> {
-        BorrowV2::handle_borrow(ctx, args)
+    pub fn deposit_collateral(ctx: Context<DepositCollateral>, args: DepositCollateralArgs) -> Result<()> {
+        DepositCollateral::handle_deposit(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn v2_repay(ctx: Context<RepayV2>, args: RepayV2Args) -> Result<()> {
-        RepayV2::handle_repay(ctx, args)
+    pub fn market_borrow(ctx: Context<MarketBorrow>, args: MarketBorrowArgs) -> Result<()> {
+        MarketBorrow::handle_borrow(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn v2_deposit_insurance(ctx: Context<DepositInsuranceV2>, args: DepositInsuranceV2Args) -> Result<()> {
-        DepositInsuranceV2::handle_deposit(ctx, args)
+    pub fn market_repay(ctx: Context<MarketRepay>, args: MarketRepayArgs) -> Result<()> {
+        MarketRepay::handle_repay(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn v2_liquidate(ctx: Context<LiquidateV2>, args: LiquidateV2Args) -> Result<()> {
-        LiquidateV2::handle_liquidate(ctx, args)
+    pub fn deposit_insurance(ctx: Context<DepositInsurance>, args: DepositInsuranceArgs) -> Result<()> {
+        DepositInsurance::handle_deposit(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn v2_open_hedge(ctx: Context<OpenHedgeV2>, args: OpenHedgeV2Args) -> Result<()> {
-        OpenHedgeV2::handle_open(ctx, args)
+    pub fn market_liquidate(ctx: Context<MarketLiquidate>, args: MarketLiquidateArgs) -> Result<()> {
+        MarketLiquidate::handle_liquidate(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn v2_close_hedge(ctx: Context<CloseHedgeV2>, args: CloseHedgeV2Args) -> Result<()> {
-        CloseHedgeV2::handle_close(ctx, args)
+    pub fn open_hedge(ctx: Context<OpenHedge>, args: OpenHedgeArgs) -> Result<()> {
+        OpenHedge::handle_open(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn close_hedge(ctx: Context<CloseHedge>, args: CloseHedgeArgs) -> Result<()> {
+        CloseHedge::handle_close(ctx, args)
     }
 
     // Pair instructions

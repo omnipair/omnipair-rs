@@ -7,9 +7,9 @@ use anchor_spl::{
 use crate::{
     constants::*,
     errors::ErrorCode,
-    events::{MarketClaimRedeemedV2, MarketEventMetadataV2, MarketReserveDepositedV2},
-    generate_market_v2_seeds,
-    state::{MarketV2, StakePositionV2},
+    events::{MarketClaimRedeemed, MarketEventMetadata, MarketReserveDeposited},
+    generate_market_seeds,
+    state::{Market, StakePosition},
     utils::{
         account::get_size_with_discriminator,
         token::{
@@ -24,7 +24,7 @@ use super::common::{
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct DepositReserveV2Args {
+pub struct DepositReserveArgs {
     pub market_side_index: u8,
     pub deposit_amount: u64,
     pub min_claim_amount: u64,
@@ -32,7 +32,7 @@ pub struct DepositReserveV2Args {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct RedeemClaimV2Args {
+pub struct RedeemClaimArgs {
     pub market_side_index: u8,
     pub claim_amount: u64,
     pub min_asset_amount_out: u64,
@@ -40,19 +40,19 @@ pub struct RedeemClaimV2Args {
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: DepositReserveV2Args)]
-pub struct DepositReserveV2<'info> {
+#[instruction(args: DepositReserveArgs)]
+pub struct DepositReserve<'info> {
     #[account(
         mut,
         seeds = [
-            MARKET_V2_SEED_PREFIX,
+            MARKET_SEED_PREFIX,
             market.asset0_mint.as_ref(),
             market.asset1_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
     )]
-    pub market: Box<Account<'info, MarketV2>>,
+    pub market: Box<Account<'info, Market>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -74,24 +74,24 @@ pub struct DepositReserveV2<'info> {
     #[account(
         init_if_needed,
         payer = owner,
-        space = get_size_with_discriminator::<StakePositionV2>(),
+        space = get_size_with_discriminator::<StakePosition>(),
         seeds = [
-            STAKE_POSITION_V2_SEED_PREFIX,
+            STAKE_POSITION_SEED_PREFIX,
             market.key().as_ref(),
             owner.key().as_ref(),
             asset_mint.key().as_ref(),
         ],
         bump
     )]
-    pub stake_position: Box<Account<'info, StakePositionV2>>,
+    pub stake_position: Box<Account<'info, StakePosition>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
     pub system_program: Program<'info, System>,
 }
 
-impl<'info> DepositReserveV2<'info> {
-    pub fn validate(&self, args: &DepositReserveV2Args) -> Result<()> {
+impl<'info> DepositReserve<'info> {
+    pub fn validate(&self, args: &DepositReserveArgs) -> Result<()> {
         self.market.assert_live()?;
         require!(args.deposit_amount > 0, ErrorCode::AmountZero);
         require_gte!(
@@ -123,7 +123,7 @@ impl<'info> DepositReserveV2<'info> {
         Ok(())
     }
 
-    pub fn handle_deposit(ctx: Context<Self>, args: DepositReserveV2Args) -> Result<()> {
+    pub fn handle_deposit(ctx: Context<Self>, args: DepositReserveArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
@@ -163,7 +163,7 @@ impl<'info> DepositReserveV2<'info> {
             .reserve_vault
             .amount
             .checked_sub(reserve_balance_before)
-            .ok_or(ErrorCode::MarketMathOverflowV2)?;
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         let (claim_amount, buffer_amount, protected_claim_supply, required_buffer) = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
             let (claim_amount, buffer_amount) =
@@ -201,10 +201,10 @@ impl<'info> DepositReserveV2<'info> {
             ctx.accounts.claim_mint.to_account_info(),
             ctx.accounts.owner_claim_account.to_account_info(),
             claim_amount,
-            &[&generate_market_v2_seeds!(ctx.accounts.market)[..]],
+            &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
 
-        emit_cpi!(MarketReserveDepositedV2 {
+        emit_cpi!(MarketReserveDeposited {
             market: market_key,
             owner: owner_key,
             asset_mint: asset_mint_key,
@@ -213,7 +213,7 @@ impl<'info> DepositReserveV2<'info> {
             buffer_amount,
             protected_claim_supply,
             required_buffer,
-            metadata: MarketEventMetadataV2::new(owner_key, market_key),
+            metadata: MarketEventMetadata::new(owner_key, market_key),
         });
 
         Ok(())
@@ -222,19 +222,19 @@ impl<'info> DepositReserveV2<'info> {
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: RedeemClaimV2Args)]
-pub struct RedeemClaimV2<'info> {
+#[instruction(args: RedeemClaimArgs)]
+pub struct RedeemClaim<'info> {
     #[account(
         mut,
         seeds = [
-            MARKET_V2_SEED_PREFIX,
+            MARKET_SEED_PREFIX,
             market.asset0_mint.as_ref(),
             market.asset1_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
     )]
-    pub market: Box<Account<'info, MarketV2>>,
+    pub market: Box<Account<'info, Market>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -257,8 +257,8 @@ pub struct RedeemClaimV2<'info> {
     pub token_2022_program: Program<'info, Token2022>,
 }
 
-impl<'info> RedeemClaimV2<'info> {
-    pub fn validate(&self, args: &RedeemClaimV2Args) -> Result<()> {
+impl<'info> RedeemClaim<'info> {
+    pub fn validate(&self, args: &RedeemClaimArgs) -> Result<()> {
         self.market.assert_started()?;
         require!(args.claim_amount > 0, ErrorCode::AmountZero);
         require_gte!(
@@ -286,7 +286,7 @@ impl<'info> RedeemClaimV2<'info> {
         Ok(())
     }
 
-    pub fn handle_redeem(ctx: Context<Self>, args: RedeemClaimV2Args) -> Result<()> {
+    pub fn handle_redeem(ctx: Context<Self>, args: RedeemClaimArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
@@ -322,7 +322,7 @@ impl<'info> RedeemClaimV2<'info> {
             asset_token_program,
             args.claim_amount,
             ctx.accounts.asset_mint.decimals,
-            &[&generate_market_v2_seeds!(ctx.accounts.market)[..]],
+            &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
 
         let (protected_claim_supply, required_buffer) = {
@@ -336,14 +336,14 @@ impl<'info> RedeemClaimV2<'info> {
         ctx.accounts.market.refresh_risk_book()?;
         ctx.accounts.market.assert_spot_ema_divergence()?;
 
-        emit_cpi!(MarketClaimRedeemedV2 {
+        emit_cpi!(MarketClaimRedeemed {
             market: market_key,
             owner: owner_key,
             asset_mint: asset_mint_key,
             claim_amount: args.claim_amount,
             protected_claim_supply,
             required_buffer,
-            metadata: MarketEventMetadataV2::new(owner_key, market_key),
+            metadata: MarketEventMetadata::new(owner_key, market_key),
         });
 
         Ok(())

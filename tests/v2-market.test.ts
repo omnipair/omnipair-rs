@@ -27,7 +27,7 @@ function orderedMints(mintA: PublicKey, mintB: PublicKey): [PublicKey, PublicKey
     : [mintB, mintA];
 }
 
-function marketConfigV2() {
+function marketConfig() {
   return {
     swapFeeBps: 30,
     operatorFeeBps: 1_000,
@@ -49,7 +49,7 @@ function marketConfigV2() {
   };
 }
 
-describe("Omnipair V2 Market LiteSVM", () => {
+describe("Omnipair Market LiteSVM", () => {
   let connection: LiteSVMConnection;
   let provider: any;
   let program: any;
@@ -72,15 +72,15 @@ describe("Omnipair V2 Market LiteSVM", () => {
     program = new Program(omnipairIdl as any, provider as any);
   });
 
-  it("initializes a V2 market account", async () => {
-    trackInstruction("v2InitializeMarket", "initializes a V2 market account");
+  it("initializes a market account", async () => {
+    trackInstruction("initializeMarket", "initializes a market account");
 
     const mintA = await createMint(connection as any, payer, payer.publicKey, null, 6);
     const mintB = await createMint(connection as any, payer, payer.publicKey, null, 6);
     const [asset0Mint, asset1Mint] = orderedMints(mintA, mintB);
     const paramsHash = Buffer.alloc(32, 7);
     const [market] = PublicKey.findProgramAddressSync(
-      [Buffer.from("market_v2"), asset0Mint.toBuffer(), asset1Mint.toBuffer(), paramsHash],
+      [Buffer.from("market"), asset0Mint.toBuffer(), asset1Mint.toBuffer(), paramsHash],
       OMNIPAIR_PROGRAM_ID
     );
     const [eventAuthority] = PublicKey.findProgramAddressSync(
@@ -89,10 +89,10 @@ describe("Omnipair V2 Market LiteSVM", () => {
     );
 
     await program.methods
-      .v2InitializeMarket({
+      .initializeMarket({
         operator: payer.publicKey,
         manager: payer.publicKey,
-        config: marketConfigV2(),
+        config: marketConfig(),
         paramsHash: [...paramsHash],
       })
       .accounts({

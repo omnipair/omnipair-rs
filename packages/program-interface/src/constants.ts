@@ -19,18 +19,18 @@ export const PROGRAM_ID = new PublicKey(getProgramIdFromEnv());
  */
 export const SEEDS = {
   PAIR: Buffer.from("gamm_pair"),
-  MARKET_V2: Buffer.from("market_v2"),
-  MARKET_RESERVE_VAULT_V2: Buffer.from("market_reserve_v2"),
-  MARKET_COLLATERAL_VAULT_V2: Buffer.from("market_collateral_v2"),
-  MARKET_FEE_VAULT_V2: Buffer.from("market_fee_v2"),
-  MARKET_STAKE_VAULT_V2: Buffer.from("market_stake_v2"),
-  STAKE_POSITION_V2: Buffer.from("stake_v2"),
-  MARGIN_POSITION_V2: Buffer.from("margin_v2"),
-  HEDGE_VAULT_V2: Buffer.from("hedged_v2"),
-  HEDGE_POSITION_V2: Buffer.from("hedge_position_v2"),
-  INSURANCE_RESERVE_V2: Buffer.from("insurance_v2"),
-  RECOGNITION_LEDGER_V2: Buffer.from("recognized_collateral_v2"),
-  DAILY_LIMIT_V2: Buffer.from("daily_limit_v2"),
+  MARKET: Buffer.from("market"),
+  MARKET_RESERVE_VAULT: Buffer.from("market_reserve"),
+  MARKET_COLLATERAL_VAULT: Buffer.from("market_collateral"),
+  MARKET_FEE_VAULT: Buffer.from("market_fee"),
+  MARKET_STAKE_VAULT: Buffer.from("market_stake"),
+  STAKE_POSITION: Buffer.from("stake"),
+  MARGIN_POSITION: Buffer.from("margin"),
+  HEDGE_VAULT: Buffer.from("hedged"),
+  HEDGE_POSITION: Buffer.from("hedge_position"),
+  INSURANCE_RESERVE: Buffer.from("insurance"),
+  RECOGNITION_LEDGER: Buffer.from("recognized_collateral"),
+  DAILY_LIMIT: Buffer.from("daily_limit"),
   USER_POSITION: Buffer.from("gamm_position"),
   FUTARCHY_AUTHORITY: Buffer.from("futarchy_authority"),
   RESERVE_VAULT: Buffer.from("reserve_vault"),
@@ -107,16 +107,16 @@ export function deriveCollateralVaultAddress(
 }
 
 /**
- * Derive V2 Market PDA address
+ * Derive Market PDA address
  */
-export function deriveMarketV2Address(
+export function deriveMarketAddress(
   asset0Mint: PublicKey,
   asset1Mint: PublicKey,
   paramsHash: Uint8Array | Buffer | number[]
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [
-      SEEDS.MARKET_V2,
+      SEEDS.MARKET,
       asset0Mint.toBuffer(),
       asset1Mint.toBuffer(),
       normalizeParamsHash(paramsHash),
@@ -126,59 +126,59 @@ export function deriveMarketV2Address(
 }
 
 /**
- * Derive V2 market reserve vault PDA address
+ * Derive market reserve vault PDA address
  */
 export function deriveMarketReserveVaultAddress(
   market: PublicKey,
   reserveMint: PublicKey
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [SEEDS.MARKET_RESERVE_VAULT_V2, market.toBuffer(), reserveMint.toBuffer()],
+    [SEEDS.MARKET_RESERVE_VAULT, market.toBuffer(), reserveMint.toBuffer()],
     PROGRAM_ID
   );
 }
 
 /**
- * Derive V2 market collateral vault PDA address
+ * Derive market collateral vault PDA address
  */
 export function deriveMarketCollateralVaultAddress(
   market: PublicKey,
   collateralMint: PublicKey
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [SEEDS.MARKET_COLLATERAL_VAULT_V2, market.toBuffer(), collateralMint.toBuffer()],
+    [SEEDS.MARKET_COLLATERAL_VAULT, market.toBuffer(), collateralMint.toBuffer()],
     PROGRAM_ID
   );
 }
 
 /**
- * Derive V2 market fee vault PDA address
+ * Derive market fee vault PDA address
  */
 export function deriveMarketFeeVaultAddress(
   market: PublicKey,
   feeMint: PublicKey
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [SEEDS.MARKET_FEE_VAULT_V2, market.toBuffer(), feeMint.toBuffer()],
+    [SEEDS.MARKET_FEE_VAULT, market.toBuffer(), feeMint.toBuffer()],
     PROGRAM_ID
   );
 }
 
 /**
- * Derive V2 market stake vault PDA address
+ * Derive market stake vault PDA address
  */
 export function deriveMarketStakeVaultAddress(
   market: PublicKey,
   claimMint: PublicKey
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [SEEDS.MARKET_STAKE_VAULT_V2, market.toBuffer(), claimMint.toBuffer()],
+    [SEEDS.MARKET_STAKE_VAULT, market.toBuffer(), claimMint.toBuffer()],
     PROGRAM_ID
   );
 }
 
 /**
- * Derive V2 stake position PDA address
+ * Derive stake position PDA address
  */
 export function deriveStakePositionAddress(
   market: PublicKey,
@@ -187,7 +187,7 @@ export function deriveStakePositionAddress(
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [
-      SEEDS.STAKE_POSITION_V2,
+      SEEDS.STAKE_POSITION,
       market.toBuffer(),
       owner.toBuffer(),
       assetMint.toBuffer(),
@@ -197,33 +197,33 @@ export function deriveStakePositionAddress(
 }
 
 /**
- * Derive V2 margin position PDA address
+ * Derive margin position PDA address
  */
 export function deriveMarginPositionAddress(
   market: PublicKey,
   owner: PublicKey
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [SEEDS.MARGIN_POSITION_V2, market.toBuffer(), owner.toBuffer()],
+    [SEEDS.MARGIN_POSITION, market.toBuffer(), owner.toBuffer()],
     PROGRAM_ID
   );
 }
 
 /**
- * Derive V2 hedge vault PDA address
+ * Derive hedge vault PDA address
  */
 export function deriveHedgeVaultAddress(
   market: PublicKey,
   claimMint: PublicKey
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [SEEDS.HEDGE_VAULT_V2, market.toBuffer(), claimMint.toBuffer()],
+    [SEEDS.HEDGE_VAULT, market.toBuffer(), claimMint.toBuffer()],
     PROGRAM_ID
   );
 }
 
 /**
- * Derive V2 hedge position PDA address
+ * Derive hedge position PDA address
  */
 export function deriveHedgePositionAddress(
   market: PublicKey,
@@ -232,7 +232,7 @@ export function deriveHedgePositionAddress(
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [
-      SEEDS.HEDGE_POSITION_V2,
+      SEEDS.HEDGE_POSITION,
       market.toBuffer(),
       owner.toBuffer(),
       assetMint.toBuffer(),
@@ -242,37 +242,37 @@ export function deriveHedgePositionAddress(
 }
 
 /**
- * Derive V2 insurance reserve PDA address
+ * Derive insurance reserve PDA address
  */
 export function deriveInsuranceReserveAddress(
   market: PublicKey,
   assetMint: PublicKey
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [SEEDS.INSURANCE_RESERVE_V2, market.toBuffer(), assetMint.toBuffer()],
+    [SEEDS.INSURANCE_RESERVE, market.toBuffer(), assetMint.toBuffer()],
     PROGRAM_ID
   );
 }
 
 /**
- * Derive V2 recognition ledger PDA address
+ * Derive recognition ledger PDA address
  */
 export function deriveRecognitionLedgerAddress(market: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [SEEDS.RECOGNITION_LEDGER_V2, market.toBuffer()],
+    [SEEDS.RECOGNITION_LEDGER, market.toBuffer()],
     PROGRAM_ID
   );
 }
 
 /**
- * Derive V2 daily limit book PDA address
+ * Derive daily limit book PDA address
  */
 export function deriveDailyLimitAddress(
   market: PublicKey,
   assetMint: PublicKey
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [SEEDS.DAILY_LIMIT_V2, market.toBuffer(), assetMint.toBuffer()],
+    [SEEDS.DAILY_LIMIT, market.toBuffer(), assetMint.toBuffer()],
     PROGRAM_ID
   );
 }
