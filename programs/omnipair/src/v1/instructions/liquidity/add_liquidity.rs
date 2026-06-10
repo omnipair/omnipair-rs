@@ -1,9 +1,9 @@
 use anchor_lang::prelude::*;
 use crate::errors::ErrorCode;
 use crate::constants::*;
-use crate::utils::token::{transfer_from_user_to_vault, token_mint_to};
-use crate::utils::math::ceil_div;
-use crate::utils::liquidity_delta_circuit_breaker::{require_top_level_liquidity_delta_ix, LiquidityDeltaInstruction};
+use crate::shared::token::{transfer_from_user_to_vault, token_mint_to};
+use crate::shared::math::ceil_div;
+use crate::shared::liquidity_delta_circuit_breaker::{require_top_level_liquidity_delta_ix, LiquidityDeltaInstruction};
 use crate::generate_gamm_pair_seeds;
 use crate::liquidity::common::{AdjustLiquidity, AddLiquidityArgs};
 use crate::events::{MintEvent, UserLiquidityPositionUpdatedEvent, EventMetadata};

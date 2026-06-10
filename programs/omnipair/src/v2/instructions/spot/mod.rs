@@ -16,7 +16,7 @@ use crate::{
             transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault,
         },
     },
-    state::{Market, MarketSide},
+    v2::state::{Market, MarketSide},
     v2::utils::market_math::require_market_reserve_floor,
 };
 
@@ -301,19 +301,19 @@ mod tests {
             collateral_vault: Pubkey::new_unique(),
             fee_vault: Pubkey::new_unique(),
             stake_vault: Pubkey::new_unique(),
-            reserve_ledger: crate::state::ReserveLedger {
+            reserve_ledger: crate::v2::state::ReserveLedger {
                 live_reserve,
                 cash_reserve,
                 reserved_liability: 0,
             },
-            claim_ledger: crate::state::ClaimLedger {
+            claim_ledger: crate::v2::state::ClaimLedger {
                 protected_claim_supply,
-                ..crate::state::ClaimLedger::default()
+                ..crate::v2::state::ClaimLedger::default()
             },
-            buffer_book: crate::state::BufferBook {
+            buffer_book: crate::v2::state::BufferBook {
                 required_buffer,
                 buffer_ratio_bps: 2_000,
-                ..crate::state::BufferBook::default()
+                ..crate::v2::state::BufferBook::default()
             },
             ..MarketSide::default()
         }

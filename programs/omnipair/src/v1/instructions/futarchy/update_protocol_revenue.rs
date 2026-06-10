@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::state::futarchy_authority::{FutarchyAuthority, RevenueDistribution};
+use crate::v1::state::futarchy_authority::{FutarchyAuthority, RevenueDistribution};
 use crate::constants::{FUTARCHY_AUTHORITY_SEED_PREFIX, BPS_DENOMINATOR};
 use crate::errors::ErrorCode;
 

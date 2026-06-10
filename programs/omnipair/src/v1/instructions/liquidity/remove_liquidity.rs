@@ -10,14 +10,14 @@ use crate::constants::*;
 use crate::errors::ErrorCode;
 use crate::events::{BurnEvent, EventMetadata, UserLiquidityPositionUpdatedEvent};
 use crate::generate_gamm_pair_seeds;
-use crate::state::{futarchy_authority::FutarchyAuthority, pair::Pair, rate_model::RateModel};
-use crate::utils::gamm_math::{construct_virtual_reserves_at_pessimistic_price, CPCurve};
-use crate::utils::liquidity_delta_circuit_breaker::{
+use crate::v1::state::{futarchy_authority::FutarchyAuthority, pair::Pair, rate_model::RateModel};
+use crate::shared::gamm_math::{construct_virtual_reserves_at_pessimistic_price, CPCurve};
+use crate::shared::liquidity_delta_circuit_breaker::{
     require_current_ix_is_final, require_no_same_tx_add_liquidity,
     require_top_level_liquidity_delta_ix, LiquidityDeltaInstruction,
 };
-use crate::utils::math::ceil_div;
-use crate::utils::token::{token_burn, transfer_from_vault_to_user};
+use crate::shared::math::ceil_div;
+use crate::shared::token::{token_burn, transfer_from_vault_to_user};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct RemoveLiquidityArgs {

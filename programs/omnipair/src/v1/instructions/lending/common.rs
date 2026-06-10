@@ -7,10 +7,10 @@ use anchor_spl::{
     token_interface::{Token2022},
 };
 use crate::{
-    state::pair::Pair,
-    state::rate_model::RateModel,
-    state::user_position::UserPosition,
-    state::futarchy_authority::FutarchyAuthority,
+    v1::state::pair::Pair,
+    v1::state::rate_model::RateModel,
+    v1::state::user_position::UserPosition,
+    v1::state::futarchy_authority::FutarchyAuthority,
     constants::*,
     errors::ErrorCode,
 };

@@ -5,11 +5,11 @@ use anchor_spl::{
     associated_token::AssociatedToken,
 };
 use crate::{
-    state::*,
+    v1::state::*,
     constants::*,
     errors::ErrorCode,
     events::{ClaimProtocolFeesEvent, EventMetadata},
-    utils::token::transfer_from_vault_to_vault,
+    shared::token::transfer_from_vault_to_vault,
     generate_gamm_pair_seeds,
 };
 

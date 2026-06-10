@@ -12,7 +12,7 @@ use crate::{
     shared::token::{
         transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault,
     },
-    state::{DebtBook, MarginPosition, Market},
+    v2::state::{DebtBook, MarginPosition, Market},
 };
 
 use super::common::{require_supported_asset_mint, token_program_for_mint};
@@ -819,7 +819,7 @@ fn recognized_decrease_after_seizure(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{BufferBook, MarketConfig, MarketSide, ReserveLedger};
+    use crate::v2::state::{BufferBook, MarketConfig, MarketSide, ReserveLedger};
 
     fn market_side(asset_mint: Pubkey) -> MarketSide {
         MarketSide {

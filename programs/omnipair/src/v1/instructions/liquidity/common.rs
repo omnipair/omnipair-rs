@@ -8,9 +8,9 @@ use anchor_spl::{
     associated_token::AssociatedToken,
 };
 use crate::{
-    state::pair::Pair,
-    state::rate_model::RateModel,
-    state::futarchy_authority::FutarchyAuthority,
+    v1::state::pair::Pair,
+    v1::state::rate_model::RateModel,
+    v1::state::futarchy_authority::FutarchyAuthority,
     constants::*,
     errors::ErrorCode,
 };

@@ -3,10 +3,10 @@ use crate::{
     constants::PAIR_SEED_PREFIX,
     errors::ErrorCode,
     events::{AdjustCollateralEvent, EventMetadata, UserPositionUpdatedEvent},
-    utils::token::transfer_from_vault_to_user,
-    utils::liquidity_delta_circuit_breaker::require_no_same_tx_liquidity_delta,
+    shared::token::transfer_from_vault_to_user,
+    shared::liquidity_delta_circuit_breaker::require_no_same_tx_liquidity_delta,
     generate_gamm_pair_seeds,
-    instructions::lending::common::{CommonAdjustCollateral, AdjustCollateralArgs},
+    v1::instructions::lending::common::{CommonAdjustCollateral, AdjustCollateralArgs},
 };
 
 impl<'info> CommonAdjustCollateral<'info> {
@@ -182,10 +182,10 @@ impl<'info> CommonAdjustCollateral<'info> {
 #[cfg(test)]
 mod tests {
     use crate::constants::*;
-    use crate::utils::gamm_math::{
+    use crate::shared::gamm_math::{
         construct_virtual_reserves_at_pessimistic_price, pessimistic_max_debt, CPCurve,
     };
-    use crate::utils::math::ceil_div;
+    use crate::shared::math::ceil_div;
 
     fn simulate_resolve_remove_collateral_amount(user_collateral: u64, debt: u64, amount: u64) -> u64 {
         if amount == u64::MAX && debt == 0 {

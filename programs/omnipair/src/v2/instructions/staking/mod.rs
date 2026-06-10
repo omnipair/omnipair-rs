@@ -12,7 +12,7 @@ use crate::{
     },
     generate_market_seeds,
     shared::token::{transfer_from_user_to_vault, transfer_from_vault_to_user},
-    state::{Market, MarketFeeClaimKind, StakePosition},
+    v2::state::{Market, MarketFeeClaimKind, StakePosition},
     v2::utils::market_math::active_stake_units,
 };
 

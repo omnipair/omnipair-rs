@@ -1,9 +1,9 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::errors::ErrorCode;
-use crate::utils::gamm_math::pessimistic_max_debt;
-use crate::utils::math::{compute_ema, slots_to_ms, ceil_div};
-use crate::state::RateModel;
+use crate::shared::gamm_math::pessimistic_max_debt;
+use crate::shared::math::{compute_ema, slots_to_ms, ceil_div};
+use crate::v1::state::RateModel;
 use crate::events::{UpdatePairEvent, EventMetadata};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
@@ -326,7 +326,7 @@ impl Pair {
     pub fn update<'info>(
         &mut self,
         rate_model: &Account<RateModel>,
-        futarchy_authority: &crate::state::FutarchyAuthority,
+        futarchy_authority: &crate::v1::state::FutarchyAuthority,
         pair_key: Pubkey,
         event_authority: Option<AccountInfo<'info>>,
     ) -> Result<()> {

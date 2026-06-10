@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
-use crate::utils::math::*;
+use crate::shared::math::*;
 
 #[account]
 #[derive(InitSpace)]

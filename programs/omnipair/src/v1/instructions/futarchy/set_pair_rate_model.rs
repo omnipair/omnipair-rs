@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
-use crate::state::futarchy_authority::FutarchyAuthority;
-use crate::state::pair::Pair;
-use crate::state::rate_model::RateModel;
+use crate::v1::state::futarchy_authority::FutarchyAuthority;
+use crate::v1::state::pair::Pair;
+use crate::v1::state::rate_model::RateModel;
 use crate::constants::{FUTARCHY_AUTHORITY_SEED_PREFIX, PAIR_SEED_PREFIX};
 use crate::errors::ErrorCode;
 

@@ -15,7 +15,7 @@ use crate::{
         account::get_size_with_discriminator,
         token::{transfer_from_user_to_vault, transfer_from_vault_to_user},
     },
-    state::{DebtBook, MarginPosition, Market, MarketSide},
+    v2::state::{DebtBook, MarginPosition, Market, MarketSide},
     v2::utils::market_math::require_market_reserve_floor,
 };
 

@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
-use crate::state::futarchy_authority::FutarchyAuthority;
-use crate::state::rate_model::RateModel;
+use crate::v1::state::futarchy_authority::FutarchyAuthority;
+use crate::v1::state::rate_model::RateModel;
 use crate::constants::*;
-use crate::utils::account::get_size_with_discriminator;
+use crate::shared::account::get_size_with_discriminator;
 use crate::errors::ErrorCode;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]

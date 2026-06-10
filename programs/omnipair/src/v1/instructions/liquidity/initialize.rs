@@ -19,19 +19,19 @@ use anchor_spl::metadata::{
     CreateMetadataAccountsV3, Metadata,
 };
 use anchor_lang::solana_program::program_pack::Pack;
-use crate::state::{
+use crate::v1::state::{
     pair::{Pair, VaultBumps, LastPriceEMA},
     rate_model::RateModel,
     futarchy_authority::FutarchyAuthority,
 };
 use crate::errors::ErrorCode;
 use crate::constants::*;
-use crate::utils::account::get_size_with_discriminator;
-use crate::utils::token::{
+use crate::shared::account::get_size_with_discriminator;
+use crate::shared::token::{
     transfer_from_user_to_vault,
     token_mint_to,  
 };
-use crate::utils::math::SqrtU128;
+use crate::shared::math::SqrtU128;
 use crate::events::{PairCreatedEvent, MintEvent, UserLiquidityPositionUpdatedEvent, EventMetadata};
 use crate::generate_gamm_pair_seeds;
 

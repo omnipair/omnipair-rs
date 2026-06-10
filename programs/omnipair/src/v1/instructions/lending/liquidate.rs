@@ -5,14 +5,14 @@ use anchor_spl::{
     token_interface::{Token2022},
 };
 use crate::{
-    state::pair::Pair,
-    state::rate_model::RateModel,
-    state::futarchy_authority::FutarchyAuthority,
+    v1::state::pair::Pair,
+    v1::state::rate_model::RateModel,
+    v1::state::futarchy_authority::FutarchyAuthority,
     constants::*,
     errors::ErrorCode,
     events::{AdjustDebtEvent, EventMetadata, UserPositionLiquidatedEvent, UserPositionUpdatedEvent},
-    state::user_position::{UserPosition, DebtDecreaseReason},
-    utils::{
+    v1::state::user_position::{UserPosition, DebtDecreaseReason},
+    shared::{
         token::{transfer_from_vault_to_user, transfer_from_vault_to_vault}, 
         math::ceil_div,
         gamm_math::{CPCurve, construct_virtual_reserves_at_pessimistic_price},

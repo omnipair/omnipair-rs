@@ -6,7 +6,7 @@ use crate::{
     errors::ErrorCode,
     events::{MarketCreated, MarketEventMetadata, MarketUpdated},
     shared::account::get_size_with_discriminator,
-    state::{Market, MarketConfig, MarketSide},
+    v2::state::{Market, MarketConfig, MarketSide},
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -122,9 +122,9 @@ impl<'info> InitializeMarket<'info> {
             collateral_vault: ctx.accounts.collateral0_vault.key(),
             fee_vault: ctx.accounts.fee0_vault.key(),
             stake_vault: ctx.accounts.claim0_stake_vault.key(),
-            buffer_book: crate::state::BufferBook {
+            buffer_book: crate::v2::state::BufferBook {
                 buffer_ratio_bps: args.config.buffer_ratio_bps,
-                ..crate::state::BufferBook::default()
+                ..crate::v2::state::BufferBook::default()
             },
             ..MarketSide::default()
         };
@@ -138,28 +138,28 @@ impl<'info> InitializeMarket<'info> {
             collateral_vault: ctx.accounts.collateral1_vault.key(),
             fee_vault: ctx.accounts.fee1_vault.key(),
             stake_vault: ctx.accounts.claim1_stake_vault.key(),
-            buffer_book: crate::state::BufferBook {
+            buffer_book: crate::v2::state::BufferBook {
                 buffer_ratio_bps: args.config.buffer_ratio_bps,
-                ..crate::state::BufferBook::default()
+                ..crate::v2::state::BufferBook::default()
             },
             ..MarketSide::default()
         };
         market.insurance_reserve.vault0 = ctx.accounts.insurance0_vault.key();
         market.insurance_reserve.vault1 = ctx.accounts.insurance1_vault.key();
         market.config = args.config;
-        market.debt_book = crate::state::DebtBook {
+        market.debt_book = crate::v2::state::DebtBook {
             borrow_index0_nad: NAD as u128,
             borrow_index1_nad: NAD as u128,
-            ..crate::state::DebtBook::default()
+            ..crate::v2::state::DebtBook::default()
         };
-        market.risk_book = crate::state::RiskBook {
+        market.risk_book = crate::v2::state::RiskBook {
             last_snapshot_slot: current_slot,
-            ..crate::state::RiskBook::default()
+            ..crate::v2::state::RiskBook::default()
         };
-        market.health = crate::state::MarketHealth::default();
-        market.recognition_ledger = crate::state::RecognitionLedger {
+        market.health = crate::v2::state::MarketHealth::default();
+        market.recognition_ledger = crate::v2::state::RecognitionLedger {
             last_recognition_slot: current_slot,
-            ..crate::state::RecognitionLedger::default()
+            ..crate::v2::state::RecognitionLedger::default()
         };
         market.params_hash = args.params_hash;
         market.last_update_slot = current_slot;

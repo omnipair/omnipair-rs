@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::errors::ErrorCode;
-use crate::utils::math::ceil_div;
+use crate::shared::math::ceil_div;
 use super::Pair;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -396,7 +396,7 @@ macro_rules! generate_user_position_seeds {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::VaultBumps;
+    use crate::v1::state::VaultBumps;
 
     fn test_pair() -> Pair {
         Pair::initialize(

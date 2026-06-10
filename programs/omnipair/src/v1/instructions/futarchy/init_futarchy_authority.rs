@@ -1,9 +1,9 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::bpf_loader_upgradeable::UpgradeableLoaderState;
 use bincode::Options;
-use crate::state::futarchy_authority::FutarchyAuthority;
+use crate::v1::state::futarchy_authority::FutarchyAuthority;
 use crate::constants::{FUTARCHY_AUTHORITY_SEED_PREFIX, BPS_DENOMINATOR};
-use crate::utils::account::get_size_with_discriminator;
+use crate::shared::account::get_size_with_discriminator;
 use crate::errors::ErrorCode;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]

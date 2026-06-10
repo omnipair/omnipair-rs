@@ -2,9 +2,9 @@ use anchor_lang::prelude::*;
 use crate::{
     errors::ErrorCode,
     events::{AdjustDebtEvent, UserPositionUpdatedEvent, EventMetadata},
-    utils::token::transfer_from_user_to_vault,
-    instructions::lending::common::{CommonAdjustDebt, AdjustDebtArgs},
-    state::user_position::DebtDecreaseReason,
+    shared::token::transfer_from_user_to_vault,
+    v1::instructions::lending::common::{CommonAdjustDebt, AdjustDebtArgs},
+    v1::state::user_position::DebtDecreaseReason,
 };
 
 impl<'info> CommonAdjustDebt<'info> {

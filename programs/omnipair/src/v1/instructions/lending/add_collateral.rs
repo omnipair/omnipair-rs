@@ -6,9 +6,9 @@ use anchor_spl::{
 use crate::{
     errors::ErrorCode,
     events::{AdjustCollateralEvent, EventMetadata, UserPositionCreatedEvent, UserPositionUpdatedEvent},
-    utils::{token::transfer_from_user_to_vault, account::get_size_with_discriminator},
-    instructions::lending::common::AdjustCollateralArgs,
-    state::{user_position::UserPosition, pair::Pair, rate_model::RateModel, futarchy_authority::FutarchyAuthority},
+    shared::{token::transfer_from_user_to_vault, account::get_size_with_discriminator},
+    v1::instructions::lending::common::AdjustCollateralArgs,
+    v1::state::{user_position::UserPosition, pair::Pair, rate_model::RateModel, futarchy_authority::FutarchyAuthority},
     constants::*,
 };
 

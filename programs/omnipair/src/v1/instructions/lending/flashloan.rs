@@ -9,11 +9,11 @@ use anchor_spl::{
     token_interface::{Token2022},
 };
 use crate::{
-    state::*,
+    v1::state::*,
     constants::*,
     errors::ErrorCode,
     events::*,
-    utils::{token::{transfer_from_vault_to_user, sync_native_if_wsol}, math::ceil_div},
+    shared::{token::{transfer_from_vault_to_user, sync_native_if_wsol}, math::ceil_div},
     generate_gamm_pair_seeds,
 };
 

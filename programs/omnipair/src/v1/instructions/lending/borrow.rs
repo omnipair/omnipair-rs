@@ -10,12 +10,12 @@ use crate::{
     errors::ErrorCode,
     events::{AdjustDebtEvent, EventMetadata, UserPositionUpdatedEvent},
     generate_gamm_pair_seeds,
-    instructions::lending::common::AdjustDebtArgs,
-    state::{
+    v1::instructions::lending::common::AdjustDebtArgs,
+    v1::state::{
         futarchy_authority::FutarchyAuthority, pair::Pair, rate_model::RateModel,
         user_position::UserPosition,
     },
-    utils::{
+    shared::{
         liquidity_delta_circuit_breaker::require_no_same_tx_liquidity_delta,
         token::transfer_from_vault_to_user,
     },

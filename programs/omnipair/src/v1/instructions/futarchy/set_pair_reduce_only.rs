@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::state::pair::Pair;
+use crate::v1::state::pair::Pair;
 use crate::constants::{PAIR_SEED_PREFIX, REDUCE_ONLY_EMERGENCY_AUTHORITY};
 use crate::errors::ErrorCode;
 

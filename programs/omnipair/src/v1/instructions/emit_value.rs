@@ -1,10 +1,10 @@
 use anchor_lang::prelude::*;
-use crate::state::{Pair, UserPosition, RateModel, FutarchyAuthority};
+use crate::v1::state::{Pair, UserPosition, RateModel, FutarchyAuthority};
 use std::fmt;
 use crate::errors::ErrorCode;
 use crate::constants::*;
-use crate::utils::gamm_math::{CPCurve, construct_virtual_reserves_at_pessimistic_price};
-use crate::utils::math::ceil_div;
+use crate::shared::gamm_math::{CPCurve, construct_virtual_reserves_at_pessimistic_price};
+use crate::shared::math::ceil_div;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
 pub enum OptionalUint {

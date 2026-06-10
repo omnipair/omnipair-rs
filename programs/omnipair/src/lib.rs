@@ -3,19 +3,17 @@ use anchor_lang::prelude::*;
 pub mod constants;
 pub mod errors;
 pub mod events;
-pub mod instructions;
 pub mod shared;
-pub mod state;
-pub mod utils;
 pub mod v1;
 pub mod v2;
 
-pub use utils::*;
-pub use instructions::*;
-pub use v1::*;
-pub use v2::*;
-pub use utils::account::*;
-pub use instructions::emit_value::{EmitValueArgs, PairViewKind, UserPositionViewKind, ViewPairData, ViewUserPositionData};
+pub use v1::instructions::*;
+pub use v1::state::*;
+pub use v2::instructions::*;
+pub use v2::state::*;
+pub use v1::instructions::emit_value::{
+    EmitValueArgs, PairViewKind, UserPositionViewKind, ViewPairData, ViewUserPositionData,
+};
 
 #[cfg(not(feature = "no-entrypoint"))]
 use solana_security_txt::security_txt;

@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::state::futarchy_authority::FutarchyAuthority;
+use crate::v1::state::futarchy_authority::FutarchyAuthority;
 use crate::constants::FUTARCHY_AUTHORITY_SEED_PREFIX;
 use crate::errors::ErrorCode;
 

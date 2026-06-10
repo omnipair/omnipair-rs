@@ -15,7 +15,7 @@ use crate::{
             token_burn, token_mint_to, transfer_from_user_to_vault, transfer_from_vault_to_user,
         },
     },
-    state::{Market, StakePosition},
+    v2::state::{Market, StakePosition},
 };
 
 use super::common::{
