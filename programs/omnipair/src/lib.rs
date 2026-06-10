@@ -6,10 +6,12 @@ pub mod events;
 pub mod instructions;
 pub mod state;
 pub mod utils;
+pub mod v1;
 pub mod v2;
 
 pub use utils::*;
 pub use instructions::*;
+pub use v1::*;
 pub use v2::*;
 pub use utils::account::*;
 pub use instructions::emit_value::{EmitValueArgs, PairViewKind, UserPositionViewKind, ViewPairData, ViewUserPositionData};
