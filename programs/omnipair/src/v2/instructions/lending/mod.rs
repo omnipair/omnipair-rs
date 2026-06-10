@@ -15,9 +15,9 @@ use crate::{
     state::{DebtBookV2, MarginPositionV2, MarketSideV2, MarketV2},
     utils::{
         account::get_size_with_discriminator,
-        market_v2_math::require_market_reserve_floor,
         token::{transfer_from_user_to_vault, transfer_from_vault_to_user},
     },
+    v2::utils::market_math::require_market_reserve_floor,
 };
 
 use super::common::{require_supported_asset_mint, token_program_for_mint};

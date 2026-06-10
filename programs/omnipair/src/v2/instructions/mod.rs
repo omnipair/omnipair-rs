@@ -1,16 +1,16 @@
 mod common;
-mod debt;
 mod hedge;
+mod lending;
 mod liquidation;
 mod market;
 mod reserve;
-mod stake;
-mod swap;
+mod spot;
+mod staking;
 
-pub use debt::*;
 pub use hedge::*;
+pub use lending::*;
 pub use liquidation::*;
 pub use market::*;
 pub use reserve::*;
-pub use stake::*;
-pub use swap::*;
+pub use spot::*;
+pub use staking::*;

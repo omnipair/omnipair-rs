@@ -14,9 +14,9 @@ use crate::{
     generate_market_v2_seeds,
     state::{MarketFeeClaimKindV2, MarketV2, StakePositionV2},
     utils::{
-        market_v2_math::active_stake_units,
         token::{transfer_from_user_to_vault, transfer_from_vault_to_user},
     },
+    v2::utils::market_math::active_stake_units,
 };
 
 use super::common::{

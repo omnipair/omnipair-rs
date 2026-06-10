@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::constants::*;
 use crate::errors::ErrorCode;
-use crate::utils::market_v2_math::{
+use crate::v2::utils::market_math::{
     accrue_fee_liability, active_stake_units, required_buffer_for_claims, split_claim_minus_buffer,
 };
 use crate::utils::math::{ceil_div, slots_to_ms, taylor_exp, SqrtU128};

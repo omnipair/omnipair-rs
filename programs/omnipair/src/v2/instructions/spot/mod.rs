@@ -12,12 +12,12 @@ use crate::{
     state::{MarketSideV2, MarketV2},
     utils::{
         gamm_math::CPCurve,
-        market_v2_math::require_market_reserve_floor,
         math::ceil_div,
         token::{
             transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault,
         },
     },
+    v2::utils::market_math::require_market_reserve_floor,
 };
 
 use super::common::{require_supported_asset_mint, token_program_for_mint, validate_swap_accounts};
