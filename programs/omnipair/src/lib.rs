@@ -122,10 +122,6 @@ pub mod omnipair {
         SetMarketReduceOnly::handle_set(ctx, args)
     }
 
-    pub fn get_market_state(ctx: Context<ViewMarketState>) -> Result<()> {
-        ViewMarketState::handle_view(ctx)
-    }
-
     #[access_control(ctx.accounts.validate(&args))]
     pub fn deposit_reserve(ctx: Context<DepositReserve>, args: DepositReserveArgs) -> Result<()> {
         DepositReserve::handle_deposit(ctx, args)
