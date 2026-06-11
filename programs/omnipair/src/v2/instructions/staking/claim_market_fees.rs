@@ -1,0 +1,143 @@
+use anchor_lang::prelude::*;
+use anchor_spl::{
+    token::Token,
+    token_interface::{Mint, Token2022, TokenAccount},
+};
+
+use crate::{
+    constants::*,
+    errors::ErrorCode,
+    events::{MarketEventMetadata, MarketFeeLiabilityClaimed},
+    generate_market_seeds,
+    shared::token::transfer_from_vault_to_user,
+    v2::state::{Market, MarketFeeClaimKind},
+};
+
+use crate::v2::instructions::common::{
+    require_supported_asset_mint, token_program_for_mint, validate_fee_accounts,
+};
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct ClaimMarketFeesArgs {
+    pub market_side_index: u8,
+    pub claim_kind: MarketFeeClaimKind,
+    pub min_fee_amount: u64,
+}
+
+#[event_cpi]
+#[derive(Accounts)]
+#[instruction(args: ClaimMarketFeesArgs)]
+pub struct ClaimMarketFees<'info> {
+    #[account(
+        mut,
+        seeds = [
+            MARKET_SEED_PREFIX,
+            market.asset0_mint.as_ref(),
+            market.asset1_mint.as_ref(),
+            market.params_hash.as_ref(),
+        ],
+        bump = market.bump
+    )]
+    pub market: Box<Account<'info, Market>>,
+
+    #[account(mut)]
+    pub fee_authority: Signer<'info>,
+
+    pub asset_mint: Box<InterfaceAccount<'info, Mint>>,
+
+    #[account(mut)]
+    pub fee_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub recipient_fee_account: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    pub token_program: Program<'info, Token>,
+    pub token_2022_program: Program<'info, Token2022>,
+}
+
+impl<'info> ClaimMarketFees<'info> {
+    pub fn validate(&self, args: &ClaimMarketFeesArgs) -> Result<()> {
+        self.market.assert_started()?;
+        match args.claim_kind {
+            MarketFeeClaimKind::Operator => require_keys_eq!(
+                self.fee_authority.key(),
+                self.market.operator,
+                ErrorCode::InvalidMarketFeeAuthority
+            ),
+            MarketFeeClaimKind::Protocol => require_keys_eq!(
+                self.fee_authority.key(),
+                self.market.manager,
+                ErrorCode::InvalidMarketFeeAuthority
+            ),
+        }
+        validate_fee_accounts(
+            &self.market,
+            args.market_side_index,
+            self.fee_authority.key(),
+            &self.asset_mint,
+            &self.fee_vault,
+            &self.recipient_fee_account,
+        )?;
+        require_supported_asset_mint(&self.asset_mint)?;
+        Ok(())
+    }
+
+    pub fn handle_claim(ctx: Context<Self>, args: ClaimMarketFeesArgs) -> Result<()> {
+        let market_key = ctx.accounts.market.key();
+        let fee_authority_key = ctx.accounts.fee_authority.key();
+        let asset_mint_key = ctx.accounts.asset_mint.key();
+
+        let fee_amount = {
+            let market_side = ctx.accounts.market.side(args.market_side_index)?;
+            let fee_amount = market_side.fee_ledger.market_fee_liability(args.claim_kind);
+            require!(fee_amount > 0, ErrorCode::AmountZero);
+            require_gte!(fee_amount, args.min_fee_amount, ErrorCode::SlippageExceeded);
+            require_gte!(
+                ctx.accounts.fee_vault.amount,
+                fee_amount,
+                ErrorCode::UnbackedFeeLiability
+            );
+            fee_amount
+        };
+
+        let asset_token_program = token_program_for_mint(
+            &ctx.accounts.asset_mint,
+            &ctx.accounts.token_program,
+            &ctx.accounts.token_2022_program,
+        )?;
+        transfer_from_vault_to_user(
+            ctx.accounts.market.to_account_info(),
+            ctx.accounts.fee_vault.to_account_info(),
+            ctx.accounts.recipient_fee_account.to_account_info(),
+            ctx.accounts.asset_mint.to_account_info(),
+            asset_token_program,
+            fee_amount,
+            ctx.accounts.asset_mint.decimals,
+            &[&generate_market_seeds!(ctx.accounts.market)[..]],
+        )?;
+        ctx.accounts.fee_vault.reload()?;
+
+        let remaining_fee_liability = {
+            let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
+            let claimed_amount = market_side
+                .fee_ledger
+                .claim_market_fee_liability(args.claim_kind)?;
+            require_eq!(claimed_amount, fee_amount, ErrorCode::UnbackedFeeLiability);
+            market_side.fee_ledger.fee_vault_balance = ctx.accounts.fee_vault.amount;
+            market_side.fee_ledger.assert_backed()?;
+            market_side.fee_ledger.market_fee_liability(args.claim_kind)
+        };
+
+        emit_cpi!(MarketFeeLiabilityClaimed {
+            market: market_key,
+            authority: fee_authority_key,
+            asset_mint: asset_mint_key,
+            claim_kind: args.claim_kind.event_code(),
+            fee_amount,
+            remaining_fee_liability,
+            metadata: MarketEventMetadata::new(fee_authority_key, market_key),
+        });
+
+        Ok(())
+    }
+}
