@@ -15,7 +15,9 @@ use crate::{
     v2::state::{DebtBook, MarginPosition, Market},
 };
 
-use crate::v2::instructions::common::{require_supported_asset_mint, token_program_for_mint};
+use crate::v2::instructions::common::{
+    require_supported_asset_mint, token_account_credit, token_program_for_mint,
+};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct MarketLiquidateArgs {
@@ -196,13 +198,9 @@ impl<'info> MarketLiquidate<'info> {
             insurance_credit,
             args.max_socialized_loss,
         )?;
-        require_gte!(
-            outcome.collateral_seized,
-            args.min_collateral_out,
-            ErrorCode::SlippageExceeded
-        );
-
-        if outcome.collateral_seized > 0 {
+        let collateral_credit = if outcome.collateral_seized > 0 {
+            let liquidator_collateral_balance_before =
+                ctx.accounts.liquidator_collateral_account.amount;
             let collateral_token_program = token_program_for_mint(
                 &ctx.accounts.collateral_asset_mint,
                 &ctx.accounts.token_program,
@@ -218,7 +216,19 @@ impl<'info> MarketLiquidate<'info> {
                 ctx.accounts.collateral_asset_mint.decimals,
                 &[&generate_market_seeds!(ctx.accounts.market)[..]],
             )?;
-        }
+            ctx.accounts.liquidator_collateral_account.reload()?;
+            token_account_credit(
+                liquidator_collateral_balance_before,
+                &ctx.accounts.liquidator_collateral_account,
+            )?
+        } else {
+            0
+        };
+        require_gte!(
+            collateral_credit,
+            args.min_collateral_out,
+            ErrorCode::SlippageExceeded
+        );
 
         emit_cpi!(MarketLiquidated {
             market: market_key,

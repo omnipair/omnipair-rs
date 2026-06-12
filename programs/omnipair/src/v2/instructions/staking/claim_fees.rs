@@ -14,7 +14,8 @@ use crate::{
 };
 
 use crate::v2::instructions::common::{
-    require_supported_asset_mint, token_program_for_mint, validate_fee_accounts,
+    require_supported_asset_mint, token_account_credit, token_program_for_mint,
+    validate_fee_accounts,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -100,7 +101,6 @@ impl<'info> ClaimFees<'info> {
             )?;
             let fee_amount = ctx.accounts.stake_position.accrued_fee_amount;
             require!(fee_amount > 0, ErrorCode::AmountZero);
-            require_gte!(fee_amount, args.min_fee_amount, ErrorCode::SlippageExceeded);
             require_gte!(
                 market_side.fee_ledger.fee_liability,
                 fee_amount,
@@ -114,6 +114,7 @@ impl<'info> ClaimFees<'info> {
             fee_amount
         };
 
+        let owner_fee_balance_before = ctx.accounts.owner_fee_account.amount;
         let asset_token_program = token_program_for_mint(
             &ctx.accounts.asset_mint,
             &ctx.accounts.token_program,
@@ -129,7 +130,11 @@ impl<'info> ClaimFees<'info> {
             ctx.accounts.asset_mint.decimals,
             &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
+        ctx.accounts.owner_fee_account.reload()?;
         ctx.accounts.fee_vault.reload()?;
+        let fee_credit =
+            token_account_credit(owner_fee_balance_before, &ctx.accounts.owner_fee_account)?;
+        require_gte!(fee_credit, args.min_fee_amount, ErrorCode::SlippageExceeded);
 
         let remaining_fee_liability = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;

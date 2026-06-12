@@ -13,8 +13,8 @@ use crate::{
     v2::state::{HedgePosition, Market},
 };
 
-use crate::v2::instructions::common::token_program_for_mint;
 use super::common::validate_hedge_accounts;
+use crate::v2::instructions::common::{token_account_credit, token_program_for_mint};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct CloseHedgeArgs {
@@ -142,6 +142,7 @@ impl<'info> CloseHedge<'info> {
             &ctx.accounts.token_program,
             &ctx.accounts.token_2022_program,
         )?;
+        let owner_claim_balance_before = ctx.accounts.owner_claim_account.amount;
         transfer_from_vault_to_user(
             ctx.accounts.market.to_account_info(),
             ctx.accounts.hedge_vault.to_account_info(),
@@ -152,8 +153,13 @@ impl<'info> CloseHedge<'info> {
             ctx.accounts.claim_mint.decimals,
             &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
+        ctx.accounts.owner_claim_account.reload()?;
+        let claim_credit = token_account_credit(
+            owner_claim_balance_before,
+            &ctx.accounts.owner_claim_account,
+        )?;
         require_gte!(
-            args.hedge_amount,
+            claim_credit,
             args.min_claim_amount_out,
             ErrorCode::SlippageExceeded
         );

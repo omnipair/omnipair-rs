@@ -35,6 +35,16 @@ pub fn require_fee_free_claim_mint(mint: &InterfaceAccount<Mint>) -> Result<()> 
     Ok(())
 }
 
+pub fn token_account_credit(
+    balance_before: u64,
+    token_account: &InterfaceAccount<TokenAccount>,
+) -> Result<u64> {
+    token_account
+        .amount
+        .checked_sub(balance_before)
+        .ok_or(ErrorCode::MarketMathOverflow.into())
+}
+
 pub fn validate_reserve_accounts<'info>(
     market: &Account<'info, Market>,
     market_side_index: u8,

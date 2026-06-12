@@ -21,7 +21,8 @@ use crate::{
 };
 
 use crate::v2::instructions::common::{
-    require_supported_asset_mint, token_program_for_mint, validate_swap_accounts,
+    require_supported_asset_mint, token_account_credit, token_program_for_mint,
+    validate_swap_accounts,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -131,8 +132,8 @@ impl<'info> MarketSwap<'info> {
                 amount_in_after_fee,
             )?
         };
-        require_gte!(amount_out, args.min_asset_out, ErrorCode::SlippageExceeded);
 
+        let trader_asset_out_balance_before = ctx.accounts.trader_asset_out_account.amount;
         let asset_out_token_program = token_program_for_mint(
             &ctx.accounts.asset_out_mint,
             &ctx.accounts.token_program,
@@ -148,6 +149,16 @@ impl<'info> MarketSwap<'info> {
             ctx.accounts.asset_out_mint.decimals,
             &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
+        ctx.accounts.trader_asset_out_account.reload()?;
+        let asset_out_credit = token_account_credit(
+            trader_asset_out_balance_before,
+            &ctx.accounts.trader_asset_out_account,
+        )?;
+        require_gte!(
+            asset_out_credit,
+            args.min_asset_out,
+            ErrorCode::SlippageExceeded
+        );
 
         {
             let (market_side_in, market_side_out) =

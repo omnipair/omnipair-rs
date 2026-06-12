@@ -14,8 +14,8 @@ use crate::{
 };
 
 use crate::v2::instructions::common::{
-    require_fee_free_claim_mint, require_supported_asset_mint, token_program_for_mint,
-    validate_reserve_accounts,
+    require_fee_free_claim_mint, require_supported_asset_mint, token_account_credit,
+    token_program_for_mint, validate_reserve_accounts,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -71,11 +71,6 @@ impl<'info> RedeemClaim<'info> {
             args.claim_amount,
             ErrorCode::InsufficientBalance
         );
-        require_gte!(
-            args.claim_amount,
-            args.min_asset_amount_out,
-            ErrorCode::SlippageExceeded
-        );
         validate_reserve_accounts(
             &self.market,
             args.market_side_index,
@@ -114,6 +109,7 @@ impl<'info> RedeemClaim<'info> {
             &[],
         )?;
 
+        let owner_asset_balance_before = ctx.accounts.owner_asset_account.amount;
         let asset_token_program = token_program_for_mint(
             &ctx.accounts.asset_mint,
             &ctx.accounts.token_program,
@@ -129,6 +125,16 @@ impl<'info> RedeemClaim<'info> {
             ctx.accounts.asset_mint.decimals,
             &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
+        ctx.accounts.owner_asset_account.reload()?;
+        let asset_credit = token_account_credit(
+            owner_asset_balance_before,
+            &ctx.accounts.owner_asset_account,
+        )?;
+        require_gte!(
+            asset_credit,
+            args.min_asset_amount_out,
+            ErrorCode::SlippageExceeded
+        );
 
         let (protected_claim_supply, required_buffer) = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
