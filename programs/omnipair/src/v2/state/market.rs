@@ -511,6 +511,12 @@ pub struct RiskBook {
     pub price1_ema_nad: u64,
     pub directional_price0_ema_nad: u64,
     pub directional_price1_ema_nad: u64,
+    pub cached_spot_price0_nad: u64,
+    pub cached_spot_price1_nad: u64,
+    pub cached_k_nad: u128,
+    pub cached_liquidity_nad: u128,
+    pub cached_liquidity0_nad: u128,
+    pub cached_liquidity1_nad: u128,
     pub k_ema: u128,
     pub liquidity_ema: u128,
     pub liquidity0_ema: u128,
@@ -526,71 +532,83 @@ impl RiskBook {
         config: &MarketConfig,
         current_slot: u64,
     ) -> Result<Self> {
-        let spot_price0_nad = market_spot_price_nad(side0, side1)?;
-        let spot_price1_nad = market_spot_price_nad(side1, side0)?;
-        let liquidity0 = normalize_to_nad(
+        let current_spot_price0_nad = market_spot_price_nad(side0, side1)?;
+        let current_spot_price1_nad = market_spot_price_nad(side1, side0)?;
+        let current_liquidity0_nad = normalize_to_nad(
             side0.reserve_ledger.live_reserve as u128,
             side0.asset_decimals,
         )?;
-        let liquidity1 = normalize_to_nad(
+        let current_liquidity1_nad = normalize_to_nad(
             side1.reserve_ledger.live_reserve as u128,
             side1.asset_decimals,
         )?;
-        let liquidity = market_liquidity_nad(side0, side1)?;
-        let k = market_k_nad(side0, side1)?;
+        let current_liquidity_nad = market_liquidity_nad(side0, side1)?;
+        let current_k_nad = market_k_nad(side0, side1)?;
+
+        let cached_spot_price0_nad =
+            observed_or_current_u64(self.cached_spot_price0_nad, current_spot_price0_nad);
+        let cached_spot_price1_nad =
+            observed_or_current_u64(self.cached_spot_price1_nad, current_spot_price1_nad);
+        let cached_liquidity0_nad =
+            observed_or_current_u128(self.cached_liquidity0_nad, current_liquidity0_nad);
+        let cached_liquidity1_nad =
+            observed_or_current_u128(self.cached_liquidity1_nad, current_liquidity1_nad);
+        let cached_liquidity_nad =
+            observed_or_current_u128(self.cached_liquidity_nad, current_liquidity_nad);
+        let cached_k_nad = observed_or_current_u128(self.cached_k_nad, current_k_nad);
 
         let price0_ema_nad = ema_u64(
             self.price0_ema_nad,
-            spot_price0_nad,
+            cached_spot_price0_nad,
             self.last_snapshot_slot,
             current_slot,
             config.ema_half_life_ms,
         );
         let price1_ema_nad = ema_u64(
             self.price1_ema_nad,
-            spot_price1_nad,
+            cached_spot_price1_nad,
             self.last_snapshot_slot,
             current_slot,
             config.ema_half_life_ms,
         );
         let directional_price0_ema_nad = directional_ema_u64(
             self.directional_price0_ema_nad,
-            spot_price0_nad,
+            cached_spot_price0_nad,
             self.last_snapshot_slot,
             current_slot,
             config.directional_ema_half_life_ms,
         );
         let directional_price1_ema_nad = directional_ema_u64(
             self.directional_price1_ema_nad,
-            spot_price1_nad,
+            cached_spot_price1_nad,
             self.last_snapshot_slot,
             current_slot,
             config.directional_ema_half_life_ms,
         );
         let liquidity_ema = ema_u128(
             self.liquidity_ema,
-            liquidity,
+            cached_liquidity_nad,
             self.last_snapshot_slot,
             current_slot,
             config.k_ema_half_life_ms,
         );
         let k_ema = ema_u128(
             self.k_ema,
-            k,
+            cached_k_nad,
             self.last_snapshot_slot,
             current_slot,
             config.k_ema_half_life_ms,
         );
         let liquidity0_ema = ema_u128(
             self.liquidity0_ema,
-            liquidity0,
+            cached_liquidity0_nad,
             self.last_snapshot_slot,
             current_slot,
             config.k_ema_half_life_ms,
         );
         let liquidity1_ema = ema_u128(
             self.liquidity1_ema,
-            liquidity1,
+            cached_liquidity1_nad,
             self.last_snapshot_slot,
             current_slot,
             config.k_ema_half_life_ms,
@@ -601,6 +619,12 @@ impl RiskBook {
             price1_ema_nad,
             directional_price0_ema_nad,
             directional_price1_ema_nad,
+            cached_spot_price0_nad: current_spot_price0_nad,
+            cached_spot_price1_nad: current_spot_price1_nad,
+            cached_k_nad: current_k_nad,
+            cached_liquidity_nad: current_liquidity_nad,
+            cached_liquidity0_nad: current_liquidity0_nad,
+            cached_liquidity1_nad: current_liquidity1_nad,
             k_ema,
             liquidity_ema,
             liquidity0_ema,
@@ -1521,6 +1545,22 @@ fn denormalize_from_nad_floor(amount_nad: u128, decimals: u8) -> Result<u64> {
     u64::try_from(value).map_err(|_| ErrorCode::MarketMathOverflow.into())
 }
 
+fn observed_or_current_u64(cached_observation: u64, current_observation: u64) -> u64 {
+    if cached_observation == 0 {
+        current_observation
+    } else {
+        cached_observation
+    }
+}
+
+fn observed_or_current_u128(cached_observation: u128, current_observation: u128) -> u128 {
+    if cached_observation == 0 {
+        current_observation
+    } else {
+        cached_observation
+    }
+}
+
 fn virtual_reserves_at_pessimistic_price(
     collateral_reserve: u128,
     debt_reserve: u128,
@@ -2115,6 +2155,57 @@ mod tests {
         let err = market.enforce_daily_borrow_limit(0, 1).unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::InsufficientLiquidity));
+    }
+
+    #[test]
+    fn risk_book_bootstraps_cached_spot_observation() {
+        let asset0_mint = Pubkey::new_unique();
+        let asset1_mint = Pubkey::new_unique();
+        let mut side0 = test_market_side(asset0_mint, 2_000);
+        let mut side1 = test_market_side(asset1_mint, 2_000);
+        side0.reserve_ledger.live_reserve = 1_000_000;
+        side1.reserve_ledger.live_reserve = 2_000_000;
+
+        let refreshed = RiskBook::default()
+            .refreshed(&side0, &side1, &test_market().config, 42)
+            .unwrap();
+
+        assert_eq!(refreshed.price0_ema_nad, 2 * NAD);
+        assert_eq!(refreshed.price1_ema_nad, NAD / 2);
+        assert_eq!(refreshed.cached_spot_price0_nad, 2 * NAD);
+        assert_eq!(refreshed.cached_spot_price1_nad, NAD / 2);
+        assert_eq!(refreshed.last_snapshot_slot, 42);
+    }
+
+    #[test]
+    fn risk_book_rolls_ema_from_cached_spot_not_current_spot() {
+        let asset0_mint = Pubkey::new_unique();
+        let asset1_mint = Pubkey::new_unique();
+        let mut side0 = test_market_side(asset0_mint, 2_000);
+        let mut side1 = test_market_side(asset1_mint, 2_000);
+        side0.reserve_ledger.live_reserve = 1_000_000;
+        side1.reserve_ledger.live_reserve = 2_000_000;
+        let risk_book = RiskBook {
+            price0_ema_nad: NAD,
+            price1_ema_nad: NAD,
+            directional_price0_ema_nad: NAD,
+            directional_price1_ema_nad: NAD,
+            cached_spot_price0_nad: NAD,
+            cached_spot_price1_nad: NAD,
+            last_snapshot_slot: 0,
+            ..RiskBook::default()
+        };
+
+        let refreshed = risk_book
+            .refreshed(&side0, &side1, &test_market().config, 10_000)
+            .unwrap();
+
+        assert_eq!(refreshed.price0_ema_nad, NAD);
+        assert_eq!(refreshed.price1_ema_nad, NAD);
+        assert_eq!(refreshed.directional_price0_ema_nad, NAD);
+        assert_eq!(refreshed.directional_price1_ema_nad, NAD);
+        assert_eq!(refreshed.cached_spot_price0_nad, 2 * NAD);
+        assert_eq!(refreshed.cached_spot_price1_nad, NAD / 2);
     }
 
     #[test]
