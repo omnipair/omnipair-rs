@@ -49,29 +49,125 @@ pub struct InitializeMarket<'info> {
     pub hedge0_mint: UncheckedAccount<'info>,
     /// CHECK: Stored as the hedged wrapper mint for asset1; initialized in a later token-layer instruction.
     pub hedge1_mint: UncheckedAccount<'info>,
-    /// CHECK: Stored as the base claim escrow for h-omLP asset0 wrappers; validation is added in the hedge layer.
+    /// CHECK: Canonical base claim escrow PDA for h-omLP asset0 wrappers.
+    #[account(
+        seeds = [
+            HEDGE_VAULT_SEED_PREFIX,
+            market.key().as_ref(),
+            claim0_mint.key().as_ref(),
+        ],
+        bump
+    )]
     pub hedge0_vault: UncheckedAccount<'info>,
-    /// CHECK: Stored as the base claim escrow for h-omLP asset1 wrappers; validation is added in the hedge layer.
+    /// CHECK: Canonical base claim escrow PDA for h-omLP asset1 wrappers.
+    #[account(
+        seeds = [
+            HEDGE_VAULT_SEED_PREFIX,
+            market.key().as_ref(),
+            claim1_mint.key().as_ref(),
+        ],
+        bump
+    )]
     pub hedge1_vault: UncheckedAccount<'info>,
-    /// CHECK: Stored as the reserve vault for asset0; PDA/token-account validation is added in the reserve layer.
+    /// CHECK: Canonical reserve vault PDA for asset0.
+    #[account(
+        seeds = [
+            MARKET_RESERVE_VAULT_SEED_PREFIX,
+            market.key().as_ref(),
+            asset0_mint.key().as_ref(),
+        ],
+        bump
+    )]
     pub reserve0_vault: UncheckedAccount<'info>,
-    /// CHECK: Stored as the reserve vault for asset1; PDA/token-account validation is added in the reserve layer.
+    /// CHECK: Canonical reserve vault PDA for asset1.
+    #[account(
+        seeds = [
+            MARKET_RESERVE_VAULT_SEED_PREFIX,
+            market.key().as_ref(),
+            asset1_mint.key().as_ref(),
+        ],
+        bump
+    )]
     pub reserve1_vault: UncheckedAccount<'info>,
-    /// CHECK: Stored as the collateral vault for asset0; validation is added in the margin layer.
+    /// CHECK: Canonical collateral vault PDA for asset0.
+    #[account(
+        seeds = [
+            MARKET_COLLATERAL_VAULT_SEED_PREFIX,
+            market.key().as_ref(),
+            asset0_mint.key().as_ref(),
+        ],
+        bump
+    )]
     pub collateral0_vault: UncheckedAccount<'info>,
-    /// CHECK: Stored as the collateral vault for asset1; validation is added in the margin layer.
+    /// CHECK: Canonical collateral vault PDA for asset1.
+    #[account(
+        seeds = [
+            MARKET_COLLATERAL_VAULT_SEED_PREFIX,
+            market.key().as_ref(),
+            asset1_mint.key().as_ref(),
+        ],
+        bump
+    )]
     pub collateral1_vault: UncheckedAccount<'info>,
-    /// CHECK: Stored as the junior insurance reserve vault for asset0; validation is added in the insurance layer.
+    /// CHECK: Canonical junior insurance reserve vault PDA for asset0.
+    #[account(
+        seeds = [
+            INSURANCE_RESERVE_SEED_PREFIX,
+            market.key().as_ref(),
+            asset0_mint.key().as_ref(),
+        ],
+        bump
+    )]
     pub insurance0_vault: UncheckedAccount<'info>,
-    /// CHECK: Stored as the junior insurance reserve vault for asset1; validation is added in the insurance layer.
+    /// CHECK: Canonical junior insurance reserve vault PDA for asset1.
+    #[account(
+        seeds = [
+            INSURANCE_RESERVE_SEED_PREFIX,
+            market.key().as_ref(),
+            asset1_mint.key().as_ref(),
+        ],
+        bump
+    )]
     pub insurance1_vault: UncheckedAccount<'info>,
-    /// CHECK: Stored as the non-compounding fee vault for asset0; validation is added in the fee layer.
+    /// CHECK: Canonical non-compounding fee vault PDA for asset0.
+    #[account(
+        seeds = [
+            MARKET_FEE_VAULT_SEED_PREFIX,
+            market.key().as_ref(),
+            asset0_mint.key().as_ref(),
+        ],
+        bump
+    )]
     pub fee0_vault: UncheckedAccount<'info>,
-    /// CHECK: Stored as the non-compounding fee vault for asset1; validation is added in the fee layer.
+    /// CHECK: Canonical non-compounding fee vault PDA for asset1.
+    #[account(
+        seeds = [
+            MARKET_FEE_VAULT_SEED_PREFIX,
+            market.key().as_ref(),
+            asset1_mint.key().as_ref(),
+        ],
+        bump
+    )]
     pub fee1_vault: UncheckedAccount<'info>,
-    /// CHECK: Stored as the staked claim escrow for asset0; validation is added in the staking layer.
+    /// CHECK: Canonical staked claim escrow PDA for asset0.
+    #[account(
+        seeds = [
+            MARKET_STAKE_VAULT_SEED_PREFIX,
+            market.key().as_ref(),
+            claim0_mint.key().as_ref(),
+        ],
+        bump
+    )]
     pub claim0_stake_vault: UncheckedAccount<'info>,
-    /// CHECK: Stored as the staked claim escrow for asset1; validation is added in the staking layer.
+    /// CHECK: Canonical staked claim escrow PDA for asset1.
+    #[account(
+        seeds = [
+            MARKET_STAKE_VAULT_SEED_PREFIX,
+            market.key().as_ref(),
+            claim1_mint.key().as_ref(),
+        ],
+        bump
+    )]
     pub claim1_stake_vault: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,

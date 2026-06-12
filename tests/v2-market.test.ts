@@ -27,6 +27,10 @@ function orderedMints(mintA: PublicKey, mintB: PublicKey): [PublicKey, PublicKey
     : [mintB, mintA];
 }
 
+function deriveAddress(...seeds: Buffer[]): PublicKey {
+  return PublicKey.findProgramAddressSync(seeds, OMNIPAIR_PROGRAM_ID)[0];
+}
+
 function marketConfig() {
   return {
     swapFeeBps: 30,
@@ -87,6 +91,10 @@ describe("Omnipair Market LiteSVM", () => {
       [Buffer.from("__event_authority")],
       OMNIPAIR_PROGRAM_ID
     );
+    const claim0Mint = Keypair.generate().publicKey;
+    const claim1Mint = Keypair.generate().publicKey;
+    const hedge0Mint = Keypair.generate().publicKey;
+    const hedge1Mint = Keypair.generate().publicKey;
 
     await program.methods
       .initializeMarket({
@@ -100,22 +108,22 @@ describe("Omnipair Market LiteSVM", () => {
         asset0Mint,
         asset1Mint,
         market,
-        claim0Mint: Keypair.generate().publicKey,
-        claim1Mint: Keypair.generate().publicKey,
-        hedge0Mint: Keypair.generate().publicKey,
-        hedge1Mint: Keypair.generate().publicKey,
-        hedge0Vault: Keypair.generate().publicKey,
-        hedge1Vault: Keypair.generate().publicKey,
-        reserve0Vault: Keypair.generate().publicKey,
-        reserve1Vault: Keypair.generate().publicKey,
-        collateral0Vault: Keypair.generate().publicKey,
-        collateral1Vault: Keypair.generate().publicKey,
-        insurance0Vault: Keypair.generate().publicKey,
-        insurance1Vault: Keypair.generate().publicKey,
-        fee0Vault: Keypair.generate().publicKey,
-        fee1Vault: Keypair.generate().publicKey,
-        claim0StakeVault: Keypair.generate().publicKey,
-        claim1StakeVault: Keypair.generate().publicKey,
+        claim0Mint,
+        claim1Mint,
+        hedge0Mint,
+        hedge1Mint,
+        hedge0Vault: deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim0Mint.toBuffer()),
+        hedge1Vault: deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim1Mint.toBuffer()),
+        reserve0Vault: deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset0Mint.toBuffer()),
+        reserve1Vault: deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset1Mint.toBuffer()),
+        collateral0Vault: deriveAddress(Buffer.from("market_collateral"), market.toBuffer(), asset0Mint.toBuffer()),
+        collateral1Vault: deriveAddress(Buffer.from("market_collateral"), market.toBuffer(), asset1Mint.toBuffer()),
+        insurance0Vault: deriveAddress(Buffer.from("insurance"), market.toBuffer(), asset0Mint.toBuffer()),
+        insurance1Vault: deriveAddress(Buffer.from("insurance"), market.toBuffer(), asset1Mint.toBuffer()),
+        fee0Vault: deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset0Mint.toBuffer()),
+        fee1Vault: deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset1Mint.toBuffer()),
+        claim0StakeVault: deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim0Mint.toBuffer()),
+        claim1StakeVault: deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim1Mint.toBuffer()),
         systemProgram: SystemProgram.programId,
         eventAuthority,
         program: OMNIPAIR_PROGRAM_ID,
