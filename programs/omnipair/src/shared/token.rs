@@ -2,12 +2,11 @@
 /// https://github.com/raydium-io/raydium-cp-swap/blob/master/programs/cp-swap/src/utils/token.rs
 /// Handles token transfers and minting with support for old token program and spl_token_2022
 use crate::errors::ErrorCode;
-use anchor_lang::{prelude::*, system_program, solana_program::program::invoke};
+use anchor_lang::{prelude::*, solana_program::program::invoke, system_program};
 use anchor_spl::{
     token::{self, Token, TokenAccount},
     token_2022::{
         self,
-        Token2022,
         spl_token_2022::{
             self,
             extension::{
@@ -15,6 +14,7 @@ use anchor_spl::{
                 ExtensionType, StateWithExtensions,
             },
         },
+        Token2022,
     },
     token_interface::{
         initialize_account3, spl_token_2022::extension::BaseStateWithExtensions,
@@ -32,14 +32,8 @@ pub fn sync_native_if_wsol<'a>(
 ) -> Result<()> {
     if *mint == spl_token::native_mint::id() {
         invoke(
-            &spl_token::instruction::sync_native(
-                token_program.key,
-                token_account.key,
-            )?,
-            &[
-                token_program.clone(),
-                token_account.clone(),
-            ],
+            &spl_token::instruction::sync_native(token_program.key, token_account.key)?,
+            &[token_program.clone(), token_account.clone()],
         )?;
     }
     Ok(())
@@ -136,7 +130,7 @@ pub fn transfer_from_vault<'a>(
 }
 
 /// Transfers tokens from one vault account to another vault account.
-/// 
+///
 /// This function is an explicit alias for `transfer_from_vault`, providing clearer intent for vault-to-vault token movement.
 /// Arguments:
 ///   - `authority`: The account authorized to sign for the transfer (typically a PDA).
@@ -167,7 +161,7 @@ pub fn transfer_from_vault_to_vault<'a>(
 }
 
 /// Transfers tokens from one vault account to a user's token account.
-/// 
+///
 /// This function is an explicit alias for `transfer_from_vault`, providing clearer intent for vault-to-user token movement.
 /// Arguments:
 ///   - `authority`: The account authorized to sign for the transfer (typically a PDA).
@@ -202,7 +196,7 @@ pub fn transfer_from_vault_to_user<'a>(
     )
 }
 
-/// Issue a spl_token `MintTo` instruction.
+/// Issue a token `MintTo` instruction.
 pub fn token_mint_to<'a>(
     authority: AccountInfo<'a>,
     token_program: AccountInfo<'a>,
@@ -214,18 +208,35 @@ pub fn token_mint_to<'a>(
     if amount == 0 {
         return Ok(());
     }
-    token_2022::mint_to(
-        CpiContext::new_with_signer(
-            token_program,
-            token_2022::MintTo {
-                to: destination,
-                authority,
-                mint,
-            },
-            signer_seeds,
-        ),
-        amount,
-    )
+    if *token_program.key == Token2022::id() {
+        token_2022::mint_to(
+            CpiContext::new_with_signer(
+                token_program.to_account_info(),
+                token_2022::MintTo {
+                    to: destination,
+                    authority,
+                    mint,
+                },
+                signer_seeds,
+            ),
+            amount,
+        )
+    } else if *token_program.key == Token::id() {
+        token::mint_to(
+            CpiContext::new_with_signer(
+                token_program.to_account_info(),
+                token::MintTo {
+                    to: destination,
+                    authority,
+                    mint,
+                },
+                signer_seeds,
+            ),
+            amount,
+        )
+    } else {
+        err!(ErrorCode::InvalidTokenProgram)
+    }
 }
 
 pub fn token_burn<'a>(
@@ -239,18 +250,35 @@ pub fn token_burn<'a>(
     if amount == 0 {
         return Ok(());
     }
-    token_2022::burn(
-        CpiContext::new_with_signer(
-            token_program.to_account_info(),
-            token_2022::Burn {
-                from,
-                authority,
-                mint,
-            },
-            signer_seeds,
-        ),
-        amount,
-    )
+    if *token_program.key == Token2022::id() {
+        token_2022::burn(
+            CpiContext::new_with_signer(
+                token_program.to_account_info(),
+                token_2022::Burn {
+                    from,
+                    authority,
+                    mint,
+                },
+                signer_seeds,
+            ),
+            amount,
+        )
+    } else if *token_program.key == Token::id() {
+        token::burn(
+            CpiContext::new_with_signer(
+                token_program.to_account_info(),
+                token::Burn {
+                    from,
+                    authority,
+                    mint,
+                },
+                signer_seeds,
+            ),
+            amount,
+        )
+    } else {
+        err!(ErrorCode::InvalidTokenProgram)
+    }
 }
 
 /// Calculate the fee for output amount
