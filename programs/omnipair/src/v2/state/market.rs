@@ -1113,6 +1113,43 @@ impl Market {
         )
     }
 
+    pub fn debt_capped_recognized_collateral(
+        &self,
+        margin_position: &MarginPosition,
+        debt_asset_is_asset0: bool,
+        risk_book: &RiskBook,
+    ) -> Result<u64> {
+        let cap_bps = self.config.recognized_collateral_cap_bps as u128;
+        let (fixed_debt, debt_decimals, total_collateral) = if debt_asset_is_asset0 {
+            (
+                margin_position.fixed_debt0(&self.debt_book)?,
+                self.side0.asset_decimals,
+                margin_position.collateral1,
+            )
+        } else {
+            (
+                margin_position.fixed_debt1(&self.debt_book)?,
+                self.side1.asset_decimals,
+                margin_position.collateral0,
+            )
+        };
+        if fixed_debt == 0 || total_collateral == 0 {
+            return Ok(0);
+        }
+
+        let debt_value_nad = normalize_to_nad(fixed_debt, debt_decimals)?;
+        let recognized_value_cap_nad = debt_value_nad
+            .checked_mul(cap_bps)
+            .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        let capped_collateral = self.collateral_amount_for_debt_value_cap_with_risk(
+            debt_asset_is_asset0,
+            recognized_value_cap_nad,
+            risk_book,
+        )?;
+        Ok(total_collateral.min(capped_collateral))
+    }
+
     pub fn position_health_bps(
         &self,
         margin_position: &MarginPosition,
@@ -1166,39 +1203,21 @@ impl Market {
         debt_asset_is_asset0: bool,
     ) -> Result<()> {
         let risk_book = self.current_risk_book()?;
-        let cap_bps = self.config.recognized_collateral_cap_bps as u128;
-        if debt_asset_is_asset0 {
-            let recognized = self.collateral_value_nad(
-                false,
-                margin_position.recognized_collateral1_for_debt0,
-                &risk_book,
-            )?;
-            let total =
-                self.collateral_value_nad(false, margin_position.collateral1, &risk_book)?;
-            require_gte!(
-                total
-                    .checked_mul(cap_bps)
-                    .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
-                    .ok_or(ErrorCode::MarketMathOverflow)?,
-                recognized,
-                ErrorCode::InsufficientRecognizedCollateral
-            );
+        let max_recognized = self.debt_capped_recognized_collateral(
+            margin_position,
+            debt_asset_is_asset0,
+            &risk_book,
+        )?;
+        let recognized = if debt_asset_is_asset0 {
+            margin_position.recognized_collateral1_for_debt0
         } else {
-            let recognized = self.collateral_value_nad(
-                true,
-                margin_position.recognized_collateral0_for_debt1,
-                &risk_book,
-            )?;
-            let total = self.collateral_value_nad(true, margin_position.collateral0, &risk_book)?;
-            require_gte!(
-                total
-                    .checked_mul(cap_bps)
-                    .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
-                    .ok_or(ErrorCode::MarketMathOverflow)?,
-                recognized,
-                ErrorCode::InsufficientRecognizedCollateral
-            );
-        }
+            margin_position.recognized_collateral0_for_debt1
+        };
+        require_gte!(
+            max_recognized,
+            recognized,
+            ErrorCode::InsufficientRecognizedCollateral
+        );
         Ok(())
     }
 
@@ -1382,6 +1401,54 @@ impl Market {
             debt_amount_nad,
         )?;
         denormalize_from_nad_ceil(collateral_amount_nad, collateral_side.asset_decimals)
+    }
+
+    fn collateral_amount_for_debt_value_cap_with_risk(
+        &self,
+        debt_asset_is_asset0: bool,
+        debt_value_nad: u128,
+        risk_book: &RiskBook,
+    ) -> Result<u64> {
+        if debt_value_nad == 0 {
+            return Ok(0);
+        }
+        let (collateral_side, debt_side, price_ema_nad, directional_price_ema_nad) =
+            if debt_asset_is_asset0 {
+                (
+                    &self.side1,
+                    &self.side0,
+                    risk_book.price1_ema_nad,
+                    risk_book.directional_price1_ema_nad,
+                )
+            } else {
+                (
+                    &self.side0,
+                    &self.side1,
+                    risk_book.price0_ema_nad,
+                    risk_book.directional_price0_ema_nad,
+                )
+            };
+        let collateral_reserve = normalize_to_nad(
+            collateral_side.reserve_ledger.live_reserve as u128,
+            collateral_side.asset_decimals,
+        )?;
+        let debt_reserve = normalize_to_nad(
+            debt_side.reserve_ledger.live_reserve as u128,
+            debt_side.asset_decimals,
+        )?;
+        let (collateral_virtual_reserve, debt_virtual_reserve) =
+            virtual_reserves_at_pessimistic_price(
+                collateral_reserve,
+                debt_reserve,
+                price_ema_nad,
+                directional_price_ema_nad,
+            )?;
+        let collateral_amount_nad = constant_product_amount_in_floor(
+            collateral_virtual_reserve,
+            debt_virtual_reserve,
+            debt_value_nad,
+        )?;
+        denormalize_from_nad_floor(collateral_amount_nad, collateral_side.asset_decimals)
     }
 
     fn daily_limit_for_side(&self, market_side_index: u8, limit_bps: u16) -> Result<u64> {
@@ -1626,6 +1693,25 @@ fn constant_product_amount_in(
         denominator,
     )
     .ok_or(ErrorCode::MarketMathOverflow.into())
+}
+
+fn constant_product_amount_in_floor(
+    reserve_in: u128,
+    reserve_out: u128,
+    amount_out: u128,
+) -> Result<u128> {
+    if amount_out == 0 {
+        return Ok(0);
+    }
+    require_gte!(reserve_out, amount_out, ErrorCode::InsufficientLiquidity);
+    let denominator = reserve_out
+        .checked_sub(amount_out)
+        .ok_or(ErrorCode::MarketMathOverflow)?;
+    require!(denominator > 0, ErrorCode::InsufficientLiquidity);
+    amount_out
+        .checked_mul(reserve_in)
+        .and_then(|value| value.checked_div(denominator))
+        .ok_or(ErrorCode::MarketMathOverflow.into())
 }
 
 fn ema_u64(last_ema: u64, input: u64, last_slot: u64, current_slot: u64, half_life_ms: u64) -> u64 {
@@ -2236,6 +2322,53 @@ mod tests {
         let effective = market.effective_debt0_nad().unwrap();
 
         assert_eq!(effective, 160 * NAD as u128);
+    }
+
+    #[test]
+    fn recognized_collateral_is_capped_by_debt_value() {
+        let mut market = test_market();
+        market.config.recognized_collateral_cap_bps = 15_000;
+        market.side0.reserve_ledger.live_reserve = 1_000_000_000;
+        market.side1.reserve_ledger.live_reserve = 1_000_000_000;
+        market.refresh_risk_book().unwrap();
+        let mut position = margin_position();
+        position.collateral1 = 1_000_000_000;
+        position.fixed_debt0_shares =
+            DebtBook::debt_to_shares(100_000_000, market.debt_book.borrow_index0_nad).unwrap();
+
+        let recognized = market
+            .debt_capped_recognized_collateral(&position, true, &market.risk_book)
+            .unwrap();
+        let recognized_value = market
+            .collateral_value_nad(false, recognized, &market.risk_book)
+            .unwrap();
+        let debt_value_cap = normalize_to_nad(100_000_000, market.side0.asset_decimals)
+            .unwrap()
+            .checked_mul(15_000)
+            .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
+            .unwrap();
+
+        assert!(recognized > 100_000_000);
+        assert!(recognized < position.collateral1);
+        assert!(recognized_value <= debt_value_cap);
+    }
+
+    #[test]
+    fn recognition_cap_rejects_idle_collateral_pump() {
+        let mut market = test_market();
+        market.config.recognized_collateral_cap_bps = 15_000;
+        market.side0.reserve_ledger.live_reserve = 1_000_000_000;
+        market.side1.reserve_ledger.live_reserve = 1_000_000_000;
+        market.refresh_risk_book().unwrap();
+        let mut position = margin_position();
+        position.collateral1 = 1_000_000_000;
+        position.recognized_collateral1_for_debt0 = 1_000_000_000;
+        position.fixed_debt0_shares =
+            DebtBook::debt_to_shares(100_000_000, market.debt_book.borrow_index0_nad).unwrap();
+
+        let err = market.assert_recognition_cap(&position, true).unwrap_err();
+
+        assert_eq!(err, error!(ErrorCode::InsufficientRecognizedCollateral));
     }
 
     #[test]

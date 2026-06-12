@@ -21,7 +21,6 @@ use super::common::{apply_borrow_state, validate_borrow_accounts};
 pub struct MarketBorrowArgs {
     pub borrow_asset_is_asset0: bool,
     pub borrow_amount: u64,
-    pub collateral_amount_to_recognize: u64,
     pub min_health_bps: u64,
 }
 
@@ -77,10 +76,6 @@ impl<'info> MarketBorrow<'info> {
             ErrorCode::InvalidMarketConfig
         );
         require!(args.borrow_amount > 0, ErrorCode::AmountZero);
-        require!(
-            args.collateral_amount_to_recognize > 0,
-            ErrorCode::InsufficientRecognizedCollateral
-        );
         validate_borrow_accounts(
             &self.market,
             args.borrow_asset_is_asset0,
@@ -107,7 +102,6 @@ impl<'info> MarketBorrow<'info> {
             &mut ctx.accounts.margin_position,
             args.borrow_asset_is_asset0,
             args.borrow_amount,
-            args.collateral_amount_to_recognize,
             args.min_health_bps,
         )?;
 

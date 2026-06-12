@@ -144,7 +144,6 @@ pub(super) fn apply_borrow_state(
     margin_position: &mut MarginPosition,
     borrow_asset_is_asset0: bool,
     borrow_amount: u64,
-    collateral_amount_to_recognize: u64,
     min_health_bps: u64,
 ) -> Result<()> {
     let debt_shares = if borrow_asset_is_asset0 {
@@ -172,15 +171,6 @@ pub(super) fn apply_borrow_state(
         .ok_or(ErrorCode::CashReserveUnderflow)?;
 
     if borrow_asset_is_asset0 {
-        require_gte!(
-            margin_position.idle_collateral1()?,
-            collateral_amount_to_recognize,
-            ErrorCode::InsufficientRecognizedCollateral
-        );
-        margin_position.recognized_collateral1_for_debt0 = margin_position
-            .recognized_collateral1_for_debt0
-            .checked_add(collateral_amount_to_recognize)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
         margin_position.fixed_debt0_shares = margin_position
             .fixed_debt0_shares
             .checked_add(debt_shares)
@@ -190,21 +180,7 @@ pub(super) fn apply_borrow_state(
             .fixed_debt0_shares
             .checked_add(debt_shares)
             .ok_or(ErrorCode::MarketMathOverflow)?;
-        market.recognition_ledger.debt_bearing_collateral1_for_debt0 = market
-            .recognition_ledger
-            .debt_bearing_collateral1_for_debt0
-            .checked_add(collateral_amount_to_recognize)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
     } else {
-        require_gte!(
-            margin_position.idle_collateral0()?,
-            collateral_amount_to_recognize,
-            ErrorCode::InsufficientRecognizedCollateral
-        );
-        margin_position.recognized_collateral0_for_debt1 = margin_position
-            .recognized_collateral0_for_debt1
-            .checked_add(collateral_amount_to_recognize)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
         margin_position.fixed_debt1_shares = margin_position
             .fixed_debt1_shares
             .checked_add(debt_shares)
@@ -214,13 +190,8 @@ pub(super) fn apply_borrow_state(
             .fixed_debt1_shares
             .checked_add(debt_shares)
             .ok_or(ErrorCode::MarketMathOverflow)?;
-        market.recognition_ledger.debt_bearing_collateral0_for_debt1 = market
-            .recognition_ledger
-            .debt_bearing_collateral0_for_debt1
-            .checked_add(collateral_amount_to_recognize)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
     }
-    market.recognition_ledger.last_recognition_slot = Clock::get()?.slot;
+    sync_borrow_recognition(market, margin_position, borrow_asset_is_asset0)?;
     market.refresh_market_health()?;
     market.assert_market_health()?;
     market.assert_spot_ema_divergence()?;
@@ -232,6 +203,72 @@ pub(super) fn apply_borrow_state(
         market.position_health_bps(margin_position, false)?
     };
     require_gte!(health, min_health_bps, ErrorCode::InsufficientMarketHealth);
+    Ok(())
+}
+
+fn sync_borrow_recognition(
+    market: &mut Market,
+    margin_position: &mut MarginPosition,
+    debt_asset_is_asset0: bool,
+) -> Result<()> {
+    let risk_book = market.current_risk_book()?;
+    let recognition_slot = Clock::get()
+        .map(|clock| clock.slot)
+        .unwrap_or(market.last_update_slot);
+
+    if debt_asset_is_asset0 {
+        let old_recognized = margin_position.recognized_collateral1_for_debt0;
+        let target_recognized =
+            market.debt_capped_recognized_collateral(margin_position, true, &risk_book)?;
+        reconcile_recognition(
+            &mut margin_position.recognized_collateral1_for_debt0,
+            &mut market.recognition_ledger.debt_bearing_collateral1_for_debt0,
+            old_recognized,
+            target_recognized,
+        )?;
+    } else {
+        let old_recognized = margin_position.recognized_collateral0_for_debt1;
+        let target_recognized =
+            market.debt_capped_recognized_collateral(margin_position, false, &risk_book)?;
+        reconcile_recognition(
+            &mut margin_position.recognized_collateral0_for_debt1,
+            &mut market.recognition_ledger.debt_bearing_collateral0_for_debt1,
+            old_recognized,
+            target_recognized,
+        )?;
+    }
+
+    market.recognition_ledger.last_recognition_slot = recognition_slot;
+    Ok(())
+}
+
+fn reconcile_recognition(
+    position_recognized: &mut u64,
+    ledger_recognized: &mut u64,
+    old_recognized: u64,
+    target_recognized: u64,
+) -> Result<()> {
+    match target_recognized.cmp(&old_recognized) {
+        std::cmp::Ordering::Greater => {
+            let delta = target_recognized
+                .checked_sub(old_recognized)
+                .ok_or(ErrorCode::MarketMathOverflow)?;
+            *ledger_recognized = ledger_recognized
+                .checked_add(delta)
+                .ok_or(ErrorCode::MarketMathOverflow)?;
+        }
+        std::cmp::Ordering::Less => {
+            let delta = old_recognized
+                .checked_sub(target_recognized)
+                .ok_or(ErrorCode::MarketMathOverflow)?;
+            *ledger_recognized = ledger_recognized
+                .checked_sub(delta)
+                .ok_or(ErrorCode::MarketMathOverflow)?;
+        }
+        std::cmp::Ordering::Equal => {}
+    }
+
+    *position_recognized = target_recognized;
     Ok(())
 }
 
