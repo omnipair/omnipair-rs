@@ -56,6 +56,7 @@ impl MarketConfig {
                 && self.effective_debt_weight_min_bps <= BPS_DENOMINATOR,
             ErrorCode::InvalidMarketConfig
         );
+        require!(!self.soft_borrow_enabled, ErrorCode::InvalidMarketConfig);
         Ok(())
     }
 }
@@ -1924,6 +1925,16 @@ mod tests {
             fixed_debt1_shares: 0,
             bump: 1,
         }
+    }
+
+    #[test]
+    fn market_config_rejects_soft_borrow_until_implemented() {
+        let mut config = test_market().config;
+        config.soft_borrow_enabled = true;
+
+        let err = config.validate().unwrap_err();
+
+        assert_eq!(err, error!(ErrorCode::InvalidMarketConfig));
     }
 
     #[test]
