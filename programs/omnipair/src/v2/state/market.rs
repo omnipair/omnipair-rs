@@ -59,6 +59,7 @@ impl MarketConfig {
         require!(
             self.recognized_collateral_cap_bps >= BPS_DENOMINATOR
                 && self.market_health_min_bps >= BPS_DENOMINATOR
+                && self.recognized_collateral_cap_bps >= self.market_health_min_bps
                 && self.effective_debt_weight_min_bps <= BPS_DENOMINATOR,
             ErrorCode::InvalidMarketConfig
         );
@@ -1884,7 +1885,7 @@ mod tests {
                 max_daily_borrow_bps: 2_000,
                 max_daily_withdraw_bps: 2_000,
                 spot_ema_divergence_bps: 1_000,
-                recognized_collateral_cap_bps: 10_000,
+                recognized_collateral_cap_bps: 15_000,
                 market_health_min_bps: 11_000,
                 effective_debt_weight_min_bps: 10_000,
                 effective_debt_gamma_nad: NAD,
@@ -1941,6 +1942,17 @@ mod tests {
     fn market_config_rejects_soft_borrow_until_implemented() {
         let mut config = test_market().config;
         config.soft_borrow_enabled = true;
+
+        let err = config.validate().unwrap_err();
+
+        assert_eq!(err, error!(ErrorCode::InvalidMarketConfig));
+    }
+
+    #[test]
+    fn market_config_rejects_recognition_cap_below_health_floor() {
+        let mut config = test_market().config;
+        config.recognized_collateral_cap_bps = 10_000;
+        config.market_health_min_bps = 11_000;
 
         let err = config.validate().unwrap_err();
 
@@ -2173,7 +2185,7 @@ mod tests {
             side0,
             side1,
             MarketConfig {
-                recognized_collateral_cap_bps: 10_000,
+                recognized_collateral_cap_bps: 11_000,
                 ..test_market().config
             },
             [8_u8; 32],

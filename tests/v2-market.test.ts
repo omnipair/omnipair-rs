@@ -56,7 +56,7 @@ function marketConfig() {
     maxDailyBorrowBps: 2_000,
     maxDailyWithdrawBps: 2_000,
     spotEmaDivergenceBps: 1_000,
-    recognizedCollateralCapBps: 10_000,
+    recognizedCollateralCapBps: 15_000,
     marketHealthMinBps: 11_000,
     effectiveDebtWeightMinBps: 10_000,
     effectiveDebtGammaNad: NAD,
@@ -165,11 +165,131 @@ describe("Omnipair Market LiteSVM", () => {
       market,
       reserve0Vault,
       reserve1Vault,
+      fee0Vault,
+      fee1Vault,
       hedge0Vault,
       hedge1Vault,
       claim0StakeVault,
       claim1StakeVault,
       eventAuthority,
+    };
+  }
+
+  async function depositReserveSide(
+    fixture,
+    marketSideIndex,
+    assetMint,
+    claimMint,
+    reserveVault,
+    ownerAssetAccount,
+    ownerClaimAccount
+  ) {
+    const stakePosition = deriveAddress(
+      Buffer.from("stake"),
+      fixture.market.toBuffer(),
+      payer.publicKey.toBuffer(),
+      assetMint.toBuffer()
+    );
+
+    await program.methods
+      .depositReserve({
+        marketSideIndex,
+        depositAmount: new BN(1_000_000),
+        minClaimAmount: new BN(800_000),
+        maxBufferAmount: new BN(200_000),
+      })
+      .accounts({
+        market: fixture.market,
+        owner: payer.publicKey,
+        assetMint,
+        claimMint,
+        reserveVault,
+        ownerAssetAccount,
+        ownerClaimAccount,
+        stakePosition,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        eventAuthority: fixture.eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    return stakePosition;
+  }
+
+  async function fundTwoSidedMarket() {
+    const fixture = await initializeMarketFixture();
+    const ownerAsset0Account = await createAccount(
+      connection as any,
+      payer,
+      fixture.asset0Mint,
+      payer.publicKey
+    );
+    const ownerAsset1Account = await createAccount(
+      connection as any,
+      payer,
+      fixture.asset1Mint,
+      payer.publicKey
+    );
+    const ownerClaim0Account = await createAccount(
+      connection as any,
+      payer,
+      fixture.claim0Mint,
+      payer.publicKey
+    );
+    const ownerClaim1Account = await createAccount(
+      connection as any,
+      payer,
+      fixture.claim1Mint,
+      payer.publicKey
+    );
+
+    await mintTo(
+      connection as any,
+      payer,
+      fixture.asset0Mint,
+      ownerAsset0Account,
+      payer,
+      2_000_000
+    );
+    await mintTo(
+      connection as any,
+      payer,
+      fixture.asset1Mint,
+      ownerAsset1Account,
+      payer,
+      2_000_000
+    );
+
+    const stake0Position = await depositReserveSide(
+      fixture,
+      0,
+      fixture.asset0Mint,
+      fixture.claim0Mint,
+      fixture.reserve0Vault,
+      ownerAsset0Account,
+      ownerClaim0Account
+    );
+    const stake1Position = await depositReserveSide(
+      fixture,
+      1,
+      fixture.asset1Mint,
+      fixture.claim1Mint,
+      fixture.reserve1Vault,
+      ownerAsset1Account,
+      ownerClaim1Account
+    );
+
+    return {
+      ...fixture,
+      ownerAsset0Account,
+      ownerAsset1Account,
+      ownerClaim0Account,
+      ownerClaim1Account,
+      stake0Position,
+      stake1Position,
     };
   }
 
@@ -203,102 +323,13 @@ describe("Omnipair Market LiteSVM", () => {
 
     const {
       asset0Mint,
-      asset1Mint,
       claim0Mint,
-      claim1Mint,
       market,
       reserve0Vault,
-      reserve1Vault,
+      ownerAsset0Account,
+      ownerClaim0Account,
       eventAuthority,
-    } = await initializeMarketFixture();
-    const ownerAsset0Account = await createAccount(
-      connection as any,
-      payer,
-      asset0Mint,
-      payer.publicKey
-    );
-    const ownerAsset1Account = await createAccount(
-      connection as any,
-      payer,
-      asset1Mint,
-      payer.publicKey
-    );
-    const ownerClaim0Account = await createAccount(
-      connection as any,
-      payer,
-      claim0Mint,
-      payer.publicKey
-    );
-    const ownerClaim1Account = await createAccount(
-      connection as any,
-      payer,
-      claim1Mint,
-      payer.publicKey
-    );
-    const stake0Position = deriveAddress(
-      Buffer.from("stake"),
-      market.toBuffer(),
-      payer.publicKey.toBuffer(),
-      asset0Mint.toBuffer()
-    );
-    const stake1Position = deriveAddress(
-      Buffer.from("stake"),
-      market.toBuffer(),
-      payer.publicKey.toBuffer(),
-      asset1Mint.toBuffer()
-    );
-
-    await mintTo(connection as any, payer, asset0Mint, ownerAsset0Account, payer, 2_000_000);
-    await mintTo(connection as any, payer, asset1Mint, ownerAsset1Account, payer, 2_000_000);
-
-    await program.methods
-      .depositReserve({
-        marketSideIndex: 0,
-        depositAmount: new BN(1_000_000),
-        minClaimAmount: new BN(800_000),
-        maxBufferAmount: new BN(200_000),
-      })
-      .accounts({
-        market,
-        owner: payer.publicKey,
-        assetMint: asset0Mint,
-        claimMint: claim0Mint,
-        reserveVault: reserve0Vault,
-        ownerAssetAccount: ownerAsset0Account,
-        ownerClaimAccount: ownerClaim0Account,
-        stakePosition: stake0Position,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        token2022Program: TOKEN_2022_PROGRAM_ID,
-        systemProgram: SystemProgram.programId,
-        eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
-      })
-      .signers([payer])
-      .rpc();
-    await program.methods
-      .depositReserve({
-        marketSideIndex: 1,
-        depositAmount: new BN(1_000_000),
-        minClaimAmount: new BN(800_000),
-        maxBufferAmount: new BN(200_000),
-      })
-      .accounts({
-        market,
-        owner: payer.publicKey,
-        assetMint: asset1Mint,
-        claimMint: claim1Mint,
-        reserveVault: reserve1Vault,
-        ownerAssetAccount: ownerAsset1Account,
-        ownerClaimAccount: ownerClaim1Account,
-        stakePosition: stake1Position,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        token2022Program: TOKEN_2022_PROGRAM_ID,
-        systemProgram: SystemProgram.programId,
-        eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
-      })
-      .signers([payer])
-      .rpc();
+    } = await fundTwoSidedMarket();
 
     expect((await getAccount(connection as any, ownerAsset0Account)).amount).to.equal(
       BigInt(1_000_000)
@@ -342,6 +373,7 @@ describe("Omnipair Market LiteSVM", () => {
       BigInt(920_000)
     );
   });
+
 });
 
 after(() => {
