@@ -1,15 +1,21 @@
 use anchor_lang::{prelude::*, solana_program::program_option::COption};
-use anchor_spl::token_interface::Mint;
+use anchor_spl::{
+    token::Token,
+    token_interface::{Mint, Token2022},
+};
 
 use crate::{
     constants::*,
     errors::ErrorCode,
     events::{MarketCreated, MarketEventMetadata},
     shared::account::get_size_with_discriminator,
+    shared::token::create_token_account,
     v2::state::{Market, MarketConfig, MarketSide},
 };
 
-use crate::v2::instructions::common::{require_fee_free_claim_mint, require_supported_asset_mint};
+use crate::v2::instructions::common::{
+    require_fee_free_claim_mint, require_supported_asset_mint, token_program_for_mint,
+};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InitializeMarketArgs {
@@ -49,6 +55,7 @@ pub struct InitializeMarket<'info> {
     pub hedge1_mint: Box<InterfaceAccount<'info, Mint>>,
     /// CHECK: Canonical base claim escrow PDA for h-omLP asset0 wrappers.
     #[account(
+        mut,
         seeds = [
             HEDGE_VAULT_SEED_PREFIX,
             market.key().as_ref(),
@@ -59,6 +66,7 @@ pub struct InitializeMarket<'info> {
     pub hedge0_vault: UncheckedAccount<'info>,
     /// CHECK: Canonical base claim escrow PDA for h-omLP asset1 wrappers.
     #[account(
+        mut,
         seeds = [
             HEDGE_VAULT_SEED_PREFIX,
             market.key().as_ref(),
@@ -69,6 +77,7 @@ pub struct InitializeMarket<'info> {
     pub hedge1_vault: UncheckedAccount<'info>,
     /// CHECK: Canonical reserve vault PDA for asset0.
     #[account(
+        mut,
         seeds = [
             MARKET_RESERVE_VAULT_SEED_PREFIX,
             market.key().as_ref(),
@@ -79,6 +88,7 @@ pub struct InitializeMarket<'info> {
     pub reserve0_vault: UncheckedAccount<'info>,
     /// CHECK: Canonical reserve vault PDA for asset1.
     #[account(
+        mut,
         seeds = [
             MARKET_RESERVE_VAULT_SEED_PREFIX,
             market.key().as_ref(),
@@ -89,6 +99,7 @@ pub struct InitializeMarket<'info> {
     pub reserve1_vault: UncheckedAccount<'info>,
     /// CHECK: Canonical collateral vault PDA for asset0.
     #[account(
+        mut,
         seeds = [
             MARKET_COLLATERAL_VAULT_SEED_PREFIX,
             market.key().as_ref(),
@@ -99,6 +110,7 @@ pub struct InitializeMarket<'info> {
     pub collateral0_vault: UncheckedAccount<'info>,
     /// CHECK: Canonical collateral vault PDA for asset1.
     #[account(
+        mut,
         seeds = [
             MARKET_COLLATERAL_VAULT_SEED_PREFIX,
             market.key().as_ref(),
@@ -109,6 +121,7 @@ pub struct InitializeMarket<'info> {
     pub collateral1_vault: UncheckedAccount<'info>,
     /// CHECK: Canonical junior insurance reserve vault PDA for asset0.
     #[account(
+        mut,
         seeds = [
             INSURANCE_RESERVE_SEED_PREFIX,
             market.key().as_ref(),
@@ -119,6 +132,7 @@ pub struct InitializeMarket<'info> {
     pub insurance0_vault: UncheckedAccount<'info>,
     /// CHECK: Canonical junior insurance reserve vault PDA for asset1.
     #[account(
+        mut,
         seeds = [
             INSURANCE_RESERVE_SEED_PREFIX,
             market.key().as_ref(),
@@ -129,6 +143,7 @@ pub struct InitializeMarket<'info> {
     pub insurance1_vault: UncheckedAccount<'info>,
     /// CHECK: Canonical non-compounding fee vault PDA for asset0.
     #[account(
+        mut,
         seeds = [
             MARKET_FEE_VAULT_SEED_PREFIX,
             market.key().as_ref(),
@@ -139,6 +154,7 @@ pub struct InitializeMarket<'info> {
     pub fee0_vault: UncheckedAccount<'info>,
     /// CHECK: Canonical non-compounding fee vault PDA for asset1.
     #[account(
+        mut,
         seeds = [
             MARKET_FEE_VAULT_SEED_PREFIX,
             market.key().as_ref(),
@@ -149,6 +165,7 @@ pub struct InitializeMarket<'info> {
     pub fee1_vault: UncheckedAccount<'info>,
     /// CHECK: Canonical staked claim escrow PDA for asset0.
     #[account(
+        mut,
         seeds = [
             MARKET_STAKE_VAULT_SEED_PREFIX,
             market.key().as_ref(),
@@ -159,6 +176,7 @@ pub struct InitializeMarket<'info> {
     pub claim0_stake_vault: UncheckedAccount<'info>,
     /// CHECK: Canonical staked claim escrow PDA for asset1.
     #[account(
+        mut,
         seeds = [
             MARKET_STAKE_VAULT_SEED_PREFIX,
             market.key().as_ref(),
@@ -169,6 +187,8 @@ pub struct InitializeMarket<'info> {
     pub claim1_stake_vault: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+    pub token_2022_program: Program<'info, Token2022>,
 }
 
 impl<'info> InitializeMarket<'info> {
@@ -205,6 +225,8 @@ impl<'info> InitializeMarket<'info> {
     pub fn handle_initialize(ctx: Context<Self>, args: InitializeMarketArgs) -> Result<()> {
         let current_slot = Clock::get()?.slot;
         let market_key = ctx.accounts.market.key();
+
+        Self::create_vault_accounts(&ctx)?;
 
         let market = &mut ctx.accounts.market;
         market.version = MARKET_VERSION;
@@ -293,4 +315,183 @@ impl<'info> InitializeMarket<'info> {
 
         Ok(())
     }
+
+    fn create_vault_accounts(ctx: &Context<Self>) -> Result<()> {
+        let asset0_token_program = token_program_for_mint(
+            &ctx.accounts.asset0_mint,
+            &ctx.accounts.token_program,
+            &ctx.accounts.token_2022_program,
+        )?;
+        let asset1_token_program = token_program_for_mint(
+            &ctx.accounts.asset1_mint,
+            &ctx.accounts.token_program,
+            &ctx.accounts.token_2022_program,
+        )?;
+        let claim0_token_program = token_program_for_mint(
+            &ctx.accounts.claim0_mint,
+            &ctx.accounts.token_program,
+            &ctx.accounts.token_2022_program,
+        )?;
+        let claim1_token_program = token_program_for_mint(
+            &ctx.accounts.claim1_mint,
+            &ctx.accounts.token_program,
+            &ctx.accounts.token_2022_program,
+        )?;
+
+        create_vault_token_account(
+            &ctx.accounts.market,
+            &ctx.accounts.payer,
+            &ctx.accounts.reserve0_vault,
+            &ctx.accounts.asset0_mint,
+            &ctx.accounts.system_program,
+            &asset0_token_program,
+            MARKET_RESERVE_VAULT_SEED_PREFIX,
+            ctx.bumps.reserve0_vault,
+        )?;
+        create_vault_token_account(
+            &ctx.accounts.market,
+            &ctx.accounts.payer,
+            &ctx.accounts.reserve1_vault,
+            &ctx.accounts.asset1_mint,
+            &ctx.accounts.system_program,
+            &asset1_token_program,
+            MARKET_RESERVE_VAULT_SEED_PREFIX,
+            ctx.bumps.reserve1_vault,
+        )?;
+        create_vault_token_account(
+            &ctx.accounts.market,
+            &ctx.accounts.payer,
+            &ctx.accounts.collateral0_vault,
+            &ctx.accounts.asset0_mint,
+            &ctx.accounts.system_program,
+            &asset0_token_program,
+            MARKET_COLLATERAL_VAULT_SEED_PREFIX,
+            ctx.bumps.collateral0_vault,
+        )?;
+        create_vault_token_account(
+            &ctx.accounts.market,
+            &ctx.accounts.payer,
+            &ctx.accounts.collateral1_vault,
+            &ctx.accounts.asset1_mint,
+            &ctx.accounts.system_program,
+            &asset1_token_program,
+            MARKET_COLLATERAL_VAULT_SEED_PREFIX,
+            ctx.bumps.collateral1_vault,
+        )?;
+        create_vault_token_account(
+            &ctx.accounts.market,
+            &ctx.accounts.payer,
+            &ctx.accounts.insurance0_vault,
+            &ctx.accounts.asset0_mint,
+            &ctx.accounts.system_program,
+            &asset0_token_program,
+            INSURANCE_RESERVE_SEED_PREFIX,
+            ctx.bumps.insurance0_vault,
+        )?;
+        create_vault_token_account(
+            &ctx.accounts.market,
+            &ctx.accounts.payer,
+            &ctx.accounts.insurance1_vault,
+            &ctx.accounts.asset1_mint,
+            &ctx.accounts.system_program,
+            &asset1_token_program,
+            INSURANCE_RESERVE_SEED_PREFIX,
+            ctx.bumps.insurance1_vault,
+        )?;
+        create_vault_token_account(
+            &ctx.accounts.market,
+            &ctx.accounts.payer,
+            &ctx.accounts.fee0_vault,
+            &ctx.accounts.asset0_mint,
+            &ctx.accounts.system_program,
+            &asset0_token_program,
+            MARKET_FEE_VAULT_SEED_PREFIX,
+            ctx.bumps.fee0_vault,
+        )?;
+        create_vault_token_account(
+            &ctx.accounts.market,
+            &ctx.accounts.payer,
+            &ctx.accounts.fee1_vault,
+            &ctx.accounts.asset1_mint,
+            &ctx.accounts.system_program,
+            &asset1_token_program,
+            MARKET_FEE_VAULT_SEED_PREFIX,
+            ctx.bumps.fee1_vault,
+        )?;
+        create_vault_token_account(
+            &ctx.accounts.market,
+            &ctx.accounts.payer,
+            &ctx.accounts.hedge0_vault,
+            &ctx.accounts.claim0_mint,
+            &ctx.accounts.system_program,
+            &claim0_token_program,
+            HEDGE_VAULT_SEED_PREFIX,
+            ctx.bumps.hedge0_vault,
+        )?;
+        create_vault_token_account(
+            &ctx.accounts.market,
+            &ctx.accounts.payer,
+            &ctx.accounts.hedge1_vault,
+            &ctx.accounts.claim1_mint,
+            &ctx.accounts.system_program,
+            &claim1_token_program,
+            HEDGE_VAULT_SEED_PREFIX,
+            ctx.bumps.hedge1_vault,
+        )?;
+        create_vault_token_account(
+            &ctx.accounts.market,
+            &ctx.accounts.payer,
+            &ctx.accounts.claim0_stake_vault,
+            &ctx.accounts.claim0_mint,
+            &ctx.accounts.system_program,
+            &claim0_token_program,
+            MARKET_STAKE_VAULT_SEED_PREFIX,
+            ctx.bumps.claim0_stake_vault,
+        )?;
+        create_vault_token_account(
+            &ctx.accounts.market,
+            &ctx.accounts.payer,
+            &ctx.accounts.claim1_stake_vault,
+            &ctx.accounts.claim1_mint,
+            &ctx.accounts.system_program,
+            &claim1_token_program,
+            MARKET_STAKE_VAULT_SEED_PREFIX,
+            ctx.bumps.claim1_stake_vault,
+        )
+    }
+}
+
+fn create_vault_token_account<'info>(
+    market: &Account<'info, Market>,
+    payer: &Signer<'info>,
+    vault: &UncheckedAccount<'info>,
+    mint: &InterfaceAccount<'info, Mint>,
+    system_program: &Program<'info, System>,
+    token_program: &AccountInfo<'info>,
+    seed_prefix: &[u8],
+    bump: u8,
+) -> Result<()> {
+    let market_key = market.key();
+    let mint_key = mint.key();
+    let bump_seed = [bump];
+    let market_info = market.to_account_info();
+    let payer_info = payer.to_account_info();
+    let vault_info = vault.to_account_info();
+    let mint_info = mint.to_account_info();
+    let system_program_info = system_program.to_account_info();
+
+    create_token_account(
+        &market_info,
+        &payer_info,
+        &vault_info,
+        &mint_info,
+        &system_program_info,
+        token_program,
+        &[
+            seed_prefix,
+            market_key.as_ref(),
+            mint_key.as_ref(),
+            &bump_seed,
+        ],
+    )
 }

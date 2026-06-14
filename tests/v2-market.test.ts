@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
 import anchor from "@coral-xyz/anchor";
-import { createMint } from "@solana/spl-token";
+import { createMint, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram } from "@solana/web3.js";
 import { expect } from "chai";
 import { LiteSVM } from "litesvm";
@@ -95,6 +95,18 @@ describe("Omnipair Market LiteSVM", () => {
     const claim1Mint = await createMint(connection as any, payer, market, null, 6);
     const hedge0Mint = await createMint(connection as any, payer, market, null, 6);
     const hedge1Mint = await createMint(connection as any, payer, market, null, 6);
+    const hedge0Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim0Mint.toBuffer());
+    const hedge1Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim1Mint.toBuffer());
+    const reserve0Vault = deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset0Mint.toBuffer());
+    const reserve1Vault = deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset1Mint.toBuffer());
+    const collateral0Vault = deriveAddress(Buffer.from("market_collateral"), market.toBuffer(), asset0Mint.toBuffer());
+    const collateral1Vault = deriveAddress(Buffer.from("market_collateral"), market.toBuffer(), asset1Mint.toBuffer());
+    const insurance0Vault = deriveAddress(Buffer.from("insurance"), market.toBuffer(), asset0Mint.toBuffer());
+    const insurance1Vault = deriveAddress(Buffer.from("insurance"), market.toBuffer(), asset1Mint.toBuffer());
+    const fee0Vault = deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset0Mint.toBuffer());
+    const fee1Vault = deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset1Mint.toBuffer());
+    const claim0StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim0Mint.toBuffer());
+    const claim1StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim1Mint.toBuffer());
 
     await program.methods
       .initializeMarket({
@@ -112,19 +124,21 @@ describe("Omnipair Market LiteSVM", () => {
         claim1Mint,
         hedge0Mint,
         hedge1Mint,
-        hedge0Vault: deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim0Mint.toBuffer()),
-        hedge1Vault: deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim1Mint.toBuffer()),
-        reserve0Vault: deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset0Mint.toBuffer()),
-        reserve1Vault: deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset1Mint.toBuffer()),
-        collateral0Vault: deriveAddress(Buffer.from("market_collateral"), market.toBuffer(), asset0Mint.toBuffer()),
-        collateral1Vault: deriveAddress(Buffer.from("market_collateral"), market.toBuffer(), asset1Mint.toBuffer()),
-        insurance0Vault: deriveAddress(Buffer.from("insurance"), market.toBuffer(), asset0Mint.toBuffer()),
-        insurance1Vault: deriveAddress(Buffer.from("insurance"), market.toBuffer(), asset1Mint.toBuffer()),
-        fee0Vault: deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset0Mint.toBuffer()),
-        fee1Vault: deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset1Mint.toBuffer()),
-        claim0StakeVault: deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim0Mint.toBuffer()),
-        claim1StakeVault: deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim1Mint.toBuffer()),
+        hedge0Vault,
+        hedge1Vault,
+        reserve0Vault,
+        reserve1Vault,
+        collateral0Vault,
+        collateral1Vault,
+        insurance0Vault,
+        insurance1Vault,
+        fee0Vault,
+        fee1Vault,
+        claim0StakeVault,
+        claim1StakeVault,
         systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
         program: OMNIPAIR_PROGRAM_ID,
       })
@@ -134,6 +148,12 @@ describe("Omnipair Market LiteSVM", () => {
     const marketAccount = await connection.getAccountInfo(market);
     expect(marketAccount).to.not.equal(null);
     expect(marketAccount.owner.toString()).to.equal(OMNIPAIR_PROGRAM_ID.toString());
+
+    for (const vault of [reserve0Vault, reserve1Vault, hedge0Vault, hedge1Vault, claim0StakeVault, claim1StakeVault]) {
+      const vaultAccount = await connection.getAccountInfo(vault);
+      expect(vaultAccount).to.not.equal(null);
+      expect(vaultAccount.owner.toString()).to.equal(TOKEN_PROGRAM_ID.toString());
+    }
   });
 });
 
