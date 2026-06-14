@@ -2,8 +2,21 @@ import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
 import anchor from "@coral-xyz/anchor";
-import { createMint, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram } from "@solana/web3.js";
+import {
+  createAccount,
+  createMint,
+  getAccount,
+  mintTo,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
+import {
+  ComputeBudgetProgram,
+  Keypair,
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  SystemProgram,
+} from "@solana/web3.js";
 import { expect } from "chai";
 import { LiteSVM } from "litesvm";
 import { LiteSVMConnection } from "./utils/litesvm-connection.js";
@@ -76,9 +89,7 @@ describe("Omnipair Market LiteSVM", () => {
     program = new Program(omnipairIdl as any, provider as any);
   });
 
-  it("initializes a market account", async () => {
-    trackInstruction("initializeMarket", "initializes a market account");
-
+  async function initializeMarketFixture() {
     const mintA = await createMint(connection as any, payer, payer.publicKey, null, 6);
     const mintB = await createMint(connection as any, payer, payer.publicKey, null, 6);
     const [asset0Mint, asset1Mint] = orderedMints(mintA, mintB);
@@ -142,8 +153,38 @@ describe("Omnipair Market LiteSVM", () => {
         eventAuthority,
         program: OMNIPAIR_PROGRAM_ID,
       })
+      .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
       .signers([payer])
       .rpc();
+
+    return {
+      asset0Mint,
+      asset1Mint,
+      claim0Mint,
+      claim1Mint,
+      market,
+      reserve0Vault,
+      reserve1Vault,
+      hedge0Vault,
+      hedge1Vault,
+      claim0StakeVault,
+      claim1StakeVault,
+      eventAuthority,
+    };
+  }
+
+  it("initializes a market account", async () => {
+    trackInstruction("initializeMarket", "initializes a market account");
+
+    const {
+      market,
+      reserve0Vault,
+      reserve1Vault,
+      hedge0Vault,
+      hedge1Vault,
+      claim0StakeVault,
+      claim1StakeVault,
+    } = await initializeMarketFixture();
 
     const marketAccount = await connection.getAccountInfo(market);
     expect(marketAccount).to.not.equal(null);
@@ -154,6 +195,152 @@ describe("Omnipair Market LiteSVM", () => {
       expect(vaultAccount).to.not.equal(null);
       expect(vaultAccount.owner.toString()).to.equal(TOKEN_PROGRAM_ID.toString());
     }
+  });
+
+  it("deposits reserve inventory and redeems fixed principal", async () => {
+    trackInstruction("depositReserve", "deposits reserve inventory");
+    trackInstruction("redeemClaim", "redeems fixed principal");
+
+    const {
+      asset0Mint,
+      asset1Mint,
+      claim0Mint,
+      claim1Mint,
+      market,
+      reserve0Vault,
+      reserve1Vault,
+      eventAuthority,
+    } = await initializeMarketFixture();
+    const ownerAsset0Account = await createAccount(
+      connection as any,
+      payer,
+      asset0Mint,
+      payer.publicKey
+    );
+    const ownerAsset1Account = await createAccount(
+      connection as any,
+      payer,
+      asset1Mint,
+      payer.publicKey
+    );
+    const ownerClaim0Account = await createAccount(
+      connection as any,
+      payer,
+      claim0Mint,
+      payer.publicKey
+    );
+    const ownerClaim1Account = await createAccount(
+      connection as any,
+      payer,
+      claim1Mint,
+      payer.publicKey
+    );
+    const stake0Position = deriveAddress(
+      Buffer.from("stake"),
+      market.toBuffer(),
+      payer.publicKey.toBuffer(),
+      asset0Mint.toBuffer()
+    );
+    const stake1Position = deriveAddress(
+      Buffer.from("stake"),
+      market.toBuffer(),
+      payer.publicKey.toBuffer(),
+      asset1Mint.toBuffer()
+    );
+
+    await mintTo(connection as any, payer, asset0Mint, ownerAsset0Account, payer, 2_000_000);
+    await mintTo(connection as any, payer, asset1Mint, ownerAsset1Account, payer, 2_000_000);
+
+    await program.methods
+      .depositReserve({
+        marketSideIndex: 0,
+        depositAmount: new BN(1_000_000),
+        minClaimAmount: new BN(800_000),
+        maxBufferAmount: new BN(200_000),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        assetMint: asset0Mint,
+        claimMint: claim0Mint,
+        reserveVault: reserve0Vault,
+        ownerAssetAccount: ownerAsset0Account,
+        ownerClaimAccount: ownerClaim0Account,
+        stakePosition: stake0Position,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+    await program.methods
+      .depositReserve({
+        marketSideIndex: 1,
+        depositAmount: new BN(1_000_000),
+        minClaimAmount: new BN(800_000),
+        maxBufferAmount: new BN(200_000),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        assetMint: asset1Mint,
+        claimMint: claim1Mint,
+        reserveVault: reserve1Vault,
+        ownerAssetAccount: ownerAsset1Account,
+        ownerClaimAccount: ownerClaim1Account,
+        stakePosition: stake1Position,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    expect((await getAccount(connection as any, ownerAsset0Account)).amount).to.equal(
+      BigInt(1_000_000)
+    );
+    expect((await getAccount(connection as any, ownerClaim0Account)).amount).to.equal(
+      BigInt(800_000)
+    );
+    expect((await getAccount(connection as any, reserve0Vault)).amount).to.equal(
+      BigInt(1_000_000)
+    );
+
+    await program.methods
+      .redeemClaim({
+        marketSideIndex: 0,
+        claimAmount: new BN(80_000),
+        minAssetAmountOut: new BN(80_000),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        assetMint: asset0Mint,
+        claimMint: claim0Mint,
+        reserveVault: reserve0Vault,
+        ownerAssetAccount: ownerAsset0Account,
+        ownerClaimAccount: ownerClaim0Account,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    expect((await getAccount(connection as any, ownerAsset0Account)).amount).to.equal(
+      BigInt(1_080_000)
+    );
+    expect((await getAccount(connection as any, ownerClaim0Account)).amount).to.equal(
+      BigInt(720_000)
+    );
+    expect((await getAccount(connection as any, reserve0Vault)).amount).to.equal(
+      BigInt(920_000)
+    );
   });
 });
 
