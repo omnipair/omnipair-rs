@@ -391,9 +391,8 @@ fn insurance_request_for_liquidation(
     } else {
         market.insurance_reserve.available1
     };
-    Ok((remaining_debt as u64)
-        .min(available)
-        .min(max_insurance_draw))
+    let remaining_debt_cap = u64::try_from(remaining_debt).unwrap_or(u64::MAX);
+    Ok(remaining_debt_cap.min(available).min(max_insurance_draw))
 }
 
 fn apply_liquidation_state(
@@ -762,6 +761,19 @@ mod tests {
         let exhausted_request =
             insurance_request_for_liquidation(&market, &position, true, 50, 30).unwrap();
         assert_eq!(exhausted_request, 30);
+    }
+
+    #[test]
+    fn insurance_request_saturates_large_remaining_debt() {
+        let mut market = test_market();
+        let mut position = insolvent_position(&mut market);
+        position.collateral1 = 0;
+        position.recognized_collateral1_for_debt0 = 0;
+        position.fixed_debt0_shares = (u64::MAX as u128) + 51;
+
+        let request = insurance_request_for_liquidation(&market, &position, true, 50, 40).unwrap();
+
+        assert_eq!(request, 40);
     }
 
     #[test]
