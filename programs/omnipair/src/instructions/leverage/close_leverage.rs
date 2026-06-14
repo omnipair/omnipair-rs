@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    token::{Mint, Token, TokenAccount},
-    token_interface::Token2022,
+    token::Token,
+    token_interface::{Mint, Token2022, TokenAccount},
 };
 
 use crate::{
@@ -10,12 +10,16 @@ use crate::{
     events::{EventMetadata, LeveragePositionClosedEvent, SwapEvent},
     generate_gamm_pair_seeds,
     state::{FutarchyAuthority, Pair, RateModel, UserLeverageDelegation, UserLeveragePosition},
-    utils::token::{transfer_from_vault_to_user, transfer_from_vault_to_vault},
+    utils::token::{
+        require_supported_mint, transfer_amounts_from_gross, transfer_from_vault_to_user,
+        transfer_from_vault_to_vault,
+    },
 };
 
 use super::common::{
-    approved_for, invoke_delegated_approval_callback, invoke_delegated_callback, quote_swap,
-    split_delegated_accounts, token_program_for_mint, DelegatedCpiArgs, LEVERAGE_DELEGATE_CLOSE,
+    approved_for, invoke_delegated_approval_callback, quote_swap, split_delegated_accounts,
+    DelegatedCpiArgs, LEVERAGE_DELEGATE_CLOSE,
+    LEVERAGE_DELEGATE_CLOSE_SETTLED, leverage_token_program_for_mint, invoke_delegated_callback
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -93,7 +97,7 @@ pub struct CloseLeverage<'info> {
         ],
         bump = pair.get_reserve_vault_bump(&token_in_mint.key())
     )]
-    pub token_in_vault: Box<Account<'info, TokenAccount>>,
+    pub token_in_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -104,7 +108,7 @@ pub struct CloseLeverage<'info> {
         ],
         bump = pair.get_reserve_vault_bump(&token_out_mint.key())
     )]
-    pub token_out_vault: Box<Account<'info, TokenAccount>>,
+    pub token_out_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -117,23 +121,23 @@ pub struct CloseLeverage<'info> {
         constraint = leverage_collateral_vault.mint == token_in_mint.key() @ ErrorCode::InvalidVault,
         constraint = leverage_collateral_vault.owner == pair.key() @ ErrorCode::InvalidVault
     )]
-    pub leverage_collateral_vault: Box<Account<'info, TokenAccount>>,
+    pub leverage_collateral_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
         constraint = recipient_token_out_account.mint == token_out_mint.key() @ ErrorCode::InvalidTokenAccount,
     )]
-    pub recipient_token_out_account: Box<Account<'info, TokenAccount>>,
+    pub recipient_token_out_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         constraint = token_in_mint.key() == pair.token0 || token_in_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub token_in_mint: Box<Account<'info, Mint>>,
+    pub token_in_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         constraint = token_out_mint.key() == pair.token0 || token_out_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub token_out_mint: Box<Account<'info, Mint>>,
+    pub token_out_mint: Box<InterfaceAccount<'info, Mint>>,
 
     pub user_leverage_delegation: Option<Account<'info, UserLeverageDelegation>>,
 
@@ -157,11 +161,28 @@ impl<'info> CloseLeverage<'info> {
             Some(self.event_authority.to_account_info()),
         )?;
 
-        let debt_token = if args.is_debt_token0 { self.pair.token0 } else { self.pair.token1 };
+        let debt_token = if args.is_debt_token0 {
+            self.pair.token0
+        } else {
+            self.pair.token1
+        };
         let collateral_token = self.pair.get_token_y(&debt_token);
-        require_keys_eq!(self.token_in_mint.key(), collateral_token, ErrorCode::InvalidMint);
-        require_keys_eq!(self.token_out_mint.key(), debt_token, ErrorCode::InvalidMint);
-        require!(self.user_leverage_position.debt_shares > 0, ErrorCode::ZeroDebtAmount);
+        require_keys_eq!(
+            self.token_in_mint.key(),
+            collateral_token,
+            ErrorCode::InvalidMint
+        );
+        require_keys_eq!(
+            self.token_out_mint.key(),
+            debt_token,
+            ErrorCode::InvalidMint
+        );
+        require_supported_mint(&self.token_in_mint)?;
+        require_supported_mint(&self.token_out_mint)?;
+        require!(
+            self.user_leverage_position.debt_shares > 0,
+            ErrorCode::ZeroDebtAmount
+        );
         require!(
             self.user_leverage_position.collateral_amount > 0,
             ErrorCode::InsufficientAmount
@@ -216,31 +237,53 @@ impl<'info> CloseLeverage<'info> {
         let position = &mut accounts.user_leverage_position;
         let debt_amount = position.calculate_debt(pair)?;
         require_gt!(debt_amount, 0, ErrorCode::ZeroDebtAmount);
+        let collateral_input = transfer_amounts_from_gross(
+            &accounts.token_in_mint.to_account_info(),
+            position.collateral_amount,
+        )?;
 
         let is_token0_in = !args.is_debt_token0;
-        let reserve_in = if is_token0_in { pair.reserve0 } else { pair.reserve1 };
-        let reserve_out = if is_token0_in { pair.reserve1 } else { pair.reserve0 };
+        let reserve_in = if is_token0_in {
+            pair.reserve0
+        } else {
+            pair.reserve1
+        };
+        let reserve_out = if is_token0_in {
+            pair.reserve1
+        } else {
+            pair.reserve0
+        };
         let quote = quote_swap(
-            position.collateral_amount,
+            collateral_input.net,
             reserve_in,
             reserve_out,
             pair.swap_fee_bps,
             accounts.futarchy_authority.revenue_share.swap_bps,
         )?;
-        require_gte!(
-            quote.amount_out,
-            args.min_amount_out,
-            ErrorCode::SlippageExceeded
-        );
         require_gte!(quote.amount_out, debt_amount, ErrorCode::InsufficientAmount);
 
         let residual = quote
             .amount_out
             .checked_sub(debt_amount)
             .ok_or(ErrorCode::Overflow)?;
+        let residual_transfer =
+            transfer_amounts_from_gross(&accounts.token_out_mint.to_account_info(), residual)?;
+        require_gte!(
+            residual_transfer.net,
+            args.min_amount_out,
+            ErrorCode::SlippageExceeded
+        );
         match args.is_debt_token0 {
-            true => require_gte!(pair.cash_reserve0, residual, ErrorCode::InsufficientCashReserve0),
-            false => require_gte!(pair.cash_reserve1, residual, ErrorCode::InsufficientCashReserve1),
+            true => require_gte!(
+                pair.cash_reserve0,
+                residual,
+                ErrorCode::InsufficientCashReserve0
+            ),
+            false => require_gte!(
+                pair.cash_reserve1,
+                residual,
+                ErrorCode::InsufficientCashReserve1
+            ),
         }
 
         match mode {
@@ -260,18 +303,35 @@ impl<'info> CloseLeverage<'info> {
                     .delegated_program
                     .as_ref()
                     .ok_or(ErrorCode::InvalidLeverageDelegation)?;
-                require_keys_eq!(delegation.owner, position.owner, ErrorCode::InvalidLeverageDelegation);
-                require_keys_eq!(delegation.pair, pair.key(), ErrorCode::InvalidLeverageDelegation);
-                require_keys_eq!(delegation.position, position.key(), ErrorCode::InvalidLeverageDelegation);
-                require!(delegation.is_debt_token0 == args.is_debt_token0, ErrorCode::InvalidLeverageDelegation);
+                require_keys_eq!(
+                    delegation.owner,
+                    position.owner,
+                    ErrorCode::InvalidLeverageDelegation
+                );
+                require_keys_eq!(
+                    delegation.pair,
+                    pair.key(),
+                    ErrorCode::InvalidLeverageDelegation
+                );
+                require_keys_eq!(
+                    delegation.position,
+                    position.key(),
+                    ErrorCode::InvalidLeverageDelegation
+                );
+                require!(
+                    delegation.is_debt_token0 == args.is_debt_token0,
+                    ErrorCode::InvalidLeverageDelegation
+                );
                 require_keys_eq!(
                     delegation.delegated_program,
                     delegated_program.key(),
                     ErrorCode::InvalidLeverageDelegation
                 );
                 approved_for(delegation.approved_actions, LEVERAGE_DELEGATE_CLOSE)?;
-                let (before_accounts, _) =
-                    split_delegated_accounts(ctx.remaining_accounts, delegated.before_accounts_len)?;
+                let (before_accounts, _) = split_delegated_accounts(
+                    ctx.remaining_accounts,
+                    delegated.before_accounts_len,
+                )?;
                 let protected_accounts = [
                     pair.key(),
                     position.key(),
@@ -296,7 +356,7 @@ impl<'info> CloseLeverage<'info> {
                     args.is_debt_token0,
                     accounts.recipient_token_out_account.key(),
                     accounts.token_out_mint.key(),
-                    residual,
+                    residual_transfer.net,
                 )?;
             }
         }
@@ -349,11 +409,11 @@ impl<'info> CloseLeverage<'info> {
             accounts.leverage_collateral_vault.to_account_info(),
             accounts.token_in_vault.to_account_info(),
             accounts.token_in_mint.to_account_info(),
-            token_program_for_mint(
+            leverage_token_program_for_mint(
                 &accounts.token_in_mint.to_account_info(),
                 &accounts.token_program.to_account_info(),
                 &accounts.token_2022_program.to_account_info(),
-            ),
+            )?,
             position.collateral_amount,
             accounts.token_in_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
@@ -364,11 +424,11 @@ impl<'info> CloseLeverage<'info> {
                 accounts.token_out_vault.to_account_info(),
                 accounts.recipient_token_out_account.to_account_info(),
                 accounts.token_out_mint.to_account_info(),
-                token_program_for_mint(
+                leverage_token_program_for_mint(
                     &accounts.token_out_mint.to_account_info(),
                     &accounts.token_program.to_account_info(),
                     &accounts.token_2022_program.to_account_info(),
-                ),
+                )?,
                 residual,
                 accounts.token_out_mint.decimals,
                 &[&generate_gamm_pair_seeds!(pair)[..]],
@@ -384,7 +444,7 @@ impl<'info> CloseLeverage<'info> {
             reserve1: pair.reserve1,
             is_token0_in,
             amount_in: collateral_sold,
-            amount_out: quote.amount_out,
+            amount_out: residual_transfer.net,
             amount_in_after_fee: quote.amount_in_after_swap_fee,
             lp_fee: quote.lp_fee,
             protocol_fee: quote.protocol_fee,
@@ -397,7 +457,7 @@ impl<'info> CloseLeverage<'info> {
             debt_repaid: debt_amount,
             collateral_sold,
             closeout_value: quote.amount_out,
-            residual,
+            residual: residual_transfer.net,
         });
 
         match mode {
@@ -422,16 +482,34 @@ impl<'info> CloseLeverage<'info> {
                     accounts.recipient_token_out_account.key(),
                 ];
                 let writable_protected_accounts = [accounts.recipient_token_out_account.key()];
+                let position_owner = position.owner;
+                let position_key = position.key();
+                let pair_key = pair.key();
                 pair.exit(&crate::ID)?;
                 position.exit(&crate::ID)?;
                 let (_, after_accounts) =
                     split_delegated_accounts(ctx.remaining_accounts, delegated.before_accounts_len)?;
-                invoke_delegated_callback(
+                // The after-hook must drain the staged residual to the owner-bound
+                // recipient. Validating a SETTLED approval prevents a permissionless
+                // executor from substituting an unrelated success-returning instruction
+                // (e.g. a `before_*` hook for a different order) and leaving the
+                // proceeds stranded in the custody PDA after this transaction closes
+                // the position account.
+                invoke_delegated_approval_callback(
                     delegated_program,
                     delegated.after_ix_data,
                     after_accounts,
                     &protected_accounts,
                     &writable_protected_accounts,
+                    LEVERAGE_DELEGATE_CLOSE_SETTLED,
+                    pair_key,
+                    position_owner,
+                    position_key,
+                    delegation_key,
+                    args.is_debt_token0,
+                    accounts.recipient_token_out_account.key(),
+                    accounts.token_out_mint.key(),
+                    residual,
                 )
             }
         }

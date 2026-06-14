@@ -17,6 +17,12 @@ pub const LEVERAGE_DELEGATE_ADD_MARGIN: u32 = 1 << 1;
 pub const LEVERAGE_DELEGATE_REMOVE_MARGIN: u32 = 1 << 2;
 pub const LEVERAGE_DELEGATE_INCREASE: u32 = 1 << 3;
 pub const LEVERAGE_DELEGATE_DECREASE: u32 = 1 << 4;
+// Settlement-completion marker for the close after-hook. This is not a permission
+// bit on UserLeverageDelegation.approved_actions; it identifies the approval payload
+// the delegate must return after performing post-close settlement so that Omnipair
+// can verify the after-hook actually drained the residual to the owner-bound recipient
+// instead of being substituted by an unrelated success-returning instruction.
+pub const LEVERAGE_DELEGATE_CLOSE_SETTLED: u32 = 1 << 5;
 pub const LEVERAGE_DELEGATION_APPROVAL_MAGIC: [u8; 8] = *b"OMNILVDA";
 pub const LEVERAGE_DELEGATION_APPROVAL_VERSION: u8 = 1;
 
@@ -87,7 +93,10 @@ pub fn quote_swap(
     protocol_share_bps: u16,
 ) -> Result<SwapQuote> {
     require!(amount_in > 0, ErrorCode::AmountZero);
-    require!(reserve_in > 0 && reserve_out > 0, ErrorCode::InsufficientLiquidity);
+    require!(
+        reserve_in > 0 && reserve_out > 0,
+        ErrorCode::InsufficientLiquidity
+    );
 
     let swap_fee = ceil_div(
         (amount_in as u128)
@@ -170,7 +179,11 @@ pub fn require_initial_leverage_health(
     closeout_value: u64,
     debt_amount: u64,
 ) -> Result<()> {
-    require_gt!(closeout_value, debt_amount, ErrorCode::LeverageInitialMarginTooLow);
+    require_gt!(
+        closeout_value,
+        debt_amount,
+        ErrorCode::LeverageInitialMarginTooLow
+    );
     let margin_bps = equity_bps(closeout_value, debt_amount)?;
     require_gte!(
         margin_bps,
@@ -197,15 +210,12 @@ pub fn require_leverage_not_liquidatable(closeout_value: u64, debt_amount: u64) 
     Ok(())
 }
 
-pub fn token_program_for_mint<'info>(
+pub(crate) fn leverage_token_program_for_mint<'info>(
     mint: &AccountInfo<'info>,
     token_program: &AccountInfo<'info>,
     token_2022_program: &AccountInfo<'info>,
-) -> AccountInfo<'info> {
-    match mint.owner == token_program.key {
-        true => token_program.clone(),
-        false => token_2022_program.clone(),
-    }
+) -> Result<AccountInfo<'info>> {
+    crate::utils::token::token_program_for_mint(mint, token_program, token_2022_program)
 }
 
 pub fn approved_for(approved_actions: u32, action: u32) -> Result<()> {
@@ -314,7 +324,11 @@ pub fn validate_delegation_approval(
     expected_output_mint: Pubkey,
     expected_output_amount: u64,
 ) -> Result<()> {
-    require_keys_eq!(program_id, expected_program, ErrorCode::InvalidLeverageDelegation);
+    require_keys_eq!(
+        program_id,
+        expected_program,
+        ErrorCode::InvalidLeverageDelegation
+    );
     let mut data_ref = data;
     let approval = LeverageDelegationApproval::deserialize(&mut data_ref)
         .map_err(|_| ErrorCode::InvalidLeverageDelegation)?;
@@ -327,9 +341,20 @@ pub fn validate_delegation_approval(
         approval.version == LEVERAGE_DELEGATION_APPROVAL_VERSION,
         ErrorCode::InvalidLeverageDelegation
     );
-    require!(approval.action == expected_action, ErrorCode::InvalidLeverageDelegation);
-    require_keys_eq!(approval.pair, expected_pair, ErrorCode::InvalidLeverageDelegation);
-    require_keys_eq!(approval.owner, expected_owner, ErrorCode::InvalidLeverageDelegation);
+    require!(
+        approval.action == expected_action,
+        ErrorCode::InvalidLeverageDelegation
+    );
+    require_keys_eq!(
+        approval.pair,
+        expected_pair,
+        ErrorCode::InvalidLeverageDelegation
+    );
+    require_keys_eq!(
+        approval.owner,
+        expected_owner,
+        ErrorCode::InvalidLeverageDelegation
+    );
     require_keys_eq!(
         approval.position,
         expected_position,
@@ -368,7 +393,11 @@ fn delegated_account_metas(
 ) -> Result<Vec<AccountMeta>> {
     for (index, account) in accounts.iter().enumerate() {
         for prior in accounts.iter().take(index) {
-            require_keys_neq!(account.key(), prior.key(), ErrorCode::InvalidLeverageDelegation);
+            require_keys_neq!(
+                account.key(),
+                prior.key(),
+                ErrorCode::InvalidLeverageDelegation
+            );
         }
     }
 
@@ -665,6 +694,231 @@ mod tests {
             recipient,
             mint,
             43,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn settled_action_validates_close_completion_marker() {
+        let program = Pubkey::new_unique();
+        let pair = Pubkey::new_unique();
+        let owner = Pubkey::new_unique();
+        let position = Pubkey::new_unique();
+        let delegation = Pubkey::new_unique();
+        let recipient = Pubkey::new_unique();
+        let mint = Pubkey::new_unique();
+        let approval = LeverageDelegationApproval::new(
+            LEVERAGE_DELEGATE_CLOSE_SETTLED,
+            pair,
+            owner,
+            position,
+            delegation,
+            true,
+            recipient,
+            mint,
+            42,
+        );
+        let mut data = Vec::new();
+        approval.serialize(&mut data).unwrap();
+
+        assert!(validate_delegation_approval(
+            program,
+            &data,
+            program,
+            LEVERAGE_DELEGATE_CLOSE_SETTLED,
+            pair,
+            owner,
+            position,
+            delegation,
+            true,
+            recipient,
+            mint,
+            42,
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn settled_and_close_actions_are_not_interchangeable() {
+        // A pre-close CLOSE approval must not be accepted where the after-hook
+        // SETTLED marker is expected, and vice versa. This is what prevents an
+        // attacker from replaying the legitimate before-hook payload as the
+        // after-hook return data (or vice versa) when both hooks invoke the
+        // delegate program.
+        let program = Pubkey::new_unique();
+        let pair = Pubkey::new_unique();
+        let owner = Pubkey::new_unique();
+        let position = Pubkey::new_unique();
+        let delegation = Pubkey::new_unique();
+        let recipient = Pubkey::new_unique();
+        let mint = Pubkey::new_unique();
+
+        let close_approval = LeverageDelegationApproval::new(
+            LEVERAGE_DELEGATE_CLOSE,
+            pair,
+            owner,
+            position,
+            delegation,
+            true,
+            recipient,
+            mint,
+            42,
+        );
+        let mut close_data = Vec::new();
+        close_approval.serialize(&mut close_data).unwrap();
+        assert!(validate_delegation_approval(
+            program,
+            &close_data,
+            program,
+            LEVERAGE_DELEGATE_CLOSE_SETTLED,
+            pair,
+            owner,
+            position,
+            delegation,
+            true,
+            recipient,
+            mint,
+            42,
+        )
+        .is_err());
+
+        let settled_approval = LeverageDelegationApproval::new(
+            LEVERAGE_DELEGATE_CLOSE_SETTLED,
+            pair,
+            owner,
+            position,
+            delegation,
+            true,
+            recipient,
+            mint,
+            42,
+        );
+        let mut settled_data = Vec::new();
+        settled_approval.serialize(&mut settled_data).unwrap();
+        assert!(validate_delegation_approval(
+            program,
+            &settled_data,
+            program,
+            LEVERAGE_DELEGATE_CLOSE,
+            pair,
+            owner,
+            position,
+            delegation,
+            true,
+            recipient,
+            mint,
+            42,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn settled_approval_rejects_substituted_after_hook_payload() {
+        // Models the F-55159 attack: a permissionless executor calls the legitimate
+        // before-hook for the victim's order (producing a CLOSE approval bound to
+        // residual R) and then supplies after-hook ix data that lands on some other
+        // delegate-program entrypoint. That foreign entrypoint either sets no return
+        // data, or sets return data shaped for a different action / different order.
+        // None of these can satisfy the SETTLED check Omnipair now performs.
+        let program = Pubkey::new_unique();
+        let pair = Pubkey::new_unique();
+        let owner = Pubkey::new_unique();
+        let position = Pubkey::new_unique();
+        let delegation = Pubkey::new_unique();
+        let recipient = Pubkey::new_unique();
+        let mint = Pubkey::new_unique();
+        let residual: u64 = 1_234;
+
+        // Case 1: foreign entrypoint emits a CLOSE approval for an unrelated order.
+        let other_position = Pubkey::new_unique();
+        let other_delegation = Pubkey::new_unique();
+        let foreign = LeverageDelegationApproval::new(
+            LEVERAGE_DELEGATE_CLOSE,
+            pair,
+            owner,
+            other_position,
+            other_delegation,
+            true,
+            recipient,
+            mint,
+            residual,
+        );
+        let mut data = Vec::new();
+        foreign.serialize(&mut data).unwrap();
+        assert!(validate_delegation_approval(
+            program,
+            &data,
+            program,
+            LEVERAGE_DELEGATE_CLOSE_SETTLED,
+            pair,
+            owner,
+            position,
+            delegation,
+            true,
+            recipient,
+            mint,
+            residual,
+        )
+        .is_err());
+
+        // Case 2: a SETTLED approval bound to a different amount cannot ratify
+        // the actual residual.
+        let wrong_amount = LeverageDelegationApproval::new(
+            LEVERAGE_DELEGATE_CLOSE_SETTLED,
+            pair,
+            owner,
+            position,
+            delegation,
+            true,
+            recipient,
+            mint,
+            residual - 1,
+        );
+        let mut data = Vec::new();
+        wrong_amount.serialize(&mut data).unwrap();
+        assert!(validate_delegation_approval(
+            program,
+            &data,
+            program,
+            LEVERAGE_DELEGATE_CLOSE_SETTLED,
+            pair,
+            owner,
+            position,
+            delegation,
+            true,
+            recipient,
+            mint,
+            residual,
+        )
+        .is_err());
+
+        // Case 3: a SETTLED approval bound to a foreign recipient.
+        let foreign_recipient = LeverageDelegationApproval::new(
+            LEVERAGE_DELEGATE_CLOSE_SETTLED,
+            pair,
+            owner,
+            position,
+            delegation,
+            true,
+            Pubkey::new_unique(),
+            mint,
+            residual,
+        );
+        let mut data = Vec::new();
+        foreign_recipient.serialize(&mut data).unwrap();
+        assert!(validate_delegation_approval(
+            program,
+            &data,
+            program,
+            LEVERAGE_DELEGATE_CLOSE_SETTLED,
+            pair,
+            owner,
+            position,
+            delegation,
+            true,
+            recipient,
+            mint,
+            residual,
         )
         .is_err());
     }

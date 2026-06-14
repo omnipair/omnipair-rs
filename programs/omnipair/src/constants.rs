@@ -1,4 +1,4 @@
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, solana_program::pubkey};
 
 // GLOBAL CONSTANTS
 /// NAD: Nine-decimal fixed point unit (1e9 scaling), similar to WAD (1e18) by Maker.
@@ -15,13 +15,13 @@ pub const MAX_COLLATERAL_FACTOR_BPS: u16 = 8_500; // 85% cap for dynamic collate
 #[constant]
 pub const LTV_BUFFER_BPS: u16 = 500; // 5% buffer between borrow limit and liquidation threshold
 #[constant]
-pub const FLASHLOAN_FEE_BPS: u16 = 5; // 0.05%
-#[constant]
 pub const LIQUIDATION_INCENTIVE_BPS: u16 = 50; // 0.5% liquidation incentive for caller
 #[constant]
 pub const LIQUIDATION_PENALTY_BPS: u16 = 300; // 3% total liquidation penalty (0.5% to liquidator, 2.5% to LPs)
 #[constant]
 pub const LIQUIDITY_WITHDRAWAL_FEE_BPS: u16 = 100; // 1% fee on liquidity withdrawal (goes to remaining LPs)
+#[constant]
+pub const POST_WITHDRAW_DEBT_COVERAGE_BPS: u16 = 11_500; // 115% debt coverage required after liquidity withdrawal
 #[constant]
 pub const PAIR_CREATION_FEE_LAMPORTS: u64 = 200_000_000; // 0.2 SOL
 // 3log2(100) = 19.93 secs (with 400ms slot time, this is ~50 slots)
@@ -121,3 +121,8 @@ pub const LEVERAGE_INITIAL_MARGIN_BPS: u16 = 1_000; // 10%
 pub const LEVERAGE_MAINTENANCE_BUFFER_BPS: u16 = 700; // 7%
 #[constant]
 pub const VERSION: u8 = 1;
+
+/// Emergency signer authorized to toggle reduce-only mode.
+/// For Squads, use the vault/authority signer address.
+pub const REDUCE_ONLY_EMERGENCY_AUTHORITY: Pubkey =
+    pubkey!("3YL87sTCrHMB6DYKorE9CCN4dL45kZPahoREcMLDY6QV");

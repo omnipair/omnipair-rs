@@ -1,18 +1,25 @@
-use anchor_lang::prelude::*;
 use crate::{
     constants::PAIR_SEED_PREFIX,
     errors::ErrorCode,
     events::{AdjustCollateralEvent, EventMetadata, UserPositionUpdatedEvent},
-    utils::token::transfer_from_vault_to_user,
+    utils::liquidity_delta_circuit_breaker::require_no_same_tx_liquidity_delta,
     generate_gamm_pair_seeds,
-    instructions::lending::common::{CommonAdjustCollateral, AdjustCollateralArgs},
+    instructions::lending::common::{AdjustCollateralArgs, CommonAdjustCollateral},
+    utils::token::{require_supported_mint, token_program_for_mint, transfer_from_vault_to_user},
 };
+use anchor_lang::prelude::*;
 
 impl<'info> CommonAdjustCollateral<'info> {
     pub fn validate_remove(&self, args: &AdjustCollateralArgs) -> Result<()> {
         let AdjustCollateralArgs { amount } = args;
         
+        require_no_same_tx_liquidity_delta(
+            &self.pair.key(),
+            &self.instructions_sysvar.to_account_info(),
+        )?;
+
         require!(*amount > 0, ErrorCode::AmountZero);
+        require_supported_mint(&self.collateral_token_mint)?;
 
         let collateral_token = self.user_collateral_token_account.mint;
         let is_collateral_token0 = collateral_token == self.pair.token0;
@@ -23,12 +30,19 @@ impl<'info> CommonAdjustCollateral<'info> {
 
         // Calculate current debt
         let debt = match is_collateral_token0 {
-            true => self.user_position.calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares)?,
-            false => self.user_position.calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares)?,
+            true => self
+                .user_position
+                .calculate_debt1(self.pair.total_debt1, self.pair.total_debt1_shares)?,
+            false => self
+                .user_position
+                .calculate_debt0(self.pair.total_debt0, self.pair.total_debt0_shares)?,
         };
 
         // Check reduce-only mode: if active, user must have zero debt to remove collateral
-        if self.futarchy_authority.is_reduce_only(self.pair.reduce_only) {
+        if self
+            .futarchy_authority
+            .is_reduce_only(self.pair.reduce_only)
+        {
             require!(debt == 0, ErrorCode::ReduceOnlyHasDebt);
         }
 
@@ -50,19 +64,24 @@ impl<'info> CommonAdjustCollateral<'info> {
             let remaining_collateral = user_collateral
                 .checked_sub(withdraw_amount)
                 .ok_or(ErrorCode::Overflow)?;
-            let collateral_token = if is_collateral_token0 { self.pair.token0 } else { self.pair.token1 };
-            let (post_withdraw_borrow_limit, _, _) = self.pair.get_max_debt_and_cf_bps_for_collateral(
-                &self.pair,
-                &collateral_token,
-                remaining_collateral,
-            )?;
+            let collateral_token = if is_collateral_token0 {
+                self.pair.token0
+            } else {
+                self.pair.token1
+            };
+            let (post_withdraw_borrow_limit, _, _) =
+                self.pair.get_max_debt_and_cf_bps_for_collateral(
+                    &self.pair,
+                    &collateral_token,
+                    remaining_collateral,
+                )?;
             require_gte!(
                 post_withdraw_borrow_limit,
                 debt,
                 ErrorCode::BorrowingPowerExceeded
             );
         }
-        
+
         Ok(())
     }
 
@@ -112,10 +131,11 @@ impl<'info> CommonAdjustCollateral<'info> {
             collateral_vault.to_account_info(),
             user_collateral_token_account.to_account_info(),
             collateral_token_mint.to_account_info(),
-            match collateral_vault.to_account_info().owner == token_program.key {
-                true => token_program.to_account_info(),
-                false => token_2022_program.to_account_info(),
-            },
+            token_program_for_mint(
+                &collateral_token_mint.to_account_info(),
+                &token_program.to_account_info(),
+                &token_2022_program.to_account_info(),
+            )?,
             withdraw_amount,
             collateral_token_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
@@ -124,12 +144,20 @@ impl<'info> CommonAdjustCollateral<'info> {
         // Transfer tokens from vault to user
         match is_token0 {
             true => {
-                pair.total_collateral0 = pair.total_collateral0.checked_sub(withdraw_amount).unwrap();
-                user_position.collateral0 = user_position.collateral0.checked_sub(withdraw_amount).unwrap();
-            },
+                pair.total_collateral0 =
+                    pair.total_collateral0.checked_sub(withdraw_amount).unwrap();
+                user_position.collateral0 = user_position
+                    .collateral0
+                    .checked_sub(withdraw_amount)
+                    .unwrap();
+            }
             false => {
-                pair.total_collateral1 = pair.total_collateral1.checked_sub(withdraw_amount).unwrap();
-                user_position.collateral1 = user_position.collateral1.checked_sub(withdraw_amount).unwrap();
+                pair.total_collateral1 =
+                    pair.total_collateral1.checked_sub(withdraw_amount).unwrap();
+                user_position.collateral1 = user_position
+                    .collateral1
+                    .checked_sub(withdraw_amount)
+                    .unwrap();
             }
         }
 
@@ -140,7 +168,11 @@ impl<'info> CommonAdjustCollateral<'info> {
         } else {
             user_position.collateral1
         };
-        let (_, _, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount)?;
+        let (_, _, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(
+            &pair,
+            &collateral_token,
+            collateral_amount,
+        )?;
         user_position.set_liquidation_cf_for_debt_token(&debt_token, &pair, liquidation_cf_bps);
 
         // Emit collateral adjustment event
@@ -148,13 +180,13 @@ impl<'info> CommonAdjustCollateral<'info> {
             true => (-(withdraw_amount as i64), 0),
             false => (0, -(withdraw_amount as i64)),
         };
-        
+
         emit_cpi!(AdjustCollateralEvent {
             metadata: EventMetadata::new(user.key(), pair.key()),
             amount0,
             amount1,
         });
-        
+
         // Emit position updated event
         emit_cpi!(UserPositionUpdatedEvent {
             metadata: EventMetadata::new(user.key(), pair.key()),
@@ -181,7 +213,11 @@ mod tests {
     };
     use crate::utils::math::ceil_div;
 
-    fn simulate_resolve_remove_collateral_amount(user_collateral: u64, debt: u64, amount: u64) -> u64 {
+    fn simulate_resolve_remove_collateral_amount(
+        user_collateral: u64,
+        debt: u64,
+        amount: u64,
+    ) -> u64 {
         if amount == u64::MAX && debt == 0 {
             user_collateral
         } else {
@@ -213,11 +249,8 @@ mod tests {
             max_cf_bps as u128,
         )
         .unwrap();
-        let min_collateral = ceil_div(
-            min_collateral_value * (NAD as u128),
-            ema_price as u128,
-        )
-        .unwrap();
+        let min_collateral =
+            ceil_div(min_collateral_value * (NAD as u128), ema_price as u128).unwrap();
         let min_collateral_u64 = u64::try_from(min_collateral).unwrap_or(u64::MAX);
 
         user_collateral.saturating_sub(min_collateral_u64)
@@ -342,8 +375,14 @@ mod tests {
 
     #[test]
     fn max_sentinel_only_resolves_to_all_collateral_without_debt() {
-        assert_eq!(simulate_resolve_remove_collateral_amount(123, 0, u64::MAX), 123);
-        assert_eq!(simulate_resolve_remove_collateral_amount(123, 1, u64::MAX), u64::MAX);
+        assert_eq!(
+            simulate_resolve_remove_collateral_amount(123, 0, u64::MAX),
+            123
+        );
+        assert_eq!(
+            simulate_resolve_remove_collateral_amount(123, 1, u64::MAX),
+            u64::MAX
+        );
         assert_eq!(simulate_resolve_remove_collateral_amount(123, 1, 10), 10);
     }
 

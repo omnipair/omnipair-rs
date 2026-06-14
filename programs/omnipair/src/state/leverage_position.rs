@@ -101,15 +101,30 @@ impl UserLeveragePosition {
 
         match total_debt_shares {
             0 => Ok(0),
-            _ => Ok(ceil_div(
-                self.debt_shares
+            _ => {
+                let debt_numerator = self
+                    .debt_shares
                     .checked_mul(total_debt as u128)
-                    .ok_or(ErrorCode::DebtMathOverflow)?,
-                total_debt_shares,
-            )
-            .ok_or(ErrorCode::DebtShareDivisionOverflow)?
-            .try_into()
-            .map_err(|_| ErrorCode::DebtShareDivisionOverflow)?),
+                    .ok_or(ErrorCode::DebtMathOverflow)?;
+                let rounded_up = ceil_div(debt_numerator, total_debt_shares)
+                    .ok_or(ErrorCode::DebtShareDivisionOverflow)?;
+
+                // When the pool is down to a single nominal debt unit shared by
+                // multiple shareholders, ceil rounding assigns the entire unit to
+                // every partial holder and traps repay/close paths. Floor that case
+                // so each holder only claims their proportional share.
+                if self.debt_shares < total_debt_shares && rounded_up == total_debt as u128 {
+                    return Ok(debt_numerator
+                        .checked_div(total_debt_shares)
+                        .ok_or(ErrorCode::DebtShareDivisionOverflow)?
+                        .try_into()
+                        .map_err(|_| ErrorCode::DebtShareDivisionOverflow)?);
+                }
+
+                Ok(rounded_up
+                    .try_into()
+                    .map_err(|_| ErrorCode::DebtShareDivisionOverflow)?)
+            }
         }
     }
 
@@ -370,6 +385,9 @@ impl UserLeveragePosition {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::constants::*;
+    use crate::state::{Pair, RateModel, VaultBumps};
+    use crate::utils::math::ceil_div;
 
     fn pair_with_debt(total_debt0: u64, total_debt0_shares: u128) -> Pair {
         Pair {
@@ -457,12 +475,25 @@ mod tests {
     }
 
     #[test]
-    fn calculate_debt_ceil_rounds_dust_up() {
+    fn calculate_debt_does_not_assign_all_dust_to_partial_shareholder() {
         let pair = pair_with_debt(1, 6);
         let mut position = empty_position(true);
         position.debt_shares = 1;
 
-        assert_eq!(position.calculate_debt(&pair).unwrap(), 1);
+        assert_eq!(position.calculate_debt(&pair).unwrap(), 0);
+    }
+
+    #[test]
+    fn clear_debt_allows_zero_amount_for_partial_dust_shareholder() {
+        let mut pair = pair_with_debt(1, 6);
+        let mut position = empty_position(true);
+        position.debt_shares = 1;
+
+        position.clear_debt(&mut pair, 0).unwrap();
+
+        assert_eq!(position.debt_shares, 0);
+        assert_eq!(pair.total_debt0, 1);
+        assert_eq!(pair.total_debt0_shares, 5);
     }
 
     #[test]
@@ -630,5 +661,142 @@ mod tests {
         assert_eq!(position.debt_shares, 1);
         assert_eq!(pair.total_debt0, 10_000_000);
         assert_eq!(pair.total_debt0_shares, 10);
+    }
+
+    fn base_pair() -> Pair {
+        let mut pair = Pair::initialize(
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            6,
+            6,
+            Pubkey::new_unique(),
+            0,
+            MIN_RATE_HALF_LIFE_MS,
+            None,
+            0,
+            [0; 32],
+            1,
+            255,
+            VaultBumps::default(),
+            0,
+        );
+        pair.reserve0 = 1_000_000;
+        pair.reserve1 = 1_000_000;
+        pair.cash_reserve0 = 1_000_000;
+        pair.cash_reserve1 = 1_000_000;
+        pair
+    }
+
+    fn empty_leverage_position(pair_key: Pubkey) -> UserLeveragePosition {
+        let mut position = UserLeveragePosition {
+            owner: Pubkey::default(),
+            pair: Pubkey::default(),
+            is_debt_token0: true,
+            collateral_amount: 0,
+            margin_amount: 0,
+            open_notional: 0,
+            debt_amount: 0,
+            debt_shares: 0,
+            multiplier_bps: 0,
+            opened_at: 0,
+            opened_slot: 0,
+            bump: 0,
+        };
+        position.initialize(
+            Pubkey::new_unique(),
+            pair_key,
+            true,
+            1_000_000,
+            0,
+            0,
+            0,
+            0,
+            10_000,
+            0,
+            0,
+            0,
+        );
+        position
+    }
+
+    fn zero_floor_model() -> RateModel {
+        assert!(RateModel::validate_rate_params(
+            MIN_RATE_HALF_LIFE_MS,
+            0,
+            0,
+            10,
+        ));
+        RateModel::new(
+            TARGET_UTIL_START_BPS,
+            TARGET_UTIL_END_BPS,
+            MIN_RATE_HALF_LIFE_MS,
+            0,
+            0,
+            10,
+        )
+    }
+
+    fn find_final_dust_accrual_ms(model: &RateModel, total_debt: u64) -> u64 {
+        for minute in 1..=(90_u64 * 24 * 60) {
+            let dt = minute * 60_000;
+            let (new_rate, integral) = model.calculate_rate(model.initial_rate, dt, 0);
+            let interest = ceil_div(total_debt as u128 * integral as u128, NAD as u128)
+                .unwrap() as u64;
+            if new_rate == 0 && interest == 1 {
+                return dt;
+            }
+        }
+        panic!("expected a zero-floor decay window with one final unit of interest");
+    }
+
+    fn build_dust_state() -> (Pair, UserLeveragePosition, UserLeveragePosition) {
+        let pair_key = Pubkey::new_unique();
+        let mut pair = base_pair();
+        let mut alice = empty_leverage_position(pair_key);
+        let mut bob = empty_leverage_position(pair_key);
+
+        // Reachable stranded state: one nominal debt unit left in the pool while
+        // two partial shareholders still hold residual shares after floor-rounded
+        // share burns from independent 1-unit repayments.
+        pair.total_debt0 = 1;
+        pair.total_debt0_shares = 666_667;
+        pair.cash_reserve0 = pair.cash_reserve0.saturating_sub(2);
+        pair.reserve0 = pair.reserve0.saturating_sub(2);
+        alice.debt_shares = 333_334;
+        bob.debt_shares = 333_333;
+        assert_eq!(alice.calculate_debt(&pair).unwrap(), 0);
+        assert_eq!(bob.calculate_debt(&pair).unwrap(), 0);
+
+        (pair, alice, bob)
+    }
+
+    #[test]
+    fn zero_floor_rate_model_can_charge_one_last_unit_of_interest() {
+        let model = zero_floor_model();
+        let dt = find_final_dust_accrual_ms(&model, 2);
+        let (new_rate, integral) = model.calculate_rate(model.initial_rate, dt, 0);
+        let interest = ceil_div(2_u128 * integral as u128, NAD as u128).unwrap() as u64;
+        assert_eq!(new_rate, 0);
+        assert_eq!(interest, 1);
+    }
+
+    #[test]
+    fn dust_state_allows_close_via_zero_debt_clear() {
+        let (mut pair, mut alice, bob) = build_dust_state();
+        assert!(alice.debt_shares > 0);
+        assert!(bob.debt_shares > 0);
+        assert_eq!(alice.calculate_debt(&pair).unwrap(), 0);
+        assert_eq!(bob.calculate_debt(&pair).unwrap(), 0);
+
+        // Repaying the rounded-up unit still fails for partial shareholders.
+        assert!(alice.decrease_debt(&mut pair, 1).is_err());
+        assert!(alice.clear_debt(&mut pair, 1).is_err());
+
+        // Clearing with zero computed debt burns residual shares and unblocks close.
+        alice.clear_debt(&mut pair, 0).unwrap();
+        assert_eq!(alice.debt_shares, 0);
+        assert_eq!(pair.total_debt0, 1);
+        assert_eq!(pair.total_debt0_shares, 333_333);
     }
 }

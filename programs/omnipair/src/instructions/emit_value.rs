@@ -469,8 +469,10 @@ impl ViewUserPositionData<'_> {
                     if user_debt == 0 || user_collateral == 0 {
                         0u64
                     } else {
+                        // Mirror liquidation: directional EMA is only for borrow/withdraw CF checks.
+                        let ema_price = pair.ema_price0_nad();
                         let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
-                            pair.reserve0, pair.reserve1, pair.ema_price0_nad(), pair.directional_ema_price0_nad()
+                            pair.reserve0, pair.reserve1, ema_price, ema_price
                         ).unwrap_or((pair.reserve0, pair.reserve1));
                         
                         let collateral_value = CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, user_collateral).unwrap_or(0);
@@ -491,8 +493,10 @@ impl ViewUserPositionData<'_> {
                     if user_debt == 0 || user_collateral == 0 {
                         0u64
                     } else {
+                        // Mirror liquidation: directional EMA is only for borrow/withdraw CF checks.
+                        let ema_price = pair.ema_price1_nad();
                         let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
-                            pair.reserve1, pair.reserve0, pair.ema_price1_nad(), pair.directional_ema_price1_nad()
+                            pair.reserve1, pair.reserve0, ema_price, ema_price
                         ).unwrap_or((pair.reserve1, pair.reserve0));
                         
                         let collateral_value = CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, user_collateral).unwrap_or(0);

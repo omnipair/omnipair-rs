@@ -44,7 +44,7 @@ impl FuzzTest {
     }
 
     // Main lending flow: add collateral -> borrow
-    #[flow(weight = 30)]
+    #[flow(weight = 35)]
     fn lending_flow_borrow(&mut self) {
         self.add_collateral();
         self.trident.forward_in_time(60 * 60);
@@ -52,7 +52,7 @@ impl FuzzTest {
     }
 
     // Lending flow: add collateral -> borrow -> repay
-    #[flow(weight = 25)]
+    #[flow(weight = 30)]
     fn lending_flow_repay(&mut self) {
         self.add_collateral();
         self.trident.forward_in_time(60 * 60);
@@ -69,14 +69,8 @@ impl FuzzTest {
         self.remove_collateral();
     }
 
-    // Lending flow: flashloan
-    #[flow(weight = 15)]
-    fn lending_flow_flashloan(&mut self) {
-        self.flashloan();
-    }
-
     // Lending flow: add collateral -> borrow -> liquidate
-    #[flow(weight = 10)]
+    #[flow(weight = 15)]
     fn lending_flow_liquidate(&mut self) {
         self.add_collateral();
         self.trident.forward_in_time(60 * 60);

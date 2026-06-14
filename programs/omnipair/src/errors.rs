@@ -20,33 +20,39 @@ pub enum ErrorCode {
     #[msg("Invalid futarchy authority")]
     InvalidFutarchyAuthority,
 
+    #[msg("Invalid reduce-only authority")]
+    InvalidReduceOnlyAuthority,
+
     #[msg("Invalid argument")]
     InvalidArgument,
-    
+
     #[msg("Amount cannot be zero")]
     AmountZero,
 
     #[msg("Insufficient amount0 in")]
     InsufficientAmount0In,
-    
+
     #[msg("Insufficient amount1 in")]
     InsufficientAmount1In,
-    
+
     #[msg("Borrowing power exceeded")]
     BorrowingPowerExceeded,
-    
+
     #[msg("Invalid token account")]
     InvalidTokenAccount,
-    
+
     #[msg("Invalid token program")]
     InvalidTokenProgram,
-    
+
+    #[msg("Unsupported Token-2022 mint extension")]
+    UnsupportedTokenExtension,
+
     #[msg("Borrow exceeds reserve")]
     BorrowExceedsReserve,
 
     #[msg("Insufficient amount0")]
     InsufficientAmount0,
-    
+
     #[msg("Insufficient amount1")]
     InsufficientAmount1,
 
@@ -91,7 +97,7 @@ pub enum ErrorCode {
 
     #[msg("Not undercollateralized")]
     NotUndercollateralized,
-    
+
     #[msg("Broken invariant")]
     BrokenInvariant,
 
@@ -181,7 +187,7 @@ pub enum ErrorCode {
 
     #[msg("Wrong LP decimals")]
     WrongLpDecimals,
-    
+
     #[msg("Invalid vault - token_in_vault and token_out_vault must be different")]
     InvalidVaultSameAccount,
 
@@ -215,6 +221,18 @@ pub enum ErrorCode {
     #[msg("Cannot remove collateral in reduce-only mode while debt exists")]
     ReduceOnlyHasDebt,
 
+    #[msg("Operation blocked: same-transaction liquidity delta detected")]
+    LiquidityDeltaCircuitBreaker,
+
+    #[msg("Operation blocked: liquidity delta instruction must be top-level")]
+    LiquidityDeltaCircuitBreakerCpi,
+
+    #[msg("Invalid instructions sysvar")]
+    InvalidInstructionsSysvar,
+
+    #[msg("Insufficient post-withdraw debt coverage")]
+    InsufficientPostWithdrawDebtCoverage,
+
     #[msg("Invalid recipient - address does not match configured revenue recipient")]
     InvalidRecipient,
 
@@ -238,5 +256,4 @@ pub enum ErrorCode {
 
     #[msg("Leverage liquidation would strand debtless collateral")]
     LeverageLiquidationDust,
-
 }

@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    token::{Mint, Token, TokenAccount},
-    token_interface::Token2022,
+    token::Token,
+    token_interface::{Mint, Token2022, TokenAccount},
 };
 
 use crate::{
@@ -10,13 +10,15 @@ use crate::{
     events::{EventMetadata, LeveragePositionUpdatedEvent, SwapEvent},
     generate_gamm_pair_seeds,
     state::{FutarchyAuthority, Pair, RateModel, UserLeverageDelegation, UserLeveragePosition},
-    utils::token::transfer_from_vault_to_vault,
+    utils::token::{
+        require_supported_mint, transfer_amounts_from_gross, transfer_from_vault_to_vault,
+    },
 };
 
 use super::common::{
-    approved_for, invoke_delegated_approval_callback, invoke_delegated_callback, quote_swap,
-    require_leverage_not_liquidatable, split_delegated_accounts, token_program_for_mint,
-    DelegatedCpiArgs, LEVERAGE_DELEGATE_DECREASE,
+    approved_for, invoke_delegated_approval_callback, invoke_delegated_callback,
+    leverage_token_program_for_mint, quote_swap, require_leverage_not_liquidatable,
+    split_delegated_accounts, DelegatedCpiArgs, LEVERAGE_DELEGATE_DECREASE,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -89,7 +91,7 @@ pub struct DecreaseLeverage<'info> {
         ],
         bump = pair.get_reserve_vault_bump(&collateral_token_mint.key())
     )]
-    pub collateral_token_vault: Box<Account<'info, TokenAccount>>,
+    pub collateral_token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -100,7 +102,7 @@ pub struct DecreaseLeverage<'info> {
         ],
         bump = pair.get_reserve_vault_bump(&debt_token_mint.key())
     )]
-    pub debt_token_vault: Box<Account<'info, TokenAccount>>,
+    pub debt_token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -113,17 +115,17 @@ pub struct DecreaseLeverage<'info> {
         constraint = leverage_collateral_vault.mint == collateral_token_mint.key() @ ErrorCode::InvalidVault,
         constraint = leverage_collateral_vault.owner == pair.key() @ ErrorCode::InvalidVault
     )]
-    pub leverage_collateral_vault: Box<Account<'info, TokenAccount>>,
+    pub leverage_collateral_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         constraint = collateral_token_mint.key() == pair.token0 || collateral_token_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub collateral_token_mint: Box<Account<'info, Mint>>,
+    pub collateral_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         constraint = debt_token_mint.key() == pair.token0 || debt_token_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub debt_token_mint: Box<Account<'info, Mint>>,
+    pub debt_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
     pub user_leverage_delegation: Option<Account<'info, UserLeverageDelegation>>,
 
@@ -138,10 +140,7 @@ pub struct DecreaseLeverage<'info> {
 }
 
 impl<'info> DecreaseLeverage<'info> {
-    pub fn update_and_validate_decrease(
-        &mut self,
-        args: &DecreaseLeverageArgs,
-    ) -> Result<()> {
+    pub fn update_and_validate_decrease(&mut self, args: &DecreaseLeverageArgs) -> Result<()> {
         let pair_key = self.pair.key();
         self.pair.update(
             &self.rate_model,
@@ -150,12 +149,29 @@ impl<'info> DecreaseLeverage<'info> {
             Some(self.event_authority.to_account_info()),
         )?;
 
-        let debt_token = if args.is_debt_token0 { self.pair.token0 } else { self.pair.token1 };
+        let debt_token = if args.is_debt_token0 {
+            self.pair.token0
+        } else {
+            self.pair.token1
+        };
         let collateral_token = self.pair.get_token_y(&debt_token);
-        require_keys_eq!(self.debt_token_mint.key(), debt_token, ErrorCode::InvalidMint);
-        require_keys_eq!(self.collateral_token_mint.key(), collateral_token, ErrorCode::InvalidMint);
+        require_keys_eq!(
+            self.debt_token_mint.key(),
+            debt_token,
+            ErrorCode::InvalidMint
+        );
+        require_keys_eq!(
+            self.collateral_token_mint.key(),
+            collateral_token,
+            ErrorCode::InvalidMint
+        );
+        require_supported_mint(&self.debt_token_mint)?;
+        require_supported_mint(&self.collateral_token_mint)?;
         require!(args.collateral_amount > 0, ErrorCode::AmountZero);
-        require!(self.user_leverage_position.debt_shares > 0, ErrorCode::ZeroDebtAmount);
+        require!(
+            self.user_leverage_position.debt_shares > 0,
+            ErrorCode::ZeroDebtAmount
+        );
         require_gt!(
             self.user_leverage_position.collateral_amount,
             args.collateral_amount,
@@ -212,11 +228,23 @@ impl<'info> DecreaseLeverage<'info> {
         let pair = &mut accounts.pair;
         let position = &mut accounts.user_leverage_position;
         let debt_before = position.calculate_debt(pair)?;
-        let is_token0_in = !args.is_debt_token0;
-        let reserve_in = if is_token0_in { pair.reserve0 } else { pair.reserve1 };
-        let reserve_out = if is_token0_in { pair.reserve1 } else { pair.reserve0 };
-        let quote = quote_swap(
+        let collateral_input = transfer_amounts_from_gross(
+            &accounts.collateral_token_mint.to_account_info(),
             args.collateral_amount,
+        )?;
+        let is_token0_in = !args.is_debt_token0;
+        let reserve_in = if is_token0_in {
+            pair.reserve0
+        } else {
+            pair.reserve1
+        };
+        let reserve_out = if is_token0_in {
+            pair.reserve1
+        } else {
+            pair.reserve0
+        };
+        let quote = quote_swap(
+            collateral_input.net,
             reserve_in,
             reserve_out,
             pair.swap_fee_bps,
@@ -269,18 +297,35 @@ impl<'info> DecreaseLeverage<'info> {
                     .delegated_program
                     .as_ref()
                     .ok_or(ErrorCode::InvalidLeverageDelegation)?;
-                require_keys_eq!(delegation.owner, position.owner, ErrorCode::InvalidLeverageDelegation);
-                require_keys_eq!(delegation.pair, pair.key(), ErrorCode::InvalidLeverageDelegation);
-                require_keys_eq!(delegation.position, position.key(), ErrorCode::InvalidLeverageDelegation);
-                require!(delegation.is_debt_token0 == args.is_debt_token0, ErrorCode::InvalidLeverageDelegation);
+                require_keys_eq!(
+                    delegation.owner,
+                    position.owner,
+                    ErrorCode::InvalidLeverageDelegation
+                );
+                require_keys_eq!(
+                    delegation.pair,
+                    pair.key(),
+                    ErrorCode::InvalidLeverageDelegation
+                );
+                require_keys_eq!(
+                    delegation.position,
+                    position.key(),
+                    ErrorCode::InvalidLeverageDelegation
+                );
+                require!(
+                    delegation.is_debt_token0 == args.is_debt_token0,
+                    ErrorCode::InvalidLeverageDelegation
+                );
                 require_keys_eq!(
                     delegation.delegated_program,
                     delegated_program.key(),
                     ErrorCode::InvalidLeverageDelegation
                 );
                 approved_for(delegation.approved_actions, LEVERAGE_DELEGATE_DECREASE)?;
-                let (before_accounts, _) =
-                    split_delegated_accounts(ctx.remaining_accounts, delegated.before_accounts_len)?;
+                let (before_accounts, _) = split_delegated_accounts(
+                    ctx.remaining_accounts,
+                    delegated.before_accounts_len,
+                )?;
                 let protected_accounts = [
                     pair.key(),
                     position.key(),
@@ -339,11 +384,11 @@ impl<'info> DecreaseLeverage<'info> {
             accounts.leverage_collateral_vault.to_account_info(),
             accounts.collateral_token_vault.to_account_info(),
             accounts.collateral_token_mint.to_account_info(),
-            token_program_for_mint(
+            leverage_token_program_for_mint(
                 &accounts.collateral_token_mint.to_account_info(),
                 &accounts.token_program.to_account_info(),
                 &accounts.token_2022_program.to_account_info(),
-            ),
+            )?,
             args.collateral_amount,
             accounts.collateral_token_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
@@ -355,7 +400,7 @@ impl<'info> DecreaseLeverage<'info> {
             reserve0: pair.reserve0,
             reserve1: pair.reserve1,
             is_token0_in,
-            amount_in: args.collateral_amount,
+            amount_in: collateral_input.net,
             amount_out: quote.amount_out,
             amount_in_after_fee: quote.amount_in_after_swap_fee,
             lp_fee: quote.lp_fee,
@@ -396,8 +441,10 @@ impl<'info> DecreaseLeverage<'info> {
                 ];
                 pair.exit(&crate::ID)?;
                 position.exit(&crate::ID)?;
-                let (_, after_accounts) =
-                    split_delegated_accounts(ctx.remaining_accounts, delegated.before_accounts_len)?;
+                let (_, after_accounts) = split_delegated_accounts(
+                    ctx.remaining_accounts,
+                    delegated.before_accounts_len,
+                )?;
                 invoke_delegated_callback(
                     delegated_program,
                     delegated.after_ix_data,
