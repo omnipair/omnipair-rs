@@ -1,4 +1,4 @@
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, solana_program::program_option::COption};
 use anchor_spl::token_interface::Mint;
 
 use crate::{
@@ -8,6 +8,8 @@ use crate::{
     shared::account::get_size_with_discriminator,
     v2::state::{Market, MarketConfig, MarketSide},
 };
+
+use crate::v2::instructions::common::{require_fee_free_claim_mint, require_supported_asset_mint};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InitializeMarketArgs {
@@ -41,14 +43,10 @@ pub struct InitializeMarket<'info> {
     )]
     pub market: Box<Account<'info, Market>>,
 
-    /// CHECK: Stored as the protected claim mint for asset0; initialized in a later token-layer instruction.
-    pub claim0_mint: UncheckedAccount<'info>,
-    /// CHECK: Stored as the protected claim mint for asset1; initialized in a later token-layer instruction.
-    pub claim1_mint: UncheckedAccount<'info>,
-    /// CHECK: Stored as the hedged wrapper mint for asset0; initialized in a later token-layer instruction.
-    pub hedge0_mint: UncheckedAccount<'info>,
-    /// CHECK: Stored as the hedged wrapper mint for asset1; initialized in a later token-layer instruction.
-    pub hedge1_mint: UncheckedAccount<'info>,
+    pub claim0_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub claim1_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub hedge0_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub hedge1_mint: Box<InterfaceAccount<'info, Mint>>,
     /// CHECK: Canonical base claim escrow PDA for h-omLP asset0 wrappers.
     #[account(
         seeds = [
@@ -185,7 +183,23 @@ impl<'info> InitializeMarket<'info> {
             Pubkey::default(),
             ErrorCode::InvalidMarketConfig
         );
+        require_supported_asset_mint(&self.asset0_mint)?;
+        require_supported_asset_mint(&self.asset1_mint)?;
+        self.validate_claim_mint(&self.claim0_mint, self.asset0_mint.decimals)?;
+        self.validate_claim_mint(&self.claim1_mint, self.asset1_mint.decimals)?;
+        self.validate_claim_mint(&self.hedge0_mint, self.asset0_mint.decimals)?;
+        self.validate_claim_mint(&self.hedge1_mint, self.asset1_mint.decimals)?;
         args.config.validate()
+    }
+
+    fn validate_claim_mint(&self, mint: &InterfaceAccount<Mint>, asset_decimals: u8) -> Result<()> {
+        require_fee_free_claim_mint(mint)?;
+        require_eq!(mint.decimals, asset_decimals, ErrorCode::InvalidClaimMint);
+        require!(
+            mint.mint_authority == COption::Some(self.market.key()),
+            ErrorCode::InvalidClaimMint
+        );
+        Ok(())
     }
 
     pub fn handle_initialize(ctx: Context<Self>, args: InitializeMarketArgs) -> Result<()> {

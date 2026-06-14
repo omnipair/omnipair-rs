@@ -91,10 +91,10 @@ describe("Omnipair Market LiteSVM", () => {
       [Buffer.from("__event_authority")],
       OMNIPAIR_PROGRAM_ID
     );
-    const claim0Mint = Keypair.generate().publicKey;
-    const claim1Mint = Keypair.generate().publicKey;
-    const hedge0Mint = Keypair.generate().publicKey;
-    const hedge1Mint = Keypair.generate().publicKey;
+    const claim0Mint = await createMint(connection as any, payer, market, null, 6);
+    const claim1Mint = await createMint(connection as any, payer, market, null, 6);
+    const hedge0Mint = await createMint(connection as any, payer, market, null, 6);
+    const hedge1Mint = await createMint(connection as any, payer, market, null, 6);
 
     await program.methods
       .initializeMarket({
