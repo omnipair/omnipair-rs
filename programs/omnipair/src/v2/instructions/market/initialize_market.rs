@@ -40,7 +40,7 @@ pub struct InitializeMarket<'info> {
         payer = payer,
         space = get_size_with_discriminator::<Market>(),
         seeds = [
-            MARKET_SEED_PREFIX,
+            MARKET_V2_SEED_PREFIX,
             asset0_mint.key().as_ref(),
             asset1_mint.key().as_ref(),
             args.params_hash.as_ref(),

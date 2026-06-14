@@ -16,8 +16,8 @@ use crate::{
     v2::state::{HedgePosition, Market},
 };
 
-use crate::v2::instructions::common::token_program_for_mint;
 use super::common::validate_hedge_accounts;
+use crate::v2::instructions::common::token_program_for_mint;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct OpenHedgeArgs {
@@ -33,7 +33,7 @@ pub struct OpenHedge<'info> {
     #[account(
         mut,
         seeds = [
-            MARKET_SEED_PREFIX,
+            MARKET_V2_SEED_PREFIX,
             market.asset0_mint.as_ref(),
             market.asset1_mint.as_ref(),
             market.params_hash.as_ref(),

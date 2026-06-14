@@ -36,7 +36,7 @@ pub struct DepositReserve<'info> {
     #[account(
         mut,
         seeds = [
-            MARKET_SEED_PREFIX,
+            MARKET_V2_SEED_PREFIX,
             market.asset0_mint.as_ref(),
             market.asset1_mint.as_ref(),
             market.params_hash.as_ref(),

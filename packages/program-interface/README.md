@@ -139,6 +139,9 @@ All TypeScript types generated from the IDL:
 - `deriveFutarchyAuthorityAddress()` - Derive FutarchyAuthority PDA
 - `deriveReserveVaultAddress(pair, reserveMint)` - Derive a reserve vault PDA
 - `deriveCollateralVaultAddress(pair, collateralMint)` - Derive a collateral vault PDA
+- `deriveMarketV2Address(asset0Mint, asset1Mint, paramsHash)` - Derive a V2 Market PDA
+- `deriveMarketReserveVaultAddress(market, reserveMint)` - Derive a V2 market reserve vault PDA
+- `deriveStakePositionAddress(market, owner, assetMint)` - Derive a V2 stake position PDA
 
 ## Peer Dependencies
 

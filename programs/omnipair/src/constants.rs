@@ -98,7 +98,7 @@ pub const MAX_TARGET_UTIL_BPS: u64 = 10_000;  // 100% maximum for target_util_en
 #[constant]
 pub const PAIR_SEED_PREFIX: &[u8] = b"gamm_pair";
 #[constant]
-pub const MARKET_SEED_PREFIX: &[u8] = b"market";
+pub const MARKET_V2_SEED_PREFIX: &[u8] = b"market_v2";
 #[constant]
 pub const MARKET_RESERVE_VAULT_SEED_PREFIX: &[u8] = b"market_reserve";
 #[constant]

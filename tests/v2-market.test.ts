@@ -84,7 +84,7 @@ describe("Omnipair Market LiteSVM", () => {
     const [asset0Mint, asset1Mint] = orderedMints(mintA, mintB);
     const paramsHash = Buffer.alloc(32, 7);
     const [market] = PublicKey.findProgramAddressSync(
-      [Buffer.from("market"), asset0Mint.toBuffer(), asset1Mint.toBuffer(), paramsHash],
+      [Buffer.from("market_v2"), asset0Mint.toBuffer(), asset1Mint.toBuffer(), paramsHash],
       OMNIPAIR_PROGRAM_ID
     );
     const [eventAuthority] = PublicKey.findProgramAddressSync(

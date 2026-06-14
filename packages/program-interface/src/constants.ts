@@ -19,7 +19,7 @@ export const PROGRAM_ID = new PublicKey(getProgramIdFromEnv());
  */
 export const SEEDS = {
   PAIR: Buffer.from("gamm_pair"),
-  MARKET: Buffer.from("market"),
+  MARKET_V2: Buffer.from("market_v2"),
   MARKET_RESERVE_VAULT: Buffer.from("market_reserve"),
   MARKET_COLLATERAL_VAULT: Buffer.from("market_collateral"),
   MARKET_FEE_VAULT: Buffer.from("market_fee"),
@@ -107,22 +107,33 @@ export function deriveCollateralVaultAddress(
 }
 
 /**
- * Derive Market PDA address
+ * Derive V2 Market PDA address
  */
-export function deriveMarketAddress(
+export function deriveMarketV2Address(
   asset0Mint: PublicKey,
   asset1Mint: PublicKey,
   paramsHash: Uint8Array | Buffer | number[]
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [
-      SEEDS.MARKET,
+      SEEDS.MARKET_V2,
       asset0Mint.toBuffer(),
       asset1Mint.toBuffer(),
       normalizeParamsHash(paramsHash),
     ],
     PROGRAM_ID
   );
+}
+
+/**
+ * @deprecated Use deriveMarketV2Address.
+ */
+export function deriveMarketAddress(
+  asset0Mint: PublicKey,
+  asset1Mint: PublicKey,
+  paramsHash: Uint8Array | Buffer | number[]
+): [PublicKey, number] {
+  return deriveMarketV2Address(asset0Mint, asset1Mint, paramsHash);
 }
 
 /**

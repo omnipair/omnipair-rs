@@ -1820,7 +1820,7 @@ fn assert_price_divergence(
 macro_rules! generate_market_seeds {
     ($market:expr) => {
         [
-            MARKET_SEED_PREFIX,
+            MARKET_V2_SEED_PREFIX,
             $market.asset0_mint.as_ref(),
             $market.asset1_mint.as_ref(),
             $market.params_hash.as_ref(),
