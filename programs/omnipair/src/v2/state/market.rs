@@ -51,6 +51,12 @@ impl MarketConfig {
             ErrorCode::InvalidMarketConfig
         );
         require!(
+            half_life_in_bounds(self.ema_half_life_ms)
+                && half_life_in_bounds(self.directional_ema_half_life_ms)
+                && half_life_in_bounds(self.k_ema_half_life_ms),
+            ErrorCode::InvalidMarketConfig
+        );
+        require!(
             self.recognized_collateral_cap_bps >= BPS_DENOMINATOR
                 && self.market_health_min_bps >= BPS_DENOMINATOR
                 && self.effective_debt_weight_min_bps <= BPS_DENOMINATOR,
@@ -59,6 +65,10 @@ impl MarketConfig {
         require!(!self.soft_borrow_enabled, ErrorCode::InvalidMarketConfig);
         Ok(())
     }
+}
+
+fn half_life_in_bounds(half_life_ms: u64) -> bool {
+    (MIN_HALF_LIFE_MS..=MAX_HALF_LIFE_MS).contains(&half_life_ms)
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
@@ -1935,6 +1945,30 @@ mod tests {
         let err = config.validate().unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::InvalidMarketConfig));
+    }
+
+    #[test]
+    fn market_config_rejects_inert_ema_half_lives() {
+        let mut config = test_market().config;
+        config.ema_half_life_ms = 0;
+        assert_eq!(
+            config.validate().unwrap_err(),
+            error!(ErrorCode::InvalidMarketConfig)
+        );
+
+        let mut config = test_market().config;
+        config.directional_ema_half_life_ms = MIN_HALF_LIFE_MS - 1;
+        assert_eq!(
+            config.validate().unwrap_err(),
+            error!(ErrorCode::InvalidMarketConfig)
+        );
+
+        let mut config = test_market().config;
+        config.k_ema_half_life_ms = MAX_HALF_LIFE_MS + 1;
+        assert_eq!(
+            config.validate().unwrap_err(),
+            error!(ErrorCode::InvalidMarketConfig)
+        );
     }
 
     #[test]
