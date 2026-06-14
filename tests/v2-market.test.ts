@@ -167,6 +167,10 @@ describe("Omnipair Market LiteSVM", () => {
       market,
       reserve0Vault,
       reserve1Vault,
+      collateral0Vault,
+      collateral1Vault,
+      insurance0Vault,
+      insurance1Vault,
       fee0Vault,
       fee1Vault,
       hedge0Vault,
@@ -543,6 +547,80 @@ describe("Omnipair Market LiteSVM", () => {
     );
     expect((await getAccount(connection as any, hedge0Vault)).amount).to.equal(
       BigInt(150_000)
+    );
+  });
+
+  it("deposits collateral and funds market insurance", async () => {
+    trackInstruction("depositCollateral", "deposits borrower collateral");
+    trackInstruction("depositInsurance", "funds market insurance reserves");
+
+    const {
+      asset0Mint,
+      asset1Mint,
+      market,
+      collateral1Vault,
+      insurance0Vault,
+      ownerAsset0Account,
+      ownerAsset1Account,
+      eventAuthority,
+    } = await fundTwoSidedMarket();
+
+    await program.methods
+      .depositCollateral({
+        marketSideIndex: 1,
+        depositAmount: new BN(300_000),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        assetMint: asset1Mint,
+        collateralVault: collateral1Vault,
+        ownerAssetAccount: ownerAsset1Account,
+        marginPosition: deriveAddress(
+          Buffer.from("margin"),
+          market.toBuffer(),
+          payer.publicKey.toBuffer()
+        ),
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    expect((await getAccount(connection as any, ownerAsset1Account)).amount).to.equal(
+      BigInt(700_000)
+    );
+    expect((await getAccount(connection as any, collateral1Vault)).amount).to.equal(
+      BigInt(300_000)
+    );
+
+    await program.methods
+      .depositInsurance({
+        marketSideIndex: 0,
+        depositAmount: new BN(125_000),
+      })
+      .accounts({
+        market,
+        sponsor: payer.publicKey,
+        assetMint: asset0Mint,
+        insuranceVault: insurance0Vault,
+        sponsorAssetAccount: ownerAsset0Account,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    expect((await getAccount(connection as any, ownerAsset0Account)).amount).to.equal(
+      BigInt(875_000)
+    );
+    expect((await getAccount(connection as any, insurance0Vault)).amount).to.equal(
+      BigInt(125_000)
     );
   });
 
