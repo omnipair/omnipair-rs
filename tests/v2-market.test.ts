@@ -188,7 +188,10 @@ describe("Omnipair Market LiteSVM", () => {
     claimMint,
     reserveVault,
     ownerAssetAccount,
-    ownerClaimAccount
+    ownerClaimAccount,
+    depositAmount = 1_000_000,
+    minClaimAmount = 800_000,
+    maxBufferAmount = 200_000
   ) {
     const stakePosition = deriveAddress(
       Buffer.from("stake"),
@@ -200,9 +203,9 @@ describe("Omnipair Market LiteSVM", () => {
     await program.methods
       .depositReserve({
         marketSideIndex,
-        depositAmount: new BN(1_000_000),
-        minClaimAmount: new BN(800_000),
-        maxBufferAmount: new BN(200_000),
+        depositAmount: new BN(depositAmount),
+        minClaimAmount: new BN(minClaimAmount),
+        maxBufferAmount: new BN(maxBufferAmount),
       })
       .accounts({
         market: fixture.market,
@@ -299,6 +302,86 @@ describe("Omnipair Market LiteSVM", () => {
     };
   }
 
+  async function fundTinyRoundingMarket() {
+    const fixture = await initializeMarketFixture();
+    const ownerAsset0Account = await createAccount(
+      connection as any,
+      payer,
+      fixture.asset0Mint,
+      payer.publicKey
+    );
+    const ownerAsset1Account = await createAccount(
+      connection as any,
+      payer,
+      fixture.asset1Mint,
+      payer.publicKey
+    );
+    const ownerClaim0Account = await createAccount(
+      connection as any,
+      payer,
+      fixture.claim0Mint,
+      payer.publicKey
+    );
+    const ownerClaim1Account = await createAccount(
+      connection as any,
+      payer,
+      fixture.claim1Mint,
+      payer.publicKey
+    );
+
+    await mintTo(
+      connection as any,
+      payer,
+      fixture.asset0Mint,
+      ownerAsset0Account,
+      payer,
+      100
+    );
+    await mintTo(
+      connection as any,
+      payer,
+      fixture.asset1Mint,
+      ownerAsset1Account,
+      payer,
+      100
+    );
+
+    const stake0Position = await depositReserveSide(
+      fixture,
+      0,
+      fixture.asset0Mint,
+      fixture.claim0Mint,
+      fixture.reserve0Vault,
+      ownerAsset0Account,
+      ownerClaim0Account,
+      6,
+      4,
+      2
+    );
+    const stake1Position = await depositReserveSide(
+      fixture,
+      1,
+      fixture.asset1Mint,
+      fixture.claim1Mint,
+      fixture.reserve1Vault,
+      ownerAsset1Account,
+      ownerClaim1Account,
+      6,
+      4,
+      2
+    );
+
+    return {
+      ...fixture,
+      ownerAsset0Account,
+      ownerAsset1Account,
+      ownerClaim0Account,
+      ownerClaim1Account,
+      stake0Position,
+      stake1Position,
+    };
+  }
+
   it("initializes a market account", async () => {
     trackInstruction("initializeMarket", "initializes a market account");
 
@@ -378,6 +461,60 @@ describe("Omnipair Market LiteSVM", () => {
     expect((await getAccount(connection as any, reserve0Vault)).amount).to.equal(
       BigInt(920_000)
     );
+  });
+
+  it("swaps against market reserve floor excess", async () => {
+    trackInstruction("marketSwap", "swaps against rounded market reserve excess");
+
+    const {
+      asset0Mint,
+      asset1Mint,
+      market,
+      reserve0Vault,
+      reserve1Vault,
+      fee0Vault,
+      ownerAsset0Account,
+      ownerAsset1Account,
+      eventAuthority,
+    } = await fundTinyRoundingMarket();
+
+    await program.methods
+      .marketSwap({
+        assetInIsAsset0: true,
+        exactAssetIn: new BN(3),
+        minAssetOut: new BN(1),
+      })
+      .accounts({
+        market,
+        trader: payer.publicKey,
+        assetInMint: asset0Mint,
+        assetOutMint: asset1Mint,
+        reserveInVault: reserve0Vault,
+        reserveOutVault: reserve1Vault,
+        feeInVault: fee0Vault,
+        traderAssetInAccount: ownerAsset0Account,
+        traderAssetOutAccount: ownerAsset1Account,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    expect((await getAccount(connection as any, ownerAsset0Account)).amount).to.equal(
+      BigInt(91)
+    );
+    expect((await getAccount(connection as any, ownerAsset1Account)).amount).to.equal(
+      BigInt(95)
+    );
+    expect((await getAccount(connection as any, reserve0Vault)).amount).to.equal(
+      BigInt(8)
+    );
+    expect((await getAccount(connection as any, reserve1Vault)).amount).to.equal(
+      BigInt(5)
+    );
+    expect((await getAccount(connection as any, fee0Vault)).amount).to.equal(BigInt(1));
   });
 
   it("stakes and unstakes matched market claims and buffer shares", async () => {
