@@ -13,7 +13,9 @@ use crate::{
     v2::state::{MarginPosition, Market},
 };
 
-use crate::v2::instructions::common::{require_supported_asset_mint, token_program_for_mint};
+use crate::v2::instructions::common::{
+    require_supported_asset_mint, token_account_credit, token_program_for_mint,
+};
 
 use super::common::{apply_borrow_state, validate_borrow_accounts};
 
@@ -21,6 +23,7 @@ use super::common::{apply_borrow_state, validate_borrow_accounts};
 pub struct MarketBorrowArgs {
     pub borrow_asset_is_asset0: bool,
     pub borrow_amount: u64,
+    pub min_debt_amount_out: u64,
     pub min_health_bps: u64,
 }
 
@@ -76,6 +79,11 @@ impl<'info> MarketBorrow<'info> {
             ErrorCode::InvalidMarketConfig
         );
         require!(args.borrow_amount > 0, ErrorCode::AmountZero);
+        require_gte!(
+            args.borrow_amount,
+            args.min_debt_amount_out,
+            ErrorCode::SlippageExceeded
+        );
         validate_borrow_accounts(
             &self.market,
             args.borrow_asset_is_asset0,
@@ -110,6 +118,7 @@ impl<'info> MarketBorrow<'info> {
             &ctx.accounts.token_program,
             &ctx.accounts.token_2022_program,
         )?;
+        let owner_debt_balance_before = ctx.accounts.owner_debt_account.amount;
         transfer_from_vault_to_user(
             ctx.accounts.market.to_account_info(),
             ctx.accounts.reserve_vault.to_account_info(),
@@ -120,6 +129,16 @@ impl<'info> MarketBorrow<'info> {
             ctx.accounts.debt_asset_mint.decimals,
             &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
+        ctx.accounts.owner_debt_account.reload()?;
+        let debt_credit = token_account_credit(
+            owner_debt_balance_before,
+            &ctx.accounts.owner_debt_account,
+        )?;
+        require_gte!(
+            debt_credit,
+            args.min_debt_amount_out,
+            ErrorCode::SlippageExceeded
+        );
 
         emit_cpi!(MarketDebtUpdated {
             market: market_key,

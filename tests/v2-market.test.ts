@@ -834,6 +834,7 @@ describe("Omnipair Market LiteSVM", () => {
         .marketBorrow({
           borrowAssetIsAsset0: true,
           borrowAmount: new BN(5),
+          minDebtAmountOut: new BN(5),
           minHealthBps: new BN(11_000),
         })
         .accounts({
@@ -1536,10 +1537,37 @@ describe("Omnipair Market LiteSVM", () => {
       .signers([payer])
       .rpc();
 
+    await expectRejects(() =>
+      program.methods
+        .marketBorrow({
+          borrowAssetIsAsset0: true,
+          borrowAmount: new BN(5),
+          minDebtAmountOut: new BN(6),
+          minHealthBps: new BN(11_000),
+        })
+        .accounts({
+          market,
+          owner: payer.publicKey,
+          debtAssetMint: asset0Mint,
+          collateralAssetMint: asset1Mint,
+          reserveVault: reserve0Vault,
+          ownerDebtAccount: ownerAsset0Account,
+          marginPosition,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
+        .rpc()
+    );
+
     await program.methods
       .marketBorrow({
         borrowAssetIsAsset0: true,
         borrowAmount: new BN(5),
+        minDebtAmountOut: new BN(5),
         minHealthBps: new BN(11_000),
       })
       .accounts({
@@ -1645,6 +1673,7 @@ describe("Omnipair Market LiteSVM", () => {
       .marketBorrow({
         borrowAssetIsAsset0: true,
         borrowAmount: new BN(5),
+        minDebtAmountOut: new BN(5),
         minHealthBps: new BN(11_000),
       })
       .accounts({
@@ -1746,6 +1775,7 @@ describe("Omnipair Market LiteSVM", () => {
       .marketBorrow({
         borrowAssetIsAsset0: true,
         borrowAmount: new BN(5),
+        minDebtAmountOut: new BN(5),
         minHealthBps: new BN(11_000),
       })
       .accounts({
@@ -1894,6 +1924,7 @@ describe("Omnipair Market LiteSVM", () => {
       .marketBorrow({
         borrowAssetIsAsset0: true,
         borrowAmount: new BN(5),
+        minDebtAmountOut: new BN(5),
         minHealthBps: new BN(11_000),
       })
       .accounts({
