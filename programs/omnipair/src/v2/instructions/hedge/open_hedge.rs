@@ -82,7 +82,7 @@ pub struct OpenHedge<'info> {
 
 impl<'info> OpenHedge<'info> {
     pub fn validate(&self, args: &OpenHedgeArgs) -> Result<()> {
-        self.market.assert_started()?;
+        self.market.assert_live()?;
         require!(
             self.market.config.hedged_lp_enabled,
             ErrorCode::InvalidMarketConfig

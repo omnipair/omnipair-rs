@@ -1019,6 +1019,44 @@ describe("Omnipair Market LiteSVM", () => {
     );
 
     await program.methods
+      .setMarketReduceOnly({ reduceOnly: true })
+      .accounts({
+        market,
+        operator: payer.publicKey,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await expectRejects(() =>
+      program.methods
+        .openHedge({
+          marketSideIndex: 0,
+          claimAmount: new BN(10_000),
+          minHedgeAmount: new BN(10_000),
+        })
+        .accounts({
+          market,
+          owner: payer.publicKey,
+          assetMint: asset0Mint,
+          claimMint: claim0Mint,
+          hedgeMint: hedge0Mint,
+          hedgeVault: hedge0Vault,
+          ownerClaimAccount: ownerClaim0Account,
+          ownerHedgeAccount: ownerHedge0Account,
+          hedgePosition: hedge0Position,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .rpc()
+    );
+
+    await program.methods
       .closeHedge({
         marketSideIndex: 0,
         hedgeAmount: new BN(50_000),
