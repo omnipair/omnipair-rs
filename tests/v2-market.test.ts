@@ -1196,6 +1196,96 @@ describe("Omnipair Market LiteSVM", () => {
     );
   });
 
+  it("blocks hedge closes when spot diverges from cached EMA", async () => {
+    const {
+      asset0Mint,
+      claim0Mint,
+      hedge0Mint,
+      market,
+      reserve0Vault,
+      hedge0Vault,
+      ownerAsset0Account,
+      ownerClaim0Account,
+      eventAuthority,
+    } = await fundTwoSidedMarket();
+    const ownerHedge0Account = await createAccount(
+      connection as any,
+      payer,
+      hedge0Mint,
+      payer.publicKey
+    );
+    const hedge0Position = deriveAddress(
+      Buffer.from("hedge_position"),
+      market.toBuffer(),
+      payer.publicKey.toBuffer(),
+      asset0Mint.toBuffer()
+    );
+
+    await program.methods
+      .openHedge({
+        marketSideIndex: 0,
+        claimAmount: new BN(200_000),
+        minHedgeAmount: new BN(200_000),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        assetMint: asset0Mint,
+        claimMint: claim0Mint,
+        hedgeMint: hedge0Mint,
+        hedgeVault: hedge0Vault,
+        ownerClaimAccount: ownerClaim0Account,
+        ownerHedgeAccount: ownerHedge0Account,
+        hedgePosition: hedge0Position,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await depositReserveSide(
+      { market, eventAuthority },
+      0,
+      asset0Mint,
+      claim0Mint,
+      reserve0Vault,
+      ownerAsset0Account,
+      ownerClaim0Account,
+      500_000,
+      400_000,
+      100_000
+    );
+
+    await expectRejects(() =>
+      program.methods
+        .closeHedge({
+          marketSideIndex: 0,
+          hedgeAmount: new BN(50_000),
+          minClaimAmountOut: new BN(50_000),
+        })
+        .accounts({
+          market,
+          owner: payer.publicKey,
+          assetMint: asset0Mint,
+          claimMint: claim0Mint,
+          hedgeMint: hedge0Mint,
+          hedgeVault: hedge0Vault,
+          ownerClaimAccount: ownerClaim0Account,
+          ownerHedgeAccount: ownerHedge0Account,
+          hedgePosition: hedge0Position,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .rpc()
+    );
+  });
+
   it("deposits collateral and funds market insurance", async () => {
     trackInstruction("depositCollateral", "deposits borrower collateral");
     trackInstruction("depositInsurance", "funds market insurance reserves");

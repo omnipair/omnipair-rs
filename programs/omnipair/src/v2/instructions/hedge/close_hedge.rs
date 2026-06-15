@@ -112,6 +112,9 @@ impl<'info> CloseHedge<'info> {
         let owner_key = ctx.accounts.owner.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
 
+        ctx.accounts.market.refresh_risk_book()?;
+        ctx.accounts.market.assert_spot_ema_divergence()?;
+
         let hedge_token_program = token_program_for_mint(
             &ctx.accounts.hedge_mint,
             &ctx.accounts.token_program,
