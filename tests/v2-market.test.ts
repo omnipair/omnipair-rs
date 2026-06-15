@@ -623,6 +623,139 @@ describe("Omnipair Market LiteSVM", () => {
     expect((await getAccount(connection as any, fee0Vault)).amount).to.equal(BigInt(1));
   });
 
+  it("claims staker and operator market fees", async () => {
+    trackInstruction("claimFees", "claims non-compounding staker fees");
+    trackInstruction("claimMarketFees", "claims operator market fee liabilities");
+
+    const {
+      asset0Mint,
+      asset1Mint,
+      claim0Mint,
+      market,
+      reserve0Vault,
+      reserve1Vault,
+      fee0Vault,
+      claim0StakeVault,
+      ownerAsset0Account,
+      ownerAsset1Account,
+      ownerClaim0Account,
+      stake0Position,
+      eventAuthority,
+    } = await fundTinyRoundingMarket();
+
+    const config = marketConfig();
+    config.swapFeeBps = 8_000;
+    await program.methods
+      .updateMarketConfig({ config })
+      .accounts({
+        market,
+        operator: payer.publicKey,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await program.methods
+      .stake({
+        marketSideIndex: 0,
+        claimAmount: new BN(4),
+        bufferShares: new BN(1),
+        minActiveStakeUnits: new BN(5),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        assetMint: asset0Mint,
+        claimMint: claim0Mint,
+        stakeVault: claim0StakeVault,
+        ownerClaimAccount: ownerClaim0Account,
+        stakePosition: stake0Position,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await program.methods
+      .marketSwap({
+        assetInIsAsset0: true,
+        exactAssetIn: new BN(12),
+        minAssetOut: new BN(1),
+      })
+      .accounts({
+        market,
+        trader: payer.publicKey,
+        assetInMint: asset0Mint,
+        assetOutMint: asset1Mint,
+        reserveInVault: reserve0Vault,
+        reserveOutVault: reserve1Vault,
+        feeInVault: fee0Vault,
+        traderAssetInAccount: ownerAsset0Account,
+        traderAssetOutAccount: ownerAsset1Account,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    expect((await getAccount(connection as any, fee0Vault)).amount).to.equal(BigInt(10));
+
+    await program.methods
+      .claimFees({
+        marketSideIndex: 0,
+        minFeeAmount: new BN(9),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        assetMint: asset0Mint,
+        feeVault: fee0Vault,
+        ownerFeeAccount: ownerAsset0Account,
+        stakePosition: stake0Position,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    expect((await getAccount(connection as any, ownerAsset0Account)).amount).to.equal(
+      BigInt(91)
+    );
+    expect((await getAccount(connection as any, fee0Vault)).amount).to.equal(BigInt(1));
+
+    await program.methods
+      .claimMarketFees({
+        marketSideIndex: 0,
+        claimKind: { operator: {} },
+        minFeeAmount: new BN(1),
+      })
+      .accounts({
+        market,
+        feeAuthority: payer.publicKey,
+        assetMint: asset0Mint,
+        feeVault: fee0Vault,
+        recipientFeeAccount: ownerAsset0Account,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    expect((await getAccount(connection as any, ownerAsset0Account)).amount).to.equal(
+      BigInt(92)
+    );
+    expect((await getAccount(connection as any, fee0Vault)).amount).to.equal(BigInt(0));
+  });
+
   it("stakes and unstakes matched market claims and buffer shares", async () => {
     trackInstruction("stake", "stakes matched market claim and buffer shares");
     trackInstruction("unstake", "unstakes matched market claim and buffer shares");
