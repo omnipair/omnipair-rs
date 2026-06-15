@@ -44,6 +44,16 @@ function deriveAddress(...seeds: Buffer[]): PublicKey {
   return PublicKey.findProgramAddressSync(seeds, OMNIPAIR_PROGRAM_ID)[0];
 }
 
+async function expectRejects(action) {
+  let rejected = false;
+  try {
+    await action();
+  } catch (_) {
+    rejected = true;
+  }
+  expect(rejected).to.equal(true);
+}
+
 function marketConfig() {
   return {
     swapFeeBps: 30,
@@ -404,6 +414,102 @@ describe("Omnipair Market LiteSVM", () => {
       expect(vaultAccount).to.not.equal(null);
       expect(vaultAccount.owner.toString()).to.equal(TOKEN_PROGRAM_ID.toString());
     }
+  });
+
+  it("updates market config and enforces reduce-only mode", async () => {
+    trackInstruction("updateMarketConfig", "updates market buffer ratio");
+    trackInstruction("setMarketReduceOnly", "blocks risk-increasing reserve deposits");
+
+    const fixture = await initializeMarketFixture();
+    const ownerAsset0Account = await createAccount(
+      connection as any,
+      payer,
+      fixture.asset0Mint,
+      payer.publicKey
+    );
+    const ownerClaim0Account = await createAccount(
+      connection as any,
+      payer,
+      fixture.claim0Mint,
+      payer.publicKey
+    );
+
+    await mintTo(
+      connection as any,
+      payer,
+      fixture.asset0Mint,
+      ownerAsset0Account,
+      payer,
+      2_000_000
+    );
+
+    const config = marketConfig();
+    config.bufferRatioBps = 1_000;
+    await program.methods
+      .updateMarketConfig({ config })
+      .accounts({
+        market: fixture.market,
+        operator: payer.publicKey,
+        eventAuthority: fixture.eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    const stake0Position = await depositReserveSide(
+      fixture,
+      0,
+      fixture.asset0Mint,
+      fixture.claim0Mint,
+      fixture.reserve0Vault,
+      ownerAsset0Account,
+      ownerClaim0Account,
+      1_000_000,
+      900_000,
+      100_000
+    );
+
+    expect((await getAccount(connection as any, ownerClaim0Account)).amount).to.equal(
+      BigInt(900_000)
+    );
+
+    await program.methods
+      .setMarketReduceOnly({ reduceOnly: true })
+      .accounts({
+        market: fixture.market,
+        operator: payer.publicKey,
+        eventAuthority: fixture.eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await expectRejects(() =>
+      program.methods
+        .depositReserve({
+          marketSideIndex: 0,
+          depositAmount: new BN(1_000),
+          minClaimAmount: new BN(900),
+          maxBufferAmount: new BN(100),
+        })
+        .accounts({
+          market: fixture.market,
+          owner: payer.publicKey,
+          assetMint: fixture.asset0Mint,
+          claimMint: fixture.claim0Mint,
+          reserveVault: fixture.reserve0Vault,
+          ownerAssetAccount: ownerAsset0Account,
+          ownerClaimAccount: ownerClaim0Account,
+          stakePosition: stake0Position,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          eventAuthority: fixture.eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .rpc()
+    );
   });
 
   it("deposits reserve inventory and redeems fixed principal", async () => {
