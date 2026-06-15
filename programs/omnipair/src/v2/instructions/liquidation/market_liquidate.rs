@@ -490,6 +490,7 @@ fn apply_liquidation_state(
     }
 
     market.refresh_market_health()?;
+    market.assert_spot_ema_divergence()?;
     Ok(LiquidationOutcome {
         repaid_amount: repay_credit,
         collateral_seized,

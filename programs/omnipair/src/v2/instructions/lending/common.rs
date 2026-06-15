@@ -378,7 +378,7 @@ pub(super) fn apply_repay_state(
             .ok_or(ErrorCode::ReserveOverflow)?;
     }
     market.refresh_market_health()?;
-    Ok(())
+    market.assert_spot_ema_divergence()
 }
 
 fn require_borrow_headroom(debt_side: &MarketSide, borrow_amount: u64) -> Result<()> {
