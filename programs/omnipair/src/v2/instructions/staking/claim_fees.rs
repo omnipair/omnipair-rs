@@ -92,6 +92,9 @@ impl<'info> ClaimFees<'info> {
         let owner_key = ctx.accounts.owner.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
 
+        ctx.accounts.market.refresh_risk_book()?;
+        ctx.accounts.market.assert_spot_ema_divergence()?;
+
         let fee_amount = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
             market_side.carry_forward_unallocated_fee()?;
