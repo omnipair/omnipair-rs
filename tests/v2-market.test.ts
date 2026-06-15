@@ -750,6 +750,111 @@ describe("Omnipair Market LiteSVM", () => {
     expect((await getAccount(connection as any, fee0Vault)).amount).to.equal(BigInt(1));
   });
 
+  it("blocks market swaps and borrows in reduce-only mode", async () => {
+    const swapFixture = await fundTinyRoundingMarket();
+
+    await program.methods
+      .setMarketReduceOnly({ reduceOnly: true })
+      .accounts({
+        market: swapFixture.market,
+        operator: payer.publicKey,
+        eventAuthority: swapFixture.eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await expectRejects(() =>
+      program.methods
+        .marketSwap({
+          assetInIsAsset0: true,
+          exactAssetIn: new BN(3),
+          minAssetOut: new BN(1),
+        })
+        .accounts({
+          market: swapFixture.market,
+          trader: payer.publicKey,
+          assetInMint: swapFixture.asset0Mint,
+          assetOutMint: swapFixture.asset1Mint,
+          reserveInVault: swapFixture.reserve0Vault,
+          reserveOutVault: swapFixture.reserve1Vault,
+          feeInVault: swapFixture.fee0Vault,
+          traderAssetInAccount: swapFixture.ownerAsset0Account,
+          traderAssetOutAccount: swapFixture.ownerAsset1Account,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          eventAuthority: swapFixture.eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .rpc()
+    );
+
+    const borrowFixture = await fundRoundedBorrowMarket();
+    const marginPosition = deriveAddress(
+      Buffer.from("margin"),
+      borrowFixture.market.toBuffer(),
+      payer.publicKey.toBuffer()
+    );
+
+    await program.methods
+      .depositCollateral({
+        marketSideIndex: 1,
+        depositAmount: new BN(60),
+      })
+      .accounts({
+        market: borrowFixture.market,
+        owner: payer.publicKey,
+        assetMint: borrowFixture.asset1Mint,
+        collateralVault: borrowFixture.collateral1Vault,
+        ownerAssetAccount: borrowFixture.ownerAsset1Account,
+        marginPosition,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        eventAuthority: borrowFixture.eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await program.methods
+      .setMarketReduceOnly({ reduceOnly: true })
+      .accounts({
+        market: borrowFixture.market,
+        operator: payer.publicKey,
+        eventAuthority: borrowFixture.eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await expectRejects(() =>
+      program.methods
+        .marketBorrow({
+          borrowAssetIsAsset0: true,
+          borrowAmount: new BN(5),
+          minHealthBps: new BN(11_000),
+        })
+        .accounts({
+          market: borrowFixture.market,
+          owner: payer.publicKey,
+          debtAssetMint: borrowFixture.asset0Mint,
+          collateralAssetMint: borrowFixture.asset1Mint,
+          reserveVault: borrowFixture.reserve0Vault,
+          ownerDebtAccount: borrowFixture.ownerAsset0Account,
+          marginPosition,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          eventAuthority: borrowFixture.eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
+        .rpc()
+    );
+  });
+
   it("claims staker and operator market fees", async () => {
     trackInstruction("claimFees", "claims non-compounding staker fees");
     trackInstruction("claimMarketFees", "claims operator market fee liabilities");
