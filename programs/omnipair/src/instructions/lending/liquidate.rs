@@ -10,7 +10,7 @@ use crate::{
     state::futarchy_authority::FutarchyAuthority,
     constants::*,
     errors::ErrorCode,
-    events::{AdjustDebtEvent, EventMetadata, UserPositionLiquidatedEvent, UserPositionUpdatedEvent},
+    events::{AdjustDebtEvent, EventMetadata, SwapEvent, UserPositionLiquidatedEvent, UserPositionUpdatedEvent},
     state::user_position::{UserPosition, DebtDecreaseReason},
     utils::{
         token::{transfer_from_vault_to_user, transfer_from_vault_to_vault}, 
@@ -357,6 +357,18 @@ impl<'info> Liquidate<'info> {
                 pair.cash_reserve1 = pair.cash_reserve1.saturating_add(collateral_to_reserves);
             }
         }
+
+        emit_cpi!(SwapEvent {
+            metadata: EventMetadata::new(payer.key(), pair.key()),
+            reserve0: pair.reserve0,
+            reserve1: pair.reserve1,
+            is_token0_in: is_collateral_token0,
+            amount_in: collateral_to_reserves,
+            amount_out: debt_to_writeoff,
+            amount_in_after_fee: collateral_to_reserves,
+            lp_fee: 0,
+            protocol_fee: 0,
+        });
 
         // Emit debt adjustment event (debt written off)
         let (amount0, amount1) = if is_collateral_token0 {
