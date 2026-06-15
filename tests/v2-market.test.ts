@@ -201,12 +201,13 @@ describe("Omnipair Market LiteSVM", () => {
     ownerClaimAccount,
     depositAmount = 1_000_000,
     minClaimAmount = 800_000,
-    maxBufferAmount = 200_000
+    maxBufferAmount = 200_000,
+    owner = payer
   ) {
     const stakePosition = deriveAddress(
       Buffer.from("stake"),
       fixture.market.toBuffer(),
-      payer.publicKey.toBuffer(),
+      owner.publicKey.toBuffer(),
       assetMint.toBuffer()
     );
 
@@ -219,7 +220,7 @@ describe("Omnipair Market LiteSVM", () => {
       })
       .accounts({
         market: fixture.market,
-        owner: payer.publicKey,
+        owner: owner.publicKey,
         assetMint,
         claimMint,
         reserveVault,
@@ -232,7 +233,7 @@ describe("Omnipair Market LiteSVM", () => {
         eventAuthority: fixture.eventAuthority,
         program: OMNIPAIR_PROGRAM_ID,
       })
-      .signers([payer])
+      .signers([owner])
       .rpc();
 
     return stakePosition;
@@ -389,6 +390,132 @@ describe("Omnipair Market LiteSVM", () => {
       ownerClaim1Account,
       stake0Position,
       stake1Position,
+    };
+  }
+
+  async function fundRoundedBorrowMarket(rounds = 12) {
+    const fixture = await initializeMarketFixture();
+    const ownerAsset0Account = await createAccount(
+      connection as any,
+      payer,
+      fixture.asset0Mint,
+      payer.publicKey
+    );
+    const ownerAsset1Account = await createAccount(
+      connection as any,
+      payer,
+      fixture.asset1Mint,
+      payer.publicKey
+    );
+    const ownerClaim0Account = await createAccount(
+      connection as any,
+      payer,
+      fixture.claim0Mint,
+      payer.publicKey
+    );
+    const ownerClaim1Account = await createAccount(
+      connection as any,
+      payer,
+      fixture.claim1Mint,
+      payer.publicKey
+    );
+
+    await mintTo(
+      connection as any,
+      payer,
+      fixture.asset0Mint,
+      ownerAsset0Account,
+      payer,
+      300
+    );
+    await mintTo(
+      connection as any,
+      payer,
+      fixture.asset1Mint,
+      ownerAsset1Account,
+      payer,
+      300
+    );
+
+    for (let i = 0; i < rounds; i++) {
+      const lender = Keypair.generate();
+      await connection.requestAirdrop(lender.publicKey, LAMPORTS_PER_SOL);
+      const lenderAsset0Account = await createAccount(
+        connection as any,
+        payer,
+        fixture.asset0Mint,
+        lender.publicKey
+      );
+      const lenderAsset1Account = await createAccount(
+        connection as any,
+        payer,
+        fixture.asset1Mint,
+        lender.publicKey
+      );
+      const lenderClaim0Account = await createAccount(
+        connection as any,
+        payer,
+        fixture.claim0Mint,
+        lender.publicKey
+      );
+      const lenderClaim1Account = await createAccount(
+        connection as any,
+        payer,
+        fixture.claim1Mint,
+        lender.publicKey
+      );
+
+      await mintTo(
+        connection as any,
+        payer,
+        fixture.asset0Mint,
+        lenderAsset0Account,
+        payer,
+        26
+      );
+      await mintTo(
+        connection as any,
+        payer,
+        fixture.asset1Mint,
+        lenderAsset1Account,
+        payer,
+        26
+      );
+
+      await depositReserveSide(
+        fixture,
+        0,
+        fixture.asset0Mint,
+        fixture.claim0Mint,
+        fixture.reserve0Vault,
+        lenderAsset0Account,
+        lenderClaim0Account,
+        26,
+        20,
+        6,
+        lender
+      );
+      await depositReserveSide(
+        fixture,
+        1,
+        fixture.asset1Mint,
+        fixture.claim1Mint,
+        fixture.reserve1Vault,
+        lenderAsset1Account,
+        lenderClaim1Account,
+        26,
+        20,
+        6,
+        lender
+      );
+    }
+
+    return {
+      ...fixture,
+      ownerAsset0Account,
+      ownerAsset1Account,
+      ownerClaim0Account,
+      ownerClaim1Account,
     };
   }
 
@@ -997,6 +1124,112 @@ describe("Omnipair Market LiteSVM", () => {
     );
     expect((await getAccount(connection as any, insurance0Vault)).amount).to.equal(
       BigInt(125_000)
+    );
+  });
+
+  it("borrows and repays fixed market debt against recognized collateral", async () => {
+    trackInstruction("marketBorrow", "borrows fixed market debt");
+    trackInstruction("marketRepay", "repays fixed market debt");
+
+    const {
+      asset0Mint,
+      asset1Mint,
+      market,
+      reserve0Vault,
+      collateral1Vault,
+      ownerAsset0Account,
+      ownerAsset1Account,
+      eventAuthority,
+    } = await fundRoundedBorrowMarket();
+    const marginPosition = deriveAddress(
+      Buffer.from("margin"),
+      market.toBuffer(),
+      payer.publicKey.toBuffer()
+    );
+
+    await program.methods
+      .depositCollateral({
+        marketSideIndex: 1,
+        depositAmount: new BN(60),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        assetMint: asset1Mint,
+        collateralVault: collateral1Vault,
+        ownerAssetAccount: ownerAsset1Account,
+        marginPosition,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await program.methods
+      .marketBorrow({
+        borrowAssetIsAsset0: true,
+        borrowAmount: new BN(5),
+        minHealthBps: new BN(11_000),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        debtAssetMint: asset0Mint,
+        collateralAssetMint: asset1Mint,
+        reserveVault: reserve0Vault,
+        ownerDebtAccount: ownerAsset0Account,
+        marginPosition,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
+      .rpc();
+
+    expect((await getAccount(connection as any, ownerAsset0Account)).amount).to.equal(
+      BigInt(305)
+    );
+    expect((await getAccount(connection as any, reserve0Vault)).amount).to.equal(
+      BigInt(307)
+    );
+
+    await program.methods
+      .marketRepay({
+        repayAssetIsAsset0: true,
+        repayAmount: new BN(5),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        debtAssetMint: asset0Mint,
+        reserveVault: reserve0Vault,
+        ownerDebtAccount: ownerAsset0Account,
+        marginPosition,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
+      .rpc();
+
+    expect((await getAccount(connection as any, ownerAsset0Account)).amount).to.equal(
+      BigInt(300)
+    );
+    expect((await getAccount(connection as any, reserve0Vault)).amount).to.equal(
+      BigInt(312)
+    );
+    expect((await getAccount(connection as any, ownerAsset1Account)).amount).to.equal(
+      BigInt(240)
+    );
+    expect((await getAccount(connection as any, collateral1Vault)).amount).to.equal(
+      BigInt(60)
     );
   });
 
