@@ -6,14 +6,18 @@
 const testedInstructions = new Set<string>();
 const instructionDetails = new Map<string, { count: number; tests: string[] }>();
 
-// All Omnipair program instructions
-const ALL_INSTRUCTIONS = [
+const V1_INSTRUCTIONS = [
   "viewPairData",
   "viewUserPositionData",
   "initFutarchyAuthority",
   "updateFutarchyAuthority",
+  "updateProtocolRevenue",
+  "updateRevenueRecipients",
   "claimProtocolFees",
-  "distributeTokens",
+  "setGlobalReduceOnly",
+  "setPairReduceOnly",
+  "setPairRateModel",
+  "createRateModel",
   "initialize",
   "addLiquidity",
   "removeLiquidity",
@@ -25,6 +29,29 @@ const ALL_INSTRUCTIONS = [
   "liquidate",
   "flashloan"
 ];
+
+const V2_INSTRUCTIONS = [
+  "initializeMarket",
+  "updateMarketConfig",
+  "setMarketReduceOnly",
+  "depositReserve",
+  "redeemClaim",
+  "stake",
+  "unstake",
+  "claimFees",
+  "claimMarketFees",
+  "marketSwap",
+  "depositCollateral",
+  "marketBorrow",
+  "marketRepay",
+  "depositInsurance",
+  "marketLiquidate",
+  "openHedge",
+  "closeHedge"
+];
+
+// All Omnipair program instructions exposed from programs/omnipair/src/lib.rs.
+const ALL_INSTRUCTIONS = [...V1_INSTRUCTIONS, ...V2_INSTRUCTIONS];
 
 /**
  * Track that an instruction was tested
