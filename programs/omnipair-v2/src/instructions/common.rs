@@ -4,11 +4,9 @@ use anchor_spl::{
     token_interface::{Mint, Token2022, TokenAccount},
 };
 
-use crate::{
-    errors::ErrorCode,
-    shared::token::{is_fee_free_mint, is_supported_mint},
-    state::Market,
-};
+use crate::{errors::ErrorCode, shared::token::is_supported_mint, state::Market};
+
+pub use crate::tokens::claim_token::require_fee_free_claim_mint;
 
 pub fn token_program_for_mint<'info>(
     mint: &InterfaceAccount<'info, Mint>,
@@ -27,11 +25,6 @@ pub fn token_program_for_mint<'info>(
 
 pub fn require_supported_asset_mint(mint: &InterfaceAccount<Mint>) -> Result<()> {
     require!(is_supported_mint(mint)?, ErrorCode::InvalidTokenProgram);
-    Ok(())
-}
-
-pub fn require_fee_free_claim_mint(mint: &InterfaceAccount<Mint>) -> Result<()> {
-    require!(is_fee_free_mint(mint)?, ErrorCode::InvalidClaimMint);
     Ok(())
 }
 

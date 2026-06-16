@@ -1,4 +1,4 @@
-use anchor_lang::{prelude::*, solana_program::program_option::COption};
+use anchor_lang::prelude::*;
 use anchor_spl::{
     token::Token,
     token_interface::{Mint, Token2022},
@@ -11,11 +11,10 @@ use crate::{
     shared::account::get_size_with_discriminator,
     shared::token::create_token_account,
     state::{Market, MarketConfig, MarketSide},
+    tokens::{claim_token::validate_claim_token_mint, hedge_token::validate_hedge_token_mint},
 };
 
-use crate::instructions::common::{
-    require_fee_free_claim_mint, require_supported_asset_mint, token_program_for_mint,
-};
+use crate::instructions::common::{require_supported_asset_mint, token_program_for_mint};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InitializeMarketArgs {
@@ -210,21 +209,12 @@ impl<'info> InitializeMarket<'info> {
         );
         require_supported_asset_mint(&self.asset0_mint)?;
         require_supported_asset_mint(&self.asset1_mint)?;
-        self.validate_claim_mint(&self.claim0_mint, self.asset0_mint.decimals)?;
-        self.validate_claim_mint(&self.claim1_mint, self.asset1_mint.decimals)?;
-        self.validate_claim_mint(&self.hedge0_mint, self.asset0_mint.decimals)?;
-        self.validate_claim_mint(&self.hedge1_mint, self.asset1_mint.decimals)?;
+        let market = self.market.key();
+        validate_claim_token_mint(&self.claim0_mint, market, self.asset0_mint.decimals)?;
+        validate_claim_token_mint(&self.claim1_mint, market, self.asset1_mint.decimals)?;
+        validate_hedge_token_mint(&self.hedge0_mint, market, self.asset0_mint.decimals)?;
+        validate_hedge_token_mint(&self.hedge1_mint, market, self.asset1_mint.decimals)?;
         args.config.validate()
-    }
-
-    fn validate_claim_mint(&self, mint: &InterfaceAccount<Mint>, asset_decimals: u8) -> Result<()> {
-        require_fee_free_claim_mint(mint)?;
-        require_eq!(mint.decimals, asset_decimals, ErrorCode::InvalidClaimMint);
-        require!(
-            mint.mint_authority == COption::Some(self.market.key()),
-            ErrorCode::InvalidClaimMint
-        );
-        Ok(())
     }
 
     pub fn handle_initialize(ctx: Context<Self>, args: InitializeMarketArgs) -> Result<()> {
