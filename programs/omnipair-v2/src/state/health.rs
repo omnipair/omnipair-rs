@@ -10,8 +10,7 @@ use crate::{
 
 impl Market {
     pub fn refresh_market_health(&mut self) -> Result<()> {
-        self.refresh_risk_book()?;
-        self.recompute_market_health_from_risk_book()
+        self.refresh_risk_book()
     }
 
     pub fn recompute_market_health_from_risk_book(&mut self) -> Result<()> {
@@ -65,7 +64,7 @@ impl Market {
     pub fn refresh_risk_book(&mut self) -> Result<()> {
         self.risk_book = self.current_risk_book()?;
         self.last_update_slot = self.risk_book.last_snapshot_slot;
-        Ok(())
+        self.recompute_market_health_from_risk_book()
     }
 
     pub fn enforce_daily_borrow_limit(
@@ -487,5 +486,97 @@ impl Market {
             .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
             .ok_or(ErrorCode::MarketMathOverflow)?;
         denormalize_from_nad_floor(limit_nad, asset_decimals)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        constants::NAD,
+        state::{BufferLedger, DebtBook, MarketConfig, MarketSide, ReserveLedger},
+    };
+
+    fn market_side(asset_mint: Pubkey) -> MarketSide {
+        MarketSide {
+            asset_mint,
+            asset_decimals: 6,
+            claim_token_mint: Pubkey::new_unique(),
+            hedge_token_mint: Pubkey::new_unique(),
+            hedge_vault: Pubkey::new_unique(),
+            reserve_vault: Pubkey::new_unique(),
+            collateral_vault: Pubkey::new_unique(),
+            fee_vault: Pubkey::new_unique(),
+            stake_vault: Pubkey::new_unique(),
+            reserve_ledger: ReserveLedger {
+                live_reserve: 1_000_000,
+                cash_reserve: 1_000_000,
+                reserved_liability: 0,
+            },
+            buffer_ledger: BufferLedger {
+                buffer_ratio_bps: 2_000,
+                ..BufferLedger::default()
+            },
+            ..MarketSide::default()
+        }
+    }
+
+    fn market_config() -> MarketConfig {
+        MarketConfig {
+            swap_fee_bps: 30,
+            operator_fee_bps: 1_000,
+            protocol_fee_bps: 0,
+            buffer_ratio_bps: 2_000,
+            fee_routing_k_nad: NAD,
+            ema_half_life_ms: 60_000,
+            directional_ema_half_life_ms: 60_000,
+            k_ema_half_life_ms: 60_000,
+            max_daily_borrow_bps: 2_000,
+            max_daily_withdraw_bps: 2_000,
+            spot_ema_divergence_bps: 1_000,
+            k_ema_drawdown_bps: 1_000,
+            recognized_collateral_cap_bps: 15_000,
+            market_health_min_bps: 11_000,
+            effective_debt_weight_min_bps: 10_000,
+            effective_debt_gamma_nad: NAD,
+            soft_borrow_enabled: false,
+            hedged_lp_enabled: true,
+            start_time: 0,
+        }
+    }
+
+    fn test_market() -> Market {
+        let base_mint = Pubkey::new_unique();
+        let quote_mint = Pubkey::new_unique();
+        Market::initialize(
+            base_mint,
+            quote_mint,
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            market_side(base_mint),
+            market_side(quote_mint),
+            market_config(),
+            [21_u8; 32],
+            42,
+            250,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn risk_book_refresh_recomputes_stored_market_health() {
+        let mut market = test_market();
+        market.debt_book.fixed_base_debt_shares =
+            DebtBook::debt_to_shares(100_000, market.debt_book.base_borrow_index_nad).unwrap();
+        market
+            .recognition_ledger
+            .debt_bearing_quote_collateral_for_base_debt = 150_000;
+        market.health.effective_base_debt_nad = 1;
+        market.health.base_debt_health_bps = 1;
+
+        market.refresh_risk_book().unwrap();
+
+        assert_eq!(market.health.effective_base_debt_nad, 100_000_000);
+        assert!(market.health.base_debt_health_bps > 1);
     }
 }
