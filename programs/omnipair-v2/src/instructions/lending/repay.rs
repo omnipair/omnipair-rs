@@ -10,11 +10,12 @@ use crate::{
     events::{MarketDebtUpdated, MarketEventMetadata, MarketHealthUpdated},
     shared::token::transfer_from_user_to_vault,
     state::{MarginPosition, Market},
+    transitions::debt::Repay,
 };
 
 use crate::instructions::common::{require_supported_asset_mint, token_program_for_mint};
 
-use super::common::{apply_repay_state, validate_repay_accounts};
+use super::common::validate_repay_accounts;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct MarketRepayArgs {
@@ -114,24 +115,19 @@ impl<'info> MarketRepay<'info> {
             .checked_sub(reserve_balance_before)
             .ok_or(ErrorCode::MarketMathOverflow)?;
         require!(repay_credit > 0, ErrorCode::AmountZero);
-        let debt_delta = -i64::try_from(repay_credit).map_err(|_| ErrorCode::Overflow)?;
 
-        apply_repay_state(
-            &mut ctx.accounts.market,
-            &mut ctx.accounts.margin_position,
-            args.repay_asset_is_asset0,
-            repay_credit,
-        )?;
+        let debt_receipt = Repay::new(args.repay_asset_is_asset0, repay_credit)
+            .apply(&mut ctx.accounts.market, &mut ctx.accounts.margin_position)?;
 
         emit_cpi!(MarketDebtUpdated {
             market: market_key,
             owner: owner_key,
             debt_asset_mint: debt_asset_mint_key,
-            debt_delta,
-            fixed_debt0: ctx.accounts.market.debt_book.fixed_debt0()?,
-            fixed_debt1: ctx.accounts.market.debt_book.fixed_debt1()?,
-            health0_bps: ctx.accounts.market.health.health0_bps,
-            health1_bps: ctx.accounts.market.health.health1_bps,
+            debt_delta: debt_receipt.debt_delta,
+            fixed_debt0: debt_receipt.fixed_debt0,
+            fixed_debt1: debt_receipt.fixed_debt1,
+            health0_bps: debt_receipt.health0_bps,
+            health1_bps: debt_receipt.health1_bps,
             metadata: MarketEventMetadata::new(owner_key, market_key),
         });
         emit_cpi!(MarketHealthUpdated {
