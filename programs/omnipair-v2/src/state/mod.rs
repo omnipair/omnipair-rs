@@ -1,4 +1,5 @@
 pub mod config;
+pub mod health;
 pub mod ledgers;
 pub mod market;
 pub mod positions;
