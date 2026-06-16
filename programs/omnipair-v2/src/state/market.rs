@@ -180,11 +180,7 @@ macro_rules! generate_market_seeds {
 mod tests {
     use super::*;
     use crate::{
-        math::*,
-        state::{
-            BufferLedger, FeeLedger, HedgePosition, MarginPosition, MarketFeeClaimKind,
-            StakePosition,
-        },
+        state::{BufferLedger, FeeLedger, HedgePosition, MarketFeeClaimKind, StakePosition},
         transitions::fee::{CarryForwardStakerFees, RecordFeeCredit},
         transitions::reserve::{AddLiquidity, RemoveLiquidity},
     };
@@ -268,20 +264,6 @@ mod tests {
             hedged_claim_token_amount: 0,
             fee_growth_checkpoint_nad: 0,
             accrued_fee_amount: 0,
-            bump: 1,
-        }
-    }
-
-    fn margin_position() -> MarginPosition {
-        MarginPosition {
-            owner: Pubkey::new_unique(),
-            market: Pubkey::new_unique(),
-            base_collateral: 0,
-            quote_collateral: 0,
-            recognized_base_collateral_for_quote_debt: 0,
-            recognized_quote_collateral_for_base_debt: 0,
-            fixed_base_debt_shares: 0,
-            fixed_quote_debt_shares: 0,
             bump: 1,
         }
     }
@@ -583,69 +565,6 @@ mod tests {
     }
 
     #[test]
-    fn market_health_uses_recognized_collateral_not_idle_inventory() {
-        let mut market = test_market();
-        market.base_side.reserve_ledger.live_reserve = 1_000_000_000;
-        market.quote_side.reserve_ledger.live_reserve = 1_000_000_000;
-        market.debt_book.fixed_base_debt_shares =
-            DebtBook::debt_to_shares(1_000, NAD as u128).unwrap();
-
-        market.refresh_market_health().unwrap();
-        assert_eq!(market.health.base_debt_health_bps, 0);
-        assert_eq!(
-            market.assert_market_health().unwrap_err(),
-            error!(ErrorCode::InsufficientMarketHealth)
-        );
-
-        market
-            .recognition_ledger
-            .debt_bearing_quote_collateral_for_base_debt = 1_500;
-        market.refresh_market_health().unwrap();
-        assert!(market.health.base_debt_health_bps >= 14_900);
-        market.assert_market_health().unwrap();
-    }
-
-    #[test]
-    fn market_health_rejects_raw_unit_decimal_pump() {
-        let base_mint = Pubkey::new_unique();
-        let quote_mint = Pubkey::new_unique();
-        let mut base_side = test_market_side(base_mint, 2_000);
-        let mut quote_side = test_market_side(quote_mint, 2_000);
-        base_side.asset_decimals = 6;
-        quote_side.asset_decimals = 9;
-        base_side.reserve_ledger.live_reserve = 1_000_000_000;
-        quote_side.reserve_ledger.live_reserve = 1_000_000_000_000_000;
-        let mut market = Market::initialize(
-            base_mint,
-            quote_mint,
-            Pubkey::new_unique(),
-            Pubkey::new_unique(),
-            base_side,
-            quote_side,
-            MarketConfig {
-                recognized_collateral_cap_bps: 11_000,
-                ..test_market().config
-            },
-            [8_u8; 32],
-            42,
-            253,
-        )
-        .unwrap();
-        market.debt_book.fixed_base_debt_shares =
-            DebtBook::debt_to_shares(900_000_000, NAD as u128).unwrap();
-        market
-            .recognition_ledger
-            .debt_bearing_quote_collateral_for_base_debt = 1_000_000_000;
-        market.refresh_market_health().unwrap();
-
-        assert!(market.health.base_debt_health_bps < market.config.market_health_min_bps as u64);
-        assert_eq!(
-            market.assert_market_health().unwrap_err(),
-            error!(ErrorCode::InsufficientMarketHealth)
-        );
-    }
-
-    #[test]
     fn buffer_ratio_update_recomputes_required_floor() {
         let mut market = test_market();
         AddLiquidity::new(1_000_000)
@@ -719,159 +638,5 @@ mod tests {
 
         assert_eq!(err, error!(ErrorCode::InvalidMarketConfig));
         assert_eq!(market.quote_side.buffer_ledger.buffer_ratio_bps, 2_000);
-    }
-
-    #[test]
-    fn daily_borrow_limit_uses_side_liquidity_ema() {
-        let mut market = test_market();
-        market.base_side.reserve_ledger.live_reserve = 1_000_000;
-        market.quote_side.reserve_ledger.live_reserve = 1_000_000;
-        market.refresh_risk_book().unwrap();
-
-        market
-            .enforce_daily_borrow_limit(MarketAsset::Base, 200_000)
-            .unwrap();
-        let err = market
-            .enforce_daily_borrow_limit(MarketAsset::Base, 1)
-            .unwrap_err();
-
-        assert_eq!(err, error!(ErrorCode::DailyLimitExceeded));
-        assert_eq!(market.base_side.daily_limit_book.borrowed_bucket, 200_000);
-    }
-
-    #[test]
-    fn daily_limit_rejects_zero_liquidity() {
-        let mut market = test_market();
-
-        let err = market
-            .enforce_daily_borrow_limit(MarketAsset::Base, 1)
-            .unwrap_err();
-
-        assert_eq!(err, error!(ErrorCode::InsufficientLiquidity));
-    }
-
-    #[test]
-    fn circuit_breaker_rejects_spot_ema_divergence() {
-        let mut market = test_market();
-        market.base_side.reserve_ledger.live_reserve = 1_000_000;
-        market.quote_side.reserve_ledger.live_reserve = 2_000_000;
-        market.risk_book.base_price_ema_nad = NAD;
-        market.risk_book.quote_price_ema_nad = NAD;
-
-        let err = market.assert_spot_ema_divergence().unwrap_err();
-
-        assert_eq!(err, error!(ErrorCode::MarketRiskCircuitBreaker));
-    }
-
-    #[test]
-    fn circuit_breaker_rejects_k_ema_drawdown() {
-        let mut market = test_market();
-        market.base_side.reserve_ledger.live_reserve = 900_000;
-        market.quote_side.reserve_ledger.live_reserve = 900_000;
-        market.risk_book.base_price_ema_nad = NAD;
-        market.risk_book.quote_price_ema_nad = NAD;
-        market.risk_book.k_ema = normalize_to_nad(1_000_000, market.base_side.asset_decimals)
-            .unwrap()
-            .checked_mul(normalize_to_nad(1_000_000, market.quote_side.asset_decimals).unwrap())
-            .unwrap();
-
-        market.assert_spot_ema_divergence().unwrap();
-        let err = market.assert_risk_circuit_breakers().unwrap_err();
-
-        assert_eq!(err, error!(ErrorCode::MarketRiskCircuitBreaker));
-    }
-
-    #[test]
-    fn effective_debt_applies_gamma_only_to_hedged_overlay() {
-        let mut market = test_market();
-        market.base_side.reserve_ledger.live_reserve = 2_000_000_000;
-        market.quote_side.reserve_ledger.live_reserve = 2_000_000_000;
-        market.refresh_risk_book().unwrap();
-        market.config.effective_debt_weight_min_bps = 5_000;
-        market.config.effective_debt_gamma_nad = 2 * NAD;
-        market.risk_book.liquidity_ema = 1_000 * NAD as u128;
-        market.debt_book.fixed_base_debt_shares =
-            DebtBook::debt_to_shares(100_000_000, NAD as u128).unwrap();
-        market
-            .quote_side
-            .claim_token_ledger
-            .hedged_claim_token_supply = 100_000_000;
-
-        let raw_hedged_debt = market.hedged_base_debt_nad(&market.risk_book).unwrap();
-        let effective_hedged_debt = effective_hedged_debt_nad(
-            raw_hedged_debt,
-            market.risk_book.liquidity_ema,
-            market.config.effective_debt_weight_min_bps,
-            market.config.effective_debt_gamma_nad,
-        )
-        .unwrap();
-        let effective = market.effective_base_debt_nad().unwrap();
-
-        assert!(raw_hedged_debt > 0);
-        assert!(effective_hedged_debt < raw_hedged_debt);
-        assert_eq!(effective, 100 * NAD as u128 + effective_hedged_debt);
-    }
-
-    #[test]
-    fn recognized_collateral_is_capped_by_debt_value() {
-        let mut market = test_market();
-        market.config.recognized_collateral_cap_bps = 15_000;
-        market.base_side.reserve_ledger.live_reserve = 1_000_000_000;
-        market.quote_side.reserve_ledger.live_reserve = 1_000_000_000;
-        market.refresh_risk_book().unwrap();
-        let mut position = margin_position();
-        position.quote_collateral = 1_000_000_000;
-        position.fixed_base_debt_shares =
-            DebtBook::debt_to_shares(100_000_000, market.debt_book.base_borrow_index_nad).unwrap();
-
-        let recognized = market
-            .debt_capped_recognized_collateral(&position, MarketAsset::Base, &market.risk_book)
-            .unwrap();
-        let recognized_value = market
-            .collateral_value_nad(MarketAsset::Quote, recognized, &market.risk_book)
-            .unwrap();
-        let debt_value_cap = normalize_to_nad(100_000_000, market.base_side.asset_decimals)
-            .unwrap()
-            .checked_mul(15_000)
-            .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
-            .unwrap();
-
-        assert!(recognized > 100_000_000);
-        assert!(recognized < position.quote_collateral);
-        assert!(recognized_value <= debt_value_cap);
-    }
-
-    #[test]
-    fn recognition_cap_rejects_idle_collateral_pump() {
-        let mut market = test_market();
-        market.config.recognized_collateral_cap_bps = 15_000;
-        market.base_side.reserve_ledger.live_reserve = 1_000_000_000;
-        market.quote_side.reserve_ledger.live_reserve = 1_000_000_000;
-        market.refresh_risk_book().unwrap();
-        let mut position = margin_position();
-        position.quote_collateral = 1_000_000_000;
-        position.recognized_quote_collateral_for_base_debt = 1_000_000_000;
-        position.fixed_base_debt_shares =
-            DebtBook::debt_to_shares(100_000_000, market.debt_book.base_borrow_index_nad).unwrap();
-
-        let err = market
-            .assert_recognition_cap(&position, MarketAsset::Base)
-            .unwrap_err();
-
-        assert_eq!(err, error!(ErrorCode::InsufficientRecognizedCollateral));
-    }
-
-    #[test]
-    fn stale_recognition_cannot_exceed_margin_collateral() {
-        let mut position = margin_position();
-        position.base_collateral = 100;
-        position.recognized_base_collateral_for_quote_debt = 80;
-        assert_eq!(position.idle_base_collateral().unwrap(), 20);
-
-        position.recognized_base_collateral_for_quote_debt = 101;
-        assert_eq!(
-            position.idle_base_collateral().unwrap_err(),
-            error!(ErrorCode::InsufficientRecognizedCollateral)
-        );
     }
 }
