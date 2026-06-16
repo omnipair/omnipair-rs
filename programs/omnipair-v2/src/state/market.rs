@@ -112,16 +112,16 @@ impl DailyLimitBook {
 
 impl MarketSide {
     pub fn claim_floor(&self) -> Result<u64> {
-        self.claim_ledger
-            .protected_claim_supply
-            .checked_add(self.buffer_book.required_buffer)
+        self.claim_token_ledger
+            .protected_claim_token_supply
+            .checked_add(self.buffer_ledger.required_buffer)
             .ok_or(ErrorCode::MarketMathOverflow.into())
     }
 
     pub fn free_buffer(&self) -> Result<u64> {
         self.reserve_ledger
             .live_reserve
-            .checked_sub(self.claim_ledger.protected_claim_supply)
+            .checked_sub(self.claim_token_ledger.protected_claim_token_supply)
             .ok_or(ErrorCode::InsufficientMarketClaimCoverage.into())
     }
 
@@ -135,20 +135,23 @@ impl MarketSide {
     }
 
     pub fn required_buffer_for_ratio(&self, buffer_ratio_bps: u16) -> Result<u64> {
-        required_buffer_for_claims(self.claim_ledger.protected_claim_supply, buffer_ratio_bps)
+        required_buffer_for_claims(
+            self.claim_token_ledger.protected_claim_token_supply,
+            buffer_ratio_bps,
+        )
     }
 
     pub fn assert_buffer_floor_for_ratio(&self, buffer_ratio_bps: u16) -> Result<u64> {
         let required_buffer = self.required_buffer_for_ratio(buffer_ratio_bps)?;
         require_gte!(
-            self.buffer_book.buffer_shares,
+            self.buffer_ledger.buffer_share_supply,
             required_buffer,
             ErrorCode::InsufficientBufferShares
         );
         require_gte!(
             self.reserve_ledger.live_reserve,
-            self.claim_ledger
-                .protected_claim_supply
+            self.claim_token_ledger
+                .protected_claim_token_supply
                 .checked_add(required_buffer)
                 .ok_or(ErrorCode::MarketMathOverflow)?,
             ErrorCode::InsufficientMarketClaimCoverage
@@ -157,8 +160,8 @@ impl MarketSide {
     }
 
     pub fn apply_buffer_ratio(&mut self, buffer_ratio_bps: u16, required_buffer: u64) {
-        self.buffer_book.buffer_ratio_bps = buffer_ratio_bps;
-        self.buffer_book.required_buffer = required_buffer;
+        self.buffer_ledger.buffer_ratio_bps = buffer_ratio_bps;
+        self.buffer_ledger.required_buffer = required_buffer;
     }
 }
 
@@ -661,16 +664,16 @@ impl Market {
     }
 
     fn assert_buffer_ratio_change_unlocked(&self, buffer_ratio_bps: u16) -> Result<()> {
-        if buffer_ratio_bps == self.side0.buffer_book.buffer_ratio_bps
-            && buffer_ratio_bps == self.side1.buffer_book.buffer_ratio_bps
+        if buffer_ratio_bps == self.side0.buffer_ledger.buffer_ratio_bps
+            && buffer_ratio_bps == self.side1.buffer_ledger.buffer_ratio_bps
         {
             return Ok(());
         }
         require!(
-            self.side0.claim_ledger.staked_claim_supply == 0
-                && self.side1.claim_ledger.staked_claim_supply == 0
-                && self.side0.buffer_book.staked_buffer_shares == 0
-                && self.side1.buffer_book.staked_buffer_shares == 0
+            self.side0.claim_token_ledger.staked_claim_token_supply == 0
+                && self.side1.claim_token_ledger.staked_claim_token_supply == 0
+                && self.side0.buffer_ledger.staked_buffer_share_amount == 0
+                && self.side1.buffer_ledger.staked_buffer_share_amount == 0
                 && self.side0.fee_ledger.fee_liability == 0
                 && self.side1.fee_ledger.fee_liability == 0,
             ErrorCode::InvalidMarketConfig
@@ -714,13 +717,17 @@ impl Market {
     fn hedged_debt0_nad(&self, risk_book: &RiskBook) -> Result<u128> {
         self.collateral_value_nad(
             false,
-            self.side1.claim_ledger.hedged_claim_supply,
+            self.side1.claim_token_ledger.hedged_claim_token_supply,
             risk_book,
         )
     }
 
     fn hedged_debt1_nad(&self, risk_book: &RiskBook) -> Result<u128> {
-        self.collateral_value_nad(true, self.side0.claim_ledger.hedged_claim_supply, risk_book)
+        self.collateral_value_nad(
+            true,
+            self.side0.claim_token_ledger.hedged_claim_token_supply,
+            risk_book,
+        )
     }
 
     fn collateral_value_nad(
@@ -1274,7 +1281,8 @@ mod tests {
     use super::*;
     use crate::{
         state::{
-            BufferBook, FeeLedger, HedgePosition, MarginPosition, MarketFeeClaimKind, StakePosition,
+            BufferLedger, FeeLedger, HedgePosition, MarginPosition, MarketFeeClaimKind,
+            StakePosition,
         },
         transitions::fee::{CarryForwardStakerFees, RecordFeeCredit},
         transitions::reserve::{AddLiquidity, RemoveLiquidity},
@@ -1284,16 +1292,16 @@ mod tests {
         MarketSide {
             asset_mint,
             asset_decimals: 6,
-            claim_mint: Pubkey::new_unique(),
-            hedge_mint: Pubkey::new_unique(),
+            claim_token_mint: Pubkey::new_unique(),
+            hedge_token_mint: Pubkey::new_unique(),
             hedge_vault: Pubkey::new_unique(),
             reserve_vault: Pubkey::new_unique(),
             collateral_vault: Pubkey::new_unique(),
             fee_vault: Pubkey::new_unique(),
             stake_vault: Pubkey::new_unique(),
-            buffer_book: BufferBook {
+            buffer_ledger: BufferLedger {
                 buffer_ratio_bps,
-                ..BufferBook::default()
+                ..BufferLedger::default()
             },
             ..MarketSide::default()
         }
@@ -1341,9 +1349,9 @@ mod tests {
             owner: Pubkey::new_unique(),
             market: Pubkey::new_unique(),
             asset_mint: Pubkey::new_unique(),
-            available_buffer_shares: 0,
-            staked_claim_amount: 0,
-            staked_buffer_shares: 0,
+            available_buffer_share_amount: 0,
+            staked_claim_token_amount: 0,
+            staked_buffer_share_amount: 0,
             fee_growth_checkpoint_nad: 0,
             accrued_fee_amount: 0,
             bump: 1,
@@ -1355,7 +1363,7 @@ mod tests {
             owner: Pubkey::new_unique(),
             market: Pubkey::new_unique(),
             asset_mint: Pubkey::new_unique(),
-            hedged_claim_amount: 0,
+            hedged_claim_token_amount: 0,
             fee_growth_checkpoint_nad: 0,
             accrued_fee_amount: 0,
             bump: 1,
@@ -1494,9 +1502,12 @@ mod tests {
         assert_eq!(receipt.buffer_amount, 200_000);
         assert_eq!(market_side.reserve_ledger.live_reserve, 1_000_000);
         assert_eq!(market_side.reserve_ledger.cash_reserve, 1_000_000);
-        assert_eq!(market_side.claim_ledger.protected_claim_supply, 800_000);
-        assert_eq!(market_side.buffer_book.buffer_shares, 200_000);
-        assert_eq!(market_side.buffer_book.required_buffer, 200_000);
+        assert_eq!(
+            market_side.claim_token_ledger.protected_claim_token_supply,
+            800_000
+        );
+        assert_eq!(market_side.buffer_ledger.buffer_share_supply, 200_000);
+        assert_eq!(market_side.buffer_ledger.required_buffer, 200_000);
         assert_eq!(market_side.claim_floor().unwrap(), 1_000_000);
         market_side.assert_claim_coverage().unwrap();
     }
@@ -1517,8 +1528,11 @@ mod tests {
 
         assert_eq!(market_side.reserve_ledger.live_reserve, 900_000);
         assert_eq!(market_side.reserve_ledger.cash_reserve, 900_000);
-        assert_eq!(market_side.claim_ledger.protected_claim_supply, 700_000);
-        assert_eq!(market_side.buffer_book.required_buffer, 175_000);
+        assert_eq!(
+            market_side.claim_token_ledger.protected_claim_token_supply,
+            700_000
+        );
+        assert_eq!(market_side.buffer_ledger.required_buffer, 175_000);
         assert_eq!(market_side.fee_ledger.fee_vault_balance, 10_000);
         assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 10_000);
         market_side.assert_claim_coverage().unwrap();
@@ -1527,8 +1541,8 @@ mod tests {
     #[test]
     fn fee_ledger_allocates_only_to_matched_stake() {
         let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
-        market_side.claim_ledger.staked_claim_supply = 800_000;
-        market_side.buffer_book.staked_buffer_shares = 100_000;
+        market_side.claim_token_ledger.staked_claim_token_supply = 800_000;
+        market_side.buffer_ledger.staked_buffer_share_amount = 100_000;
 
         RecordFeeCredit::new(1_000, 1_000, NAD)
             .apply(&mut market_side)
@@ -1547,10 +1561,10 @@ mod tests {
     fn fee_ledger_routes_pressure_share_to_hedged_liability() {
         let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
         market_side.reserve_ledger.live_reserve = 1_000_000;
-        market_side.claim_ledger.protected_claim_supply = 800_000;
-        market_side.claim_ledger.hedged_claim_supply = 200_000;
-        market_side.claim_ledger.staked_claim_supply = 800_000;
-        market_side.buffer_book.staked_buffer_shares = 200_000;
+        market_side.claim_token_ledger.protected_claim_token_supply = 800_000;
+        market_side.claim_token_ledger.hedged_claim_token_supply = 200_000;
+        market_side.claim_token_ledger.staked_claim_token_supply = 800_000;
+        market_side.buffer_ledger.staked_buffer_share_amount = 200_000;
 
         RecordFeeCredit::new(1_000, 0, NAD)
             .apply(&mut market_side)
@@ -1570,7 +1584,7 @@ mod tests {
     #[test]
     fn unstaked_claims_do_not_receive_fee_growth() {
         let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
-        market_side.claim_ledger.protected_claim_supply = 800_000;
+        market_side.claim_token_ledger.protected_claim_token_supply = 800_000;
 
         RecordFeeCredit::new(1_000, 0, NAD)
             .apply(&mut market_side)
@@ -1593,8 +1607,8 @@ mod tests {
         assert_eq!(market_side.fee_ledger.fee_liability, 0);
         assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 1_000);
 
-        market_side.claim_ledger.staked_claim_supply = 800_000;
-        market_side.buffer_book.staked_buffer_shares = 200_000;
+        market_side.claim_token_ledger.staked_claim_token_supply = 800_000;
+        market_side.buffer_ledger.staked_buffer_share_amount = 200_000;
         CarryForwardStakerFees.apply(&mut market_side).unwrap();
 
         assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 1_000_000);
@@ -1606,8 +1620,8 @@ mod tests {
     #[test]
     fn unallocated_fee_rounding_dust_stays_carried_forward() {
         let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
-        market_side.claim_ledger.staked_claim_supply = 1_600_000_000;
-        market_side.buffer_book.staked_buffer_shares = 400_000_000;
+        market_side.claim_token_ledger.staked_claim_token_supply = 1_600_000_000;
+        market_side.buffer_ledger.staked_buffer_share_amount = 400_000_000;
 
         RecordFeeCredit::new(1, 0, NAD)
             .apply(&mut market_side)
@@ -1648,7 +1662,7 @@ mod tests {
     #[test]
     fn stake_position_accrues_checkpointed_non_compounding_fees() {
         let mut position = stake_position();
-        position.credit_buffer_shares(200_000).unwrap();
+        position.credit_buffer_share_amount(200_000).unwrap();
         position.stake(800_000, 200_000).unwrap();
         position.fee_growth_checkpoint_nad = NAD as u128;
 
@@ -1665,26 +1679,32 @@ mod tests {
         let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
         let mut position = hedge_position();
 
-        market_side.claim_ledger.hedged_claim_supply = market_side
-            .claim_ledger
-            .hedged_claim_supply
+        market_side.claim_token_ledger.hedged_claim_token_supply = market_side
+            .claim_token_ledger
+            .hedged_claim_token_supply
             .checked_add(500_000)
             .unwrap();
         position.increase(500_000).unwrap();
 
-        assert_eq!(position.hedged_claim_amount, 500_000);
-        assert_eq!(market_side.claim_ledger.hedged_claim_supply, 500_000);
-        assert_eq!(market_side.claim_ledger.staked_claim_supply, 0);
-        assert_eq!(market_side.buffer_book.staked_buffer_shares, 0);
+        assert_eq!(position.hedged_claim_token_amount, 500_000);
+        assert_eq!(
+            market_side.claim_token_ledger.hedged_claim_token_supply,
+            500_000
+        );
+        assert_eq!(market_side.claim_token_ledger.staked_claim_token_supply, 0);
+        assert_eq!(market_side.buffer_ledger.staked_buffer_share_amount, 0);
 
         position.decrease(125_000).unwrap();
-        market_side.claim_ledger.hedged_claim_supply = market_side
-            .claim_ledger
-            .hedged_claim_supply
+        market_side.claim_token_ledger.hedged_claim_token_supply = market_side
+            .claim_token_ledger
+            .hedged_claim_token_supply
             .checked_sub(125_000)
             .unwrap();
-        assert_eq!(position.hedged_claim_amount, 375_000);
-        assert_eq!(market_side.claim_ledger.hedged_claim_supply, 375_000);
+        assert_eq!(position.hedged_claim_token_amount, 375_000);
+        assert_eq!(
+            market_side.claim_token_ledger.hedged_claim_token_supply,
+            375_000
+        );
     }
 
     #[test]
@@ -1768,16 +1788,16 @@ mod tests {
         AddLiquidity::new(2_000_000)
             .apply(&mut market.side1)
             .unwrap();
-        market.side0.buffer_book.buffer_shares += 100_000;
+        market.side0.buffer_ledger.buffer_share_supply += 100_000;
         market.side0.reserve_ledger.live_reserve += 100_000;
-        market.side1.buffer_book.buffer_shares += 200_000;
+        market.side1.buffer_ledger.buffer_share_supply += 200_000;
         market.side1.reserve_ledger.live_reserve += 200_000;
 
         market.apply_buffer_ratio_update(2_500).unwrap();
 
-        assert_eq!(market.side0.buffer_book.buffer_ratio_bps, 2_500);
-        assert_eq!(market.side0.buffer_book.required_buffer, 266_667);
-        assert_eq!(market.side1.buffer_book.required_buffer, 533_334);
+        assert_eq!(market.side0.buffer_ledger.buffer_ratio_bps, 2_500);
+        assert_eq!(market.side0.buffer_ledger.required_buffer, 266_667);
+        assert_eq!(market.side1.buffer_ledger.required_buffer, 533_334);
     }
 
     #[test]
@@ -1793,8 +1813,8 @@ mod tests {
         let err = market.apply_buffer_ratio_update(2_500).unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::InsufficientBufferShares));
-        assert_eq!(market.side0.buffer_book.buffer_ratio_bps, 2_000);
-        assert_eq!(market.side0.buffer_book.required_buffer, 200_000);
+        assert_eq!(market.side0.buffer_ledger.buffer_ratio_bps, 2_000);
+        assert_eq!(market.side0.buffer_ledger.required_buffer, 200_000);
     }
 
     #[test]
@@ -1806,13 +1826,13 @@ mod tests {
         AddLiquidity::new(1_000_000)
             .apply(&mut market.side1)
             .unwrap();
-        market.side0.claim_ledger.staked_claim_supply = 800_000;
-        market.side0.buffer_book.staked_buffer_shares = 200_000;
+        market.side0.claim_token_ledger.staked_claim_token_supply = 800_000;
+        market.side0.buffer_ledger.staked_buffer_share_amount = 200_000;
 
         let err = market.apply_buffer_ratio_update(1_500).unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::InvalidMarketConfig));
-        assert_eq!(market.side0.buffer_book.buffer_ratio_bps, 2_000);
+        assert_eq!(market.side0.buffer_ledger.buffer_ratio_bps, 2_000);
     }
 
     #[test]
@@ -1829,7 +1849,7 @@ mod tests {
         let err = market.apply_buffer_ratio_update(1_500).unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::InvalidMarketConfig));
-        assert_eq!(market.side1.buffer_book.buffer_ratio_bps, 2_000);
+        assert_eq!(market.side1.buffer_ledger.buffer_ratio_bps, 2_000);
     }
 
     #[test]
@@ -1963,7 +1983,7 @@ mod tests {
         market.risk_book.liquidity_ema = 1_000 * NAD as u128;
         market.debt_book.fixed_debt0_shares =
             DebtBook::debt_to_shares(100_000_000, NAD as u128).unwrap();
-        market.side1.claim_ledger.hedged_claim_supply = 100_000_000;
+        market.side1.claim_token_ledger.hedged_claim_token_supply = 100_000_000;
 
         let raw_hedged_debt = market.hedged_debt0_nad(&market.risk_book).unwrap();
         let effective_hedged_debt = effective_hedged_debt_nad(

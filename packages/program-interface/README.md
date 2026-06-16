@@ -143,10 +143,10 @@ All TypeScript types generated from the IDL:
 - `deriveMarketReserveVaultAddress(market, reserveMint)` - Derive a V2 market reserve vault PDA
 - `deriveMarketCollateralVaultAddress(market, collateralMint)` - Derive a V2 market collateral vault PDA
 - `deriveMarketFeeVaultAddress(market, feeMint)` - Derive a V2 market fee vault PDA
-- `deriveMarketStakeVaultAddress(market, claimMint)` - Derive a V2 market stake vault PDA
+- `deriveMarketStakeVaultAddress(market, claimTokenMint)` - Derive a V2 market stake vault PDA
 - `deriveStakePositionAddress(market, owner, assetMint)` - Derive a V2 stake position PDA
 - `deriveMarginPositionAddress(market, owner)` - Derive a V2 borrower margin position PDA
-- `deriveHedgeVaultAddress(market, claimMint)` - Derive a V2 hedged-claim escrow PDA
+- `deriveHedgeVaultAddress(market, claimTokenMint)` - Derive a V2 hedged-claim escrow PDA
 - `deriveHedgePositionAddress(market, owner, assetMint)` - Derive a V2 hedge position PDA
 - `deriveInsuranceReserveAddress(market, assetMint)` - Derive a V2 insurance reserve vault PDA
 

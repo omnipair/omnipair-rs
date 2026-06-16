@@ -15,14 +15,14 @@ use crate::{
 };
 
 use crate::instructions::common::{
-    require_fee_free_claim_mint, token_program_for_mint, validate_stake_accounts,
+    require_fee_free_claim_token_mint, token_program_for_mint, validate_stake_accounts,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct StakeArgs {
     pub market_side_index: u8,
     pub claim_amount: u64,
-    pub buffer_shares: u64,
+    pub buffer_share_amount: u64,
     pub min_active_stake_units: u64,
 }
 
@@ -47,7 +47,7 @@ pub struct Stake<'info> {
 
     pub asset_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    pub claim_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub claim_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
     pub stake_vault: Box<InterfaceAccount<'info, TokenAccount>>,
@@ -75,7 +75,7 @@ impl<'info> Stake<'info> {
     pub fn validate(&self, args: &StakeArgs) -> Result<()> {
         self.market.assert_live()?;
         require!(
-            args.claim_amount > 0 && args.buffer_shares > 0,
+            args.claim_amount > 0 && args.buffer_share_amount > 0,
             ErrorCode::AmountZero
         );
         require_gte!(
@@ -88,11 +88,11 @@ impl<'info> Stake<'info> {
             args.market_side_index,
             self.owner.key(),
             &self.asset_mint,
-            &self.claim_mint,
+            &self.claim_token_mint,
             &self.stake_vault,
             &self.owner_claim_account,
         )?;
-        require_fee_free_claim_mint(&self.claim_mint)?;
+        require_fee_free_claim_token_mint(&self.claim_token_mint)?;
         self.stake_position.assert_position(
             self.owner.key(),
             self.market.key(),
@@ -101,20 +101,20 @@ impl<'info> Stake<'info> {
 
         let market_side = self.market.side(args.market_side_index)?;
         require_gte!(
-            self.stake_position.available_buffer_shares,
-            args.buffer_shares,
+            self.stake_position.available_buffer_share_amount,
+            args.buffer_share_amount,
             ErrorCode::InsufficientBufferShares
         );
         let next_active_units = active_stake_units(
             self.stake_position
-                .staked_claim_amount
+                .staked_claim_token_amount
                 .checked_add(args.claim_amount)
                 .ok_or(ErrorCode::MarketMathOverflow)?,
             self.stake_position
-                .staked_buffer_shares
-                .checked_add(args.buffer_shares)
+                .staked_buffer_share_amount
+                .checked_add(args.buffer_share_amount)
                 .ok_or(ErrorCode::MarketMathOverflow)?,
-            market_side.buffer_book.buffer_ratio_bps,
+            market_side.buffer_ledger.buffer_ratio_bps,
         )?;
         require_gte!(
             next_active_units,
@@ -130,7 +130,7 @@ impl<'info> Stake<'info> {
         let asset_mint_key = ctx.accounts.asset_mint.key();
 
         let claim_token_program = token_program_for_mint(
-            &ctx.accounts.claim_mint,
+            &ctx.accounts.claim_token_mint,
             &ctx.accounts.token_program,
             &ctx.accounts.token_2022_program,
         )?;
@@ -138,40 +138,45 @@ impl<'info> Stake<'info> {
             ctx.accounts.owner.to_account_info(),
             ctx.accounts.owner_claim_account.to_account_info(),
             ctx.accounts.stake_vault.to_account_info(),
-            ctx.accounts.claim_mint.to_account_info(),
+            ctx.accounts.claim_token_mint.to_account_info(),
             claim_token_program,
             args.claim_amount,
-            ctx.accounts.claim_mint.decimals,
+            ctx.accounts.claim_token_mint.decimals,
         )?;
 
-        let (active_units, accrued_fee_amount, staked_claim_amount, staked_buffer_shares) = {
+        let (
+            active_units,
+            accrued_fee_amount,
+            staked_claim_token_amount,
+            staked_buffer_share_amount,
+        ) = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
             CarryForwardStakerFees.apply(market_side)?;
             ctx.accounts.stake_position.accrue_fees(
                 market_side.fee_ledger.fee_growth_index_nad,
-                market_side.buffer_book.buffer_ratio_bps,
+                market_side.buffer_ledger.buffer_ratio_bps,
             )?;
             ctx.accounts
                 .stake_position
-                .stake(args.claim_amount, args.buffer_shares)?;
-            market_side.claim_ledger.staked_claim_supply = market_side
-                .claim_ledger
-                .staked_claim_supply
+                .stake(args.claim_amount, args.buffer_share_amount)?;
+            market_side.claim_token_ledger.staked_claim_token_supply = market_side
+                .claim_token_ledger
+                .staked_claim_token_supply
                 .checked_add(args.claim_amount)
                 .ok_or(ErrorCode::MarketMathOverflow)?;
-            market_side.buffer_book.staked_buffer_shares = market_side
-                .buffer_book
-                .staked_buffer_shares
-                .checked_add(args.buffer_shares)
+            market_side.buffer_ledger.staked_buffer_share_amount = market_side
+                .buffer_ledger
+                .staked_buffer_share_amount
+                .checked_add(args.buffer_share_amount)
                 .ok_or(ErrorCode::MarketMathOverflow)?;
             CarryForwardStakerFees.apply(market_side)?;
             (
                 ctx.accounts
                     .stake_position
-                    .active_stake_units(market_side.buffer_book.buffer_ratio_bps)?,
+                    .active_stake_units(market_side.buffer_ledger.buffer_ratio_bps)?,
                 ctx.accounts.stake_position.accrued_fee_amount,
-                ctx.accounts.stake_position.staked_claim_amount,
-                ctx.accounts.stake_position.staked_buffer_shares,
+                ctx.accounts.stake_position.staked_claim_token_amount,
+                ctx.accounts.stake_position.staked_buffer_share_amount,
             )
         };
 
@@ -179,8 +184,8 @@ impl<'info> Stake<'info> {
             market: market_key,
             owner: owner_key,
             asset_mint: asset_mint_key,
-            staked_claim_amount,
-            staked_buffer_shares,
+            staked_claim_token_amount,
+            staked_buffer_share_amount,
             active_stake_units: active_units,
             accrued_fee_amount,
             metadata: MarketEventMetadata::new(owner_key, market_key),

@@ -45,10 +45,10 @@ pub struct CloseHedge<'info> {
 
     pub asset_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    pub claim_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub claim_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub hedge_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub hedge_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
     pub hedge_vault: Box<InterfaceAccount<'info, TokenAccount>>,
@@ -89,8 +89,8 @@ impl<'info> CloseHedge<'info> {
             args.market_side_index,
             self.owner.key(),
             &self.asset_mint,
-            &self.claim_mint,
-            &self.hedge_mint,
+            &self.claim_token_mint,
+            &self.hedge_token_mint,
             &self.hedge_vault,
             &self.owner_claim_account,
             &self.owner_hedge_account,
@@ -101,7 +101,7 @@ impl<'info> CloseHedge<'info> {
             self.asset_mint.key(),
         )?;
         require_gte!(
-            self.hedge_position.hedged_claim_amount,
+            self.hedge_position.hedged_claim_token_amount,
             args.hedge_amount,
             ErrorCode::InvalidHedgePosition
         );
@@ -126,33 +126,33 @@ impl<'info> CloseHedge<'info> {
             .accrue_fees(hedged_fee_growth_index_nad)?;
 
         let hedge_token_program = token_program_for_mint(
-            &ctx.accounts.hedge_mint,
+            &ctx.accounts.hedge_token_mint,
             &ctx.accounts.token_program,
             &ctx.accounts.token_2022_program,
         )?;
         token_burn(
             ctx.accounts.owner.to_account_info(),
             hedge_token_program,
-            ctx.accounts.hedge_mint.to_account_info(),
+            ctx.accounts.hedge_token_mint.to_account_info(),
             ctx.accounts.owner_hedge_account.to_account_info(),
             args.hedge_amount,
             &[],
         )?;
 
-        let hedged_claim_supply = {
+        let hedged_claim_token_supply = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
-            market_side.claim_ledger.hedged_claim_supply = market_side
-                .claim_ledger
-                .hedged_claim_supply
+            market_side.claim_token_ledger.hedged_claim_token_supply = market_side
+                .claim_token_ledger
+                .hedged_claim_token_supply
                 .checked_sub(args.hedge_amount)
                 .ok_or(ErrorCode::MarketMathOverflow)?;
-            market_side.claim_ledger.hedged_claim_supply
+            market_side.claim_token_ledger.hedged_claim_token_supply
         };
         ctx.accounts.hedge_position.decrease(args.hedge_amount)?;
         ctx.accounts.market.refresh_market_health()?;
 
         let claim_token_program = token_program_for_mint(
-            &ctx.accounts.claim_mint,
+            &ctx.accounts.claim_token_mint,
             &ctx.accounts.token_program,
             &ctx.accounts.token_2022_program,
         )?;
@@ -161,10 +161,10 @@ impl<'info> CloseHedge<'info> {
             ctx.accounts.market.to_account_info(),
             ctx.accounts.hedge_vault.to_account_info(),
             ctx.accounts.owner_claim_account.to_account_info(),
-            ctx.accounts.claim_mint.to_account_info(),
+            ctx.accounts.claim_token_mint.to_account_info(),
             claim_token_program,
             args.hedge_amount,
-            ctx.accounts.claim_mint.decimals,
+            ctx.accounts.claim_token_mint.decimals,
             &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
         ctx.accounts.owner_claim_account.reload()?;
@@ -184,7 +184,7 @@ impl<'info> CloseHedge<'info> {
             asset_mint: asset_mint_key,
             hedge_amount: args.hedge_amount,
             claim_amount: args.hedge_amount,
-            hedged_claim_supply,
+            hedged_claim_token_supply,
             metadata: MarketEventMetadata::new(owner_key, market_key),
         });
 

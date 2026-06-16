@@ -394,8 +394,8 @@ fn require_borrow_headroom(debt_side: &MarketSide, borrow_amount: u64) -> Result
         .ok_or(ErrorCode::ReserveUnderflow)?;
     require_market_reserve_floor(
         next_reserve,
-        debt_side.claim_ledger.protected_claim_supply,
-        debt_side.buffer_book.required_buffer,
+        debt_side.claim_token_ledger.protected_claim_token_supply,
+        debt_side.buffer_ledger.required_buffer,
     )
 }
 

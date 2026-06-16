@@ -94,9 +94,9 @@ impl RecordFeeCredit {
         record_hedged_fee_credit(market_side, routed_fee)?;
 
         let active_units = active_stake_units(
-            market_side.claim_ledger.staked_claim_supply,
-            market_side.buffer_book.staked_buffer_shares,
-            market_side.buffer_book.buffer_ratio_bps,
+            market_side.claim_token_ledger.staked_claim_token_supply,
+            market_side.buffer_ledger.staked_buffer_share_amount,
+            market_side.buffer_ledger.buffer_ratio_bps,
         )?;
         if free_lp_fee > 0 {
             market_side.fee_ledger.unallocated_fee_liability = market_side
@@ -115,9 +115,9 @@ impl RecordFeeCredit {
 impl CarryForwardStakerFees {
     pub fn apply(self, market_side: &mut MarketSide) -> Result<FeeLedgerReceipt> {
         let active_units = active_stake_units(
-            market_side.claim_ledger.staked_claim_supply,
-            market_side.buffer_book.staked_buffer_shares,
-            market_side.buffer_book.buffer_ratio_bps,
+            market_side.claim_token_ledger.staked_claim_token_supply,
+            market_side.buffer_ledger.staked_buffer_share_amount,
+            market_side.buffer_ledger.buffer_ratio_bps,
         )?;
         carry_forward_unallocated_fee_with_units(market_side, active_units)?;
         Ok(FeeLedgerReceipt::from_side(market_side))
@@ -128,7 +128,7 @@ impl CarryForwardHedgedFees {
     pub fn apply(self, market_side: &mut MarketSide) -> Result<FeeLedgerReceipt> {
         carry_forward_unallocated_hedged_fee_with_supply(
             market_side,
-            market_side.claim_ledger.hedged_claim_supply,
+            market_side.claim_token_ledger.hedged_claim_token_supply,
         )?;
         Ok(FeeLedgerReceipt::from_side(market_side))
     }
@@ -186,15 +186,17 @@ fn record_hedged_fee_credit(market_side: &mut MarketSide, fee_amount: u64) -> Re
         .ok_or(ErrorCode::MarketMathOverflow)?;
     carry_forward_unallocated_hedged_fee_with_supply(
         market_side,
-        market_side.claim_ledger.hedged_claim_supply,
+        market_side.claim_token_ledger.hedged_claim_token_supply,
     )
 }
 
 fn carry_forward_unallocated_hedged_fee_with_supply(
     market_side: &mut MarketSide,
-    hedged_claim_supply: u64,
+    hedged_claim_token_supply: u64,
 ) -> Result<()> {
-    if hedged_claim_supply == 0 || market_side.fee_ledger.unallocated_hedged_fee_liability == 0 {
+    if hedged_claim_token_supply == 0
+        || market_side.fee_ledger.unallocated_hedged_fee_liability == 0
+    {
         return Ok(());
     }
 
@@ -202,10 +204,10 @@ fn carry_forward_unallocated_hedged_fee_with_supply(
     market_side.fee_ledger.unallocated_hedged_fee_liability = 0;
     let index_delta = (fee_amount as u128)
         .checked_mul(NAD as u128)
-        .and_then(|value| value.checked_div(hedged_claim_supply as u128))
+        .and_then(|value| value.checked_div(hedged_claim_token_supply as u128))
         .ok_or(ErrorCode::MarketMathOverflow)?;
     let allocated_fee = index_delta
-        .checked_mul(hedged_claim_supply as u128)
+        .checked_mul(hedged_claim_token_supply as u128)
         .and_then(|value| value.checked_div(NAD as u128))
         .ok_or(ErrorCode::MarketMathOverflow)?;
     let allocated_fee = u64::try_from(allocated_fee).map_err(|_| ErrorCode::MarketMathOverflow)?;
@@ -236,14 +238,14 @@ fn routed_lp_fee(
     lp_fee: u64,
     fee_routing_k_nad: u64,
 ) -> Result<(u64, u64)> {
-    if lp_fee == 0 || market_side.claim_ledger.hedged_claim_supply == 0 {
+    if lp_fee == 0 || market_side.claim_token_ledger.hedged_claim_token_supply == 0 {
         return Ok((lp_fee, 0));
     }
     let free_buffer = market_side.free_buffer()?;
     if free_buffer == 0 {
         return Ok((lp_fee, 0));
     }
-    let eta_nad = (market_side.claim_ledger.hedged_claim_supply as u128)
+    let eta_nad = (market_side.claim_token_ledger.hedged_claim_token_supply as u128)
         .checked_mul(NAD as u128)
         .and_then(|value| value.checked_div(free_buffer as u128))
         .ok_or(ErrorCode::MarketMathOverflow)?;

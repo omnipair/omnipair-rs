@@ -48,17 +48,17 @@ pub struct InitializeMarket<'info> {
     )]
     pub market: Box<Account<'info, Market>>,
 
-    pub claim0_mint: Box<InterfaceAccount<'info, Mint>>,
-    pub claim1_mint: Box<InterfaceAccount<'info, Mint>>,
-    pub hedge0_mint: Box<InterfaceAccount<'info, Mint>>,
-    pub hedge1_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub claim0_token_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub claim1_token_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub hedge0_token_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub hedge1_token_mint: Box<InterfaceAccount<'info, Mint>>,
     /// CHECK: Canonical base claim escrow PDA for h-omLP asset0 wrappers.
     #[account(
         mut,
         seeds = [
             HEDGE_VAULT_SEED_PREFIX,
             market.key().as_ref(),
-            claim0_mint.key().as_ref(),
+            claim0_token_mint.key().as_ref(),
         ],
         bump
     )]
@@ -69,7 +69,7 @@ pub struct InitializeMarket<'info> {
         seeds = [
             HEDGE_VAULT_SEED_PREFIX,
             market.key().as_ref(),
-            claim1_mint.key().as_ref(),
+            claim1_token_mint.key().as_ref(),
         ],
         bump
     )]
@@ -168,7 +168,7 @@ pub struct InitializeMarket<'info> {
         seeds = [
             MARKET_STAKE_VAULT_SEED_PREFIX,
             market.key().as_ref(),
-            claim0_mint.key().as_ref(),
+            claim0_token_mint.key().as_ref(),
         ],
         bump
     )]
@@ -179,7 +179,7 @@ pub struct InitializeMarket<'info> {
         seeds = [
             MARKET_STAKE_VAULT_SEED_PREFIX,
             market.key().as_ref(),
-            claim1_mint.key().as_ref(),
+            claim1_token_mint.key().as_ref(),
         ],
         bump
     )]
@@ -210,10 +210,10 @@ impl<'info> InitializeMarket<'info> {
         require_supported_asset_mint(&self.asset0_mint)?;
         require_supported_asset_mint(&self.asset1_mint)?;
         let market = self.market.key();
-        validate_claim_token_mint(&self.claim0_mint, market, self.asset0_mint.decimals)?;
-        validate_claim_token_mint(&self.claim1_mint, market, self.asset1_mint.decimals)?;
-        validate_hedge_token_mint(&self.hedge0_mint, market, self.asset0_mint.decimals)?;
-        validate_hedge_token_mint(&self.hedge1_mint, market, self.asset1_mint.decimals)?;
+        validate_claim_token_mint(&self.claim0_token_mint, market, self.asset0_mint.decimals)?;
+        validate_claim_token_mint(&self.claim1_token_mint, market, self.asset1_mint.decimals)?;
+        validate_hedge_token_mint(&self.hedge0_token_mint, market, self.asset0_mint.decimals)?;
+        validate_hedge_token_mint(&self.hedge1_token_mint, market, self.asset1_mint.decimals)?;
         args.config.validate()
     }
 
@@ -232,32 +232,32 @@ impl<'info> InitializeMarket<'info> {
         market.side0 = MarketSide {
             asset_mint: ctx.accounts.asset0_mint.key(),
             asset_decimals: ctx.accounts.asset0_mint.decimals,
-            claim_mint: ctx.accounts.claim0_mint.key(),
-            hedge_mint: ctx.accounts.hedge0_mint.key(),
+            claim_token_mint: ctx.accounts.claim0_token_mint.key(),
+            hedge_token_mint: ctx.accounts.hedge0_token_mint.key(),
             hedge_vault: ctx.accounts.hedge0_vault.key(),
             reserve_vault: ctx.accounts.reserve0_vault.key(),
             collateral_vault: ctx.accounts.collateral0_vault.key(),
             fee_vault: ctx.accounts.fee0_vault.key(),
             stake_vault: ctx.accounts.claim0_stake_vault.key(),
-            buffer_book: crate::state::BufferBook {
+            buffer_ledger: crate::state::BufferLedger {
                 buffer_ratio_bps: args.config.buffer_ratio_bps,
-                ..crate::state::BufferBook::default()
+                ..crate::state::BufferLedger::default()
             },
             ..MarketSide::default()
         };
         market.side1 = MarketSide {
             asset_mint: ctx.accounts.asset1_mint.key(),
             asset_decimals: ctx.accounts.asset1_mint.decimals,
-            claim_mint: ctx.accounts.claim1_mint.key(),
-            hedge_mint: ctx.accounts.hedge1_mint.key(),
+            claim_token_mint: ctx.accounts.claim1_token_mint.key(),
+            hedge_token_mint: ctx.accounts.hedge1_token_mint.key(),
             hedge_vault: ctx.accounts.hedge1_vault.key(),
             reserve_vault: ctx.accounts.reserve1_vault.key(),
             collateral_vault: ctx.accounts.collateral1_vault.key(),
             fee_vault: ctx.accounts.fee1_vault.key(),
             stake_vault: ctx.accounts.claim1_stake_vault.key(),
-            buffer_book: crate::state::BufferBook {
+            buffer_ledger: crate::state::BufferLedger {
                 buffer_ratio_bps: args.config.buffer_ratio_bps,
-                ..crate::state::BufferBook::default()
+                ..crate::state::BufferLedger::default()
             },
             ..MarketSide::default()
         };
@@ -287,16 +287,16 @@ impl<'info> InitializeMarket<'info> {
             market: market_key,
             asset0_mint: ctx.accounts.asset0_mint.key(),
             asset1_mint: ctx.accounts.asset1_mint.key(),
-            claim0_mint: ctx.accounts.claim0_mint.key(),
-            claim1_mint: ctx.accounts.claim1_mint.key(),
+            claim0_token_mint: ctx.accounts.claim0_token_mint.key(),
+            claim1_token_mint: ctx.accounts.claim1_token_mint.key(),
             claim0_stake_vault: ctx.accounts.claim0_stake_vault.key(),
             claim1_stake_vault: ctx.accounts.claim1_stake_vault.key(),
             collateral0_vault: ctx.accounts.collateral0_vault.key(),
             collateral1_vault: ctx.accounts.collateral1_vault.key(),
             insurance0_vault: ctx.accounts.insurance0_vault.key(),
             insurance1_vault: ctx.accounts.insurance1_vault.key(),
-            hedge0_mint: ctx.accounts.hedge0_mint.key(),
-            hedge1_mint: ctx.accounts.hedge1_mint.key(),
+            hedge0_token_mint: ctx.accounts.hedge0_token_mint.key(),
+            hedge1_token_mint: ctx.accounts.hedge1_token_mint.key(),
             hedge0_vault: ctx.accounts.hedge0_vault.key(),
             hedge1_vault: ctx.accounts.hedge1_vault.key(),
             operator: args.operator,
@@ -323,12 +323,12 @@ impl<'info> InitializeMarket<'info> {
             &ctx.accounts.token_2022_program,
         )?;
         let claim0_token_program = token_program_for_mint(
-            &ctx.accounts.claim0_mint,
+            &ctx.accounts.claim0_token_mint,
             &ctx.accounts.token_program,
             &ctx.accounts.token_2022_program,
         )?;
         let claim1_token_program = token_program_for_mint(
-            &ctx.accounts.claim1_mint,
+            &ctx.accounts.claim1_token_mint,
             &ctx.accounts.token_program,
             &ctx.accounts.token_2022_program,
         )?;
@@ -417,7 +417,7 @@ impl<'info> InitializeMarket<'info> {
             &ctx.accounts.market,
             &ctx.accounts.payer,
             &ctx.accounts.hedge0_vault,
-            &ctx.accounts.claim0_mint,
+            &ctx.accounts.claim0_token_mint,
             &ctx.accounts.system_program,
             &claim0_token_program,
             HEDGE_VAULT_SEED_PREFIX,
@@ -427,7 +427,7 @@ impl<'info> InitializeMarket<'info> {
             &ctx.accounts.market,
             &ctx.accounts.payer,
             &ctx.accounts.hedge1_vault,
-            &ctx.accounts.claim1_mint,
+            &ctx.accounts.claim1_token_mint,
             &ctx.accounts.system_program,
             &claim1_token_program,
             HEDGE_VAULT_SEED_PREFIX,
@@ -437,7 +437,7 @@ impl<'info> InitializeMarket<'info> {
             &ctx.accounts.market,
             &ctx.accounts.payer,
             &ctx.accounts.claim0_stake_vault,
-            &ctx.accounts.claim0_mint,
+            &ctx.accounts.claim0_token_mint,
             &ctx.accounts.system_program,
             &claim0_token_program,
             MARKET_STAKE_VAULT_SEED_PREFIX,
@@ -447,7 +447,7 @@ impl<'info> InitializeMarket<'info> {
             &ctx.accounts.market,
             &ctx.accounts.payer,
             &ctx.accounts.claim1_stake_vault,
-            &ctx.accounts.claim1_mint,
+            &ctx.accounts.claim1_token_mint,
             &ctx.accounts.system_program,
             &claim1_token_program,
             MARKET_STAKE_VAULT_SEED_PREFIX,

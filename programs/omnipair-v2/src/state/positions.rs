@@ -26,9 +26,9 @@ pub struct StakePosition {
     pub owner: Pubkey,
     pub market: Pubkey,
     pub asset_mint: Pubkey,
-    pub available_buffer_shares: u64,
-    pub staked_claim_amount: u64,
-    pub staked_buffer_shares: u64,
+    pub available_buffer_share_amount: u64,
+    pub staked_claim_token_amount: u64,
+    pub staked_buffer_share_amount: u64,
     pub fee_growth_checkpoint_nad: u128,
     pub accrued_fee_amount: u64,
     pub bump: u8,
@@ -40,7 +40,7 @@ pub struct HedgePosition {
     pub owner: Pubkey,
     pub market: Pubkey,
     pub asset_mint: Pubkey,
-    pub hedged_claim_amount: u64,
+    pub hedged_claim_token_amount: u64,
     pub fee_growth_checkpoint_nad: u128,
     pub accrued_fee_amount: u64,
     pub bump: u8,
@@ -105,9 +105,9 @@ impl StakePosition {
         Ok(())
     }
 
-    pub fn credit_buffer_shares(&mut self, amount: u64) -> Result<()> {
-        self.available_buffer_shares = self
-            .available_buffer_shares
+    pub fn credit_buffer_share_amount(&mut self, amount: u64) -> Result<()> {
+        self.available_buffer_share_amount = self
+            .available_buffer_share_amount
             .checked_add(amount)
             .ok_or(ErrorCode::MarketMathOverflow)?;
         Ok(())
@@ -115,8 +115,8 @@ impl StakePosition {
 
     pub fn active_stake_units(&self, buffer_ratio_bps: u16) -> Result<u64> {
         active_stake_units(
-            self.staked_claim_amount,
-            self.staked_buffer_shares,
+            self.staked_claim_token_amount,
+            self.staked_buffer_share_amount,
             buffer_ratio_bps,
         )
     }
@@ -136,51 +136,57 @@ impl StakePosition {
         Ok(())
     }
 
-    pub fn stake(&mut self, claim_amount: u64, buffer_shares: u64) -> Result<()> {
-        require!(claim_amount > 0 && buffer_shares > 0, ErrorCode::AmountZero);
+    pub fn stake(&mut self, claim_amount: u64, buffer_share_amount: u64) -> Result<()> {
+        require!(
+            claim_amount > 0 && buffer_share_amount > 0,
+            ErrorCode::AmountZero
+        );
         require_gte!(
-            self.available_buffer_shares,
-            buffer_shares,
+            self.available_buffer_share_amount,
+            buffer_share_amount,
             ErrorCode::InsufficientBufferShares
         );
-        self.available_buffer_shares = self
-            .available_buffer_shares
-            .checked_sub(buffer_shares)
+        self.available_buffer_share_amount = self
+            .available_buffer_share_amount
+            .checked_sub(buffer_share_amount)
             .ok_or(ErrorCode::MarketMathOverflow)?;
-        self.staked_claim_amount = self
-            .staked_claim_amount
+        self.staked_claim_token_amount = self
+            .staked_claim_token_amount
             .checked_add(claim_amount)
             .ok_or(ErrorCode::MarketMathOverflow)?;
-        self.staked_buffer_shares = self
-            .staked_buffer_shares
-            .checked_add(buffer_shares)
+        self.staked_buffer_share_amount = self
+            .staked_buffer_share_amount
+            .checked_add(buffer_share_amount)
             .ok_or(ErrorCode::MarketMathOverflow)?;
         Ok(())
     }
 
-    pub fn unstake(&mut self, claim_amount: u64, buffer_shares: u64) -> Result<()> {
-        require!(claim_amount > 0 && buffer_shares > 0, ErrorCode::AmountZero);
+    pub fn unstake(&mut self, claim_amount: u64, buffer_share_amount: u64) -> Result<()> {
+        require!(
+            claim_amount > 0 && buffer_share_amount > 0,
+            ErrorCode::AmountZero
+        );
         require_gte!(
-            self.staked_claim_amount,
+            self.staked_claim_token_amount,
             claim_amount,
             ErrorCode::InsufficientBalance
         );
         require_gte!(
-            self.staked_buffer_shares,
-            buffer_shares,
+            self.staked_buffer_share_amount,
+            buffer_share_amount,
             ErrorCode::InsufficientBufferShares
         );
-        self.staked_claim_amount = self
-            .staked_claim_amount
+        self.staked_claim_token_amount = self
+            .staked_claim_token_amount
             .checked_sub(claim_amount)
             .ok_or(ErrorCode::MarketMathOverflow)?;
-        self.staked_buffer_shares = self
-            .staked_buffer_shares
-            .checked_sub(buffer_shares)
+        self.staked_buffer_share_amount = self
+            .staked_buffer_share_amount
+            .checked_sub(buffer_share_amount)
             .ok_or(ErrorCode::MarketMathOverflow)?;
-        self.available_buffer_shares = self
-            .available_buffer_shares
-            .checked_add(buffer_shares)
+        self.available_buffer_share_amount = self
+            .available_buffer_share_amount
+            .checked_add(buffer_share_amount)
             .ok_or(ErrorCode::MarketMathOverflow)?;
         Ok(())
     }
@@ -209,7 +215,7 @@ impl HedgePosition {
 
     pub fn accrue_fees(&mut self, hedged_fee_growth_index_nad: u128) -> Result<()> {
         let accrued_amount = accrue_fee_liability(
-            self.hedged_claim_amount,
+            self.hedged_claim_token_amount,
             hedged_fee_growth_index_nad,
             self.fee_growth_checkpoint_nad,
         )?;
@@ -222,8 +228,8 @@ impl HedgePosition {
     }
 
     pub fn increase(&mut self, amount: u64) -> Result<()> {
-        self.hedged_claim_amount = self
-            .hedged_claim_amount
+        self.hedged_claim_token_amount = self
+            .hedged_claim_token_amount
             .checked_add(amount)
             .ok_or(ErrorCode::MarketMathOverflow)?;
         Ok(())
@@ -231,12 +237,12 @@ impl HedgePosition {
 
     pub fn decrease(&mut self, amount: u64) -> Result<()> {
         require_gte!(
-            self.hedged_claim_amount,
+            self.hedged_claim_token_amount,
             amount,
             ErrorCode::InvalidHedgePosition
         );
-        self.hedged_claim_amount = self
-            .hedged_claim_amount
+        self.hedged_claim_token_amount = self
+            .hedged_claim_token_amount
             .checked_sub(amount)
             .ok_or(ErrorCode::MarketMathOverflow)?;
         Ok(())

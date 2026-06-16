@@ -29,7 +29,7 @@ pub fn split_claim_minus_buffer(
 }
 
 pub fn required_buffer_for_claims(
-    protected_claim_supply: u64,
+    protected_claim_token_supply: u64,
     buffer_ratio_bps: u16,
 ) -> anchor_lang::prelude::Result<u64> {
     anchor_lang::prelude::require!(
@@ -41,7 +41,7 @@ pub fn required_buffer_for_claims(
         .checked_sub(buffer_ratio_bps)
         .ok_or(ErrorCode::MarketMathOverflow)?;
     let required_buffer = ceil_div(
-        (protected_claim_supply as u128)
+        (protected_claim_token_supply as u128)
             .checked_mul(buffer_ratio_bps as u128)
             .ok_or(ErrorCode::MarketMathOverflow)?,
         claim_ratio_bps as u128,
@@ -52,8 +52,8 @@ pub fn required_buffer_for_claims(
 }
 
 pub fn active_stake_units(
-    staked_claim_amount: u64,
-    staked_buffer_shares: u64,
+    staked_claim_token_amount: u64,
+    staked_buffer_share_amount: u64,
     buffer_ratio_bps: u16,
 ) -> anchor_lang::prelude::Result<u64> {
     anchor_lang::prelude::require!(
@@ -64,11 +64,11 @@ pub fn active_stake_units(
     let claim_ratio_bps = BPS_DENOMINATOR
         .checked_sub(buffer_ratio_bps)
         .ok_or(ErrorCode::MarketMathOverflow)?;
-    let claim_units = (staked_claim_amount as u128)
+    let claim_units = (staked_claim_token_amount as u128)
         .checked_mul(BPS_DENOMINATOR as u128)
         .and_then(|value| value.checked_div(claim_ratio_bps as u128))
         .ok_or(ErrorCode::MarketMathOverflow)?;
-    let buffer_units = (staked_buffer_shares as u128)
+    let buffer_units = (staked_buffer_share_amount as u128)
         .checked_mul(BPS_DENOMINATOR as u128)
         .and_then(|value| value.checked_div(buffer_ratio_bps as u128))
         .ok_or(ErrorCode::MarketMathOverflow)?;
@@ -94,10 +94,10 @@ pub fn accrue_fee_liability(
 
 pub fn require_market_reserve_floor(
     post_reserve: u64,
-    protected_claim_supply: u64,
+    protected_claim_token_supply: u64,
     required_buffer: u64,
 ) -> anchor_lang::prelude::Result<()> {
-    let floor = protected_claim_supply
+    let floor = protected_claim_token_supply
         .checked_add(required_buffer)
         .ok_or(ErrorCode::MarketMathOverflow)?;
     anchor_lang::prelude::require_gte!(
@@ -181,21 +181,21 @@ mod tests {
 
         #[test]
         fn reserve_floor_is_exact_claim_plus_required_buffer(
-            protected_claim_supply in 1_u64..1_000_000_000_000_u64,
+            protected_claim_token_supply in 1_u64..1_000_000_000_000_u64,
             required_buffer in 0_u64..1_000_000_000_000_u64,
             excess_reserve in 0_u64..1_000_000_000_u64,
         ) {
-            let floor = protected_claim_supply.checked_add(required_buffer).unwrap();
+            let floor = protected_claim_token_supply.checked_add(required_buffer).unwrap();
             require_market_reserve_floor(
                 floor + excess_reserve,
-                protected_claim_supply,
+                protected_claim_token_supply,
                 required_buffer,
             ).unwrap();
 
             if floor > 0 {
                 let err = require_market_reserve_floor(
                     floor - 1,
-                    protected_claim_supply,
+                    protected_claim_token_supply,
                     required_buffer,
                 ).unwrap_err();
                 prop_assert_eq!(
@@ -207,19 +207,19 @@ mod tests {
 
         #[test]
         fn active_stake_uses_the_less_covered_side(
-            staked_claim_amount in 1_u64..1_000_000_000_u64,
-            staked_buffer_shares in 1_u64..1_000_000_000_u64,
+            staked_claim_token_amount in 1_u64..1_000_000_000_u64,
+            staked_buffer_share_amount in 1_u64..1_000_000_000_u64,
             buffer_ratio_bps in 1_u16..BPS_DENOMINATOR,
         ) {
             let active_units =
-                active_stake_units(staked_claim_amount, staked_buffer_shares, buffer_ratio_bps)
+                active_stake_units(staked_claim_token_amount, staked_buffer_share_amount, buffer_ratio_bps)
                     .unwrap();
             let claim_ratio_bps = BPS_DENOMINATOR - buffer_ratio_bps;
-            let claim_units = (staked_claim_amount as u128)
+            let claim_units = (staked_claim_token_amount as u128)
                 .checked_mul(BPS_DENOMINATOR as u128)
                 .unwrap()
                 / claim_ratio_bps as u128;
-            let buffer_units = (staked_buffer_shares as u128)
+            let buffer_units = (staked_buffer_share_amount as u128)
                 .checked_mul(BPS_DENOMINATOR as u128)
                 .unwrap()
                 / buffer_ratio_bps as u128;

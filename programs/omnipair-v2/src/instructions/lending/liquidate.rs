@@ -666,14 +666,14 @@ fn recognized_decrease_after_seizure(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{BufferBook, MarketConfig, MarketSide, ReserveLedger};
+    use crate::state::{BufferLedger, MarketConfig, MarketSide, ReserveLedger};
 
     fn market_side(asset_mint: Pubkey) -> MarketSide {
         MarketSide {
             asset_mint,
             asset_decimals: 6,
-            claim_mint: Pubkey::new_unique(),
-            hedge_mint: Pubkey::new_unique(),
+            claim_token_mint: Pubkey::new_unique(),
+            hedge_token_mint: Pubkey::new_unique(),
             hedge_vault: Pubkey::new_unique(),
             reserve_vault: Pubkey::new_unique(),
             collateral_vault: Pubkey::new_unique(),
@@ -684,9 +684,9 @@ mod tests {
                 cash_reserve: 1_000,
                 reserved_liability: 0,
             },
-            buffer_book: BufferBook {
+            buffer_ledger: BufferLedger {
                 buffer_ratio_bps: 2_000,
-                ..BufferBook::default()
+                ..BufferLedger::default()
             },
             ..MarketSide::default()
         }

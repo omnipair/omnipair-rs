@@ -271,8 +271,10 @@ fn apply_swap_state(
         .ok_or(ErrorCode::ReserveUnderflow)?;
     require_market_reserve_floor(
         next_out_reserve,
-        market_side_out.claim_ledger.protected_claim_supply,
-        market_side_out.buffer_book.required_buffer,
+        market_side_out
+            .claim_token_ledger
+            .protected_claim_token_supply,
+        market_side_out.buffer_ledger.required_buffer,
     )?;
 
     market_side_in.reserve_ledger.live_reserve = market_side_in
@@ -305,14 +307,14 @@ mod tests {
     fn market_side(
         live_reserve: u64,
         cash_reserve: u64,
-        protected_claim_supply: u64,
+        protected_claim_token_supply: u64,
         required_buffer: u64,
     ) -> MarketSide {
         MarketSide {
             asset_mint: Pubkey::new_unique(),
             asset_decimals: 6,
-            claim_mint: Pubkey::new_unique(),
-            hedge_mint: Pubkey::new_unique(),
+            claim_token_mint: Pubkey::new_unique(),
+            hedge_token_mint: Pubkey::new_unique(),
             hedge_vault: Pubkey::new_unique(),
             reserve_vault: Pubkey::new_unique(),
             collateral_vault: Pubkey::new_unique(),
@@ -323,14 +325,14 @@ mod tests {
                 cash_reserve,
                 reserved_liability: 0,
             },
-            claim_ledger: crate::state::ClaimLedger {
-                protected_claim_supply,
-                ..crate::state::ClaimLedger::default()
+            claim_token_ledger: crate::state::ClaimTokenLedger {
+                protected_claim_token_supply,
+                ..crate::state::ClaimTokenLedger::default()
             },
-            buffer_book: crate::state::BufferBook {
+            buffer_ledger: crate::state::BufferLedger {
                 required_buffer,
                 buffer_ratio_bps: 2_000,
-                ..crate::state::BufferBook::default()
+                ..crate::state::BufferLedger::default()
             },
             ..MarketSide::default()
         }
@@ -372,8 +374,8 @@ mod tests {
     #[test]
     fn swap_state_routes_non_compounding_fee_liabilities() {
         let mut market_side_in = market_side(10_000, 10_000, 8_000, 2_000);
-        market_side_in.claim_ledger.staked_claim_supply = 8_000;
-        market_side_in.buffer_book.staked_buffer_shares = 2_000;
+        market_side_in.claim_token_ledger.staked_claim_token_supply = 8_000;
+        market_side_in.buffer_ledger.staked_buffer_share_amount = 2_000;
         let mut market_side_out = market_side(12_000, 12_000, 8_000, 2_000);
 
         apply_swap_state(

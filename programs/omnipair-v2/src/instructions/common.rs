@@ -6,7 +6,7 @@ use anchor_spl::{
 
 use crate::{errors::ErrorCode, shared::token::is_supported_mint, state::Market};
 
-pub use crate::tokens::claim_token::require_fee_free_claim_mint;
+pub use crate::tokens::claim_token::require_fee_free_claim_token_mint;
 
 pub fn token_program_for_mint<'info>(
     mint: &InterfaceAccount<'info, Mint>,
@@ -52,7 +52,7 @@ pub fn validate_reserve_accounts<'info>(
     market_side_index: u8,
     owner: Pubkey,
     asset_mint: &InterfaceAccount<'info, Mint>,
-    claim_mint: &InterfaceAccount<'info, Mint>,
+    claim_token_mint: &InterfaceAccount<'info, Mint>,
     reserve_vault: &InterfaceAccount<'info, TokenAccount>,
     owner_asset_account: &InterfaceAccount<'info, TokenAccount>,
     owner_claim_account: &InterfaceAccount<'info, TokenAccount>,
@@ -64,8 +64,8 @@ pub fn validate_reserve_accounts<'info>(
         ErrorCode::InvalidMint
     );
     require_keys_eq!(
-        market_side.claim_mint,
-        claim_mint.key(),
+        market_side.claim_token_mint,
+        claim_token_mint.key(),
         ErrorCode::InvalidClaimMint
     );
     require_keys_eq!(
@@ -91,7 +91,7 @@ pub fn validate_reserve_accounts<'info>(
     );
     require_keys_eq!(
         owner_claim_account.mint,
-        claim_mint.key(),
+        claim_token_mint.key(),
         ErrorCode::InvalidTokenAccount
     );
     require_keys_eq!(
@@ -100,7 +100,7 @@ pub fn validate_reserve_accounts<'info>(
         ErrorCode::InvalidTokenAccount
     );
     require!(
-        claim_mint.mint_authority == COption::Some(market.key()),
+        claim_token_mint.mint_authority == COption::Some(market.key()),
         ErrorCode::InvalidClaimMint
     );
     Ok(())
@@ -111,7 +111,7 @@ pub fn validate_stake_accounts<'info>(
     market_side_index: u8,
     owner: Pubkey,
     asset_mint: &InterfaceAccount<'info, Mint>,
-    claim_mint: &InterfaceAccount<'info, Mint>,
+    claim_token_mint: &InterfaceAccount<'info, Mint>,
     stake_vault: &InterfaceAccount<'info, TokenAccount>,
     owner_claim_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
@@ -122,8 +122,8 @@ pub fn validate_stake_accounts<'info>(
         ErrorCode::InvalidMint
     );
     require_keys_eq!(
-        market_side.claim_mint,
-        claim_mint.key(),
+        market_side.claim_token_mint,
+        claim_token_mint.key(),
         ErrorCode::InvalidClaimMint
     );
     require_keys_eq!(
@@ -131,11 +131,15 @@ pub fn validate_stake_accounts<'info>(
         stake_vault.key(),
         ErrorCode::InvalidVault
     );
-    require_keys_eq!(stake_vault.mint, claim_mint.key(), ErrorCode::InvalidVault);
+    require_keys_eq!(
+        stake_vault.mint,
+        claim_token_mint.key(),
+        ErrorCode::InvalidVault
+    );
     require_keys_eq!(stake_vault.owner, market.key(), ErrorCode::InvalidVault);
     require_keys_eq!(
         owner_claim_account.mint,
-        claim_mint.key(),
+        claim_token_mint.key(),
         ErrorCode::InvalidTokenAccount
     );
     require_keys_eq!(
@@ -144,7 +148,7 @@ pub fn validate_stake_accounts<'info>(
         ErrorCode::InvalidTokenAccount
     );
     require!(
-        claim_mint.mint_authority == COption::Some(market.key()),
+        claim_token_mint.mint_authority == COption::Some(market.key()),
         ErrorCode::InvalidClaimMint
     );
     Ok(())

@@ -10,16 +10,16 @@ pub struct ReserveLedger {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
-pub struct ClaimLedger {
-    pub protected_claim_supply: u64,
-    pub hedged_claim_supply: u64,
-    pub staked_claim_supply: u64,
+pub struct ClaimTokenLedger {
+    pub protected_claim_token_supply: u64,
+    pub hedged_claim_token_supply: u64,
+    pub staked_claim_token_supply: u64,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
-pub struct BufferBook {
-    pub buffer_shares: u64,
-    pub staked_buffer_shares: u64,
+pub struct BufferLedger {
+    pub buffer_share_supply: u64,
+    pub staked_buffer_share_amount: u64,
     pub required_buffer: u64,
     pub buffer_ratio_bps: u16,
 }

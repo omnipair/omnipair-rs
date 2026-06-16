@@ -14,7 +14,7 @@ pub struct AddLiquidityReceipt {
     pub reserve_credit: u64,
     pub claim_amount: u64,
     pub buffer_amount: u64,
-    pub protected_claim_supply: u64,
+    pub protected_claim_token_supply: u64,
     pub required_buffer: u64,
 }
 
@@ -27,26 +27,26 @@ impl AddLiquidity {
         require!(self.reserve_credit > 0, ErrorCode::AmountZero);
         let (claim_amount, buffer_amount) = split_claim_minus_buffer(
             self.reserve_credit,
-            market_side.buffer_book.buffer_ratio_bps,
+            market_side.buffer_ledger.buffer_ratio_bps,
         )?;
         require!(claim_amount > 0 && buffer_amount > 0, ErrorCode::AmountZero);
 
         let next_claim_supply = market_side
-            .claim_ledger
-            .protected_claim_supply
+            .claim_token_ledger
+            .protected_claim_token_supply
             .checked_add(claim_amount)
             .ok_or(ErrorCode::MarketMathOverflow)?;
-        let next_buffer_shares = market_side
-            .buffer_book
-            .buffer_shares
+        let next_buffer_share_supply = market_side
+            .buffer_ledger
+            .buffer_share_supply
             .checked_add(buffer_amount)
             .ok_or(ErrorCode::MarketMathOverflow)?;
         let next_required_buffer = required_buffer_for_claims(
             next_claim_supply,
-            market_side.buffer_book.buffer_ratio_bps,
+            market_side.buffer_ledger.buffer_ratio_bps,
         )?;
         require_gte!(
-            next_buffer_shares,
+            next_buffer_share_supply,
             next_required_buffer,
             ErrorCode::InsufficientBufferShares
         );
@@ -61,17 +61,19 @@ impl AddLiquidity {
             .cash_reserve
             .checked_add(self.reserve_credit)
             .ok_or(ErrorCode::ReserveOverflow)?;
-        market_side.claim_ledger.protected_claim_supply = next_claim_supply;
-        market_side.buffer_book.buffer_shares = next_buffer_shares;
-        market_side.buffer_book.required_buffer = next_required_buffer;
+        market_side.claim_token_ledger.protected_claim_token_supply = next_claim_supply;
+        market_side.buffer_ledger.buffer_share_supply = next_buffer_share_supply;
+        market_side.buffer_ledger.required_buffer = next_required_buffer;
         market_side.assert_claim_coverage()?;
 
         Ok(AddLiquidityReceipt {
             reserve_credit: self.reserve_credit,
             claim_amount,
             buffer_amount,
-            protected_claim_supply: market_side.claim_ledger.protected_claim_supply,
-            required_buffer: market_side.buffer_book.required_buffer,
+            protected_claim_token_supply: market_side
+                .claim_token_ledger
+                .protected_claim_token_supply,
+            required_buffer: market_side.buffer_ledger.required_buffer,
         })
     }
 }
@@ -82,7 +84,7 @@ pub struct RemoveLiquidity {
 
 pub struct RemoveLiquidityReceipt {
     pub claim_amount: u64,
-    pub protected_claim_supply: u64,
+    pub protected_claim_token_supply: u64,
     pub required_buffer: u64,
 }
 
@@ -94,7 +96,7 @@ impl RemoveLiquidity {
     pub fn apply(self, market_side: &mut MarketSide) -> Result<RemoveLiquidityReceipt> {
         require!(self.claim_amount > 0, ErrorCode::AmountZero);
         require_gte!(
-            market_side.claim_ledger.protected_claim_supply,
+            market_side.claim_token_ledger.protected_claim_token_supply,
             self.claim_amount,
             ErrorCode::InsufficientMarketClaimCoverage
         );
@@ -105,13 +107,13 @@ impl RemoveLiquidity {
         );
 
         let next_claim_supply = market_side
-            .claim_ledger
-            .protected_claim_supply
+            .claim_token_ledger
+            .protected_claim_token_supply
             .checked_sub(self.claim_amount)
             .ok_or(ErrorCode::MarketMathOverflow)?;
         let next_required_buffer = required_buffer_for_claims(
             next_claim_supply,
-            market_side.buffer_book.buffer_ratio_bps,
+            market_side.buffer_ledger.buffer_ratio_bps,
         )?;
         let next_live_reserve = market_side
             .reserve_ledger
@@ -133,13 +135,15 @@ impl RemoveLiquidity {
             .cash_reserve
             .checked_sub(self.claim_amount)
             .ok_or(ErrorCode::CashReserveUnderflow)?;
-        market_side.claim_ledger.protected_claim_supply = next_claim_supply;
-        market_side.buffer_book.required_buffer = next_required_buffer;
+        market_side.claim_token_ledger.protected_claim_token_supply = next_claim_supply;
+        market_side.buffer_ledger.required_buffer = next_required_buffer;
 
         Ok(RemoveLiquidityReceipt {
             claim_amount: self.claim_amount,
-            protected_claim_supply: market_side.claim_ledger.protected_claim_supply,
-            required_buffer: market_side.buffer_book.required_buffer,
+            protected_claim_token_supply: market_side
+                .claim_token_ledger
+                .protected_claim_token_supply,
+            required_buffer: market_side.buffer_ledger.required_buffer,
         })
     }
 }

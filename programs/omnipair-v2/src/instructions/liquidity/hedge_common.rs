@@ -1,7 +1,7 @@
 use anchor_lang::{prelude::*, solana_program::program_option::COption};
 use anchor_spl::token_interface::{Mint, TokenAccount};
 
-use crate::instructions::common::require_fee_free_claim_mint;
+use crate::instructions::common::require_fee_free_claim_token_mint;
 use crate::{errors::ErrorCode, state::Market};
 
 pub(super) fn validate_hedge_accounts<'info>(
@@ -9,8 +9,8 @@ pub(super) fn validate_hedge_accounts<'info>(
     market_side_index: u8,
     owner: Pubkey,
     asset_mint: &InterfaceAccount<'info, Mint>,
-    claim_mint: &InterfaceAccount<'info, Mint>,
-    hedge_mint: &InterfaceAccount<'info, Mint>,
+    claim_token_mint: &InterfaceAccount<'info, Mint>,
+    hedge_token_mint: &InterfaceAccount<'info, Mint>,
     hedge_vault: &InterfaceAccount<'info, TokenAccount>,
     owner_claim_account: &InterfaceAccount<'info, TokenAccount>,
     owner_hedge_account: &InterfaceAccount<'info, TokenAccount>,
@@ -22,13 +22,13 @@ pub(super) fn validate_hedge_accounts<'info>(
         ErrorCode::InvalidMint
     );
     require_keys_eq!(
-        market_side.claim_mint,
-        claim_mint.key(),
+        market_side.claim_token_mint,
+        claim_token_mint.key(),
         ErrorCode::InvalidClaimMint
     );
     require_keys_eq!(
-        market_side.hedge_mint,
-        hedge_mint.key(),
+        market_side.hedge_token_mint,
+        hedge_token_mint.key(),
         ErrorCode::InvalidMint
     );
     require_keys_eq!(
@@ -36,11 +36,15 @@ pub(super) fn validate_hedge_accounts<'info>(
         hedge_vault.key(),
         ErrorCode::InvalidVault
     );
-    require_keys_eq!(hedge_vault.mint, claim_mint.key(), ErrorCode::InvalidVault);
+    require_keys_eq!(
+        hedge_vault.mint,
+        claim_token_mint.key(),
+        ErrorCode::InvalidVault
+    );
     require_keys_eq!(hedge_vault.owner, market.key(), ErrorCode::InvalidVault);
     require_keys_eq!(
         owner_claim_account.mint,
-        claim_mint.key(),
+        claim_token_mint.key(),
         ErrorCode::InvalidTokenAccount
     );
     require_keys_eq!(
@@ -50,7 +54,7 @@ pub(super) fn validate_hedge_accounts<'info>(
     );
     require_keys_eq!(
         owner_hedge_account.mint,
-        hedge_mint.key(),
+        hedge_token_mint.key(),
         ErrorCode::InvalidTokenAccount
     );
     require_keys_eq!(
@@ -59,9 +63,9 @@ pub(super) fn validate_hedge_accounts<'info>(
         ErrorCode::InvalidTokenAccount
     );
     require!(
-        hedge_mint.mint_authority == COption::Some(market.key()),
+        hedge_token_mint.mint_authority == COption::Some(market.key()),
         ErrorCode::InvalidMint
     );
-    require_fee_free_claim_mint(claim_mint)?;
-    require_fee_free_claim_mint(hedge_mint)
+    require_fee_free_claim_token_mint(claim_token_mint)?;
+    require_fee_free_claim_token_mint(hedge_token_mint)
 }

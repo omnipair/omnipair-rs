@@ -101,7 +101,7 @@ impl<'info> ClaimFees<'info> {
             CarryForwardStakerFees.apply(market_side)?;
             ctx.accounts.stake_position.accrue_fees(
                 market_side.fee_ledger.fee_growth_index_nad,
-                market_side.buffer_book.buffer_ratio_bps,
+                market_side.buffer_ledger.buffer_ratio_bps,
             )?;
             let fee_amount = ctx.accounts.stake_position.accrued_fee_amount;
             require!(fee_amount > 0, ErrorCode::AmountZero);

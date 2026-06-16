@@ -119,12 +119,12 @@ describe("Omnipair Market LiteSVM", () => {
       [Buffer.from("__event_authority")],
       OMNIPAIR_V2_PROGRAM_ID
     );
-    const claim0Mint = await createMint(connection as any, payer, market, null, 6);
-    const claim1Mint = await createMint(connection as any, payer, market, null, 6);
-    const hedge0Mint = await createMint(connection as any, payer, market, null, 6);
-    const hedge1Mint = await createMint(connection as any, payer, market, null, 6);
-    const hedge0Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim0Mint.toBuffer());
-    const hedge1Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim1Mint.toBuffer());
+    const claim0TokenMint = await createMint(connection as any, payer, market, null, 6);
+    const claim1TokenMint = await createMint(connection as any, payer, market, null, 6);
+    const hedge0TokenMint = await createMint(connection as any, payer, market, null, 6);
+    const hedge1TokenMint = await createMint(connection as any, payer, market, null, 6);
+    const hedge0Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim0TokenMint.toBuffer());
+    const hedge1Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim1TokenMint.toBuffer());
     const reserve0Vault = deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset0Mint.toBuffer());
     const reserve1Vault = deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset1Mint.toBuffer());
     const collateral0Vault = deriveAddress(Buffer.from("market_collateral"), market.toBuffer(), asset0Mint.toBuffer());
@@ -133,8 +133,8 @@ describe("Omnipair Market LiteSVM", () => {
     const insurance1Vault = deriveAddress(Buffer.from("insurance"), market.toBuffer(), asset1Mint.toBuffer());
     const fee0Vault = deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset0Mint.toBuffer());
     const fee1Vault = deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset1Mint.toBuffer());
-    const claim0StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim0Mint.toBuffer());
-    const claim1StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim1Mint.toBuffer());
+    const claim0StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim0TokenMint.toBuffer());
+    const claim1StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim1TokenMint.toBuffer());
 
     await program.methods
       .initialize({
@@ -148,10 +148,10 @@ describe("Omnipair Market LiteSVM", () => {
         asset0Mint,
         asset1Mint,
         market,
-        claim0Mint,
-        claim1Mint,
-        hedge0Mint,
-        hedge1Mint,
+        claim0TokenMint,
+        claim1TokenMint,
+        hedge0TokenMint,
+        hedge1TokenMint,
         hedge0Vault,
         hedge1Vault,
         reserve0Vault,
@@ -177,10 +177,10 @@ describe("Omnipair Market LiteSVM", () => {
     return {
       asset0Mint,
       asset1Mint,
-      claim0Mint,
-      claim1Mint,
-      hedge0Mint,
-      hedge1Mint,
+      claim0TokenMint,
+      claim1TokenMint,
+      hedge0TokenMint,
+      hedge1TokenMint,
       market,
       reserve0Vault,
       reserve1Vault,
@@ -251,12 +251,12 @@ describe("Omnipair Market LiteSVM", () => {
       [Buffer.from("__event_authority")],
       OMNIPAIR_V2_PROGRAM_ID
     );
-    const claim0Mint = await createMint(connection as any, payer, market, null, 6);
-    const claim1Mint = await createMint(connection as any, payer, market, null, 6);
-    const hedge0Mint = await createMint(connection as any, payer, market, null, 6);
-    const hedge1Mint = await createMint(connection as any, payer, market, null, 6);
-    const hedge0Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim0Mint.toBuffer());
-    const hedge1Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim1Mint.toBuffer());
+    const claim0TokenMint = await createMint(connection as any, payer, market, null, 6);
+    const claim1TokenMint = await createMint(connection as any, payer, market, null, 6);
+    const hedge0TokenMint = await createMint(connection as any, payer, market, null, 6);
+    const hedge1TokenMint = await createMint(connection as any, payer, market, null, 6);
+    const hedge0Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim0TokenMint.toBuffer());
+    const hedge1Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim1TokenMint.toBuffer());
     const reserve0Vault = deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset0Mint.toBuffer());
     const reserve1Vault = deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset1Mint.toBuffer());
     const collateral0Vault = deriveAddress(Buffer.from("market_collateral"), market.toBuffer(), asset0Mint.toBuffer());
@@ -265,8 +265,8 @@ describe("Omnipair Market LiteSVM", () => {
     const insurance1Vault = deriveAddress(Buffer.from("insurance"), market.toBuffer(), asset1Mint.toBuffer());
     const fee0Vault = deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset0Mint.toBuffer());
     const fee1Vault = deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset1Mint.toBuffer());
-    const claim0StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim0Mint.toBuffer());
-    const claim1StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim1Mint.toBuffer());
+    const claim0StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim0TokenMint.toBuffer());
+    const claim1StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim1TokenMint.toBuffer());
 
     await program.methods
       .initialize({
@@ -280,10 +280,10 @@ describe("Omnipair Market LiteSVM", () => {
         asset0Mint,
         asset1Mint,
         market,
-        claim0Mint,
-        claim1Mint,
-        hedge0Mint,
-        hedge1Mint,
+        claim0TokenMint,
+        claim1TokenMint,
+        hedge0TokenMint,
+        hedge1TokenMint,
         hedge0Vault,
         hedge1Vault,
         reserve0Vault,
@@ -309,8 +309,8 @@ describe("Omnipair Market LiteSVM", () => {
     return {
       asset0Mint,
       asset1Mint,
-      claim0Mint,
-      claim1Mint,
+      claim0TokenMint,
+      claim1TokenMint,
       market,
       reserve0Vault,
       reserve1Vault,
@@ -328,7 +328,7 @@ describe("Omnipair Market LiteSVM", () => {
     fixture,
     marketSideIndex,
     assetMint,
-    claimMint,
+    claimTokenMint,
     reserveVault,
     ownerAssetAccount,
     ownerClaimAccount,
@@ -355,7 +355,7 @@ describe("Omnipair Market LiteSVM", () => {
         market: fixture.market,
         owner: owner.publicKey,
         assetMint,
-        claimMint,
+        claimTokenMint,
         reserveVault,
         ownerAssetAccount,
         ownerClaimAccount,
@@ -389,13 +389,13 @@ describe("Omnipair Market LiteSVM", () => {
     const ownerClaim0Account = await createAccount(
       connection as any,
       payer,
-      fixture.claim0Mint,
+      fixture.claim0TokenMint,
       payer.publicKey
     );
     const ownerClaim1Account = await createAccount(
       connection as any,
       payer,
-      fixture.claim1Mint,
+      fixture.claim1TokenMint,
       payer.publicKey
     );
 
@@ -420,7 +420,7 @@ describe("Omnipair Market LiteSVM", () => {
       fixture,
       0,
       fixture.asset0Mint,
-      fixture.claim0Mint,
+      fixture.claim0TokenMint,
       fixture.reserve0Vault,
       ownerAsset0Account,
       ownerClaim0Account
@@ -429,7 +429,7 @@ describe("Omnipair Market LiteSVM", () => {
       fixture,
       1,
       fixture.asset1Mint,
-      fixture.claim1Mint,
+      fixture.claim1TokenMint,
       fixture.reserve1Vault,
       ownerAsset1Account,
       ownerClaim1Account
@@ -463,13 +463,13 @@ describe("Omnipair Market LiteSVM", () => {
     const ownerClaim0Account = await createAccount(
       connection as any,
       payer,
-      fixture.claim0Mint,
+      fixture.claim0TokenMint,
       payer.publicKey
     );
     const ownerClaim1Account = await createAccount(
       connection as any,
       payer,
-      fixture.claim1Mint,
+      fixture.claim1TokenMint,
       payer.publicKey
     );
 
@@ -494,7 +494,7 @@ describe("Omnipair Market LiteSVM", () => {
       fixture,
       0,
       fixture.asset0Mint,
-      fixture.claim0Mint,
+      fixture.claim0TokenMint,
       fixture.reserve0Vault,
       ownerAsset0Account,
       ownerClaim0Account,
@@ -506,7 +506,7 @@ describe("Omnipair Market LiteSVM", () => {
       fixture,
       1,
       fixture.asset1Mint,
-      fixture.claim1Mint,
+      fixture.claim1TokenMint,
       fixture.reserve1Vault,
       ownerAsset1Account,
       ownerClaim1Account,
@@ -543,13 +543,13 @@ describe("Omnipair Market LiteSVM", () => {
     const ownerClaim0Account = await createAccount(
       connection as any,
       payer,
-      fixture.claim0Mint,
+      fixture.claim0TokenMint,
       payer.publicKey
     );
     const ownerClaim1Account = await createAccount(
       connection as any,
       payer,
-      fixture.claim1Mint,
+      fixture.claim1TokenMint,
       payer.publicKey
     );
 
@@ -588,13 +588,13 @@ describe("Omnipair Market LiteSVM", () => {
       const lenderClaim0Account = await createAccount(
         connection as any,
         payer,
-        fixture.claim0Mint,
+        fixture.claim0TokenMint,
         lender.publicKey
       );
       const lenderClaim1Account = await createAccount(
         connection as any,
         payer,
-        fixture.claim1Mint,
+        fixture.claim1TokenMint,
         lender.publicKey
       );
 
@@ -619,7 +619,7 @@ describe("Omnipair Market LiteSVM", () => {
         fixture,
         0,
         fixture.asset0Mint,
-        fixture.claim0Mint,
+        fixture.claim0TokenMint,
         fixture.reserve0Vault,
         lenderAsset0Account,
         lenderClaim0Account,
@@ -632,7 +632,7 @@ describe("Omnipair Market LiteSVM", () => {
         fixture,
         1,
         fixture.asset1Mint,
-        fixture.claim1Mint,
+        fixture.claim1TokenMint,
         fixture.reserve1Vault,
         lenderAsset1Account,
         lenderClaim1Account,
@@ -668,16 +668,16 @@ describe("Omnipair Market LiteSVM", () => {
       );
 
       const blockedMint = await createTransferFeeMint(6, 1_000, 1_000_000, market);
-      const claim0Mint = blockedMintKind === "claim"
+      const claim0TokenMint = blockedMintKind === "claim"
         ? blockedMint
         : await createMint(connection as any, payer, market, null, 6);
-      const claim1Mint = await createMint(connection as any, payer, market, null, 6);
-      const hedge0Mint = blockedMintKind === "hedge"
+      const claim1TokenMint = await createMint(connection as any, payer, market, null, 6);
+      const hedge0TokenMint = blockedMintKind === "hedge"
         ? blockedMint
         : await createMint(connection as any, payer, market, null, 6);
-      const hedge1Mint = await createMint(connection as any, payer, market, null, 6);
-      const hedge0Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim0Mint.toBuffer());
-      const hedge1Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim1Mint.toBuffer());
+      const hedge1TokenMint = await createMint(connection as any, payer, market, null, 6);
+      const hedge0Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim0TokenMint.toBuffer());
+      const hedge1Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim1TokenMint.toBuffer());
       const reserve0Vault = deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset0Mint.toBuffer());
       const reserve1Vault = deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset1Mint.toBuffer());
       const collateral0Vault = deriveAddress(Buffer.from("market_collateral"), market.toBuffer(), asset0Mint.toBuffer());
@@ -686,8 +686,8 @@ describe("Omnipair Market LiteSVM", () => {
       const insurance1Vault = deriveAddress(Buffer.from("insurance"), market.toBuffer(), asset1Mint.toBuffer());
       const fee0Vault = deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset0Mint.toBuffer());
       const fee1Vault = deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset1Mint.toBuffer());
-      const claim0StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim0Mint.toBuffer());
-      const claim1StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim1Mint.toBuffer());
+      const claim0StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim0TokenMint.toBuffer());
+      const claim1StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim1TokenMint.toBuffer());
 
       await expectRejects(() =>
         program.methods
@@ -702,10 +702,10 @@ describe("Omnipair Market LiteSVM", () => {
             asset0Mint,
             asset1Mint,
             market,
-            claim0Mint,
-            claim1Mint,
-            hedge0Mint,
-            hedge1Mint,
+            claim0TokenMint,
+            claim1TokenMint,
+            hedge0TokenMint,
+            hedge1TokenMint,
             hedge0Vault,
             hedge1Vault,
             reserve0Vault,
@@ -750,12 +750,12 @@ describe("Omnipair Market LiteSVM", () => {
         [Buffer.from("__event_authority")],
         OMNIPAIR_V2_PROGRAM_ID
       );
-      const claim0Mint = await createMint(connection as any, payer, market, null, 6);
-      const claim1Mint = await createMint(connection as any, payer, market, null, 6);
-      const hedge0Mint = await createMint(connection as any, payer, market, null, 6);
-      const hedge1Mint = await createMint(connection as any, payer, market, null, 6);
-      const hedge0Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim0Mint.toBuffer());
-      const hedge1Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim1Mint.toBuffer());
+      const claim0TokenMint = await createMint(connection as any, payer, market, null, 6);
+      const claim1TokenMint = await createMint(connection as any, payer, market, null, 6);
+      const hedge0TokenMint = await createMint(connection as any, payer, market, null, 6);
+      const hedge1TokenMint = await createMint(connection as any, payer, market, null, 6);
+      const hedge0Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim0TokenMint.toBuffer());
+      const hedge1Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim1TokenMint.toBuffer());
       const reserve0Vault = deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset0Mint.toBuffer());
       const reserve1Vault = deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset1Mint.toBuffer());
       const collateral0Vault = deriveAddress(Buffer.from("market_collateral"), market.toBuffer(), asset0Mint.toBuffer());
@@ -764,8 +764,8 @@ describe("Omnipair Market LiteSVM", () => {
       const insurance1Vault = deriveAddress(Buffer.from("insurance"), market.toBuffer(), asset1Mint.toBuffer());
       const fee0Vault = deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset0Mint.toBuffer());
       const fee1Vault = deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset1Mint.toBuffer());
-      const claim0StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim0Mint.toBuffer());
-      const claim1StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim1Mint.toBuffer());
+      const claim0StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim0TokenMint.toBuffer());
+      const claim1StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim1TokenMint.toBuffer());
 
       await expectRejects(() =>
         program.methods
@@ -780,10 +780,10 @@ describe("Omnipair Market LiteSVM", () => {
             asset0Mint,
             asset1Mint,
             market,
-            claim0Mint,
-            claim1Mint,
-            hedge0Mint,
-            hedge1Mint,
+            claim0TokenMint,
+            claim1TokenMint,
+            hedge0TokenMint,
+            hedge1TokenMint,
             hedge0Vault,
             hedge1Vault,
             reserve0Vault,
@@ -852,7 +852,7 @@ describe("Omnipair Market LiteSVM", () => {
     const ownerClaim0Account = await createAccount(
       connection as any,
       payer,
-      fixture.claim0Mint,
+      fixture.claim0TokenMint,
       payer.publicKey
     );
 
@@ -882,7 +882,7 @@ describe("Omnipair Market LiteSVM", () => {
       fixture,
       0,
       fixture.asset0Mint,
-      fixture.claim0Mint,
+      fixture.claim0TokenMint,
       fixture.reserve0Vault,
       ownerAsset0Account,
       ownerClaim0Account,
@@ -918,7 +918,7 @@ describe("Omnipair Market LiteSVM", () => {
           market: fixture.market,
           owner: payer.publicKey,
           assetMint: fixture.asset0Mint,
-          claimMint: fixture.claim0Mint,
+          claimTokenMint: fixture.claim0TokenMint,
           reserveVault: fixture.reserve0Vault,
           ownerAssetAccount: ownerAsset0Account,
           ownerClaimAccount: ownerClaim0Account,
@@ -1019,7 +1019,7 @@ describe("Omnipair Market LiteSVM", () => {
   it("locks buffer-ratio updates while market stake is active", async () => {
     const {
       asset0Mint,
-      claim0Mint,
+      claim0TokenMint,
       market,
       claim0StakeVault,
       ownerClaim0Account,
@@ -1031,14 +1031,14 @@ describe("Omnipair Market LiteSVM", () => {
       .stake({
         marketSideIndex: 0,
         claimAmount: new BN(400_000),
-        bufferShares: new BN(100_000),
+        bufferShareAmount: new BN(100_000),
         minActiveStakeUnits: new BN(500_000),
       })
       .accounts({
         market,
         owner: payer.publicKey,
         assetMint: asset0Mint,
-        claimMint: claim0Mint,
+        claimTokenMint: claim0TokenMint,
         stakeVault: claim0StakeVault,
         ownerClaimAccount: ownerClaim0Account,
         stakePosition: stake0Position,
@@ -1077,7 +1077,7 @@ describe("Omnipair Market LiteSVM", () => {
     const {
       asset0Mint,
       asset1Mint,
-      claim0Mint,
+      claim0TokenMint,
       market,
       reserve0Vault,
       reserve1Vault,
@@ -1107,14 +1107,14 @@ describe("Omnipair Market LiteSVM", () => {
       .stake({
         marketSideIndex: 0,
         claimAmount: new BN(4),
-        bufferShares: new BN(1),
+        bufferShareAmount: new BN(1),
         minActiveStakeUnits: new BN(5),
       })
       .accounts({
         market,
         owner: payer.publicKey,
         assetMint: asset0Mint,
-        claimMint: claim0Mint,
+        claimTokenMint: claim0TokenMint,
         stakeVault: claim0StakeVault,
         ownerClaimAccount: ownerClaim0Account,
         stakePosition: stake0Position,
@@ -1154,13 +1154,13 @@ describe("Omnipair Market LiteSVM", () => {
       .unstake({
         marketSideIndex: 0,
         claimAmount: new BN(4),
-        bufferShares: new BN(1),
+        bufferShareAmount: new BN(1),
       })
       .accounts({
         market,
         owner: payer.publicKey,
         assetMint: asset0Mint,
-        claimMint: claim0Mint,
+        claimTokenMint: claim0TokenMint,
         stakeVault: claim0StakeVault,
         ownerClaimAccount: ownerClaim0Account,
         stakePosition: stake0Position,
@@ -1200,7 +1200,7 @@ describe("Omnipair Market LiteSVM", () => {
   it("rejects buffer-ratio updates when the recomputed floor is uncovered", async () => {
     const {
       asset0Mint,
-      claim0Mint,
+      claim0TokenMint,
       market,
       reserve0Vault,
       ownerAsset0Account,
@@ -1227,7 +1227,7 @@ describe("Omnipair Market LiteSVM", () => {
       { market, eventAuthority },
       0,
       asset0Mint,
-      claim0Mint,
+      claim0TokenMint,
       reserve0Vault,
       ownerAsset0Account,
       ownerClaim0Account,
@@ -1247,7 +1247,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     const {
       asset0Mint,
-      claim0Mint,
+      claim0TokenMint,
       market,
       reserve0Vault,
       ownerAsset0Account,
@@ -1275,7 +1275,7 @@ describe("Omnipair Market LiteSVM", () => {
         market,
         owner: payer.publicKey,
         assetMint: asset0Mint,
-        claimMint: claim0Mint,
+        claimTokenMint: claim0TokenMint,
         reserveVault: reserve0Vault,
         ownerAssetAccount: ownerAsset0Account,
         ownerClaimAccount: ownerClaim0Account,
@@ -1305,8 +1305,8 @@ describe("Omnipair Market LiteSVM", () => {
     const {
       asset0Mint,
       asset1Mint,
-      claim0Mint,
-      claim1Mint,
+      claim0TokenMint,
+      claim1TokenMint,
       market,
       reserve0Vault,
       reserve1Vault,
@@ -1338,13 +1338,13 @@ describe("Omnipair Market LiteSVM", () => {
     const ownerClaim0Account = await createAccount(
       connection as any,
       payer,
-      claim0Mint,
+      claim0TokenMint,
       payer.publicKey
     );
     const ownerClaim1Account = await createAccount(
       connection as any,
       payer,
-      claim1Mint,
+      claim1TokenMint,
       payer.publicKey
     );
 
@@ -1374,7 +1374,7 @@ describe("Omnipair Market LiteSVM", () => {
     const transferFeeSide = transferFeeMarketSideIndex === 0
       ? {
           assetMint: asset0Mint,
-          claimMint: claim0Mint,
+          claimTokenMint: claim0TokenMint,
           reserveVault: reserve0Vault,
           ownerAssetAccount: ownerAsset0Account,
           ownerClaimAccount: ownerClaim0Account,
@@ -1385,7 +1385,7 @@ describe("Omnipair Market LiteSVM", () => {
         }
       : {
           assetMint: asset1Mint,
-          claimMint: claim1Mint,
+          claimTokenMint: claim1TokenMint,
           reserveVault: reserve1Vault,
           ownerAssetAccount: ownerAsset1Account,
           ownerClaimAccount: ownerClaim1Account,
@@ -1398,7 +1398,7 @@ describe("Omnipair Market LiteSVM", () => {
       ? {
           marketSideIndex: 1,
           assetMint: asset1Mint,
-          claimMint: claim1Mint,
+          claimTokenMint: claim1TokenMint,
           reserveVault: reserve1Vault,
           feeVault: fee1Vault,
           ownerAssetAccount: ownerAsset1Account,
@@ -1407,7 +1407,7 @@ describe("Omnipair Market LiteSVM", () => {
       : {
           marketSideIndex: 0,
           assetMint: asset0Mint,
-          claimMint: claim0Mint,
+          claimTokenMint: claim0TokenMint,
           reserveVault: reserve0Vault,
           feeVault: fee0Vault,
           ownerAssetAccount: ownerAsset0Account,
@@ -1418,7 +1418,7 @@ describe("Omnipair Market LiteSVM", () => {
       fixture,
       transferFeeMarketSideIndex,
       transferFeeSide.assetMint,
-      transferFeeSide.claimMint,
+      transferFeeSide.claimTokenMint,
       transferFeeSide.reserveVault,
       transferFeeSide.ownerAssetAccount,
       transferFeeSide.ownerClaimAccount,
@@ -1441,7 +1441,7 @@ describe("Omnipair Market LiteSVM", () => {
       const lenderClaimAccount = await createAccount(
         connection as any,
         payer,
-        transferFeeSide.claimMint,
+        transferFeeSide.claimTokenMint,
         lender.publicKey
       );
       await mintTo(
@@ -1459,7 +1459,7 @@ describe("Omnipair Market LiteSVM", () => {
         fixture,
         transferFeeMarketSideIndex,
         transferFeeSide.assetMint,
-        transferFeeSide.claimMint,
+        transferFeeSide.claimTokenMint,
         transferFeeSide.reserveVault,
         lenderAssetAccount,
         lenderClaimAccount,
@@ -1473,7 +1473,7 @@ describe("Omnipair Market LiteSVM", () => {
       fixture,
       vanillaSide.marketSideIndex,
       vanillaSide.assetMint,
-      vanillaSide.claimMint,
+      vanillaSide.claimTokenMint,
       vanillaSide.reserveVault,
       vanillaSide.ownerAssetAccount,
       vanillaSide.ownerClaimAccount,
@@ -1505,7 +1505,7 @@ describe("Omnipair Market LiteSVM", () => {
           market,
           owner: payer.publicKey,
           assetMint: transferFeeSide.assetMint,
-          claimMint: transferFeeSide.claimMint,
+          claimTokenMint: transferFeeSide.claimTokenMint,
           reserveVault: transferFeeSide.reserveVault,
           ownerAssetAccount: transferFeeSide.ownerAssetAccount,
           ownerClaimAccount: transferFeeSide.ownerClaimAccount,
@@ -1534,7 +1534,7 @@ describe("Omnipair Market LiteSVM", () => {
         market,
         owner: payer.publicKey,
         assetMint: transferFeeSide.assetMint,
-        claimMint: transferFeeSide.claimMint,
+        claimTokenMint: transferFeeSide.claimTokenMint,
         reserveVault: transferFeeSide.reserveVault,
         ownerAssetAccount: transferFeeSide.ownerAssetAccount,
         ownerClaimAccount: transferFeeSide.ownerClaimAccount,
@@ -1821,7 +1821,7 @@ describe("Omnipair Market LiteSVM", () => {
         market: redeemFixture.market,
         owner: payer.publicKey,
         assetMint: redeemFixture.asset0Mint,
-        claimMint: redeemFixture.claim0Mint,
+        claimTokenMint: redeemFixture.claim0TokenMint,
         reserveVault: redeemFixture.reserve0Vault,
         ownerAssetAccount: redeemFixture.ownerAsset0Account,
         ownerClaimAccount: redeemFixture.ownerClaim0Account,
@@ -1844,7 +1844,7 @@ describe("Omnipair Market LiteSVM", () => {
           market: redeemFixture.market,
           owner: payer.publicKey,
           assetMint: redeemFixture.asset0Mint,
-          claimMint: redeemFixture.claim0Mint,
+          claimTokenMint: redeemFixture.claim0TokenMint,
           reserveVault: redeemFixture.reserve0Vault,
           ownerAssetAccount: redeemFixture.ownerAsset0Account,
           ownerClaimAccount: redeemFixture.ownerClaim0Account,
@@ -2111,7 +2111,7 @@ describe("Omnipair Market LiteSVM", () => {
     const {
       asset0Mint,
       asset1Mint,
-      claim0Mint,
+      claim0TokenMint,
       market,
       reserve0Vault,
       reserve1Vault,
@@ -2141,14 +2141,14 @@ describe("Omnipair Market LiteSVM", () => {
       .stake({
         marketSideIndex: 0,
         claimAmount: new BN(4),
-        bufferShares: new BN(1),
+        bufferShareAmount: new BN(1),
         minActiveStakeUnits: new BN(5),
       })
       .accounts({
         market,
         owner: payer.publicKey,
         assetMint: asset0Mint,
-        claimMint: claim0Mint,
+        claimTokenMint: claim0TokenMint,
         stakeVault: claim0StakeVault,
         ownerClaimAccount: ownerClaim0Account,
         stakePosition: stake0Position,
@@ -2276,7 +2276,7 @@ describe("Omnipair Market LiteSVM", () => {
     const {
       asset0Mint,
       asset1Mint,
-      claim0Mint,
+      claim0TokenMint,
       market,
       reserve0Vault,
       reserve1Vault,
@@ -2332,14 +2332,14 @@ describe("Omnipair Market LiteSVM", () => {
       .stake({
         marketSideIndex: 0,
         claimAmount: new BN(4),
-        bufferShares: new BN(1),
+        bufferShareAmount: new BN(1),
         minActiveStakeUnits: new BN(5),
       })
       .accounts({
         market,
         owner: payer.publicKey,
         assetMint: asset0Mint,
-        claimMint: claim0Mint,
+        claimTokenMint: claim0TokenMint,
         stakeVault: claim0StakeVault,
         ownerClaimAccount: ownerClaim0Account,
         stakePosition: stake0Position,
@@ -2381,7 +2381,7 @@ describe("Omnipair Market LiteSVM", () => {
     const {
       asset0Mint,
       asset1Mint,
-      claim0Mint,
+      claim0TokenMint,
       market,
       reserve0Vault,
       reserve1Vault,
@@ -2411,14 +2411,14 @@ describe("Omnipair Market LiteSVM", () => {
       .stake({
         marketSideIndex: 0,
         claimAmount: new BN(4),
-        bufferShares: new BN(1),
+        bufferShareAmount: new BN(1),
         minActiveStakeUnits: new BN(5),
       })
       .accounts({
         market,
         owner: payer.publicKey,
         assetMint: asset0Mint,
-        claimMint: claim0Mint,
+        claimTokenMint: claim0TokenMint,
         stakeVault: claim0StakeVault,
         ownerClaimAccount: ownerClaim0Account,
         stakePosition: stake0Position,
@@ -2458,7 +2458,7 @@ describe("Omnipair Market LiteSVM", () => {
       { market, eventAuthority },
       0,
       asset0Mint,
-      claim0Mint,
+      claim0TokenMint,
       reserve0Vault,
       ownerAsset0Account,
       ownerClaim0Account,
@@ -2518,7 +2518,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     const {
       asset0Mint,
-      claim0Mint,
+      claim0TokenMint,
       market,
       claim0StakeVault,
       ownerClaim0Account,
@@ -2530,14 +2530,14 @@ describe("Omnipair Market LiteSVM", () => {
       .stake({
         marketSideIndex: 0,
         claimAmount: new BN(400_000),
-        bufferShares: new BN(100_000),
+        bufferShareAmount: new BN(100_000),
         minActiveStakeUnits: new BN(500_000),
       })
       .accounts({
         market,
         owner: payer.publicKey,
         assetMint: asset0Mint,
-        claimMint: claim0Mint,
+        claimTokenMint: claim0TokenMint,
         stakeVault: claim0StakeVault,
         ownerClaimAccount: ownerClaim0Account,
         stakePosition: stake0Position,
@@ -2560,13 +2560,13 @@ describe("Omnipair Market LiteSVM", () => {
       .unstake({
         marketSideIndex: 0,
         claimAmount: new BN(160_000),
-        bufferShares: new BN(40_000),
+        bufferShareAmount: new BN(40_000),
       })
       .accounts({
         market,
         owner: payer.publicKey,
         assetMint: asset0Mint,
-        claimMint: claim0Mint,
+        claimTokenMint: claim0TokenMint,
         stakeVault: claim0StakeVault,
         ownerClaimAccount: ownerClaim0Account,
         stakePosition: stake0Position,
@@ -2594,8 +2594,8 @@ describe("Omnipair Market LiteSVM", () => {
     const {
       asset0Mint,
       asset1Mint,
-      claim0Mint,
-      hedge0Mint,
+      claim0TokenMint,
+      hedge0TokenMint,
       market,
       reserve0Vault,
       reserve1Vault,
@@ -2623,7 +2623,7 @@ describe("Omnipair Market LiteSVM", () => {
     const ownerHedge0Account = await createAccount(
       connection as any,
       payer,
-      hedge0Mint,
+      hedge0TokenMint,
       payer.publicKey
     );
     const hedge0Position = deriveAddress(
@@ -2643,8 +2643,8 @@ describe("Omnipair Market LiteSVM", () => {
         market,
         owner: payer.publicKey,
         assetMint: asset0Mint,
-        claimMint: claim0Mint,
-        hedgeMint: hedge0Mint,
+        claimTokenMint: claim0TokenMint,
+        hedgeTokenMint: hedge0TokenMint,
         hedgeVault: hedge0Vault,
         ownerClaimAccount: ownerClaim0Account,
         ownerHedgeAccount: ownerHedge0Account,
@@ -2742,8 +2742,8 @@ describe("Omnipair Market LiteSVM", () => {
           market,
           owner: payer.publicKey,
           assetMint: asset0Mint,
-          claimMint: claim0Mint,
-          hedgeMint: hedge0Mint,
+          claimTokenMint: claim0TokenMint,
+          hedgeTokenMint: hedge0TokenMint,
           hedgeVault: hedge0Vault,
           ownerClaimAccount: ownerClaim0Account,
           ownerHedgeAccount: ownerHedge0Account,
@@ -2768,8 +2768,8 @@ describe("Omnipair Market LiteSVM", () => {
         market,
         owner: payer.publicKey,
         assetMint: asset0Mint,
-        claimMint: claim0Mint,
-        hedgeMint: hedge0Mint,
+        claimTokenMint: claim0TokenMint,
+        hedgeTokenMint: hedge0TokenMint,
         hedgeVault: hedge0Vault,
         ownerClaimAccount: ownerClaim0Account,
         ownerHedgeAccount: ownerHedge0Account,
@@ -2796,8 +2796,8 @@ describe("Omnipair Market LiteSVM", () => {
   it("blocks hedged market claim wrappers when disabled by config", async () => {
     const {
       asset0Mint,
-      claim0Mint,
-      hedge0Mint,
+      claim0TokenMint,
+      hedge0TokenMint,
       market,
       hedge0Vault,
       ownerClaim0Account,
@@ -2806,7 +2806,7 @@ describe("Omnipair Market LiteSVM", () => {
     const ownerHedge0Account = await createAccount(
       connection as any,
       payer,
-      hedge0Mint,
+      hedge0TokenMint,
       payer.publicKey
     );
     const hedge0Position = deriveAddress(
@@ -2840,8 +2840,8 @@ describe("Omnipair Market LiteSVM", () => {
           market,
           owner: payer.publicKey,
           assetMint: asset0Mint,
-          claimMint: claim0Mint,
-          hedgeMint: hedge0Mint,
+          claimTokenMint: claim0TokenMint,
+          hedgeTokenMint: hedge0TokenMint,
           hedgeVault: hedge0Vault,
           ownerClaimAccount: ownerClaim0Account,
           ownerHedgeAccount: ownerHedge0Account,
@@ -2870,8 +2870,8 @@ describe("Omnipair Market LiteSVM", () => {
   it("blocks hedge closes when spot diverges from cached EMA", async () => {
     const {
       asset0Mint,
-      claim0Mint,
-      hedge0Mint,
+      claim0TokenMint,
+      hedge0TokenMint,
       market,
       reserve0Vault,
       hedge0Vault,
@@ -2882,7 +2882,7 @@ describe("Omnipair Market LiteSVM", () => {
     const ownerHedge0Account = await createAccount(
       connection as any,
       payer,
-      hedge0Mint,
+      hedge0TokenMint,
       payer.publicKey
     );
     const hedge0Position = deriveAddress(
@@ -2902,8 +2902,8 @@ describe("Omnipair Market LiteSVM", () => {
         market,
         owner: payer.publicKey,
         assetMint: asset0Mint,
-        claimMint: claim0Mint,
-        hedgeMint: hedge0Mint,
+        claimTokenMint: claim0TokenMint,
+        hedgeTokenMint: hedge0TokenMint,
         hedgeVault: hedge0Vault,
         ownerClaimAccount: ownerClaim0Account,
         ownerHedgeAccount: ownerHedge0Account,
@@ -2921,7 +2921,7 @@ describe("Omnipair Market LiteSVM", () => {
       { market, eventAuthority },
       0,
       asset0Mint,
-      claim0Mint,
+      claim0TokenMint,
       reserve0Vault,
       ownerAsset0Account,
       ownerClaim0Account,
@@ -2941,8 +2941,8 @@ describe("Omnipair Market LiteSVM", () => {
           market,
           owner: payer.publicKey,
           assetMint: asset0Mint,
-          claimMint: claim0Mint,
-          hedgeMint: hedge0Mint,
+          claimTokenMint: claim0TokenMint,
+          hedgeTokenMint: hedge0TokenMint,
           hedgeVault: hedge0Vault,
           ownerClaimAccount: ownerClaim0Account,
           ownerHedgeAccount: ownerHedge0Account,
@@ -3367,7 +3367,7 @@ describe("Omnipair Market LiteSVM", () => {
     const {
       asset0Mint,
       asset1Mint,
-      claim0Mint,
+      claim0TokenMint,
       market,
       reserve0Vault,
       collateral1Vault,
@@ -3431,7 +3431,7 @@ describe("Omnipair Market LiteSVM", () => {
       { market, eventAuthority },
       0,
       asset0Mint,
-      claim0Mint,
+      claim0TokenMint,
       reserve0Vault,
       ownerAsset0Account,
       ownerClaim0Account,
@@ -3469,7 +3469,7 @@ describe("Omnipair Market LiteSVM", () => {
     const {
       asset0Mint,
       asset1Mint,
-      claim1Mint,
+      claim1TokenMint,
       market,
       reserve0Vault,
       reserve1Vault,
@@ -3559,7 +3559,7 @@ describe("Omnipair Market LiteSVM", () => {
       { market, eventAuthority },
       1,
       asset1Mint,
-      claim1Mint,
+      claim1TokenMint,
       reserve1Vault,
       ownerAsset1Account,
       ownerClaim1Account,
@@ -4086,7 +4086,7 @@ describe("Omnipair Market LiteSVM", () => {
     const {
       asset0Mint,
       asset1Mint,
-      claim1Mint,
+      claim1TokenMint,
       market,
       reserve0Vault,
       reserve1Vault,
@@ -4166,7 +4166,7 @@ describe("Omnipair Market LiteSVM", () => {
       { market, eventAuthority },
       1,
       asset1Mint,
-      claim1Mint,
+      claim1TokenMint,
       reserve1Vault,
       ownerAsset1Account,
       ownerClaim1Account,

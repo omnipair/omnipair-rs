@@ -15,7 +15,7 @@ use crate::{
 };
 
 use crate::instructions::common::{
-    require_fee_free_claim_mint, require_supported_asset_mint, token_account_credit,
+    require_fee_free_claim_token_mint, require_supported_asset_mint, token_account_credit,
     token_program_for_mint, validate_reserve_accounts,
 };
 
@@ -48,7 +48,7 @@ pub struct RedeemClaim<'info> {
     pub asset_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub claim_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub claim_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
     pub reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
@@ -77,13 +77,13 @@ impl<'info> RedeemClaim<'info> {
             args.market_side_index,
             self.owner.key(),
             &self.asset_mint,
-            &self.claim_mint,
+            &self.claim_token_mint,
             &self.reserve_vault,
             &self.owner_asset_account,
             &self.owner_claim_account,
         )?;
         require_supported_asset_mint(&self.asset_mint)?;
-        require_fee_free_claim_mint(&self.claim_mint)?;
+        require_fee_free_claim_token_mint(&self.claim_token_mint)?;
         Ok(())
     }
 
@@ -97,14 +97,14 @@ impl<'info> RedeemClaim<'info> {
             .enforce_daily_withdraw_limit(args.market_side_index, args.claim_amount)?;
 
         let claim_token_program = token_program_for_mint(
-            &ctx.accounts.claim_mint,
+            &ctx.accounts.claim_token_mint,
             &ctx.accounts.token_program,
             &ctx.accounts.token_2022_program,
         )?;
         token_burn(
             ctx.accounts.owner.to_account_info(),
             claim_token_program,
-            ctx.accounts.claim_mint.to_account_info(),
+            ctx.accounts.claim_token_mint.to_account_info(),
             ctx.accounts.owner_claim_account.to_account_info(),
             args.claim_amount,
             &[],
@@ -149,7 +149,7 @@ impl<'info> RedeemClaim<'info> {
             owner: owner_key,
             asset_mint: asset_mint_key,
             claim_amount: receipt.claim_amount,
-            protected_claim_supply: receipt.protected_claim_supply,
+            protected_claim_token_supply: receipt.protected_claim_token_supply,
             required_buffer: receipt.required_buffer,
             metadata: MarketEventMetadata::new(owner_key, market_key),
         });

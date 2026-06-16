@@ -167,10 +167,10 @@ export function deriveMarketFeeVaultAddress(
  */
 export function deriveMarketStakeVaultAddress(
   market: PublicKey,
-  claimMint: PublicKey
+  claimTokenMint: PublicKey
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [SEEDS.MARKET_STAKE_VAULT, market.toBuffer(), claimMint.toBuffer()],
+    [SEEDS.MARKET_STAKE_VAULT, market.toBuffer(), claimTokenMint.toBuffer()],
     PROGRAM_ID
   );
 }
@@ -212,10 +212,10 @@ export function deriveMarginPositionAddress(
  */
 export function deriveHedgeVaultAddress(
   market: PublicKey,
-  claimMint: PublicKey
+  claimTokenMint: PublicKey
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [SEEDS.HEDGE_VAULT, market.toBuffer(), claimMint.toBuffer()],
+    [SEEDS.HEDGE_VAULT, market.toBuffer(), claimTokenMint.toBuffer()],
     PROGRAM_ID
   );
 }
