@@ -1,6 +1,6 @@
 /**
- * Instruction Coverage Tracking for LiteSVM Tests
- * Tracks which program instructions are tested
+ * Instruction smoke coverage tracking for LiteSVM tests.
+ * Tracks which program instructions are exercised at least once.
  */
 
 type ProgramGeneration = "v1" | "v2";
@@ -119,7 +119,9 @@ function printCoverageSection(title: string, instructions: InstructionId[]) {
   const data = coverageDataFor(instructions);
 
   console.log(`\n${title}`);
-  console.log(`Covered Instructions: ${data.covered}/${data.total} (${data.percentage}%)\n`);
+  console.log(
+    `Instructions Exercised: ${data.covered}/${data.total} (${data.percentage}%)\n`
+  );
 
   data.testedInstructions.forEach((ix) => {
     const detail = instructionDetails.get(ix);
@@ -133,7 +135,7 @@ function printCoverageSection(title: string, instructions: InstructionId[]) {
   });
 
   if (data.untestedInstructions.length > 0) {
-    console.log(`\nUntested Instructions: ${data.untestedInstructions.length}/${data.total}\n`);
+    console.log(`\nUnexercised Instructions: ${data.untestedInstructions.length}/${data.total}\n`);
     data.untestedInstructions.forEach((ix) => {
       console.log(`  ✗ ${instructionLabel(ix)}`);
     });
@@ -180,15 +182,21 @@ export function getCoverageReport() {
   lastPrintedReportSignature = signature;
   
   console.log("\n" + "═".repeat(70));
-  console.log("📊 INSTRUCTION COVERAGE REPORT");
+  console.log("📊 INSTRUCTION SMOKE COVERAGE REPORT");
   console.log("═".repeat(70));
+  console.log(
+    "This tracks whether each instruction is exercised by at least one LiteSVM test."
+  );
+  console.log(
+    "It is not statement, branch, invariant, or full behavioral coverage."
+  );
 
-  printCoverageSection("V2 Instruction Coverage", generationInstructions("v2"));
-  printCoverageSection("V1 Legacy Instruction Coverage", generationInstructions("v1"));
+  printCoverageSection("V2 Instruction Smoke Coverage", generationInstructions("v2"));
+  printCoverageSection("V1 Legacy Instruction Smoke Coverage", generationInstructions("v1"));
   
   console.log("\n" + "═".repeat(70));
   console.log(
-    `Aggregate Coverage: ${aggregate.percentage}% | Tests: ${aggregate.covered}/${aggregate.total}`
+    `Aggregate Smoke Coverage: ${aggregate.percentage}% | Instructions Exercised: ${aggregate.covered}/${aggregate.total}`
   );
   console.log("═".repeat(70) + "\n");
   

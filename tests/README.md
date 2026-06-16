@@ -45,6 +45,12 @@ Run tests matching a pattern:
 yarn test-litesvm -- --grep "Futarchy"
 ```
 
+## Instruction Smoke Coverage
+
+`yarn test-litesvm` prints an instruction smoke coverage report. This report only tracks whether each instruction appears in at least one LiteSVM test flow. It is useful as a checklist for missing instruction-level flows, but it is not statement coverage, branch coverage, invariant coverage, or proof that an instruction's full behavior is covered.
+
+For V2 review, keep using this report alongside focused unit tests for transitions, ledgers, risk math, fee accounting, liquidation edge cases, and token supply invariants.
+
 ## Test Structure
 
 ### Basic Test File: `basic.test.ts`
