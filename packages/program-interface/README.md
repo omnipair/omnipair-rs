@@ -161,7 +161,10 @@ All TypeScript types generated from the IDL:
 - V1 account types: `Pair`, `UserPosition`, `RateModel`, `FutarchyAuthority`
 - V2 account types: `Market`, `StakePosition`, `MarginPosition`, `HedgePosition`
 - Instruction argument types
-- Event types
+- V2 market/admin event types: `MarketCreated`, `MarketUpdated`, `MarketHealthUpdated`
+- V2 liquidity event types: `LiquidityAdded`, `LiquidityRemoved`, `MarketStakeUpdated`, `MarketHedgeOpened`, `MarketHedgeClosed`
+- V2 lending/settlement event types: `SwapExecuted`, `MarketCollateralDeposited`, `MarketCollateralWithdrawn`, `MarketDebtUpdated`, `MarketInsuranceFunded`, `PositionLiquidated`
+- V2 fee event types: `MarketFeesClaimed`, `MarketFeeLiabilityClaimed`, `MarketHedgeFeesClaimed`
 
 ### Constants
 - `PROGRAM_ID` / `OMNIPAIR_PROGRAM_ID` - The Omnipair V1 program ID
