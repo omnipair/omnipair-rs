@@ -25,7 +25,7 @@ const wallet = new anchor.Wallet(anchor.web3.Keypair.generate());
 const provider = new anchor.AnchorProvider(connection, wallet, {
   commitment: "confirmed",
 });
-const program = new anchor.Program<Omnipair>(IDL, PROGRAM_ID, provider);
+const v1Program = new anchor.Program<Omnipair>(IDL, PROGRAM_ID, provider);
 ```
 
 For V2:
@@ -35,12 +35,12 @@ import * as anchor from "@coral-xyz/anchor";
 import type { OmnipairV2 } from "@omnipair/program-interface";
 import { IDL_V2, OMNIPAIR_V2_PROGRAM_ID } from "@omnipair/program-interface";
 
-const program = new anchor.Program<OmnipairV2>(IDL_V2, OMNIPAIR_V2_PROGRAM_ID, provider);
+const v2Program = new anchor.Program<OmnipairV2>(IDL_V2, OMNIPAIR_V2_PROGRAM_ID, provider);
 ```
 
-## Step 3: Compute `paramsHash` (same as on-chain initialize)
+## Step 3: Compute legacy V1 `paramsHash`
 
-`derivePairAddress` requires the same `paramsHash` used by the on-chain initialize instruction.
+`derivePairAddress` is for the legacy V1 pair program and requires the same `paramsHash` used by the V1 on-chain initialize instruction.
 
 ```typescript
 import { createHash } from "node:crypto";
@@ -86,7 +86,7 @@ function computeParamsHash(params: InitParams): Uint8Array {
 }
 ```
 
-## Step 4: Derive pair PDA and fetch account
+## Step 4: Derive legacy V1 pair PDA and fetch account
 
 ```typescript
 import { PublicKey } from "@solana/web3.js";
@@ -110,9 +110,29 @@ const paramsHash = computeParamsHash({
 const [pairPda, pairBump] = derivePairAddress(token0, token1, paramsHash);
 console.log("pair:", pairPda.toBase58(), "bump:", pairBump);
 
-const pair = await program.account.pair.fetch(pairPda);
+const pair = await v1Program.account.pair.fetch(pairPda);
 console.log("Reserve0:", pair.reserve0.toString());
 console.log("Reserve1:", pair.reserve1.toString());
+```
+
+## V2 market PDA example
+
+V2 uses standalone market accounts. Pass the same `paramsHash` that was supplied to the V2 `initialize` instruction.
+
+```typescript
+import { PublicKey } from "@solana/web3.js";
+import { deriveMarketAddress } from "@omnipair/program-interface";
+
+const baseMint = new PublicKey("So11111111111111111111111111111111111111112");
+const quoteMint = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+const paramsHash = new Uint8Array(32);
+
+const [marketPda, marketBump] = deriveMarketAddress(baseMint, quoteMint, paramsHash);
+console.log("market:", marketPda.toBase58(), "bump:", marketBump);
+
+const market = await v2Program.account.market.fetch(marketPda);
+console.log("base mint:", market.baseMint.toBase58());
+console.log("quote mint:", market.quoteMint.toBase58());
 ```
 
 ## JavaScript runtime-only imports
