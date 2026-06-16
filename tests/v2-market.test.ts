@@ -770,6 +770,54 @@ describe("Omnipair Market LiteSVM", () => {
     );
   });
 
+  it("rejects disabled soft-borrow and unsafe health config updates", async () => {
+    const { market, eventAuthority } = await initializeMarketFixture();
+
+    const softBorrowConfig = marketConfig();
+    softBorrowConfig.softBorrowEnabled = true;
+    await expectRejects(() =>
+      program.methods
+        .updateMarketConfig({ config: softBorrowConfig })
+        .accounts({
+          market,
+          operator: payer.publicKey,
+          eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .rpc()
+    );
+
+    const unsafeHealthConfig = marketConfig();
+    unsafeHealthConfig.recognizedCollateralCapBps = 10_500;
+    unsafeHealthConfig.marketHealthMinBps = 11_000;
+    await expectRejects(() =>
+      program.methods
+        .updateMarketConfig({ config: unsafeHealthConfig })
+        .accounts({
+          market,
+          operator: payer.publicKey,
+          eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .rpc()
+    );
+
+    const validConfig = marketConfig();
+    validConfig.swapFeeBps = 42;
+    await program.methods
+      .updateMarketConfig({ config: validConfig })
+      .accounts({
+        market,
+        operator: payer.publicKey,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+  });
+
   it("locks buffer-ratio updates while market stake is active", async () => {
     const {
       asset0Mint,
