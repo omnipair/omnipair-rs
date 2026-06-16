@@ -2353,6 +2353,80 @@ describe("Omnipair Market LiteSVM", () => {
     );
   });
 
+  it("blocks hedged market claim wrappers when disabled by config", async () => {
+    const {
+      asset0Mint,
+      claim0Mint,
+      hedge0Mint,
+      market,
+      hedge0Vault,
+      ownerClaim0Account,
+      eventAuthority,
+    } = await fundTwoSidedMarket();
+    const ownerHedge0Account = await createAccount(
+      connection as any,
+      payer,
+      hedge0Mint,
+      payer.publicKey
+    );
+    const hedge0Position = deriveAddress(
+      Buffer.from("hedge_position"),
+      market.toBuffer(),
+      payer.publicKey.toBuffer(),
+      asset0Mint.toBuffer()
+    );
+
+    const config = marketConfig();
+    config.hedgedLpEnabled = false;
+    await program.methods
+      .updateMarketConfig({ config })
+      .accounts({
+        market,
+        operator: payer.publicKey,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await expectRejects(() =>
+      program.methods
+        .openHedge({
+          marketSideIndex: 0,
+          claimAmount: new BN(50_000),
+          minHedgeAmount: new BN(50_000),
+        })
+        .accounts({
+          market,
+          owner: payer.publicKey,
+          assetMint: asset0Mint,
+          claimMint: claim0Mint,
+          hedgeMint: hedge0Mint,
+          hedgeVault: hedge0Vault,
+          ownerClaimAccount: ownerClaim0Account,
+          ownerHedgeAccount: ownerHedge0Account,
+          hedgePosition: hedge0Position,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .rpc()
+    );
+
+    expect((await getAccount(connection as any, ownerClaim0Account)).amount).to.equal(
+      BigInt(800_000)
+    );
+    expect((await getAccount(connection as any, ownerHedge0Account)).amount).to.equal(
+      BigInt(0)
+    );
+    expect((await getAccount(connection as any, hedge0Vault)).amount).to.equal(
+      BigInt(0)
+    );
+  });
+
   it("blocks hedge closes when spot diverges from cached EMA", async () => {
     const {
       asset0Mint,
