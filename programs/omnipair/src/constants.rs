@@ -98,26 +98,6 @@ pub const MAX_TARGET_UTIL_BPS: u64 = 10_000;  // 100% maximum for target_util_en
 #[constant]
 pub const PAIR_SEED_PREFIX: &[u8] = b"gamm_pair";
 #[constant]
-pub const MARKET_V2_SEED_PREFIX: &[u8] = b"market_v2";
-#[constant]
-pub const MARKET_RESERVE_VAULT_SEED_PREFIX: &[u8] = b"market_reserve";
-#[constant]
-pub const MARKET_COLLATERAL_VAULT_SEED_PREFIX: &[u8] = b"market_collateral";
-#[constant]
-pub const MARKET_FEE_VAULT_SEED_PREFIX: &[u8] = b"market_fee";
-#[constant]
-pub const MARKET_STAKE_VAULT_SEED_PREFIX: &[u8] = b"market_stake";
-#[constant]
-pub const STAKE_POSITION_SEED_PREFIX: &[u8] = b"stake";
-#[constant]
-pub const MARGIN_POSITION_SEED_PREFIX: &[u8] = b"margin";
-#[constant]
-pub const HEDGE_VAULT_SEED_PREFIX: &[u8] = b"hedged";
-#[constant]
-pub const HEDGE_POSITION_SEED_PREFIX: &[u8] = b"hedge_position";
-#[constant]
-pub const INSURANCE_RESERVE_SEED_PREFIX: &[u8] = b"insurance";
-#[constant]
 pub const POSITION_SEED_PREFIX: &[u8] = b"gamm_position";
 #[constant]
 pub const FUTARCHY_AUTHORITY_SEED_PREFIX: &[u8] = b"futarchy_authority";
