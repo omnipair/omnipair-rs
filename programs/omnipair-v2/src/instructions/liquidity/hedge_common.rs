@@ -2,11 +2,14 @@ use anchor_lang::{prelude::*, solana_program::program_option::COption};
 use anchor_spl::token_interface::{Mint, TokenAccount};
 
 use crate::instructions::common::require_fee_free_claim_token_mint;
-use crate::{errors::ErrorCode, state::Market};
+use crate::{
+    errors::ErrorCode,
+    state::{Market, MarketAsset},
+};
 
 pub(super) fn validate_hedge_accounts<'info>(
     market: &Account<'info, Market>,
-    market_side_index: u8,
+    market_asset: MarketAsset,
     owner: Pubkey,
     asset_mint: &InterfaceAccount<'info, Mint>,
     claim_token_mint: &InterfaceAccount<'info, Mint>,
@@ -15,7 +18,7 @@ pub(super) fn validate_hedge_accounts<'info>(
     owner_claim_account: &InterfaceAccount<'info, TokenAccount>,
     owner_hedge_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
-    let market_side = market.side(market_side_index)?;
+    let market_side = market.side(market_asset)?;
     require_keys_eq!(
         market_side.asset_mint,
         asset_mint.key(),

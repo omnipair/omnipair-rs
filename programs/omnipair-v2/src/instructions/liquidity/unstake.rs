@@ -10,7 +10,7 @@ use crate::{
     events::{MarketEventMetadata, MarketStakeUpdated},
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
-    state::{Market, StakePosition},
+    state::{Market, MarketAsset, StakePosition},
     transitions::staking::Unstake as UnstakeTransition,
 };
 
@@ -20,7 +20,7 @@ use crate::instructions::common::{
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct UnstakeArgs {
-    pub market_side_index: u8,
+    pub market_asset: MarketAsset,
     pub claim_amount: u64,
     pub buffer_share_amount: u64,
 }
@@ -79,7 +79,7 @@ impl<'info> Unstake<'info> {
         );
         validate_stake_accounts(
             &self.market,
-            args.market_side_index,
+            args.market_asset,
             self.owner.key(),
             &self.asset_mint,
             &self.claim_token_mint,
@@ -111,7 +111,7 @@ impl<'info> Unstake<'info> {
         let asset_mint_key = ctx.accounts.asset_mint.key();
 
         let stake_receipt = {
-            let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
+            let market_side = ctx.accounts.market.side_mut(args.market_asset)?;
             UnstakeTransition::new(args.claim_amount, args.buffer_share_amount)
                 .apply(market_side, &mut ctx.accounts.stake_position)?
         };

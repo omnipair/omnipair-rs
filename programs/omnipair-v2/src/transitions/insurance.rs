@@ -1,9 +1,12 @@
 use anchor_lang::prelude::*;
 
-use crate::{errors::ErrorCode, state::InsuranceReserve};
+use crate::{
+    errors::ErrorCode,
+    state::{InsuranceReserve, MarketAsset},
+};
 
 pub struct DepositInsurance {
-    pub market_side_index: u8,
+    pub market_asset: MarketAsset,
     pub insurance_credit: u64,
 }
 
@@ -15,29 +18,28 @@ pub struct InsuranceReceipt {
 }
 
 impl DepositInsurance {
-    pub fn new(market_side_index: u8, insurance_credit: u64) -> Self {
+    pub fn new(market_asset: MarketAsset, insurance_credit: u64) -> Self {
         Self {
-            market_side_index,
+            market_asset,
             insurance_credit,
         }
     }
 
     pub fn apply(self, insurance_reserve: &mut InsuranceReserve) -> Result<InsuranceReceipt> {
         require!(self.insurance_credit > 0, ErrorCode::AmountZero);
-        match self.market_side_index {
-            0 => {
+        match self.market_asset {
+            MarketAsset::Base => {
                 insurance_reserve.base_available = insurance_reserve
                     .base_available
                     .checked_add(self.insurance_credit)
                     .ok_or(ErrorCode::MarketMathOverflow)?;
             }
-            1 => {
+            MarketAsset::Quote => {
                 insurance_reserve.quote_available = insurance_reserve
                     .quote_available
                     .checked_add(self.insurance_credit)
                     .ok_or(ErrorCode::MarketMathOverflow)?;
             }
-            _ => return err!(ErrorCode::InvalidMarketSide),
         }
         Ok(InsuranceReceipt {
             insurance_credit: self.insurance_credit,
@@ -59,7 +61,7 @@ mod tests {
             ..InsuranceReserve::default()
         };
 
-        let receipt = DepositInsurance::new(0, 15)
+        let receipt = DepositInsurance::new(MarketAsset::Base, 15)
             .apply(&mut insurance_reserve)
             .unwrap();
 
@@ -77,7 +79,7 @@ mod tests {
             ..InsuranceReserve::default()
         };
 
-        let receipt = DepositInsurance::new(1, 15)
+        let receipt = DepositInsurance::new(MarketAsset::Quote, 15)
             .apply(&mut insurance_reserve)
             .unwrap();
 

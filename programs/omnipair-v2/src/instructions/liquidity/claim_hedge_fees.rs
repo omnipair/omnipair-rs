@@ -10,7 +10,7 @@ use crate::{
     events::{MarketEventMetadata, MarketHedgeFeesClaimed},
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
-    state::{HedgePosition, Market},
+    state::{HedgePosition, Market, MarketAsset},
     transitions::fee::{PrepareHedgedFeeClaim, SettleHedgedFeeClaim},
 };
 
@@ -21,7 +21,7 @@ use crate::instructions::common::{
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct ClaimHedgeFeesArgs {
-    pub market_side_index: u8,
+    pub market_asset: MarketAsset,
     pub min_fee_amount: u64,
 }
 
@@ -73,7 +73,7 @@ impl<'info> ClaimHedgeFees<'info> {
         self.market.assert_started()?;
         validate_fee_accounts(
             &self.market,
-            args.market_side_index,
+            args.market_asset,
             self.owner.key(),
             &self.asset_mint,
             &self.fee_vault,
@@ -96,7 +96,7 @@ impl<'info> ClaimHedgeFees<'info> {
         ctx.accounts.market.assert_risk_circuit_breakers()?;
 
         let pending_claim = {
-            let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
+            let market_side = ctx.accounts.market.side_mut(args.market_asset)?;
             PrepareHedgedFeeClaim::new(ctx.accounts.fee_vault.amount)
                 .apply(market_side, &mut ctx.accounts.hedge_position)?
         };
@@ -124,7 +124,7 @@ impl<'info> ClaimHedgeFees<'info> {
         require_gte!(fee_credit, args.min_fee_amount, ErrorCode::SlippageExceeded);
 
         let settled_claim = {
-            let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
+            let market_side = ctx.accounts.market.side_mut(args.market_asset)?;
             SettleHedgedFeeClaim::new(pending_claim.fee_amount, ctx.accounts.fee_vault.amount)
                 .apply(market_side, &mut ctx.accounts.hedge_position)?
         };

@@ -9,7 +9,7 @@ use crate::{
     errors::ErrorCode,
     events::{MarketEventMetadata, MarketStakeUpdated},
     shared::token::transfer_from_user_to_vault,
-    state::{Market, StakePosition},
+    state::{Market, MarketAsset, StakePosition},
     transitions::staking::Stake as StakeTransition,
     utils::market_math::active_stake_units,
 };
@@ -20,7 +20,7 @@ use crate::instructions::common::{
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct StakeArgs {
-    pub market_side_index: u8,
+    pub market_asset: MarketAsset,
     pub claim_amount: u64,
     pub buffer_share_amount: u64,
     pub min_active_stake_units: u64,
@@ -85,7 +85,7 @@ impl<'info> Stake<'info> {
         );
         validate_stake_accounts(
             &self.market,
-            args.market_side_index,
+            args.market_asset,
             self.owner.key(),
             &self.asset_mint,
             &self.claim_token_mint,
@@ -99,7 +99,7 @@ impl<'info> Stake<'info> {
             self.asset_mint.key(),
         )?;
 
-        let market_side = self.market.side(args.market_side_index)?;
+        let market_side = self.market.side(args.market_asset)?;
         require_gte!(
             self.stake_position.available_buffer_share_amount,
             args.buffer_share_amount,
@@ -145,7 +145,7 @@ impl<'info> Stake<'info> {
         )?;
 
         let stake_receipt = {
-            let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
+            let market_side = ctx.accounts.market.side_mut(args.market_asset)?;
             StakeTransition::new(args.claim_amount, args.buffer_share_amount)
                 .apply(market_side, &mut ctx.accounts.stake_position)?
         };

@@ -10,7 +10,7 @@ use crate::{
     events::{MarketDebtUpdated, MarketEventMetadata, MarketHealthUpdated},
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
-    state::{MarginPosition, Market},
+    state::{MarginPosition, Market, MarketAsset},
     transitions::debt::Borrow as BorrowTransition,
 };
 
@@ -22,7 +22,7 @@ use super::common::validate_borrow_accounts;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct BorrowArgs {
-    pub borrow_asset_is_base: bool,
+    pub borrow_asset: MarketAsset,
     pub borrow_amount: u64,
     pub min_debt_amount_out: u64,
     pub min_health_bps: u64,
@@ -87,7 +87,7 @@ impl<'info> Borrow<'info> {
         );
         validate_borrow_accounts(
             &self.market,
-            args.borrow_asset_is_base,
+            args.borrow_asset,
             self.owner.key(),
             &self.debt_asset_mint,
             &self.collateral_asset_mint,
@@ -105,12 +105,9 @@ impl<'info> Borrow<'info> {
         let owner_key = ctx.accounts.owner.key();
         let debt_asset_mint_key = ctx.accounts.debt_asset_mint.key();
 
-        let debt_receipt = BorrowTransition::new(
-            args.borrow_asset_is_base,
-            args.borrow_amount,
-            args.min_health_bps,
-        )
-        .apply(&mut ctx.accounts.market, &mut ctx.accounts.margin_position)?;
+        let debt_receipt =
+            BorrowTransition::new(args.borrow_asset, args.borrow_amount, args.min_health_bps)
+                .apply(&mut ctx.accounts.market, &mut ctx.accounts.margin_position)?;
 
         let debt_token_program = token_program_for_mint(
             &ctx.accounts.debt_asset_mint,

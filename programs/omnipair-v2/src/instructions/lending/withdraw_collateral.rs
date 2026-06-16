@@ -10,7 +10,7 @@ use crate::{
     events::{MarketCollateralWithdrawn, MarketEventMetadata},
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
-    state::{MarginPosition, Market},
+    state::{MarginPosition, Market, MarketAsset},
     transitions::collateral::WithdrawCollateral as WithdrawCollateralTransition,
 };
 
@@ -22,7 +22,7 @@ use super::common::validate_collateral_accounts;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct WithdrawCollateralArgs {
-    pub market_side_index: u8,
+    pub market_asset: MarketAsset,
     pub withdraw_amount: u64,
     pub min_asset_amount_out: u64,
 }
@@ -75,7 +75,7 @@ impl<'info> WithdrawCollateral<'info> {
         require!(args.withdraw_amount > 0, ErrorCode::AmountZero);
         validate_collateral_accounts(
             &self.market,
-            args.market_side_index,
+            args.market_asset,
             self.owner.key(),
             &self.asset_mint,
             &self.collateral_vault,
@@ -89,10 +89,9 @@ impl<'info> WithdrawCollateral<'info> {
             args.withdraw_amount,
             ErrorCode::InsufficientBalance
         );
-        let idle_collateral = match args.market_side_index {
-            0 => self.margin_position.idle_base_collateral()?,
-            1 => self.margin_position.idle_quote_collateral()?,
-            _ => return err!(ErrorCode::InvalidMarketSide),
+        let idle_collateral = match args.market_asset {
+            MarketAsset::Base => self.margin_position.idle_base_collateral()?,
+            MarketAsset::Quote => self.margin_position.idle_quote_collateral()?,
         };
         require_gte!(
             idle_collateral,
@@ -144,7 +143,7 @@ impl<'info> WithdrawCollateral<'info> {
         );
 
         let collateral_receipt =
-            WithdrawCollateralTransition::new(args.market_side_index, collateral_debit)
+            WithdrawCollateralTransition::new(args.market_asset, collateral_debit)
                 .apply(&mut ctx.accounts.market, &mut ctx.accounts.margin_position)?;
 
         emit_cpi!(MarketCollateralWithdrawn {

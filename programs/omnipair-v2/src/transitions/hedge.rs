@@ -2,17 +2,17 @@ use anchor_lang::prelude::*;
 
 use crate::{
     errors::ErrorCode,
-    state::{HedgePosition, Market},
+    state::{HedgePosition, Market, MarketAsset},
     transitions::fee::CarryForwardHedgedFees,
 };
 
 pub struct OpenHedge {
-    pub market_side_index: u8,
+    pub market_asset: MarketAsset,
     pub claim_credit: u64,
 }
 
 pub struct CloseHedge {
-    pub market_side_index: u8,
+    pub market_asset: MarketAsset,
     pub hedge_amount: u64,
 }
 
@@ -25,9 +25,9 @@ pub struct HedgeReceipt {
 }
 
 impl OpenHedge {
-    pub fn new(market_side_index: u8, claim_credit: u64) -> Self {
+    pub fn new(market_asset: MarketAsset, claim_credit: u64) -> Self {
         Self {
-            market_side_index,
+            market_asset,
             claim_credit,
         }
     }
@@ -39,7 +39,7 @@ impl OpenHedge {
     ) -> Result<HedgeReceipt> {
         require!(self.claim_credit > 0, ErrorCode::AmountZero);
         let (hedged_claim_token_supply, accrued_fee_amount) = {
-            let market_side = market.side_mut(self.market_side_index)?;
+            let market_side = market.side_mut(self.market_asset)?;
             CarryForwardHedgedFees.apply(market_side)?;
             hedge_position.accrue_fees(market_side.fee_ledger.hedged_fee_growth_index_nad)?;
             market_side.claim_token_ledger.hedged_claim_token_supply = market_side
@@ -65,9 +65,9 @@ impl OpenHedge {
 }
 
 impl CloseHedge {
-    pub fn new(market_side_index: u8, hedge_amount: u64) -> Self {
+    pub fn new(market_asset: MarketAsset, hedge_amount: u64) -> Self {
         Self {
-            market_side_index,
+            market_asset,
             hedge_amount,
         }
     }
@@ -79,7 +79,7 @@ impl CloseHedge {
     ) -> Result<HedgeReceipt> {
         require!(self.hedge_amount > 0, ErrorCode::AmountZero);
         let (hedged_claim_token_supply, accrued_fee_amount) = {
-            let market_side = market.side_mut(self.market_side_index)?;
+            let market_side = market.side_mut(self.market_asset)?;
             CarryForwardHedgedFees.apply(market_side)?;
             hedge_position.accrue_fees(market_side.fee_ledger.hedged_fee_growth_index_nad)?;
             market_side.claim_token_ledger.hedged_claim_token_supply = market_side
@@ -109,7 +109,7 @@ mod tests {
     use super::*;
     use crate::{
         constants::{MARKET_VERSION, NAD},
-        state::{ClaimTokenLedger, MarketConfig, MarketSide, ReserveLedger},
+        state::{ClaimTokenLedger, MarketAsset, MarketConfig, MarketSide, ReserveLedger},
     };
 
     fn market_side(asset_mint: Pubkey) -> MarketSide {
@@ -189,7 +189,7 @@ mod tests {
         let mut market = test_market();
         let mut hedge_position = hedge_position();
 
-        let receipt = OpenHedge::new(0, 500)
+        let receipt = OpenHedge::new(MarketAsset::Base, 500)
             .apply(&mut market, &mut hedge_position)
             .unwrap();
 
@@ -216,7 +216,7 @@ mod tests {
         let mut hedge_position = hedge_position();
         hedge_position.hedged_claim_token_amount = 500;
 
-        let receipt = CloseHedge::new(0, 125)
+        let receipt = CloseHedge::new(MarketAsset::Base, 125)
             .apply(&mut market, &mut hedge_position)
             .unwrap();
 

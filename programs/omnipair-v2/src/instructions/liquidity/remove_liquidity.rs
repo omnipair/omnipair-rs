@@ -10,7 +10,7 @@ use crate::{
     events::{LiquidityRemoved, MarketEventMetadata},
     generate_market_seeds,
     shared::token::{token_burn, transfer_from_vault_to_user},
-    state::Market,
+    state::{Market, MarketAsset},
     transitions::reserve::RemoveLiquidity as RemoveLiquidityTransition,
 };
 
@@ -21,7 +21,7 @@ use crate::instructions::common::{
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct RemoveLiquidityArgs {
-    pub market_side_index: u8,
+    pub market_asset: MarketAsset,
     pub claim_amount: u64,
     pub min_asset_amount_out: u64,
 }
@@ -74,7 +74,7 @@ impl<'info> RemoveLiquidity<'info> {
         );
         validate_reserve_accounts(
             &self.market,
-            args.market_side_index,
+            args.market_asset,
             self.owner.key(),
             &self.asset_mint,
             &self.claim_token_mint,
@@ -94,7 +94,7 @@ impl<'info> RemoveLiquidity<'info> {
 
         ctx.accounts
             .market
-            .enforce_daily_withdraw_limit(args.market_side_index, args.claim_amount)?;
+            .enforce_daily_withdraw_limit(args.market_asset, args.claim_amount)?;
 
         let claim_token_program = token_program_for_mint(
             &ctx.accounts.claim_token_mint,
@@ -138,7 +138,7 @@ impl<'info> RemoveLiquidity<'info> {
         );
 
         let receipt = {
-            let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
+            let market_side = ctx.accounts.market.side_mut(args.market_asset)?;
             RemoveLiquidityTransition::new(args.claim_amount).apply(market_side)?
         };
         ctx.accounts.market.refresh_risk_book()?;

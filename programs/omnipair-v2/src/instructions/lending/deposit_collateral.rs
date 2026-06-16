@@ -9,7 +9,7 @@ use crate::{
     errors::ErrorCode,
     events::{MarketCollateralDeposited, MarketEventMetadata},
     shared::{account::get_size_with_discriminator, token::transfer_from_user_to_vault},
-    state::{MarginPosition, Market},
+    state::{MarginPosition, Market, MarketAsset},
     transitions::collateral::DepositCollateral as DepositCollateralTransition,
 };
 
@@ -19,7 +19,7 @@ use super::common::validate_collateral_accounts;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct DepositCollateralArgs {
-    pub market_side_index: u8,
+    pub market_asset: MarketAsset,
     pub deposit_amount: u64,
 }
 
@@ -79,7 +79,7 @@ impl<'info> DepositCollateral<'info> {
         );
         validate_collateral_accounts(
             &self.market,
-            args.market_side_index,
+            args.market_asset,
             self.owner.key(),
             &self.asset_mint,
             &self.collateral_vault,
@@ -134,7 +134,7 @@ impl<'info> DepositCollateral<'info> {
         require!(collateral_credit > 0, ErrorCode::AmountZero);
 
         let collateral_receipt =
-            DepositCollateralTransition::new(args.market_side_index, collateral_credit)
+            DepositCollateralTransition::new(args.market_asset, collateral_credit)
                 .apply(&mut ctx.accounts.margin_position)?;
 
         emit_cpi!(MarketCollateralDeposited {

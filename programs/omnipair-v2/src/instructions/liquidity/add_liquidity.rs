@@ -13,7 +13,7 @@ use crate::{
         account::get_size_with_discriminator,
         token::{token_mint_to, transfer_from_user_to_vault},
     },
-    state::{Market, StakePosition},
+    state::{Market, MarketAsset, StakePosition},
     transitions::reserve::AddLiquidity as AddLiquidityTransition,
 };
 
@@ -24,7 +24,7 @@ use crate::instructions::common::{
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct AddLiquidityArgs {
-    pub market_side_index: u8,
+    pub market_asset: MarketAsset,
     pub deposit_amount: u64,
     pub min_claim_amount: u64,
     pub max_buffer_amount: u64,
@@ -93,7 +93,7 @@ impl<'info> AddLiquidity<'info> {
         );
         validate_reserve_accounts(
             &self.market,
-            args.market_side_index,
+            args.market_asset,
             self.owner.key(),
             &self.asset_mint,
             &self.claim_token_mint,
@@ -157,7 +157,7 @@ impl<'info> AddLiquidity<'info> {
             .checked_sub(reserve_balance_before)
             .ok_or(ErrorCode::MarketMathOverflow)?;
         let receipt = {
-            let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
+            let market_side = ctx.accounts.market.side_mut(args.market_asset)?;
             AddLiquidityTransition::new(reserve_credit).apply(market_side)?
         };
         require_gte!(

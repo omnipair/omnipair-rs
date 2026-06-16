@@ -9,7 +9,7 @@ use crate::{
     errors::ErrorCode,
     events::{MarketEventMetadata, MarketInsuranceFunded},
     shared::token::transfer_from_user_to_vault,
-    state::Market,
+    state::{Market, MarketAsset},
     transitions::insurance::DepositInsurance as DepositInsuranceTransition,
 };
 
@@ -17,7 +17,7 @@ use crate::instructions::common::{require_supported_asset_mint, token_program_fo
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct DepositInsuranceArgs {
-    pub market_side_index: u8,
+    pub market_asset: MarketAsset,
     pub deposit_amount: u64,
 }
 
@@ -63,7 +63,7 @@ impl<'info> DepositInsurance<'info> {
         );
         validate_insurance_accounts(
             &self.market,
-            args.market_side_index,
+            args.market_asset,
             self.sponsor.key(),
             &self.asset_mint,
             &self.insurance_vault,
@@ -103,7 +103,7 @@ impl<'info> DepositInsurance<'info> {
             .ok_or(ErrorCode::MarketMathOverflow)?;
         require!(insurance_credit > 0, ErrorCode::AmountZero);
 
-        let receipt = DepositInsuranceTransition::new(args.market_side_index, insurance_credit)
+        let receipt = DepositInsuranceTransition::new(args.market_asset, insurance_credit)
             .apply(&mut ctx.accounts.market.insurance_reserve)?;
 
         emit_cpi!(MarketInsuranceFunded {
@@ -122,17 +122,16 @@ impl<'info> DepositInsurance<'info> {
 
 fn validate_insurance_accounts<'info>(
     market: &Account<'info, Market>,
-    market_side_index: u8,
+    market_asset: MarketAsset,
     owner: Pubkey,
     asset_mint: &InterfaceAccount<'info, Mint>,
     insurance_vault: &InterfaceAccount<'info, TokenAccount>,
     owner_asset_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
-    let market_side = market.side(market_side_index)?;
-    let expected_vault = if market_side_index == 0 {
-        market.insurance_reserve.base_vault
-    } else {
-        market.insurance_reserve.quote_vault
+    let market_side = market.side(market_asset)?;
+    let expected_vault = match market_asset {
+        MarketAsset::Base => market.insurance_reserve.base_vault,
+        MarketAsset::Quote => market.insurance_reserve.quote_vault,
     };
     require_keys_eq!(
         market_side.asset_mint,

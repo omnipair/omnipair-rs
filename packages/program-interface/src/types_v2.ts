@@ -3865,8 +3865,12 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketSideIndex",
-            "type": "u8"
+            "name": "marketAsset",
+            "type": {
+              "defined": {
+                "name": "marketAsset"
+              }
+            }
           },
           {
             "name": "depositAmount",
@@ -3889,8 +3893,12 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "borrowAssetIsBase",
-            "type": "bool"
+            "name": "borrowAsset",
+            "type": {
+              "defined": {
+                "name": "marketAsset"
+              }
+            }
           },
           {
             "name": "borrowAmount",
@@ -3937,8 +3945,12 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketSideIndex",
-            "type": "u8"
+            "name": "marketAsset",
+            "type": {
+              "defined": {
+                "name": "marketAsset"
+              }
+            }
           },
           {
             "name": "minFeeAmount",
@@ -3953,8 +3965,12 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketSideIndex",
-            "type": "u8"
+            "name": "marketAsset",
+            "type": {
+              "defined": {
+                "name": "marketAsset"
+              }
+            }
           },
           {
             "name": "minFeeAmount",
@@ -3969,8 +3985,12 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketSideIndex",
-            "type": "u8"
+            "name": "marketAsset",
+            "type": {
+              "defined": {
+                "name": "marketAsset"
+              }
+            }
           },
           {
             "name": "claimKind",
@@ -4013,8 +4033,12 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketSideIndex",
-            "type": "u8"
+            "name": "marketAsset",
+            "type": {
+              "defined": {
+                "name": "marketAsset"
+              }
+            }
           },
           {
             "name": "hedgeAmount",
@@ -4085,8 +4109,12 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketSideIndex",
-            "type": "u8"
+            "name": "marketAsset",
+            "type": {
+              "defined": {
+                "name": "marketAsset"
+              }
+            }
           },
           {
             "name": "depositAmount",
@@ -4101,8 +4129,12 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketSideIndex",
-            "type": "u8"
+            "name": "marketAsset",
+            "type": {
+              "defined": {
+                "name": "marketAsset"
+              }
+            }
           },
           {
             "name": "depositAmount",
@@ -4254,8 +4286,12 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "debtAssetIsBase",
-            "type": "bool"
+            "name": "debtAsset",
+            "type": {
+              "defined": {
+                "name": "marketAsset"
+              }
+            }
           },
           {
             "name": "repayAmount",
@@ -4517,6 +4553,20 @@ export type OmnipairV2 = {
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "marketAsset",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "base"
+          },
+          {
+            "name": "quote"
           }
         ]
       }
@@ -5362,8 +5412,12 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketSideIndex",
-            "type": "u8"
+            "name": "marketAsset",
+            "type": {
+              "defined": {
+                "name": "marketAsset"
+              }
+            }
           },
           {
             "name": "claimAmount",
@@ -5458,8 +5512,12 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketSideIndex",
-            "type": "u8"
+            "name": "marketAsset",
+            "type": {
+              "defined": {
+                "name": "marketAsset"
+              }
+            }
           },
           {
             "name": "claimAmount",
@@ -5478,8 +5536,12 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "repayAssetIsBase",
-            "type": "bool"
+            "name": "repayAsset",
+            "type": {
+              "defined": {
+                "name": "marketAsset"
+              }
+            }
           },
           {
             "name": "repayAmount",
@@ -5594,8 +5656,12 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketSideIndex",
-            "type": "u8"
+            "name": "marketAsset",
+            "type": {
+              "defined": {
+                "name": "marketAsset"
+              }
+            }
           },
           {
             "name": "claimAmount",
@@ -5662,8 +5728,12 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "assetInIsBase",
-            "type": "bool"
+            "name": "assetIn",
+            "type": {
+              "defined": {
+                "name": "marketAsset"
+              }
+            }
           },
           {
             "name": "exactAssetIn",
@@ -5730,8 +5800,12 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketSideIndex",
-            "type": "u8"
+            "name": "marketAsset",
+            "type": {
+              "defined": {
+                "name": "marketAsset"
+              }
+            }
           },
           {
             "name": "claimAmount",
@@ -5766,8 +5840,12 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketSideIndex",
-            "type": "u8"
+            "name": "marketAsset",
+            "type": {
+              "defined": {
+                "name": "marketAsset"
+              }
+            }
           },
           {
             "name": "withdrawAmount",

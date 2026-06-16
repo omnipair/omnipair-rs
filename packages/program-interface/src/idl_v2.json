@@ -3859,8 +3859,12 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_side_index",
-            "type": "u8"
+            "name": "market_asset",
+            "type": {
+              "defined": {
+                "name": "MarketAsset"
+              }
+            }
           },
           {
             "name": "deposit_amount",
@@ -3883,8 +3887,12 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "borrow_asset_is_base",
-            "type": "bool"
+            "name": "borrow_asset",
+            "type": {
+              "defined": {
+                "name": "MarketAsset"
+              }
+            }
           },
           {
             "name": "borrow_amount",
@@ -3931,8 +3939,12 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_side_index",
-            "type": "u8"
+            "name": "market_asset",
+            "type": {
+              "defined": {
+                "name": "MarketAsset"
+              }
+            }
           },
           {
             "name": "min_fee_amount",
@@ -3947,8 +3959,12 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_side_index",
-            "type": "u8"
+            "name": "market_asset",
+            "type": {
+              "defined": {
+                "name": "MarketAsset"
+              }
+            }
           },
           {
             "name": "min_fee_amount",
@@ -3963,8 +3979,12 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_side_index",
-            "type": "u8"
+            "name": "market_asset",
+            "type": {
+              "defined": {
+                "name": "MarketAsset"
+              }
+            }
           },
           {
             "name": "claim_kind",
@@ -4007,8 +4027,12 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_side_index",
-            "type": "u8"
+            "name": "market_asset",
+            "type": {
+              "defined": {
+                "name": "MarketAsset"
+              }
+            }
           },
           {
             "name": "hedge_amount",
@@ -4079,8 +4103,12 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_side_index",
-            "type": "u8"
+            "name": "market_asset",
+            "type": {
+              "defined": {
+                "name": "MarketAsset"
+              }
+            }
           },
           {
             "name": "deposit_amount",
@@ -4095,8 +4123,12 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_side_index",
-            "type": "u8"
+            "name": "market_asset",
+            "type": {
+              "defined": {
+                "name": "MarketAsset"
+              }
+            }
           },
           {
             "name": "deposit_amount",
@@ -4248,8 +4280,12 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "debt_asset_is_base",
-            "type": "bool"
+            "name": "debt_asset",
+            "type": {
+              "defined": {
+                "name": "MarketAsset"
+              }
+            }
           },
           {
             "name": "repay_amount",
@@ -4511,6 +4547,20 @@
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketAsset",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Base"
+          },
+          {
+            "name": "Quote"
           }
         ]
       }
@@ -5356,8 +5406,12 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_side_index",
-            "type": "u8"
+            "name": "market_asset",
+            "type": {
+              "defined": {
+                "name": "MarketAsset"
+              }
+            }
           },
           {
             "name": "claim_amount",
@@ -5452,8 +5506,12 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_side_index",
-            "type": "u8"
+            "name": "market_asset",
+            "type": {
+              "defined": {
+                "name": "MarketAsset"
+              }
+            }
           },
           {
             "name": "claim_amount",
@@ -5472,8 +5530,12 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "repay_asset_is_base",
-            "type": "bool"
+            "name": "repay_asset",
+            "type": {
+              "defined": {
+                "name": "MarketAsset"
+              }
+            }
           },
           {
             "name": "repay_amount",
@@ -5588,8 +5650,12 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_side_index",
-            "type": "u8"
+            "name": "market_asset",
+            "type": {
+              "defined": {
+                "name": "MarketAsset"
+              }
+            }
           },
           {
             "name": "claim_amount",
@@ -5656,8 +5722,12 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "asset_in_is_base",
-            "type": "bool"
+            "name": "asset_in",
+            "type": {
+              "defined": {
+                "name": "MarketAsset"
+              }
+            }
           },
           {
             "name": "exact_asset_in",
@@ -5724,8 +5794,12 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_side_index",
-            "type": "u8"
+            "name": "market_asset",
+            "type": {
+              "defined": {
+                "name": "MarketAsset"
+              }
+            }
           },
           {
             "name": "claim_amount",
@@ -5760,8 +5834,12 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_side_index",
-            "type": "u8"
+            "name": "market_asset",
+            "type": {
+              "defined": {
+                "name": "MarketAsset"
+              }
+            }
           },
           {
             "name": "withdraw_amount",

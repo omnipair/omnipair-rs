@@ -16,7 +16,7 @@ use crate::{
             transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault,
         },
     },
-    state::Market,
+    state::{Market, MarketAsset},
     transitions::swap::Swap as SwapTransition,
 };
 
@@ -27,7 +27,7 @@ use crate::instructions::common::{
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct SwapArgs {
-    pub asset_in_is_base: bool,
+    pub asset_in: MarketAsset,
     pub exact_asset_in: u64,
     pub min_asset_out: u64,
 }
@@ -85,7 +85,7 @@ impl<'info> Swap<'info> {
         );
         validate_swap_accounts(
             &self.market,
-            args.asset_in_is_base,
+            args.asset_in,
             self.trader.key(),
             &self.asset_in_mint,
             &self.asset_out_mint,
@@ -126,8 +126,7 @@ impl<'info> Swap<'info> {
         require!(amount_in_after_fee > 0, ErrorCode::InsufficientOutputAmount);
 
         let amount_out = {
-            let (market_side_in, market_side_out) =
-                ctx.accounts.market.swap_sides(args.asset_in_is_base);
+            let (market_side_in, market_side_out) = ctx.accounts.market.swap_sides(args.asset_in);
             CPCurve::calculate_amount_out(
                 market_side_in.reserve_ledger.live_reserve,
                 market_side_out.reserve_ledger.live_reserve,
@@ -164,7 +163,7 @@ impl<'info> Swap<'info> {
 
         let swap_receipt = {
             let (market_side_in, market_side_out) =
-                ctx.accounts.market.swap_sides_mut(args.asset_in_is_base);
+                ctx.accounts.market.swap_sides_mut(args.asset_in);
             SwapTransition::new(
                 amount_in_after_fee,
                 amount_out,

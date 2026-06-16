@@ -2,6 +2,25 @@ use anchor_lang::prelude::*;
 
 use super::{BufferLedger, ClaimTokenLedger, DailyLimitBook, FeeLedger, ReserveLedger};
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MarketAsset {
+    Base,
+    Quote,
+}
+
+impl MarketAsset {
+    pub fn opposite(self) -> Self {
+        match self {
+            Self::Base => Self::Quote,
+            Self::Quote => Self::Base,
+        }
+    }
+
+    pub fn is_base(self) -> bool {
+        matches!(self, Self::Base)
+    }
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct MarketSide {
     pub asset_mint: Pubkey,

@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
 
 use super::{
-    DailyLimitBook, DebtBook, InsuranceReserve, MarginPosition, MarketHealth, MarketSide,
-    RecognitionLedger, RiskBook,
+    DailyLimitBook, DebtBook, InsuranceReserve, MarginPosition, MarketAsset, MarketHealth,
+    MarketSide, RecognitionLedger, RiskBook,
 };
 use crate::constants::*;
 use crate::errors::ErrorCode;
@@ -375,35 +375,31 @@ impl Market {
         Ok(())
     }
 
-    pub fn side(&self, market_side_index: u8) -> Result<&MarketSide> {
-        match market_side_index {
-            0 => Ok(&self.base_side),
-            1 => Ok(&self.quote_side),
-            _ => err!(ErrorCode::InvalidMarketSide),
+    pub fn side(&self, market_asset: MarketAsset) -> Result<&MarketSide> {
+        match market_asset {
+            MarketAsset::Base => Ok(&self.base_side),
+            MarketAsset::Quote => Ok(&self.quote_side),
         }
     }
 
-    pub fn side_mut(&mut self, market_side_index: u8) -> Result<&mut MarketSide> {
-        match market_side_index {
-            0 => Ok(&mut self.base_side),
-            1 => Ok(&mut self.quote_side),
-            _ => err!(ErrorCode::InvalidMarketSide),
+    pub fn side_mut(&mut self, market_asset: MarketAsset) -> Result<&mut MarketSide> {
+        match market_asset {
+            MarketAsset::Base => Ok(&mut self.base_side),
+            MarketAsset::Quote => Ok(&mut self.quote_side),
         }
     }
 
-    pub fn swap_sides(&self, asset_in_is_base: bool) -> (&MarketSide, &MarketSide) {
-        if asset_in_is_base {
-            (&self.base_side, &self.quote_side)
-        } else {
-            (&self.quote_side, &self.base_side)
+    pub fn swap_sides(&self, asset_in: MarketAsset) -> (&MarketSide, &MarketSide) {
+        match asset_in {
+            MarketAsset::Base => (&self.base_side, &self.quote_side),
+            MarketAsset::Quote => (&self.quote_side, &self.base_side),
         }
     }
 
-    pub fn swap_sides_mut(&mut self, asset_in_is_base: bool) -> (&mut MarketSide, &mut MarketSide) {
-        if asset_in_is_base {
-            (&mut self.base_side, &mut self.quote_side)
-        } else {
-            (&mut self.quote_side, &mut self.base_side)
+    pub fn swap_sides_mut(&mut self, asset_in: MarketAsset) -> (&mut MarketSide, &mut MarketSide) {
+        match asset_in {
+            MarketAsset::Base => (&mut self.base_side, &mut self.quote_side),
+            MarketAsset::Quote => (&mut self.quote_side, &mut self.base_side),
         }
     }
 
@@ -470,26 +466,28 @@ impl Market {
         Ok(())
     }
 
-    pub fn enforce_daily_borrow_limit(&mut self, market_side_index: u8, amount: u64) -> Result<()> {
+    pub fn enforce_daily_borrow_limit(
+        &mut self,
+        market_asset: MarketAsset,
+        amount: u64,
+    ) -> Result<()> {
         self.refresh_risk_book()?;
         let current_slot = self.risk_book.last_snapshot_slot;
-        let limit =
-            self.daily_limit_for_side(market_side_index, self.config.max_daily_borrow_bps)?;
-        self.side_mut(market_side_index)?
+        let limit = self.daily_limit_for_side(market_asset, self.config.max_daily_borrow_bps)?;
+        self.side_mut(market_asset)?
             .daily_limit_book
             .record_borrow(amount, limit, current_slot)
     }
 
     pub fn enforce_daily_withdraw_limit(
         &mut self,
-        market_side_index: u8,
+        market_asset: MarketAsset,
         amount: u64,
     ) -> Result<()> {
         self.refresh_risk_book()?;
         let current_slot = self.risk_book.last_snapshot_slot;
-        let limit =
-            self.daily_limit_for_side(market_side_index, self.config.max_daily_withdraw_bps)?;
-        self.side_mut(market_side_index)?
+        let limit = self.daily_limit_for_side(market_asset, self.config.max_daily_withdraw_bps)?;
+        self.side_mut(market_asset)?
             .daily_limit_book
             .record_withdraw(amount, limit, current_slot)
     }
@@ -524,34 +522,34 @@ impl Market {
     }
 
     pub fn effective_base_debt_nad(&self) -> Result<u128> {
-        self.effective_debt_nad(true)
+        self.effective_debt_nad(MarketAsset::Base)
     }
 
     pub fn effective_quote_debt_nad(&self) -> Result<u128> {
-        self.effective_debt_nad(false)
+        self.effective_debt_nad(MarketAsset::Quote)
     }
 
     pub fn quote_collateral_value_for_base_debt_nad(
         &self,
         quote_collateral_amount: u64,
     ) -> Result<u128> {
-        self.collateral_value_nad(false, quote_collateral_amount, &self.risk_book)
+        self.collateral_value_nad(MarketAsset::Quote, quote_collateral_amount, &self.risk_book)
     }
 
     pub fn base_collateral_value_for_quote_debt_nad(
         &self,
         base_collateral_amount: u64,
     ) -> Result<u128> {
-        self.collateral_value_nad(true, base_collateral_amount, &self.risk_book)
+        self.collateral_value_nad(MarketAsset::Base, base_collateral_amount, &self.risk_book)
     }
 
     pub fn collateral_amount_for_debt_value(
         &self,
-        debt_asset_is_base: bool,
+        debt_asset: MarketAsset,
         debt_amount: u64,
     ) -> Result<u64> {
         self.collateral_amount_for_debt_value_with_risk(
-            debt_asset_is_base,
+            debt_asset,
             debt_amount,
             &self.current_risk_book()?,
         )
@@ -560,22 +558,21 @@ impl Market {
     pub fn debt_capped_recognized_collateral(
         &self,
         margin_position: &MarginPosition,
-        debt_asset_is_base: bool,
+        debt_asset: MarketAsset,
         risk_book: &RiskBook,
     ) -> Result<u64> {
         let cap_bps = self.config.recognized_collateral_cap_bps as u128;
-        let (fixed_debt, debt_decimals, total_collateral) = if debt_asset_is_base {
-            (
+        let (fixed_debt, debt_decimals, total_collateral) = match debt_asset {
+            MarketAsset::Base => (
                 margin_position.fixed_base_debt(&self.debt_book)?,
                 self.base_side.asset_decimals,
                 margin_position.quote_collateral,
-            )
-        } else {
-            (
+            ),
+            MarketAsset::Quote => (
                 margin_position.fixed_quote_debt(&self.debt_book)?,
                 self.quote_side.asset_decimals,
                 margin_position.base_collateral,
-            )
+            ),
         };
         if fixed_debt == 0 || total_collateral == 0 {
             return Ok(0);
@@ -587,7 +584,7 @@ impl Market {
             .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
             .ok_or(ErrorCode::MarketMathOverflow)?;
         let capped_collateral = self.collateral_amount_for_debt_value_cap_with_risk(
-            debt_asset_is_base,
+            debt_asset,
             recognized_value_cap_nad,
             risk_book,
         )?;
@@ -597,13 +594,13 @@ impl Market {
     pub fn position_health_bps(
         &self,
         margin_position: &MarginPosition,
-        debt_asset_is_base: bool,
+        debt_asset: MarketAsset,
     ) -> Result<u64> {
         let risk_book = self.current_risk_book()?;
-        if debt_asset_is_base {
-            health_bps(
+        match debt_asset {
+            MarketAsset::Base => health_bps(
                 self.collateral_value_nad(
-                    false,
+                    MarketAsset::Quote,
                     margin_position.recognized_quote_collateral_for_base_debt,
                     &risk_book,
                 )?,
@@ -611,11 +608,10 @@ impl Market {
                     margin_position.fixed_base_debt(&self.debt_book)?,
                     self.base_side.asset_decimals,
                 )?,
-            )
-        } else {
-            health_bps(
+            ),
+            MarketAsset::Quote => health_bps(
                 self.collateral_value_nad(
-                    true,
+                    MarketAsset::Base,
                     margin_position.recognized_base_collateral_for_quote_debt,
                     &risk_book,
                 )?,
@@ -623,18 +619,18 @@ impl Market {
                     margin_position.fixed_quote_debt(&self.debt_book)?,
                     self.quote_side.asset_decimals,
                 )?,
-            )
+            ),
         }
     }
 
     pub fn assert_position_health(
         &self,
         margin_position: &MarginPosition,
-        debt_asset_is_base: bool,
+        debt_asset: MarketAsset,
         min_health_bps: u64,
     ) -> Result<()> {
         require_gte!(
-            self.position_health_bps(margin_position, debt_asset_is_base)?,
+            self.position_health_bps(margin_position, debt_asset)?,
             min_health_bps,
             ErrorCode::InsufficientMarketHealth
         );
@@ -644,18 +640,14 @@ impl Market {
     pub fn assert_recognition_cap(
         &self,
         margin_position: &MarginPosition,
-        debt_asset_is_base: bool,
+        debt_asset: MarketAsset,
     ) -> Result<()> {
         let risk_book = self.current_risk_book()?;
-        let max_recognized = self.debt_capped_recognized_collateral(
-            margin_position,
-            debt_asset_is_base,
-            &risk_book,
-        )?;
-        let recognized = if debt_asset_is_base {
-            margin_position.recognized_quote_collateral_for_base_debt
-        } else {
-            margin_position.recognized_base_collateral_for_quote_debt
+        let max_recognized =
+            self.debt_capped_recognized_collateral(margin_position, debt_asset, &risk_book)?;
+        let recognized = match debt_asset {
+            MarketAsset::Base => margin_position.recognized_quote_collateral_for_base_debt,
+            MarketAsset::Quote => margin_position.recognized_base_collateral_for_quote_debt,
         };
         require_gte!(
             max_recognized,
@@ -718,21 +710,20 @@ impl Market {
 }
 
 impl Market {
-    fn effective_debt_nad(&self, debt_asset_is_base: bool) -> Result<u128> {
-        let (fixed_debt, soft_debt, hedged_debt_nad, debt_side) = if debt_asset_is_base {
-            (
+    fn effective_debt_nad(&self, debt_asset: MarketAsset) -> Result<u128> {
+        let (fixed_debt, soft_debt, hedged_debt_nad, debt_side) = match debt_asset {
+            MarketAsset::Base => (
                 self.debt_book.fixed_base_debt()?,
                 self.debt_book.soft_base_debt()?,
                 self.hedged_base_debt_nad(&self.risk_book)?,
                 &self.base_side,
-            )
-        } else {
-            (
+            ),
+            MarketAsset::Quote => (
                 self.debt_book.fixed_quote_debt()?,
                 self.debt_book.soft_quote_debt()?,
                 self.hedged_quote_debt_nad(&self.risk_book)?,
                 &self.quote_side,
-            )
+            ),
         };
         let fixed_debt_nad = normalize_to_nad(fixed_debt, debt_side.asset_decimals)?;
         let soft_debt_nad = normalize_to_nad(soft_debt, debt_side.asset_decimals)?;
@@ -751,7 +742,7 @@ impl Market {
 
     fn hedged_base_debt_nad(&self, risk_book: &RiskBook) -> Result<u128> {
         self.collateral_value_nad(
-            false,
+            MarketAsset::Quote,
             self.quote_side.claim_token_ledger.hedged_claim_token_supply,
             risk_book,
         )
@@ -759,7 +750,7 @@ impl Market {
 
     fn hedged_quote_debt_nad(&self, risk_book: &RiskBook) -> Result<u128> {
         self.collateral_value_nad(
-            true,
+            MarketAsset::Base,
             self.base_side.claim_token_ledger.hedged_claim_token_supply,
             risk_book,
         )
@@ -767,7 +758,7 @@ impl Market {
 
     fn collateral_value_nad(
         &self,
-        collateral_is_base: bool,
+        collateral_asset: MarketAsset,
         collateral_amount: u64,
         risk_book: &RiskBook,
     ) -> Result<u128> {
@@ -775,20 +766,19 @@ impl Market {
             return Ok(0);
         }
         let (collateral_side, debt_side, price_ema_nad, directional_price_ema_nad) =
-            if collateral_is_base {
-                (
+            match collateral_asset {
+                MarketAsset::Base => (
                     &self.base_side,
                     &self.quote_side,
                     risk_book.base_price_ema_nad,
                     risk_book.directional_base_price_ema_nad,
-                )
-            } else {
-                (
+                ),
+                MarketAsset::Quote => (
                     &self.quote_side,
                     &self.base_side,
                     risk_book.quote_price_ema_nad,
                     risk_book.directional_quote_price_ema_nad,
-                )
+                ),
             };
         let collateral_reserve = normalize_to_nad(
             collateral_side.reserve_ledger.live_reserve as u128,
@@ -816,7 +806,7 @@ impl Market {
 
     fn collateral_amount_for_debt_value_with_risk(
         &self,
-        debt_asset_is_base: bool,
+        debt_asset: MarketAsset,
         debt_amount: u64,
         risk_book: &RiskBook,
     ) -> Result<u64> {
@@ -828,20 +818,19 @@ impl Market {
         )
         .ok_or(ErrorCode::MarketMathOverflow)?;
         let (collateral_side, debt_side, price_ema_nad, directional_price_ema_nad) =
-            if debt_asset_is_base {
-                (
+            match debt_asset {
+                MarketAsset::Base => (
                     &self.quote_side,
                     &self.base_side,
                     risk_book.quote_price_ema_nad,
                     risk_book.directional_quote_price_ema_nad,
-                )
-            } else {
-                (
+                ),
+                MarketAsset::Quote => (
                     &self.base_side,
                     &self.quote_side,
                     risk_book.base_price_ema_nad,
                     risk_book.directional_base_price_ema_nad,
-                )
+                ),
             };
         let collateral_reserve = normalize_to_nad(
             collateral_side.reserve_ledger.live_reserve as u128,
@@ -869,7 +858,7 @@ impl Market {
 
     fn collateral_amount_for_debt_value_cap_with_risk(
         &self,
-        debt_asset_is_base: bool,
+        debt_asset: MarketAsset,
         debt_value_nad: u128,
         risk_book: &RiskBook,
     ) -> Result<u64> {
@@ -877,20 +866,19 @@ impl Market {
             return Ok(0);
         }
         let (collateral_side, debt_side, price_ema_nad, directional_price_ema_nad) =
-            if debt_asset_is_base {
-                (
+            match debt_asset {
+                MarketAsset::Base => (
                     &self.quote_side,
                     &self.base_side,
                     risk_book.quote_price_ema_nad,
                     risk_book.directional_quote_price_ema_nad,
-                )
-            } else {
-                (
+                ),
+                MarketAsset::Quote => (
                     &self.base_side,
                     &self.quote_side,
                     risk_book.base_price_ema_nad,
                     risk_book.directional_base_price_ema_nad,
-                )
+                ),
             };
         let collateral_reserve = normalize_to_nad(
             collateral_side.reserve_ledger.live_reserve as u128,
@@ -915,17 +903,16 @@ impl Market {
         denormalize_from_nad_floor(collateral_amount_nad, collateral_side.asset_decimals)
     }
 
-    fn daily_limit_for_side(&self, market_side_index: u8, limit_bps: u16) -> Result<u64> {
-        let (liquidity_ema, asset_decimals) = match market_side_index {
-            0 => (
+    fn daily_limit_for_side(&self, market_asset: MarketAsset, limit_bps: u16) -> Result<u64> {
+        let (liquidity_ema, asset_decimals) = match market_asset {
+            MarketAsset::Base => (
                 self.risk_book.base_liquidity_ema,
                 self.base_side.asset_decimals,
             ),
-            1 => (
+            MarketAsset::Quote => (
                 self.risk_book.quote_liquidity_ema,
                 self.quote_side.asset_decimals,
             ),
-            _ => return err!(ErrorCode::InvalidMarketSide),
         };
         require!(liquidity_ema > 0, ErrorCode::InsufficientLiquidity);
         let limit_nad = liquidity_ema
@@ -1565,8 +1552,12 @@ mod tests {
         market.quote_side.reserve_ledger.live_reserve = 1_000_000;
         market.refresh_risk_book().unwrap();
 
-        market.enforce_daily_borrow_limit(0, 200_000).unwrap();
-        let err = market.enforce_daily_borrow_limit(0, 1).unwrap_err();
+        market
+            .enforce_daily_borrow_limit(MarketAsset::Base, 200_000)
+            .unwrap();
+        let err = market
+            .enforce_daily_borrow_limit(MarketAsset::Base, 1)
+            .unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::DailyLimitExceeded));
         assert_eq!(market.base_side.daily_limit_book.borrowed_bucket, 200_000);
@@ -1591,7 +1582,9 @@ mod tests {
     fn daily_limit_rejects_zero_liquidity() {
         let mut market = test_market();
 
-        let err = market.enforce_daily_borrow_limit(0, 1).unwrap_err();
+        let err = market
+            .enforce_daily_borrow_limit(MarketAsset::Base, 1)
+            .unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::InsufficientLiquidity));
     }
@@ -1722,10 +1715,10 @@ mod tests {
             DebtBook::debt_to_shares(100_000_000, market.debt_book.base_borrow_index_nad).unwrap();
 
         let recognized = market
-            .debt_capped_recognized_collateral(&position, true, &market.risk_book)
+            .debt_capped_recognized_collateral(&position, MarketAsset::Base, &market.risk_book)
             .unwrap();
         let recognized_value = market
-            .collateral_value_nad(false, recognized, &market.risk_book)
+            .collateral_value_nad(MarketAsset::Quote, recognized, &market.risk_book)
             .unwrap();
         let debt_value_cap = normalize_to_nad(100_000_000, market.base_side.asset_decimals)
             .unwrap()
@@ -1751,7 +1744,9 @@ mod tests {
         position.fixed_base_debt_shares =
             DebtBook::debt_to_shares(100_000_000, market.debt_book.base_borrow_index_nad).unwrap();
 
-        let err = market.assert_recognition_cap(&position, true).unwrap_err();
+        let err = market
+            .assert_recognition_cap(&position, MarketAsset::Base)
+            .unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::InsufficientRecognizedCollateral));
     }

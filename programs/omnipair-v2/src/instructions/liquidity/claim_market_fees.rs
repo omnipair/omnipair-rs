@@ -10,7 +10,7 @@ use crate::{
     events::{MarketEventMetadata, MarketFeeLiabilityClaimed},
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
-    state::{Market, MarketFeeClaimKind},
+    state::{Market, MarketAsset, MarketFeeClaimKind},
     transitions::fee::{PrepareMarketFeeClaim, SettleMarketFeeClaim},
 };
 
@@ -21,7 +21,7 @@ use crate::instructions::common::{
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct ClaimMarketFeesArgs {
-    pub market_side_index: u8,
+    pub market_asset: MarketAsset,
     pub claim_kind: MarketFeeClaimKind,
     pub min_fee_amount: u64,
 }
@@ -74,7 +74,7 @@ impl<'info> ClaimMarketFees<'info> {
         }
         validate_fee_accounts(
             &self.market,
-            args.market_side_index,
+            args.market_asset,
             self.fee_authority.key(),
             &self.asset_mint,
             &self.fee_vault,
@@ -93,7 +93,7 @@ impl<'info> ClaimMarketFees<'info> {
         ctx.accounts.market.assert_risk_circuit_breakers()?;
 
         let pending_claim = {
-            let market_side = ctx.accounts.market.side(args.market_side_index)?;
+            let market_side = ctx.accounts.market.side(args.market_asset)?;
             PrepareMarketFeeClaim::new(args.claim_kind, ctx.accounts.fee_vault.amount)
                 .apply(market_side)?
         };
@@ -123,7 +123,7 @@ impl<'info> ClaimMarketFees<'info> {
         require_gte!(fee_credit, args.min_fee_amount, ErrorCode::SlippageExceeded);
 
         let settled_claim = {
-            let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
+            let market_side = ctx.accounts.market.side_mut(args.market_asset)?;
             SettleMarketFeeClaim::new(
                 args.claim_kind,
                 pending_claim.fee_amount,

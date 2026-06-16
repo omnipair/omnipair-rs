@@ -4,7 +4,11 @@ use anchor_spl::{
     token_interface::{Mint, Token2022, TokenAccount},
 };
 
-use crate::{errors::ErrorCode, shared::token::is_supported_mint, state::Market};
+use crate::{
+    errors::ErrorCode,
+    shared::token::is_supported_mint,
+    state::{Market, MarketAsset},
+};
 
 pub use crate::tokens::claim_token::require_fee_free_claim_token_mint;
 
@@ -49,7 +53,7 @@ pub fn token_account_debit(
 
 pub fn validate_reserve_accounts<'info>(
     market: &Account<'info, Market>,
-    market_side_index: u8,
+    market_asset: MarketAsset,
     owner: Pubkey,
     asset_mint: &InterfaceAccount<'info, Mint>,
     claim_token_mint: &InterfaceAccount<'info, Mint>,
@@ -57,7 +61,7 @@ pub fn validate_reserve_accounts<'info>(
     owner_asset_account: &InterfaceAccount<'info, TokenAccount>,
     owner_claim_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
-    let market_side = market.side(market_side_index)?;
+    let market_side = market.side(market_asset)?;
     require_keys_eq!(
         market_side.asset_mint,
         asset_mint.key(),
@@ -108,14 +112,14 @@ pub fn validate_reserve_accounts<'info>(
 
 pub fn validate_stake_accounts<'info>(
     market: &Account<'info, Market>,
-    market_side_index: u8,
+    market_asset: MarketAsset,
     owner: Pubkey,
     asset_mint: &InterfaceAccount<'info, Mint>,
     claim_token_mint: &InterfaceAccount<'info, Mint>,
     stake_vault: &InterfaceAccount<'info, TokenAccount>,
     owner_claim_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
-    let market_side = market.side(market_side_index)?;
+    let market_side = market.side(market_asset)?;
     require_keys_eq!(
         market_side.asset_mint,
         asset_mint.key(),
@@ -156,13 +160,13 @@ pub fn validate_stake_accounts<'info>(
 
 pub fn validate_fee_accounts<'info>(
     market: &Account<'info, Market>,
-    market_side_index: u8,
+    market_asset: MarketAsset,
     owner: Pubkey,
     asset_mint: &InterfaceAccount<'info, Mint>,
     fee_vault: &InterfaceAccount<'info, TokenAccount>,
     owner_fee_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
-    let market_side = market.side(market_side_index)?;
+    let market_side = market.side(market_asset)?;
     require_keys_eq!(
         market_side.asset_mint,
         asset_mint.key(),
@@ -190,7 +194,7 @@ pub fn validate_fee_accounts<'info>(
 
 pub fn validate_swap_accounts<'info>(
     market: &Account<'info, Market>,
-    asset_in_is_base: bool,
+    asset_in: MarketAsset,
     trader: Pubkey,
     asset_in_mint: &InterfaceAccount<'info, Mint>,
     asset_out_mint: &InterfaceAccount<'info, Mint>,
@@ -200,11 +204,7 @@ pub fn validate_swap_accounts<'info>(
     trader_asset_in_account: &InterfaceAccount<'info, TokenAccount>,
     trader_asset_out_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
-    let (market_side_in, market_side_out) = if asset_in_is_base {
-        (&market.base_side, &market.quote_side)
-    } else {
-        (&market.quote_side, &market.base_side)
-    };
+    let (market_side_in, market_side_out) = market.swap_sides(asset_in);
     require_keys_eq!(
         market_side_in.asset_mint,
         asset_in_mint.key(),

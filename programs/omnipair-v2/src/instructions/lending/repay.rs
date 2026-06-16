@@ -9,7 +9,7 @@ use crate::{
     errors::ErrorCode,
     events::{MarketDebtUpdated, MarketEventMetadata, MarketHealthUpdated},
     shared::token::transfer_from_user_to_vault,
-    state::{MarginPosition, Market},
+    state::{MarginPosition, Market, MarketAsset},
     transitions::debt::Repay as RepayTransition,
 };
 
@@ -19,7 +19,7 @@ use super::common::validate_repay_accounts;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct RepayArgs {
-    pub repay_asset_is_base: bool,
+    pub repay_asset: MarketAsset,
     pub repay_amount: u64,
 }
 
@@ -76,7 +76,7 @@ impl<'info> Repay<'info> {
         );
         validate_repay_accounts(
             &self.market,
-            args.repay_asset_is_base,
+            args.repay_asset,
             self.owner.key(),
             &self.debt_asset_mint,
             &self.reserve_vault,
@@ -116,7 +116,7 @@ impl<'info> Repay<'info> {
             .ok_or(ErrorCode::MarketMathOverflow)?;
         require!(repay_credit > 0, ErrorCode::AmountZero);
 
-        let debt_receipt = RepayTransition::new(args.repay_asset_is_base, repay_credit)
+        let debt_receipt = RepayTransition::new(args.repay_asset, repay_credit)
             .apply(&mut ctx.accounts.market, &mut ctx.accounts.margin_position)?;
 
         emit_cpi!(MarketDebtUpdated {

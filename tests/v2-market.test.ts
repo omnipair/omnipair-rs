@@ -31,6 +31,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OMNIPAIR_V2_PROGRAM_ID = new PublicKey("358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv");
 const { AnchorProvider, BN, Program, Wallet } = anchor;
 const NAD = new BN(1_000_000_000);
+const BASE_MARKET_ASSET = { base: {} };
+const QUOTE_MARKET_ASSET = { quote: {} };
 
 const omnipairV2IdlPath = path.join(__dirname, "../target/idl/omnipair_v2.json");
 const omnipairV2IdlData = JSON.parse(fs.readFileSync(omnipairV2IdlPath, "utf-8")) as any;
@@ -47,6 +49,18 @@ function orderedMints(mintA: PublicKey, mintB: PublicKey): [PublicKey, PublicKey
 
 function deriveAddress(...seeds: Buffer[]): PublicKey {
   return PublicKey.findProgramAddressSync(seeds, OMNIPAIR_V2_PROGRAM_ID)[0];
+}
+
+function marketAssetFromIndex(sideIndex: number) {
+  return sideIndex === 0 ? BASE_MARKET_ASSET : QUOTE_MARKET_ASSET;
+}
+
+function oppositeMarketAssetFromIndex(sideIndex: number) {
+  return marketAssetFromIndex(sideIndex === 0 ? 1 : 0);
+}
+
+function normalizeMarketAsset(marketAsset: number | { base?: {}; quote?: {} }) {
+  return typeof marketAsset === "number" ? marketAssetFromIndex(marketAsset) : marketAsset;
 }
 
 async function expectRejects(action) {
@@ -327,7 +341,7 @@ describe("Omnipair Market LiteSVM", () => {
 
   async function addLiquiditySide(
     fixture,
-    marketSideIndex,
+    marketAsset,
     assetMint,
     claimTokenMint,
     reserveVault,
@@ -347,7 +361,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .addLiquidity({
-        marketSideIndex,
+        marketAsset: normalizeMarketAsset(marketAsset),
         depositAmount: new BN(depositAmount),
         minClaimAmount: new BN(minClaimAmount),
         maxBufferAmount: new BN(maxBufferAmount),
@@ -910,7 +924,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .addLiquidity({
-          marketSideIndex: 0,
+          marketAsset: { base: {} },
           depositAmount: new BN(1_000),
           minClaimAmount: new BN(900),
           maxBufferAmount: new BN(100),
@@ -1030,7 +1044,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .stake({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         claimAmount: new BN(400_000),
         bufferShareAmount: new BN(100_000),
         minActiveStakeUnits: new BN(500_000),
@@ -1106,7 +1120,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .stake({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         claimAmount: new BN(4),
         bufferShareAmount: new BN(1),
         minActiveStakeUnits: new BN(5),
@@ -1129,7 +1143,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .swap({
-        assetInIsBase: true,
+        assetIn: { base: {} },
         exactAssetIn: new BN(12),
         minAssetOut: new BN(1),
       })
@@ -1153,7 +1167,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .unstake({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         claimAmount: new BN(4),
         bufferShareAmount: new BN(1),
       })
@@ -1268,7 +1282,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .removeLiquidity({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         claimAmount: new BN(80_000),
         minAssetAmountOut: new BN(80_000),
       })
@@ -1382,7 +1396,7 @@ describe("Omnipair Market LiteSVM", () => {
           collateralVault: quoteCollateralVault,
           collateralAssetMint: quoteMint,
           collateralOwnerAccount: ownerQuoteAccount,
-          borrowAssetIsBase: true,
+          borrowAsset: { base: {} },
         }
       : {
           assetMint: quoteMint,
@@ -1393,11 +1407,11 @@ describe("Omnipair Market LiteSVM", () => {
           collateralVault: baseCollateralVault,
           collateralAssetMint: baseMint,
           collateralOwnerAccount: ownerBaseAccount,
-          borrowAssetIsBase: false,
+          borrowAsset: { quote: {} },
         };
     const vanillaSide = transferFeeSideIndex === 0
       ? {
-          marketSideIndex: 1,
+          marketAsset: { quote: {} },
           assetMint: quoteMint,
           claimTokenMint: quoteClaimTokenMint,
           reserveVault: quoteReserveVault,
@@ -1406,7 +1420,7 @@ describe("Omnipair Market LiteSVM", () => {
           ownerClaimAccount: ownerQuoteClaimAccount,
         }
       : {
-          marketSideIndex: 0,
+          marketAsset: { base: {} },
           assetMint: baseMint,
           claimTokenMint: baseClaimTokenMint,
           reserveVault: baseReserveVault,
@@ -1472,7 +1486,7 @@ describe("Omnipair Market LiteSVM", () => {
     }
     await addLiquiditySide(
       fixture,
-      vanillaSide.marketSideIndex,
+      vanillaSide.marketAsset,
       vanillaSide.assetMint,
       vanillaSide.claimTokenMint,
       vanillaSide.reserveVault,
@@ -1498,7 +1512,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .removeLiquidity({
-          marketSideIndex: transferFeeSideIndex,
+          marketAsset: marketAssetFromIndex(transferFeeSideIndex),
           claimAmount: new BN(5),
           minAssetAmountOut: new BN(5),
         })
@@ -1527,7 +1541,7 @@ describe("Omnipair Market LiteSVM", () => {
     )).amount;
     await program.methods
       .removeLiquidity({
-        marketSideIndex: transferFeeSideIndex,
+        marketAsset: marketAssetFromIndex(transferFeeSideIndex),
         claimAmount: new BN(5),
         minAssetAmountOut: new BN(4),
       })
@@ -1557,7 +1571,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .swap({
-          assetInIsBase: !transferFeeSide.borrowAssetIsBase,
+          assetIn: vanillaSide.marketAsset,
           exactAssetIn: new BN(5),
           minAssetOut: new BN(4),
         })
@@ -1588,7 +1602,7 @@ describe("Omnipair Market LiteSVM", () => {
     )).amount;
     await program.methods
       .swap({
-        assetInIsBase: !transferFeeSide.borrowAssetIsBase,
+        assetIn: vanillaSide.marketAsset,
         exactAssetIn: new BN(5),
         minAssetOut: new BN(3),
       })
@@ -1624,7 +1638,7 @@ describe("Omnipair Market LiteSVM", () => {
     );
     await program.methods
       .depositCollateral({
-        marketSideIndex: transferFeeSideIndex === 0 ? 1 : 0,
+        marketAsset: oppositeMarketAssetFromIndex(transferFeeSideIndex),
         depositAmount: new BN(300),
       })
       .accounts({
@@ -1646,7 +1660,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .borrow({
-          borrowAssetIsBase: transferFeeSide.borrowAssetIsBase,
+          borrowAsset: transferFeeSide.borrowAsset,
           borrowAmount: new BN(5),
           minDebtAmountOut: new BN(5),
           minHealthBps: new BN(11_000),
@@ -1677,7 +1691,7 @@ describe("Omnipair Market LiteSVM", () => {
     )).amount;
     await program.methods
       .borrow({
-        borrowAssetIsBase: transferFeeSide.borrowAssetIsBase,
+        borrowAsset: transferFeeSide.borrowAsset,
         borrowAmount: new BN(5),
         minDebtAmountOut: new BN(4),
         minHealthBps: new BN(11_000),
@@ -1729,7 +1743,7 @@ describe("Omnipair Market LiteSVM", () => {
     );
     await program.methods
       .depositCollateral({
-        marketSideIndex: 1,
+        marketAsset: { quote: {} },
         depositAmount: new BN(200),
       })
       .accounts({
@@ -1750,7 +1764,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .borrow({
-        borrowAssetIsBase: true,
+        borrowAsset: { base: {} },
         borrowAmount: new BN(9),
         minDebtAmountOut: new BN(9),
         minHealthBps: new BN(11_000),
@@ -1775,7 +1789,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .borrow({
-          borrowAssetIsBase: true,
+          borrowAsset: { base: {} },
           borrowAmount: new BN(1),
           minDebtAmountOut: new BN(1),
           minHealthBps: new BN(11_000),
@@ -1814,7 +1828,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .removeLiquidity({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         claimAmount: new BN(100),
         minAssetAmountOut: new BN(100),
       })
@@ -1837,7 +1851,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .removeLiquidity({
-          marketSideIndex: 0,
+          marketAsset: { base: {} },
           claimAmount: new BN(1),
           minAssetAmountOut: new BN(1),
         })
@@ -1879,7 +1893,7 @@ describe("Omnipair Market LiteSVM", () => {
     );
     await program.methods
       .depositCollateral({
-        marketSideIndex: 1,
+        marketAsset: { quote: {} },
         depositAmount: new BN(20),
       })
       .accounts({
@@ -1900,7 +1914,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .withdrawCollateral({
-        marketSideIndex: 1,
+        marketAsset: { quote: {} },
         withdrawAmount: new BN(9),
         minAssetAmountOut: new BN(9),
       })
@@ -1923,7 +1937,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .withdrawCollateral({
-          marketSideIndex: 1,
+          marketAsset: { quote: {} },
           withdrawAmount: new BN(1),
           minAssetAmountOut: new BN(1),
         })
@@ -1962,7 +1976,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .swap({
-        assetInIsBase: true,
+        assetIn: { base: {} },
         exactAssetIn: new BN(3),
         minAssetOut: new BN(1),
       })
@@ -2016,7 +2030,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .swap({
-          assetInIsBase: true,
+          assetIn: { base: {} },
           exactAssetIn: new BN(3),
           minAssetOut: new BN(1),
         })
@@ -2048,7 +2062,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .depositCollateral({
-        marketSideIndex: 1,
+        marketAsset: { quote: {} },
         depositAmount: new BN(60),
       })
       .accounts({
@@ -2081,7 +2095,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .borrow({
-          borrowAssetIsBase: true,
+          borrowAsset: { base: {} },
           borrowAmount: new BN(5),
           minDebtAmountOut: new BN(5),
           minHealthBps: new BN(11_000),
@@ -2141,7 +2155,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .stake({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         claimAmount: new BN(4),
         bufferShareAmount: new BN(1),
         minActiveStakeUnits: new BN(5),
@@ -2164,7 +2178,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .swap({
-        assetInIsBase: true,
+        assetIn: { base: {} },
         exactAssetIn: new BN(12),
         minAssetOut: new BN(1),
       })
@@ -2190,7 +2204,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .claimFees({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         minFeeAmount: new BN(7),
       })
       .accounts({
@@ -2224,7 +2238,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .claimMarketFees({
-          marketSideIndex: 0,
+          marketAsset: { base: {} },
           claimKind: { operator: {} },
           minFeeAmount: new BN(1),
         })
@@ -2250,7 +2264,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .claimMarketFees({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         claimKind: { operator: {} },
         minFeeAmount: new BN(1),
       })
@@ -2275,7 +2289,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .claimMarketFees({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         claimKind: { protocol: {} },
         minFeeAmount: new BN(2),
       })
@@ -2331,7 +2345,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .swap({
-        assetInIsBase: true,
+        assetIn: { base: {} },
         exactAssetIn: new BN(12),
         minAssetOut: new BN(1),
       })
@@ -2357,7 +2371,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .stake({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         claimAmount: new BN(4),
         bufferShareAmount: new BN(1),
         minActiveStakeUnits: new BN(5),
@@ -2380,7 +2394,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .claimFees({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         minFeeAmount: new BN(9),
       })
       .accounts({
@@ -2436,7 +2450,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .stake({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         claimAmount: new BN(4),
         bufferShareAmount: new BN(1),
         minActiveStakeUnits: new BN(5),
@@ -2459,7 +2473,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .swap({
-        assetInIsBase: true,
+        assetIn: { base: {} },
         exactAssetIn: new BN(12),
         minAssetOut: new BN(1),
       })
@@ -2497,7 +2511,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .claimFees({
-          marketSideIndex: 0,
+          marketAsset: { base: {} },
           minFeeAmount: new BN(1),
         })
         .accounts({
@@ -2519,7 +2533,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .claimMarketFees({
-          marketSideIndex: 0,
+          marketAsset: { base: {} },
           claimKind: { operator: {} },
           minFeeAmount: new BN(1),
         })
@@ -2555,7 +2569,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .stake({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         claimAmount: new BN(400_000),
         bufferShareAmount: new BN(100_000),
         minActiveStakeUnits: new BN(500_000),
@@ -2585,7 +2599,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .unstake({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         claimAmount: new BN(160_000),
         bufferShareAmount: new BN(40_000),
       })
@@ -2662,7 +2676,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .openHedge({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         claimAmount: new BN(1),
         minHedgeAmount: new BN(1),
       })
@@ -2697,7 +2711,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .swap({
-        assetInIsBase: true,
+        assetIn: { base: {} },
         exactAssetIn: new BN(3),
         minAssetOut: new BN(1),
       })
@@ -2725,7 +2739,7 @@ describe("Omnipair Market LiteSVM", () => {
     )).amount;
     await program.methods
       .claimHedgeFees({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         minFeeAmount: new BN(1),
       })
       .accounts({
@@ -2761,7 +2775,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .openHedge({
-          marketSideIndex: 0,
+          marketAsset: { base: {} },
           claimAmount: new BN(1),
           minHedgeAmount: new BN(1),
         })
@@ -2787,7 +2801,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .closeHedge({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         hedgeAmount: new BN(1),
         minClaimAmountOut: new BN(1),
       })
@@ -2859,7 +2873,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .openHedge({
-          marketSideIndex: 0,
+          marketAsset: { base: {} },
           claimAmount: new BN(50_000),
           minHedgeAmount: new BN(50_000),
         })
@@ -2921,7 +2935,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .openHedge({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         claimAmount: new BN(200_000),
         minHedgeAmount: new BN(200_000),
       })
@@ -2960,7 +2974,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .closeHedge({
-          marketSideIndex: 0,
+          marketAsset: { base: {} },
           hedgeAmount: new BN(50_000),
           minClaimAmountOut: new BN(50_000),
         })
@@ -3001,7 +3015,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .depositCollateral({
-        marketSideIndex: 1,
+        marketAsset: { quote: {} },
         depositAmount: new BN(300_000),
       })
       .accounts({
@@ -3033,7 +3047,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .depositInsurance({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         depositAmount: new BN(125_000),
       })
       .accounts({
@@ -3081,7 +3095,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .depositCollateral({
-        marketSideIndex: 1,
+        marketAsset: { quote: {} },
         depositAmount: new BN(60),
       })
       .accounts({
@@ -3103,7 +3117,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .borrow({
-          borrowAssetIsBase: true,
+          borrowAsset: { base: {} },
           borrowAmount: new BN(5),
           minDebtAmountOut: new BN(6),
           minHealthBps: new BN(11_000),
@@ -3128,7 +3142,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .borrow({
-        borrowAssetIsBase: true,
+        borrowAsset: { base: {} },
         borrowAmount: new BN(5),
         minDebtAmountOut: new BN(5),
         minHealthBps: new BN(11_000),
@@ -3160,7 +3174,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .withdrawCollateral({
-          marketSideIndex: 1,
+          marketAsset: { quote: {} },
           withdrawAmount: new BN(60),
           minAssetAmountOut: new BN(60),
         })
@@ -3182,7 +3196,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .repay({
-        repayAssetIsBase: true,
+        repayAsset: { base: {} },
         repayAmount: new BN(5),
       })
       .accounts({
@@ -3216,7 +3230,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .withdrawCollateral({
-        marketSideIndex: 1,
+        marketAsset: { quote: {} },
         withdrawAmount: new BN(60),
         minAssetAmountOut: new BN(60),
       })
@@ -3263,7 +3277,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .depositCollateral({
-        marketSideIndex: 1,
+        marketAsset: { quote: {} },
         depositAmount: new BN(60),
       })
       .accounts({
@@ -3285,7 +3299,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .borrow({
-          borrowAssetIsBase: true,
+          borrowAsset: { base: {} },
           borrowAmount: new BN(12),
           minDebtAmountOut: new BN(12),
           minHealthBps: new BN(20_000),
@@ -3334,7 +3348,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .depositCollateral({
-        marketSideIndex: 0,
+        marketAsset: { base: {} },
         depositAmount: new BN(60),
       })
       .accounts({
@@ -3356,7 +3370,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .borrow({
-          borrowAssetIsBase: true,
+          borrowAsset: { base: {} },
           borrowAmount: new BN(5),
           minDebtAmountOut: new BN(5),
           minHealthBps: new BN(11_000),
@@ -3411,7 +3425,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .depositCollateral({
-        marketSideIndex: 1,
+        marketAsset: { quote: {} },
         depositAmount: new BN(60),
       })
       .accounts({
@@ -3432,7 +3446,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .borrow({
-        borrowAssetIsBase: true,
+        borrowAsset: { base: {} },
         borrowAmount: new BN(5),
         minDebtAmountOut: new BN(5),
         minHealthBps: new BN(11_000),
@@ -3470,7 +3484,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .repay({
-          repayAssetIsBase: true,
+          repayAsset: { base: {} },
           repayAmount: new BN(5),
         })
         .accounts({
@@ -3515,7 +3529,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .depositCollateral({
-        marketSideIndex: 1,
+        marketAsset: { quote: {} },
         depositAmount: new BN(6),
       })
       .accounts({
@@ -3536,7 +3550,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .borrow({
-        borrowAssetIsBase: true,
+        borrowAsset: { base: {} },
         borrowAmount: new BN(5),
         minDebtAmountOut: new BN(5),
         minHealthBps: new BN(11_000),
@@ -3598,7 +3612,7 @@ describe("Omnipair Market LiteSVM", () => {
     if (insuranceAmount > 0) {
       await program.methods
         .depositInsurance({
-          marketSideIndex: 0,
+          marketAsset: { base: {} },
           depositAmount: new BN(insuranceAmount),
         })
         .accounts({
@@ -3671,7 +3685,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .depositCollateral({
-        marketSideIndex: 1,
+        marketAsset: { quote: {} },
         depositAmount: new BN(60),
       })
       .accounts({
@@ -3692,7 +3706,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .borrow({
-        borrowAssetIsBase: true,
+        borrowAsset: { base: {} },
         borrowAmount: new BN(5),
         minDebtAmountOut: new BN(5),
         minHealthBps: new BN(11_000),
@@ -3740,7 +3754,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .liquidate({
-          debtAssetIsBase: true,
+          debtAsset: { base: {} },
           repayAmount: new BN(5),
           minCollateralOut: new BN(1),
           maxInsuranceDraw: new BN(0),
@@ -3803,7 +3817,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .depositCollateral({
-        marketSideIndex: 1,
+        marketAsset: { quote: {} },
         depositAmount: new BN(60),
       })
       .accounts({
@@ -3824,7 +3838,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .borrow({
-        borrowAssetIsBase: true,
+        borrowAsset: { base: {} },
         borrowAmount: new BN(5),
         minDebtAmountOut: new BN(5),
         minHealthBps: new BN(11_000),
@@ -3885,7 +3899,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .liquidate({
-        debtAssetIsBase: true,
+        debtAsset: { base: {} },
         repayAmount: new BN(5),
         minCollateralOut: new BN(1),
         maxInsuranceDraw: new BN(0),
@@ -3947,7 +3961,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .liquidate({
-          debtAssetIsBase: true,
+          debtAsset: { base: {} },
           repayAmount: new BN(4),
           minCollateralOut: new BN(6),
           maxInsuranceDraw: new BN(0),
@@ -3976,7 +3990,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .liquidate({
-        debtAssetIsBase: true,
+        debtAsset: { base: {} },
         repayAmount: new BN(4),
         minCollateralOut: new BN(6),
         maxInsuranceDraw: new BN(1),
@@ -4037,7 +4051,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .liquidate({
-          debtAssetIsBase: true,
+          debtAsset: { base: {} },
           repayAmount: new BN(4),
           minCollateralOut: new BN(6),
           maxInsuranceDraw: new BN(0),
@@ -4066,7 +4080,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .liquidate({
-        debtAssetIsBase: true,
+        debtAsset: { base: {} },
         repayAmount: new BN(4),
         minCollateralOut: new BN(6),
         maxInsuranceDraw: new BN(0),
@@ -4132,7 +4146,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .depositCollateral({
-        marketSideIndex: 1,
+        marketAsset: { quote: {} },
         depositAmount: new BN(60),
       })
       .accounts({
@@ -4153,7 +4167,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await program.methods
       .borrow({
-        borrowAssetIsBase: true,
+        borrowAsset: { base: {} },
         borrowAmount: new BN(5),
         minDebtAmountOut: new BN(5),
         minHealthBps: new BN(11_000),
@@ -4228,7 +4242,7 @@ describe("Omnipair Market LiteSVM", () => {
     await expectRejects(() =>
       program.methods
         .liquidate({
-          debtAssetIsBase: true,
+          debtAsset: { base: {} },
           repayAmount: new BN(5),
           minCollateralOut: new BN(1),
           maxInsuranceDraw: new BN(0),

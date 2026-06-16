@@ -13,7 +13,7 @@ use crate::{
         account::get_size_with_discriminator,
         token::{token_mint_to, transfer_from_user_to_vault},
     },
-    state::{HedgePosition, Market},
+    state::{HedgePosition, Market, MarketAsset},
     transitions::hedge::OpenHedge as OpenHedgeTransition,
 };
 
@@ -22,7 +22,7 @@ use crate::instructions::common::token_program_for_mint;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct OpenHedgeArgs {
-    pub market_side_index: u8,
+    pub market_asset: MarketAsset,
     pub claim_amount: u64,
     pub min_hedge_amount: u64,
 }
@@ -96,7 +96,7 @@ impl<'info> OpenHedge<'info> {
         );
         validate_hedge_accounts(
             &self.market,
-            args.market_side_index,
+            args.market_asset,
             self.owner.key(),
             &self.asset_mint,
             &self.claim_token_mint,
@@ -164,7 +164,7 @@ impl<'info> OpenHedge<'info> {
         );
         require!(claim_credit > 0, ErrorCode::AmountZero);
 
-        let receipt = OpenHedgeTransition::new(args.market_side_index, claim_credit)
+        let receipt = OpenHedgeTransition::new(args.market_asset, claim_credit)
             .apply(&mut ctx.accounts.market, &mut ctx.accounts.hedge_position)?;
 
         let hedge_token_program = token_program_for_mint(

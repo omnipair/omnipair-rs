@@ -10,7 +10,7 @@ use crate::{
     events::{MarketEventMetadata, MarketHedgeClosed},
     generate_market_seeds,
     shared::token::{token_burn, transfer_from_vault_to_user},
-    state::{HedgePosition, Market},
+    state::{HedgePosition, Market, MarketAsset},
     transitions::hedge::CloseHedge as CloseHedgeTransition,
 };
 
@@ -19,7 +19,7 @@ use crate::instructions::common::{token_account_credit, token_program_for_mint};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct CloseHedgeArgs {
-    pub market_side_index: u8,
+    pub market_asset: MarketAsset,
     pub hedge_amount: u64,
     pub min_claim_amount_out: u64,
 }
@@ -86,7 +86,7 @@ impl<'info> CloseHedge<'info> {
         );
         validate_hedge_accounts(
             &self.market,
-            args.market_side_index,
+            args.market_asset,
             self.owner.key(),
             &self.asset_mint,
             &self.claim_token_mint,
@@ -130,7 +130,7 @@ impl<'info> CloseHedge<'info> {
             &[],
         )?;
 
-        let receipt = CloseHedgeTransition::new(args.market_side_index, args.hedge_amount)
+        let receipt = CloseHedgeTransition::new(args.market_asset, args.hedge_amount)
             .apply(&mut ctx.accounts.market, &mut ctx.accounts.hedge_position)?;
 
         let claim_token_program = token_program_for_mint(

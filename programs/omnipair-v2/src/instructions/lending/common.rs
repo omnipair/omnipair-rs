@@ -3,18 +3,18 @@ use anchor_spl::token_interface::{Mint, TokenAccount};
 
 use crate::{
     errors::ErrorCode,
-    state::{Market, MarketSide},
+    state::{Market, MarketAsset, MarketSide},
 };
 
 pub(super) fn validate_collateral_accounts<'info>(
     market: &Account<'info, Market>,
-    market_side_index: u8,
+    market_asset: MarketAsset,
     owner: Pubkey,
     asset_mint: &InterfaceAccount<'info, Mint>,
     collateral_vault: &InterfaceAccount<'info, TokenAccount>,
     owner_asset_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
-    let market_side = market.side(market_side_index)?;
+    let market_side = market.side(market_asset)?;
     require_keys_eq!(
         market_side.asset_mint,
         asset_mint.key(),
@@ -50,18 +50,15 @@ pub(super) fn validate_collateral_accounts<'info>(
 
 pub(super) fn validate_borrow_accounts<'info>(
     market: &Account<'info, Market>,
-    borrow_asset_is_base: bool,
+    borrow_asset: MarketAsset,
     owner: Pubkey,
     debt_asset_mint: &InterfaceAccount<'info, Mint>,
     collateral_asset_mint: &InterfaceAccount<'info, Mint>,
     reserve_vault: &InterfaceAccount<'info, TokenAccount>,
     owner_debt_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
-    let (debt_side, collateral_side) = if borrow_asset_is_base {
-        (&market.base_side, &market.quote_side)
-    } else {
-        (&market.quote_side, &market.base_side)
-    };
+    let debt_side = market.side(borrow_asset)?;
+    let collateral_side = market.side(borrow_asset.opposite())?;
     validate_debt_reserve_accounts(
         market,
         debt_side,
@@ -80,17 +77,13 @@ pub(super) fn validate_borrow_accounts<'info>(
 
 pub(super) fn validate_repay_accounts<'info>(
     market: &Account<'info, Market>,
-    repay_asset_is_base: bool,
+    repay_asset: MarketAsset,
     owner: Pubkey,
     debt_asset_mint: &InterfaceAccount<'info, Mint>,
     reserve_vault: &InterfaceAccount<'info, TokenAccount>,
     owner_debt_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
-    let debt_side = if repay_asset_is_base {
-        &market.base_side
-    } else {
-        &market.quote_side
-    };
+    let debt_side = market.side(repay_asset)?;
     validate_debt_reserve_accounts(
         market,
         debt_side,
