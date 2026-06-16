@@ -1,6 +1,15 @@
 use anchor_lang::prelude::*;
 
-use crate::{constants::NAD, errors::ErrorCode, shared::math::ceil_div};
+use super::{MarketConfig, MarketSide};
+use crate::{
+    constants::NAD,
+    errors::ErrorCode,
+    math::{
+        directional_ema_u64, ema_u128, ema_u64, market_k_nad, market_liquidity_nad,
+        market_spot_price_nad, normalize_to_nad, observed_or_current_u128, observed_or_current_u64,
+    },
+    shared::math::ceil_div,
+};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct DebtBook {
@@ -92,5 +101,115 @@ impl DebtBook {
         self.fixed_quote_debt()?
             .checked_add(self.soft_quote_debt()?)
             .ok_or(ErrorCode::MarketMathOverflow.into())
+    }
+}
+
+impl RiskBook {
+    pub fn refreshed(
+        &self,
+        base_side: &MarketSide,
+        quote_side: &MarketSide,
+        config: &MarketConfig,
+        current_slot: u64,
+    ) -> Result<Self> {
+        let current_base_price_nad = market_spot_price_nad(base_side, quote_side)?;
+        let current_quote_price_nad = market_spot_price_nad(quote_side, base_side)?;
+        let current_base_liquidity_nad = normalize_to_nad(
+            base_side.reserve_ledger.live_reserve as u128,
+            base_side.asset_decimals,
+        )?;
+        let current_quote_liquidity_nad = normalize_to_nad(
+            quote_side.reserve_ledger.live_reserve as u128,
+            quote_side.asset_decimals,
+        )?;
+        let current_liquidity_nad = market_liquidity_nad(base_side, quote_side)?;
+        let current_k_nad = market_k_nad(base_side, quote_side)?;
+
+        let cached_spot_base_price_nad =
+            observed_or_current_u64(self.cached_spot_base_price_nad, current_base_price_nad);
+        let cached_spot_quote_price_nad =
+            observed_or_current_u64(self.cached_spot_quote_price_nad, current_quote_price_nad);
+        let cached_base_liquidity_nad =
+            observed_or_current_u128(self.cached_base_liquidity_nad, current_base_liquidity_nad);
+        let cached_quote_liquidity_nad =
+            observed_or_current_u128(self.cached_quote_liquidity_nad, current_quote_liquidity_nad);
+        let cached_liquidity_nad =
+            observed_or_current_u128(self.cached_liquidity_nad, current_liquidity_nad);
+        let cached_k_nad = observed_or_current_u128(self.cached_k_nad, current_k_nad);
+
+        let base_price_ema_nad = ema_u64(
+            self.base_price_ema_nad,
+            cached_spot_base_price_nad,
+            self.last_snapshot_slot,
+            current_slot,
+            config.ema_half_life_ms,
+        );
+        let quote_price_ema_nad = ema_u64(
+            self.quote_price_ema_nad,
+            cached_spot_quote_price_nad,
+            self.last_snapshot_slot,
+            current_slot,
+            config.ema_half_life_ms,
+        );
+        let directional_base_price_ema_nad = directional_ema_u64(
+            self.directional_base_price_ema_nad,
+            cached_spot_base_price_nad,
+            self.last_snapshot_slot,
+            current_slot,
+            config.directional_ema_half_life_ms,
+        );
+        let directional_quote_price_ema_nad = directional_ema_u64(
+            self.directional_quote_price_ema_nad,
+            cached_spot_quote_price_nad,
+            self.last_snapshot_slot,
+            current_slot,
+            config.directional_ema_half_life_ms,
+        );
+        let liquidity_ema = ema_u128(
+            self.liquidity_ema,
+            cached_liquidity_nad,
+            self.last_snapshot_slot,
+            current_slot,
+            config.k_ema_half_life_ms,
+        );
+        let k_ema = ema_u128(
+            self.k_ema,
+            cached_k_nad,
+            self.last_snapshot_slot,
+            current_slot,
+            config.k_ema_half_life_ms,
+        );
+        let base_liquidity_ema = ema_u128(
+            self.base_liquidity_ema,
+            cached_base_liquidity_nad,
+            self.last_snapshot_slot,
+            current_slot,
+            config.k_ema_half_life_ms,
+        );
+        let quote_liquidity_ema = ema_u128(
+            self.quote_liquidity_ema,
+            cached_quote_liquidity_nad,
+            self.last_snapshot_slot,
+            current_slot,
+            config.k_ema_half_life_ms,
+        );
+
+        Ok(Self {
+            base_price_ema_nad,
+            quote_price_ema_nad,
+            directional_base_price_ema_nad,
+            directional_quote_price_ema_nad,
+            cached_spot_base_price_nad: current_base_price_nad,
+            cached_spot_quote_price_nad: current_quote_price_nad,
+            cached_k_nad: current_k_nad,
+            cached_liquidity_nad: current_liquidity_nad,
+            cached_base_liquidity_nad: current_base_liquidity_nad,
+            cached_quote_liquidity_nad: current_quote_liquidity_nad,
+            k_ema,
+            liquidity_ema,
+            base_liquidity_ema,
+            quote_liquidity_ema,
+            last_snapshot_slot: current_slot,
+        })
     }
 }
