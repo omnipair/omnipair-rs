@@ -7,7 +7,7 @@ use anchor_spl::{
 use crate::{
     constants::*,
     errors::ErrorCode,
-    events::{MarketEventMetadata, PositionLiquidated},
+    events::{MarketEventMetadata, MarketHealthUpdated, PositionLiquidated},
     generate_market_seeds,
     shared::token::{
         transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault,
@@ -239,6 +239,24 @@ impl<'info> Liquidate<'info> {
             insurance_drawn: liquidation_receipt.insurance_drawn,
             socialized_loss: liquidation_receipt.socialized_loss,
             remaining_debt: liquidation_receipt.remaining_debt,
+            metadata: MarketEventMetadata::new(liquidator_key, market_key)?,
+        });
+        emit_cpi!(MarketHealthUpdated {
+            market: market_key,
+            recognized_base_collateral_for_quote_debt: ctx
+                .accounts
+                .market
+                .health
+                .recognized_base_collateral_for_quote_debt,
+            recognized_quote_collateral_for_base_debt: ctx
+                .accounts
+                .market
+                .health
+                .recognized_quote_collateral_for_base_debt,
+            effective_base_debt_nad: ctx.accounts.market.health.effective_base_debt_nad,
+            effective_quote_debt_nad: ctx.accounts.market.health.effective_quote_debt_nad,
+            base_debt_health_bps: ctx.accounts.market.health.base_debt_health_bps,
+            quote_debt_health_bps: ctx.accounts.market.health.quote_debt_health_bps,
             metadata: MarketEventMetadata::new(liquidator_key, market_key)?,
         });
 
