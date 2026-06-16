@@ -10,7 +10,7 @@ use crate::{
     events::{MarketEventMetadata, MarketStakeUpdated},
     shared::token::transfer_from_user_to_vault,
     state::{Market, StakePosition},
-    transitions::fee::CarryForwardStakerFees,
+    transitions::staking::Stake as StakeTransition,
     utils::market_math::active_stake_units,
 };
 
@@ -144,50 +144,20 @@ impl<'info> Stake<'info> {
             ctx.accounts.claim_token_mint.decimals,
         )?;
 
-        let (
-            active_units,
-            accrued_fee_amount,
-            staked_claim_token_amount,
-            staked_buffer_share_amount,
-        ) = {
+        let stake_receipt = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
-            CarryForwardStakerFees.apply(market_side)?;
-            ctx.accounts.stake_position.accrue_fees(
-                market_side.fee_ledger.fee_growth_index_nad,
-                market_side.buffer_ledger.buffer_ratio_bps,
-            )?;
-            ctx.accounts
-                .stake_position
-                .stake(args.claim_amount, args.buffer_share_amount)?;
-            market_side.claim_token_ledger.staked_claim_token_supply = market_side
-                .claim_token_ledger
-                .staked_claim_token_supply
-                .checked_add(args.claim_amount)
-                .ok_or(ErrorCode::MarketMathOverflow)?;
-            market_side.buffer_ledger.staked_buffer_share_amount = market_side
-                .buffer_ledger
-                .staked_buffer_share_amount
-                .checked_add(args.buffer_share_amount)
-                .ok_or(ErrorCode::MarketMathOverflow)?;
-            CarryForwardStakerFees.apply(market_side)?;
-            (
-                ctx.accounts
-                    .stake_position
-                    .active_stake_units(market_side.buffer_ledger.buffer_ratio_bps)?,
-                ctx.accounts.stake_position.accrued_fee_amount,
-                ctx.accounts.stake_position.staked_claim_token_amount,
-                ctx.accounts.stake_position.staked_buffer_share_amount,
-            )
+            StakeTransition::new(args.claim_amount, args.buffer_share_amount)
+                .apply(market_side, &mut ctx.accounts.stake_position)?
         };
 
         emit_cpi!(MarketStakeUpdated {
             market: market_key,
             owner: owner_key,
             asset_mint: asset_mint_key,
-            staked_claim_token_amount,
-            staked_buffer_share_amount,
-            active_stake_units: active_units,
-            accrued_fee_amount,
+            staked_claim_token_amount: stake_receipt.staked_claim_token_amount,
+            staked_buffer_share_amount: stake_receipt.staked_buffer_share_amount,
+            active_stake_units: stake_receipt.active_stake_units,
+            accrued_fee_amount: stake_receipt.accrued_fee_amount,
             metadata: MarketEventMetadata::new(owner_key, market_key),
         });
 

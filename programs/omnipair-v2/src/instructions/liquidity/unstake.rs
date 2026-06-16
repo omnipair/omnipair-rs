@@ -11,7 +11,7 @@ use crate::{
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
     state::{Market, StakePosition},
-    transitions::fee::CarryForwardStakerFees,
+    transitions::staking::Unstake as UnstakeTransition,
 };
 
 use crate::instructions::common::{
@@ -110,39 +110,10 @@ impl<'info> Unstake<'info> {
         let owner_key = ctx.accounts.owner.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
 
-        let (
-            active_units,
-            accrued_fee_amount,
-            staked_claim_token_amount,
-            staked_buffer_share_amount,
-        ) = {
+        let stake_receipt = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
-            CarryForwardStakerFees.apply(market_side)?;
-            ctx.accounts.stake_position.accrue_fees(
-                market_side.fee_ledger.fee_growth_index_nad,
-                market_side.buffer_ledger.buffer_ratio_bps,
-            )?;
-            ctx.accounts
-                .stake_position
-                .unstake(args.claim_amount, args.buffer_share_amount)?;
-            market_side.claim_token_ledger.staked_claim_token_supply = market_side
-                .claim_token_ledger
-                .staked_claim_token_supply
-                .checked_sub(args.claim_amount)
-                .ok_or(ErrorCode::MarketMathOverflow)?;
-            market_side.buffer_ledger.staked_buffer_share_amount = market_side
-                .buffer_ledger
-                .staked_buffer_share_amount
-                .checked_sub(args.buffer_share_amount)
-                .ok_or(ErrorCode::MarketMathOverflow)?;
-            (
-                ctx.accounts
-                    .stake_position
-                    .active_stake_units(market_side.buffer_ledger.buffer_ratio_bps)?,
-                ctx.accounts.stake_position.accrued_fee_amount,
-                ctx.accounts.stake_position.staked_claim_token_amount,
-                ctx.accounts.stake_position.staked_buffer_share_amount,
-            )
+            UnstakeTransition::new(args.claim_amount, args.buffer_share_amount)
+                .apply(market_side, &mut ctx.accounts.stake_position)?
         };
 
         let claim_token_program = token_program_for_mint(
@@ -165,10 +136,10 @@ impl<'info> Unstake<'info> {
             market: market_key,
             owner: owner_key,
             asset_mint: asset_mint_key,
-            staked_claim_token_amount,
-            staked_buffer_share_amount,
-            active_stake_units: active_units,
-            accrued_fee_amount,
+            staked_claim_token_amount: stake_receipt.staked_claim_token_amount,
+            staked_buffer_share_amount: stake_receipt.staked_buffer_share_amount,
+            active_stake_units: stake_receipt.active_stake_units,
+            accrued_fee_amount: stake_receipt.accrued_fee_amount,
             metadata: MarketEventMetadata::new(owner_key, market_key),
         });
 
