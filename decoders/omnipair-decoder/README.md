@@ -90,6 +90,14 @@ if let Some(decoded) = decoder.decode_instruction(&instruction) {
 - Full type definitions for all program types
 - Compatible with [Carbon](https://github.com/sevenlabs-hq/carbon) indexing framework
 
+## Regenerating V2
+
+The V2 decoder namespace is generated from `packages/program-interface/src/idl_v2.json`:
+
+```bash
+node decoders/omnipair-decoder/scripts/generate-v2-decoder.mjs
+```
+
 ## License
 
 MIT
