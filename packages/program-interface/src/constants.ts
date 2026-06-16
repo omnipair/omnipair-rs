@@ -122,9 +122,9 @@ export function deriveCollateralVaultAddress(
 }
 
 /**
- * Derive V2 Market PDA address
+ * Derive V2 market PDA address
  */
-export function deriveMarketV2Address(
+export function deriveMarketAddress(
   baseMint: PublicKey,
   quoteMint: PublicKey,
   paramsHash: Uint8Array | Buffer | number[]
@@ -140,7 +140,7 @@ export function deriveMarketV2Address(
   );
 }
 
-export const deriveMarketAddress = deriveMarketV2Address;
+export const deriveMarketV2Address = deriveMarketAddress;
 
 /**
  * Derive market reserve vault PDA address
