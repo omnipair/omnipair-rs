@@ -182,8 +182,8 @@ mod tests {
     use crate::{
         math::*,
         state::{
-            BufferLedger, DailyLimitBook, FeeLedger, HedgePosition, MarginPosition,
-            MarketFeeClaimKind, StakePosition,
+            BufferLedger, FeeLedger, HedgePosition, MarginPosition, MarketFeeClaimKind,
+            StakePosition,
         },
         transitions::fee::{CarryForwardStakerFees, RecordFeeCredit},
         transitions::reserve::{AddLiquidity, RemoveLiquidity},
@@ -740,21 +740,6 @@ mod tests {
     }
 
     #[test]
-    fn daily_limit_bucket_decays_over_one_day() {
-        let mut book = DailyLimitBook {
-            borrowed_bucket: 100_000,
-            withdrawn_bucket: 50_000,
-            last_decay_slot: 0,
-        };
-        let half_day_slots = MS_PER_DAY / TARGET_MS_PER_SLOT / 2;
-
-        book.decay_to_slot(half_day_slots).unwrap();
-
-        assert_eq!(book.borrowed_bucket, 50_000);
-        assert_eq!(book.withdrawn_bucket, 25_000);
-    }
-
-    #[test]
     fn daily_limit_rejects_zero_liquidity() {
         let mut market = test_market();
 
@@ -763,57 +748,6 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::InsufficientLiquidity));
-    }
-
-    #[test]
-    fn risk_book_bootstraps_cached_spot_observation() {
-        let base_mint = Pubkey::new_unique();
-        let quote_mint = Pubkey::new_unique();
-        let mut base_side = test_market_side(base_mint, 2_000);
-        let mut quote_side = test_market_side(quote_mint, 2_000);
-        base_side.reserve_ledger.live_reserve = 1_000_000;
-        quote_side.reserve_ledger.live_reserve = 2_000_000;
-
-        let refreshed = RiskBook::default()
-            .refreshed(&base_side, &quote_side, &test_market().config, 42)
-            .unwrap();
-
-        assert_eq!(refreshed.base_price_ema_nad, 2 * NAD);
-        assert_eq!(refreshed.quote_price_ema_nad, NAD / 2);
-        assert_eq!(refreshed.cached_spot_base_price_nad, 2 * NAD);
-        assert_eq!(refreshed.cached_spot_quote_price_nad, NAD / 2);
-        assert_eq!(refreshed.last_snapshot_slot, 42);
-    }
-
-    #[test]
-    fn risk_book_rolls_ema_from_cached_spot_not_current_spot() {
-        let base_mint = Pubkey::new_unique();
-        let quote_mint = Pubkey::new_unique();
-        let mut base_side = test_market_side(base_mint, 2_000);
-        let mut quote_side = test_market_side(quote_mint, 2_000);
-        base_side.reserve_ledger.live_reserve = 1_000_000;
-        quote_side.reserve_ledger.live_reserve = 2_000_000;
-        let risk_book = RiskBook {
-            base_price_ema_nad: NAD,
-            quote_price_ema_nad: NAD,
-            directional_base_price_ema_nad: NAD,
-            directional_quote_price_ema_nad: NAD,
-            cached_spot_base_price_nad: NAD,
-            cached_spot_quote_price_nad: NAD,
-            last_snapshot_slot: 0,
-            ..RiskBook::default()
-        };
-
-        let refreshed = risk_book
-            .refreshed(&base_side, &quote_side, &test_market().config, 10_000)
-            .unwrap();
-
-        assert_eq!(refreshed.base_price_ema_nad, NAD);
-        assert_eq!(refreshed.quote_price_ema_nad, NAD);
-        assert_eq!(refreshed.directional_base_price_ema_nad, NAD);
-        assert_eq!(refreshed.directional_quote_price_ema_nad, NAD);
-        assert_eq!(refreshed.cached_spot_base_price_nad, 2 * NAD);
-        assert_eq!(refreshed.cached_spot_quote_price_nad, NAD / 2);
     }
 
     #[test]

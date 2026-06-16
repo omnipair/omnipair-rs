@@ -213,3 +213,106 @@ impl RiskBook {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        constants::{BPS_DENOMINATOR, NAD},
+        state::BufferLedger,
+    };
+
+    fn market_side(asset_mint: Pubkey, buffer_ratio_bps: u16) -> MarketSide {
+        MarketSide {
+            asset_mint,
+            asset_decimals: 6,
+            claim_token_mint: Pubkey::new_unique(),
+            hedge_token_mint: Pubkey::new_unique(),
+            hedge_vault: Pubkey::new_unique(),
+            reserve_vault: Pubkey::new_unique(),
+            collateral_vault: Pubkey::new_unique(),
+            fee_vault: Pubkey::new_unique(),
+            stake_vault: Pubkey::new_unique(),
+            buffer_ledger: BufferLedger {
+                buffer_ratio_bps,
+                ..BufferLedger::default()
+            },
+            ..MarketSide::default()
+        }
+    }
+
+    fn market_config() -> MarketConfig {
+        MarketConfig {
+            swap_fee_bps: 30,
+            operator_fee_bps: 1_000,
+            protocol_fee_bps: 0,
+            buffer_ratio_bps: 2_000,
+            fee_routing_k_nad: NAD,
+            ema_half_life_ms: 60_000,
+            directional_ema_half_life_ms: 60_000,
+            k_ema_half_life_ms: 60_000,
+            max_daily_borrow_bps: 2_000,
+            max_daily_withdraw_bps: 2_000,
+            spot_ema_divergence_bps: 1_000,
+            k_ema_drawdown_bps: 1_000,
+            recognized_collateral_cap_bps: 15_000,
+            market_health_min_bps: 11_000,
+            effective_debt_weight_min_bps: BPS_DENOMINATOR,
+            effective_debt_gamma_nad: NAD,
+            soft_borrow_enabled: false,
+            hedged_lp_enabled: true,
+            start_time: 0,
+        }
+    }
+
+    #[test]
+    fn risk_book_bootstraps_cached_spot_observation() {
+        let base_mint = Pubkey::new_unique();
+        let quote_mint = Pubkey::new_unique();
+        let mut base_side = market_side(base_mint, 2_000);
+        let mut quote_side = market_side(quote_mint, 2_000);
+        base_side.reserve_ledger.live_reserve = 1_000_000;
+        quote_side.reserve_ledger.live_reserve = 2_000_000;
+
+        let refreshed = RiskBook::default()
+            .refreshed(&base_side, &quote_side, &market_config(), 42)
+            .unwrap();
+
+        assert_eq!(refreshed.base_price_ema_nad, 2 * NAD);
+        assert_eq!(refreshed.quote_price_ema_nad, NAD / 2);
+        assert_eq!(refreshed.cached_spot_base_price_nad, 2 * NAD);
+        assert_eq!(refreshed.cached_spot_quote_price_nad, NAD / 2);
+        assert_eq!(refreshed.last_snapshot_slot, 42);
+    }
+
+    #[test]
+    fn risk_book_rolls_ema_from_cached_spot_not_current_spot() {
+        let base_mint = Pubkey::new_unique();
+        let quote_mint = Pubkey::new_unique();
+        let mut base_side = market_side(base_mint, 2_000);
+        let mut quote_side = market_side(quote_mint, 2_000);
+        base_side.reserve_ledger.live_reserve = 1_000_000;
+        quote_side.reserve_ledger.live_reserve = 2_000_000;
+        let risk_book = RiskBook {
+            base_price_ema_nad: NAD,
+            quote_price_ema_nad: NAD,
+            directional_base_price_ema_nad: NAD,
+            directional_quote_price_ema_nad: NAD,
+            cached_spot_base_price_nad: NAD,
+            cached_spot_quote_price_nad: NAD,
+            last_snapshot_slot: 0,
+            ..RiskBook::default()
+        };
+
+        let refreshed = risk_book
+            .refreshed(&base_side, &quote_side, &market_config(), 10_000)
+            .unwrap();
+
+        assert_eq!(refreshed.base_price_ema_nad, NAD);
+        assert_eq!(refreshed.quote_price_ema_nad, NAD);
+        assert_eq!(refreshed.directional_base_price_ema_nad, NAD);
+        assert_eq!(refreshed.directional_quote_price_ema_nad, NAD);
+        assert_eq!(refreshed.cached_spot_base_price_nad, 2 * NAD);
+        assert_eq!(refreshed.cached_spot_quote_price_nad, NAD / 2);
+    }
+}
