@@ -258,6 +258,12 @@ anchor build --verifiable -p omnipair \
   -e GIT_REV=$GIT_REV \
   -e GIT_RELEASE=$GIT_RELEASE \
   -- --features "production"
+
+# Build V2 verifiable
+anchor build --verifiable -p omnipair-v2 \
+  -e GIT_REV=$GIT_REV \
+  -e GIT_RELEASE=$GIT_RELEASE \
+  -- --features "production"
 ```
 
 ### Verify On-Chain Program
@@ -274,6 +280,15 @@ solana-verify verify-from-repo \
   --commit-hash <COMMIT_SHA> \
   --library-name omnipair \
   --bpf-flag "features=production"
+
+# Verify V2 from repository
+solana-verify verify-from-repo \
+  --remote \
+  --program-id 358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv \
+  https://github.com/omnipair/omnipair-rs \
+  --commit-hash <COMMIT_SHA> \
+  --library-name omnipair_v2 \
+  --bpf-flag "features=production"
 ```
 
 ### Submit to OtterSec Registry
@@ -284,6 +299,14 @@ solana-verify remote submit-job \
   https://github.com/omnipair/omnipair-rs \
   --commit-hash <COMMIT_SHA> \
   --library-name omnipair \
+  --bpf-flag "features=production"
+
+# Submit V2 to OtterSec Registry
+solana-verify remote submit-job \
+  --program-id 358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv \
+  https://github.com/omnipair/omnipair-rs \
+  --commit-hash <COMMIT_SHA> \
+  --library-name omnipair_v2 \
   --bpf-flag "features=production"
 ```
 

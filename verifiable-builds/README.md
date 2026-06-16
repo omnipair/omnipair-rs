@@ -1,11 +1,13 @@
 # Verifiable Builds
 
-This directory contains verifiable builds of the Omnipair program.
+This directory contains verifiable builds of the Omnipair programs.
 
 ## Files
 
-- `omnipair.so` - The compiled Solana program binary
-- `omnipair.json` - The program IDL (Interface Definition Language)
+- `omnipair.so` - The compiled legacy V1 Solana program binary
+- `omnipair.json` - The legacy V1 program IDL (Interface Definition Language)
+- `omnipair_v2.so` - The compiled V2 market program binary, when generated
+- `omnipair_v2.json` - The V2 market program IDL, when generated
 
 ## Build Configuration
 
@@ -22,12 +24,19 @@ To verify a deployed program matches this build:
 # Install solana-verify
 cargo install solana-verify
 
-# Verify against mainnet
+# Verify V1 against mainnet
 solana-verify verify-from-repo \
   --remote -um \
-  --program-id <PROGRAM_ID> \
+  --program-id omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE \
   https://github.com/omnipair/omnipair-rs \
   --library-name omnipair
+
+# Verify V2 against mainnet
+solana-verify verify-from-repo \
+  --remote -um \
+  --program-id 358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv \
+  https://github.com/omnipair/omnipair-rs \
+  --library-name omnipair_v2
 ```
 
 Or use the `Verify Build` GitHub Action workflow.
