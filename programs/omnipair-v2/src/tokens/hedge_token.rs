@@ -1,3 +1,9 @@
+//! Validation helpers for V2 hedge-token mints.
+//!
+//! Hedge tokens are externally transferable `h-omLP` wrappers. They escrow
+//! underlying claim tokens one-to-one and track hedged fee exposure, but they
+//! do not grant staking rights by themselves.
+
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::Mint;
 

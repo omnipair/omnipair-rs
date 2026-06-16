@@ -1,3 +1,10 @@
+//! Validation helpers for V2 claim-token mints.
+//!
+//! Product-facing docs may call these `omLP` tokens. In state and accounting
+//! code they are claim tokens: fixed-principal SPL claims on one market side's
+//! protected reserve, with fee rights only when separately staked with matched
+//! buffer shares.
+
 use anchor_lang::{prelude::*, solana_program::program_option::COption};
 use anchor_spl::token_interface::Mint;
 

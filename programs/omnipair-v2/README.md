@@ -7,7 +7,7 @@ Omnipair V2 is a separate market architecture program. V1 remains the legacy GAM
 - `instructions/`: Anchor account validation, token movement, slippage checks, and event emission.
 - `transitions/`: atomic accounting mutations that return receipts for events and tests.
 - `state/`: account layouts, local invariants, and market/state methods.
-- `tokens/`: protocol meaning and validation for externally transferable claim and hedge token mints.
+- `tokens/`: protocol meaning and validation for externally transferable claim-token (`omLP`) and hedge-token (`h-omLP`) mints.
 - `math/`: fixed-point, AMM, EMA, valuation, and circuit-breaker helpers.
 - `utils/`: remaining shared accounting helpers used across transitions.
 
@@ -15,7 +15,7 @@ Instruction names are clean in the V2 namespace: `initialize`, `update_config`, 
 
 ## Core Invariants
 
-- Claim tokens are fixed principal claims. Base claim tokens do not rebase, compound fees, or use a dynamic exchange rate.
+- Claim tokens are fixed-principal `omLP` assets. They do not rebase, compound fees, or use a dynamic exchange rate.
 - Reserve floors must cover protected claim token supply plus required buffer on each market side.
 - Deposits split into protected claim amount and buffer share amount; only the claim amount is minted as transferable claim tokens.
 - Fee rights require matched staked claim tokens plus buffer shares. Unstaked claim tokens remain principal-only redemption claims.
@@ -25,7 +25,7 @@ Instruction names are clean in the V2 namespace: `initialize`, `update_config`, 
 - Risk books roll EMA values from cached spot and liquidity observations, then store the current observation for the next refresh.
 - Borrow, redeem, repay, liquidation, fee claim, and hedge close paths check risk circuit breakers where they increase or settle risk against market prices.
 - Liquidation reduces only insolvent debt and follows the waterfall: borrower collateral, liquidator repayment and incentive, insurance reserve, then LP socialization.
-- Hedge tokens wrap base claim tokens one-to-one and unwrap back into base claims. They do not create staking rights.
+- Hedge tokens are `h-omLP` wrappers that escrow claim tokens one-to-one and unwrap back into claim tokens. They do not create staking rights.
 - Inventory-native settlement is used for reserves, collateral, fees, insurance, claims, and hedge vaults.
 
 ## Verification
