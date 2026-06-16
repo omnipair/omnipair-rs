@@ -36,7 +36,31 @@ Useful focused checks while changing V2:
 cargo test -p omnipair-v2 --lib -- --nocapture
 cargo check -p omnipair-v2
 anchor build -p omnipair-v2
-yarn test-litesvm --grep "Omnipair Market LiteSVM"
+npm run build --prefix packages/program-interface
+yarn test-litesvm
 ```
 
 Run package interface builds when public IDL, account, event, seed, or instruction shapes change.
+
+The current V2 review gates are:
+
+- `cargo fmt -p omnipair-v2 -- --check`
+- `cargo check -p omnipair-v2 --lib`
+- `cargo test -p omnipair-v2 --lib -- --nocapture`
+- `anchor build -p omnipair-v2`
+- `npm run build --prefix packages/program-interface`
+- `yarn test-litesvm`
+
+`yarn test-litesvm` reports V2 instruction coverage separately from legacy V1 coverage. V2 is expected to cover all standalone V2 instructions in that report.
+
+## Legacy V1 Baseline
+
+V1 remains the legacy program and is not expected to become clean as part of V2 review. As of the current branch baseline, `cargo test -p omnipair --lib` has 5 known failures:
+
+- `v1::state::rate_model::tests::test_default_matches_original_low_util`
+- `v1::state::rate_model::tests::test_default_matches_original_high_util`
+- `v1::state::rate_model::tests::test_faster_half_life_adjusts_quicker`
+- `v1::state::rate_model::tests::test_uncapped_rate_grows_exponentially`
+- `shared::gamm_math::tests::manipulation_bounded_by_ema`
+
+Treat new V1 failures beyond that list as regressions, and keep V2 changes out of the legacy V1 instruction surface unless the change is explicitly scoped as V1 work.
