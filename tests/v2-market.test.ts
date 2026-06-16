@@ -200,7 +200,8 @@ describe("Omnipair Market LiteSVM", () => {
   async function createTransferFeeMint(
     decimals = 6,
     transferFeeBasisPoints = 1_000,
-    maximumFee = 1_000_000
+    maximumFee = 1_000_000,
+    mintAuthority = payer.publicKey
   ) {
     const mint = Keypair.generate();
     const mintLen = getMintLen([ExtensionType.TransferFeeConfig]);
@@ -225,7 +226,7 @@ describe("Omnipair Market LiteSVM", () => {
       createInitializeMintInstruction(
         mint.publicKey,
         decimals,
-        payer.publicKey,
+        mintAuthority,
         null,
         TOKEN_2022_PROGRAM_ID
       )
@@ -649,6 +650,90 @@ describe("Omnipair Market LiteSVM", () => {
       ownerClaim1Account,
     };
   }
+
+  it("rejects transfer-fee claim and hedge mints at market initialization", async () => {
+    async function expectTransferFeeMintRejected(blockedMintKind: "claim" | "hedge", paramsSeed: number) {
+      const mintA = await createMint(connection as any, payer, payer.publicKey, null, 6);
+      const mintB = await createMint(connection as any, payer, payer.publicKey, null, 6);
+      const [asset0Mint, asset1Mint] = orderedMints(mintA, mintB);
+      const paramsHash = Buffer.alloc(32, paramsSeed);
+      const [market] = PublicKey.findProgramAddressSync(
+        [Buffer.from("market_v2"), asset0Mint.toBuffer(), asset1Mint.toBuffer(), paramsHash],
+        OMNIPAIR_PROGRAM_ID
+      );
+      const [eventAuthority] = PublicKey.findProgramAddressSync(
+        [Buffer.from("__event_authority")],
+        OMNIPAIR_PROGRAM_ID
+      );
+
+      const blockedMint = await createTransferFeeMint(6, 1_000, 1_000_000, market);
+      const claim0Mint = blockedMintKind === "claim"
+        ? blockedMint
+        : await createMint(connection as any, payer, market, null, 6);
+      const claim1Mint = await createMint(connection as any, payer, market, null, 6);
+      const hedge0Mint = blockedMintKind === "hedge"
+        ? blockedMint
+        : await createMint(connection as any, payer, market, null, 6);
+      const hedge1Mint = await createMint(connection as any, payer, market, null, 6);
+      const hedge0Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim0Mint.toBuffer());
+      const hedge1Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim1Mint.toBuffer());
+      const reserve0Vault = deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset0Mint.toBuffer());
+      const reserve1Vault = deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset1Mint.toBuffer());
+      const collateral0Vault = deriveAddress(Buffer.from("market_collateral"), market.toBuffer(), asset0Mint.toBuffer());
+      const collateral1Vault = deriveAddress(Buffer.from("market_collateral"), market.toBuffer(), asset1Mint.toBuffer());
+      const insurance0Vault = deriveAddress(Buffer.from("insurance"), market.toBuffer(), asset0Mint.toBuffer());
+      const insurance1Vault = deriveAddress(Buffer.from("insurance"), market.toBuffer(), asset1Mint.toBuffer());
+      const fee0Vault = deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset0Mint.toBuffer());
+      const fee1Vault = deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset1Mint.toBuffer());
+      const claim0StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim0Mint.toBuffer());
+      const claim1StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim1Mint.toBuffer());
+
+      await expectRejects(() =>
+        program.methods
+          .initializeMarket({
+            operator: payer.publicKey,
+            manager: payer.publicKey,
+            config: marketConfig(),
+            paramsHash: [...paramsHash],
+          })
+          .accounts({
+            payer: payer.publicKey,
+            asset0Mint,
+            asset1Mint,
+            market,
+            claim0Mint,
+            claim1Mint,
+            hedge0Mint,
+            hedge1Mint,
+            hedge0Vault,
+            hedge1Vault,
+            reserve0Vault,
+            reserve1Vault,
+            collateral0Vault,
+            collateral1Vault,
+            insurance0Vault,
+            insurance1Vault,
+            fee0Vault,
+            fee1Vault,
+            claim0StakeVault,
+            claim1StakeVault,
+            systemProgram: SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            token2022Program: TOKEN_2022_PROGRAM_ID,
+            eventAuthority,
+            program: OMNIPAIR_PROGRAM_ID,
+          })
+          .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
+          .signers([payer])
+          .rpc()
+      );
+
+      expect(await connection.getAccountInfo(market)).to.equal(null);
+    }
+
+    await expectTransferFeeMintRejected("claim", 20);
+    await expectTransferFeeMintRejected("hedge", 21);
+  });
 
   it("initializes a market account", async () => {
     trackInstruction("initializeMarket", "initializes a market account");
