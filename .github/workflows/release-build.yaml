@@ -823,10 +823,18 @@ jobs:
         run: |
           echo "Downloaded artifacts:"
           ls -laR target/
-          test -f target/idl/omnipair.json && echo "IDL found!" || echo "IDL NOT found!"
-          test -f target/idl/omnipair_v2.json && echo "V2 IDL found!" || echo "V2 IDL NOT found!"
-          test -f target/types/omnipair.ts && echo "Types found!" || echo "Types NOT found!"
-          test -f target/types/omnipair_v2.ts && echo "V2 types found!" || echo "V2 types NOT found!"
+          for artifact in \
+            target/idl/omnipair.json \
+            target/idl/omnipair_v2.json \
+            target/types/omnipair.ts \
+            target/types/omnipair_v2.ts
+          do
+            if [ ! -f "$artifact" ]; then
+              echo "Missing required release artifact: $artifact"
+              exit 1
+            fi
+            echo "Found required release artifact: $artifact"
+          done
 
       - name: Install dependencies
         working-directory: packages/program-interface
@@ -921,8 +929,16 @@ jobs:
         run: |
           echo "Downloaded artifacts:"
           ls -laR target/
-          test -f target/idl/omnipair.json && echo "IDL found!" || echo "IDL NOT found!"
-          test -f target/idl/omnipair_v2.json && echo "V2 IDL found!" || echo "V2 IDL NOT found!"
+          for artifact in \
+            target/idl/omnipair.json \
+            target/idl/omnipair_v2.json
+          do
+            if [ ! -f "$artifact" ]; then
+              echo "Missing required release artifact: $artifact"
+              exit 1
+            fi
+            echo "Found required release artifact: $artifact"
+          done
 
       - name: Install carbon-cli
         if: steps.check-crate.outputs.skip != 'true'
