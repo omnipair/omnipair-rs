@@ -124,17 +124,6 @@ export function deriveMarketV2Address(
 }
 
 /**
- * @deprecated Use deriveMarketV2Address.
- */
-export function deriveMarketAddress(
-  asset0Mint: PublicKey,
-  asset1Mint: PublicKey,
-  paramsHash: Uint8Array | Buffer | number[]
-): [PublicKey, number] {
-  return deriveMarketV2Address(asset0Mint, asset1Mint, paramsHash);
-}
-
-/**
  * Derive market reserve vault PDA address
  */
 export function deriveMarketReserveVaultAddress(
