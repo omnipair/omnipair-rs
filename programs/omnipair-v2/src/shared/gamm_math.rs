@@ -1,7 +1,7 @@
-use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::errors::ErrorCode;
 use crate::shared::math::{ceil_div, SqrtU128};
+use anchor_lang::prelude::*;
 use std::cmp::min;
 
 const NAD_U128: u128 = NAD as u128;
@@ -17,7 +17,7 @@ const BPS_DENOMINATOR_U128: u128 = BPS_DENOMINATOR as u128;
 ///         Δy = (Δx * y) / (x + Δx)
 ///   - [`CPCurve::calculate_amount_in`]:  Given desired amount_out and reserves, computes required amount_in (“how much in to get desired out”)
 ///         Δx = (Δy * x) / (y - Δy)
-/// 
+///
 /// Assumes no fees and integer division rounding down.
 pub struct CPCurve;
 
@@ -72,23 +72,27 @@ pub fn construct_virtual_reserves_at_pessimistic_price(
 ) -> Result<(u64, u64)> {
     // Minimum liquidity check to prevent sqrt precision loss
     if collateral_spot_reserve < MIN_LIQUIDITY || debt_spot_reserve < MIN_LIQUIDITY {
-        return Ok((0, 0)); 
+        return Ok((0, 0));
     }
-    
-    let pessimistic_price = min(collateral_directional_ema_price_nad, collateral_ema_price_nad) as u128;
+
+    let pessimistic_price = min(
+        collateral_directional_ema_price_nad,
+        collateral_ema_price_nad,
+    ) as u128;
     if pessimistic_price == 0 {
         return Ok((collateral_spot_reserve, debt_spot_reserve));
     }
 
     let spot_k = (collateral_spot_reserve as u128)
-    .checked_mul(debt_spot_reserve as u128)
-    .ok_or(ErrorCode::Overflow)?;
+        .checked_mul(debt_spot_reserve as u128)
+        .ok_or(ErrorCode::Overflow)?;
 
     // k * NAD / P_pessimistic
     // Try direct multiplication first; on overflow, split as (R_c * NAD / P) * R_d
     // to keep intermediates within u128 (at a small precision cost).
     let x_virt_squared = match spot_k.checked_mul(NAD_U128) {
-        Some(v) => v.checked_div(pessimistic_price)
+        Some(v) => v
+            .checked_div(pessimistic_price)
             .ok_or(ErrorCode::DenominatorOverflow)?,
         None => {
             let partial = (collateral_spot_reserve as u128)
@@ -96,7 +100,8 @@ pub fn construct_virtual_reserves_at_pessimistic_price(
                 .ok_or(ErrorCode::Overflow)?
                 .checked_div(pessimistic_price)
                 .ok_or(ErrorCode::DenominatorOverflow)?;
-            partial.checked_mul(debt_spot_reserve as u128)
+            partial
+                .checked_mul(debt_spot_reserve as u128)
                 .ok_or(ErrorCode::Overflow)?
         }
     };
@@ -110,7 +115,8 @@ pub fn construct_virtual_reserves_at_pessimistic_price(
     // k * P_pessimistic / NAD
     // Try direct multiplication first; on overflow, split as (R_d * P / NAD) * R_c.
     let y_virt_squared = match spot_k.checked_mul(pessimistic_price) {
-        Some(v) => v.checked_div(NAD_U128)
+        Some(v) => v
+            .checked_div(NAD_U128)
             .ok_or(ErrorCode::DenominatorOverflow)?,
         None => {
             let partial = (debt_spot_reserve as u128)
@@ -118,7 +124,8 @@ pub fn construct_virtual_reserves_at_pessimistic_price(
                 .ok_or(ErrorCode::Overflow)?
                 .checked_div(NAD_U128)
                 .ok_or(ErrorCode::DenominatorOverflow)?;
-            partial.checked_mul(collateral_spot_reserve as u128)
+            partial
+                .checked_mul(collateral_spot_reserve as u128)
                 .ok_or(ErrorCode::Overflow)?
         }
     };
@@ -128,7 +135,7 @@ pub fn construct_virtual_reserves_at_pessimistic_price(
         .ok_or(ErrorCode::Overflow)?
         .try_into()
         .map_err(|_| ErrorCode::Overflow)?;
-    
+
     Ok((collateral_ema_reserve, debt_ema_reserve))
 }
 
@@ -136,19 +143,20 @@ pub fn construct_virtual_reserves_at_pessimistic_price(
 /// Answers: "How much X must be swapped to get `current_total_debt` Y out?"
 /// Includes price impact from the constant product curve.
 fn calculate_utilized_collateral_with_impact(
-    current_total_debt: u64, 
-    collateral_amm_reserve: u64, 
+    current_total_debt: u64,
+    collateral_amm_reserve: u64,
     debt_amm_reserve: u64,
     collateral_directional_ema_price_nad: u64,
     collateral_ema_price_nad: u64,
 ) -> Result<u64> {
-    let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
-        collateral_amm_reserve,
-        debt_amm_reserve,
-        collateral_ema_price_nad,
-        collateral_directional_ema_price_nad,
-    )?;
-    
+    let (collateral_ema_reserve, debt_ema_reserve) =
+        construct_virtual_reserves_at_pessimistic_price(
+            collateral_amm_reserve,
+            debt_amm_reserve,
+            collateral_ema_price_nad,
+            collateral_directional_ema_price_nad,
+        )?;
+
     CPCurve::calculate_amount_in(collateral_ema_reserve, debt_ema_reserve, current_total_debt)
 }
 
@@ -156,22 +164,29 @@ fn calculate_utilized_collateral_with_impact(
 /// Includes price impact from the constant product curve.
 /// Uses virtual reserves at min(directional_ema, ema) price to prevent manipulation.
 fn calculate_max_allowed_total_debt(
-    utilized_collateral: u64, 
-    user_collateral_amount: u64, 
-    collateral_amm_reserve: u64, 
+    utilized_collateral: u64,
+    user_collateral_amount: u64,
+    collateral_amm_reserve: u64,
     debt_amm_reserve: u64,
     collateral_directional_ema_price_nad: u64,
     collateral_ema_price_nad: u64,
 ) -> Result<u64> {
-    let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
-        collateral_amm_reserve,
-        debt_amm_reserve,
-        collateral_ema_price_nad,
-        collateral_directional_ema_price_nad,
-    )?;
-    
-    let total_collateral_amount = utilized_collateral.checked_add(user_collateral_amount).ok_or(ErrorCode::Overflow)?;
-    CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, total_collateral_amount)
+    let (collateral_ema_reserve, debt_ema_reserve) =
+        construct_virtual_reserves_at_pessimistic_price(
+            collateral_amm_reserve,
+            debt_amm_reserve,
+            collateral_ema_price_nad,
+            collateral_directional_ema_price_nad,
+        )?;
+
+    let total_collateral_amount = utilized_collateral
+        .checked_add(user_collateral_amount)
+        .ok_or(ErrorCode::Overflow)?;
+    CPCurve::calculate_amount_out(
+        collateral_ema_reserve,
+        debt_ema_reserve,
+        total_collateral_amount,
+    )
 }
 
 /// Maximum borrowable amount of tokenY using either a fixed CF or an impact-aware CF
@@ -188,7 +203,7 @@ fn calculate_max_allowed_total_debt(
 /// Returns:
 /// - final_borrow_limit (raw Y units)
 /// - max_allowed_cf_bps (liquidation_cf_bps * 95%)
-/// - liquidation_cf_bps 
+/// - liquidation_cf_bps
 pub fn pessimistic_max_debt(
     collateral_amount: u64,
     collateral_ema_price_nad: u64,
@@ -211,15 +226,17 @@ pub fn pessimistic_max_debt(
     // ensuring the borrow limit never exceeds the liquidation threshold.
     // Without this, V_linear > V_impact for collateral > ~5.26% of AMM reserve,
     // which would make max-borrow positions instantly liquidatable.
-    let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
-        collateral_amm_reserve,
-        debt_amm_reserve,
-        collateral_ema_price_nad,
-        collateral_directional_ema_price_nad,
-    )?;
+    let (collateral_ema_reserve, debt_ema_reserve) =
+        construct_virtual_reserves_at_pessimistic_price(
+            collateral_amm_reserve,
+            debt_amm_reserve,
+            collateral_ema_price_nad,
+            collateral_directional_ema_price_nad,
+        )?;
 
     let collateral_value_with_impact =
-        CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, collateral_amount)? as u128;
+        CPCurve::calculate_amount_out(collateral_ema_reserve, debt_ema_reserve, collateral_amount)?
+            as u128;
 
     // Determine base CF: either fixed CF or dynamic AMM-based CF
     let base_cf_bps: u64 = if let Some(fixed_cf) = fixed_cf_bps {
@@ -233,8 +250,8 @@ pub fn pessimistic_max_debt(
 
         // 0. Calculate utilized collateral with price impact using virtual reserves at pessimistic price.
         let utilized_collateral = calculate_utilized_collateral_with_impact(
-            total_debt, 
-            collateral_amm_reserve, 
+            total_debt,
+            collateral_amm_reserve,
             debt_amm_reserve,
             collateral_directional_ema_price_nad,
             collateral_ema_price_nad,
@@ -243,8 +260,8 @@ pub fn pessimistic_max_debt(
         // 1. Calculate max allowed total debt using virtual reserves at pessimistic price.
         let max_allowed_total_debt = calculate_max_allowed_total_debt(
             utilized_collateral,
-            collateral_amount, 
-            collateral_amm_reserve, 
+            collateral_amount,
+            collateral_amm_reserve,
             debt_amm_reserve,
             collateral_directional_ema_price_nad,
             collateral_ema_price_nad,
@@ -256,9 +273,9 @@ pub fn pessimistic_max_debt(
         // 3. Calculate base CF = user max debt * BPS_DENOMINATOR / V_impact
         //    CF is relative to impact value so it captures only the debt crowding effect.
         (user_max_debt as u128)
-        .saturating_mul(BPS_DENOMINATOR_U128)
-        .checked_div(collateral_value_with_impact) 
-        .unwrap_or(0) as u64
+            .saturating_mul(BPS_DENOMINATOR_U128)
+            .checked_div(collateral_value_with_impact)
+            .unwrap_or(0) as u64
     };
 
     // Apply spot/EMA divergence cap to fixed cf only for preventing EMA lag front-running
@@ -268,7 +285,10 @@ pub fn pessimistic_max_debt(
     let liquidation_cf_bps = if fixed_cf_bps.is_some() {
         // If spot > ema: CF stays at fixed_cf_bps
         // If spot < ema: CF reduces proportionally to render front-running non-profitable
-        require!(collateral_ema_price_nad != 0, ErrorCode::DenominatorOverflow);
+        require!(
+            collateral_ema_price_nad != 0,
+            ErrorCode::DenominatorOverflow
+        );
         let base = base_cf_bps as u128;
         let shrunk = (collateral_directional_ema_price_nad as u128)
             .saturating_mul(base)

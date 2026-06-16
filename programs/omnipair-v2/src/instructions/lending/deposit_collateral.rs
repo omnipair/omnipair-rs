@@ -142,8 +142,8 @@ impl<'info> DepositCollateral<'info> {
             owner: owner_key,
             asset_mint: asset_mint_key,
             collateral_credit: collateral_receipt.collateral_credit,
-            collateral0: collateral_receipt.collateral0,
-            collateral1: collateral_receipt.collateral1,
+            base_collateral: collateral_receipt.base_collateral,
+            quote_collateral: collateral_receipt.quote_collateral,
             metadata: MarketEventMetadata::new(owner_key, market_key)?,
         });
 

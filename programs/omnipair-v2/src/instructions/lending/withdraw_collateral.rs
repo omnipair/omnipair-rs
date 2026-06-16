@@ -90,8 +90,8 @@ impl<'info> WithdrawCollateral<'info> {
             ErrorCode::InsufficientBalance
         );
         let idle_collateral = match args.market_side_index {
-            0 => self.margin_position.idle_collateral0()?,
-            1 => self.margin_position.idle_collateral1()?,
+            0 => self.margin_position.idle_base_collateral()?,
+            1 => self.margin_position.idle_quote_collateral()?,
             _ => return err!(ErrorCode::InvalidMarketSide),
         };
         require_gte!(
@@ -153,8 +153,8 @@ impl<'info> WithdrawCollateral<'info> {
             asset_mint: asset_mint_key,
             collateral_debit: collateral_receipt.collateral_debit,
             asset_credit,
-            collateral0: collateral_receipt.collateral0,
-            collateral1: collateral_receipt.collateral1,
+            base_collateral: collateral_receipt.base_collateral,
+            quote_collateral: collateral_receipt.quote_collateral,
             metadata: MarketEventMetadata::new(owner_key, market_key)?,
         });
 

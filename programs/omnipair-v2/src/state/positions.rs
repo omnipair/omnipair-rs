@@ -11,12 +11,12 @@ use crate::{
 pub struct MarginPosition {
     pub owner: Pubkey,
     pub market: Pubkey,
-    pub collateral0: u64,
-    pub collateral1: u64,
-    pub recognized_collateral0_for_debt1: u64,
-    pub recognized_collateral1_for_debt0: u64,
-    pub fixed_debt0_shares: u128,
-    pub fixed_debt1_shares: u128,
+    pub base_collateral: u64,
+    pub quote_collateral: u64,
+    pub recognized_base_collateral_for_quote_debt: u64,
+    pub recognized_quote_collateral_for_base_debt: u64,
+    pub fixed_base_debt_shares: u128,
+    pub fixed_quote_debt_shares: u128,
     pub bump: u8,
 }
 
@@ -63,24 +63,27 @@ impl MarginPosition {
         Ok(())
     }
 
-    pub fn idle_collateral0(&self) -> Result<u64> {
-        self.collateral0
-            .checked_sub(self.recognized_collateral0_for_debt1)
+    pub fn idle_base_collateral(&self) -> Result<u64> {
+        self.base_collateral
+            .checked_sub(self.recognized_base_collateral_for_quote_debt)
             .ok_or(ErrorCode::InsufficientRecognizedCollateral.into())
     }
 
-    pub fn idle_collateral1(&self) -> Result<u64> {
-        self.collateral1
-            .checked_sub(self.recognized_collateral1_for_debt0)
+    pub fn idle_quote_collateral(&self) -> Result<u64> {
+        self.quote_collateral
+            .checked_sub(self.recognized_quote_collateral_for_base_debt)
             .ok_or(ErrorCode::InsufficientRecognizedCollateral.into())
     }
 
-    pub fn fixed_debt0(&self, debt_book: &DebtBook) -> Result<u128> {
-        DebtBook::shares_to_debt(self.fixed_debt0_shares, debt_book.borrow_index0_nad)
+    pub fn fixed_base_debt(&self, debt_book: &DebtBook) -> Result<u128> {
+        DebtBook::shares_to_debt(self.fixed_base_debt_shares, debt_book.base_borrow_index_nad)
     }
 
-    pub fn fixed_debt1(&self, debt_book: &DebtBook) -> Result<u128> {
-        DebtBook::shares_to_debt(self.fixed_debt1_shares, debt_book.borrow_index1_nad)
+    pub fn fixed_quote_debt(&self, debt_book: &DebtBook) -> Result<u128> {
+        DebtBook::shares_to_debt(
+            self.fixed_quote_debt_shares,
+            debt_book.quote_borrow_index_nad,
+        )
     }
 }
 

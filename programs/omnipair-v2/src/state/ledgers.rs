@@ -52,16 +52,16 @@ pub struct DailyLimitBook {
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct InsuranceReserve {
-    pub vault0: Pubkey,
-    pub vault1: Pubkey,
-    pub available0: u64,
-    pub available1: u64,
+    pub base_vault: Pubkey,
+    pub quote_vault: Pubkey,
+    pub base_available: u64,
+    pub quote_available: u64,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct RecognitionLedger {
-    pub debt_bearing_collateral0_for_debt1: u64,
-    pub debt_bearing_collateral1_for_debt0: u64,
+    pub debt_bearing_base_collateral_for_quote_debt: u64,
+    pub debt_bearing_quote_collateral_for_base_debt: u64,
     pub last_recognition_slot: u64,
 }
 

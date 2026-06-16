@@ -7,7 +7,7 @@ use anchor_spl::{
 use crate::{
     constants::*,
     errors::ErrorCode,
-    events::{MarketEventMetadata, MarketLiquidated},
+    events::{MarketEventMetadata, PositionLiquidated},
     generate_market_seeds,
     shared::token::{
         transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault,
@@ -22,7 +22,7 @@ use crate::instructions::common::{
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct LiquidateArgs {
-    pub debt_asset_is_asset0: bool,
+    pub debt_asset_is_base: bool,
     pub repay_amount: u64,
     pub min_collateral_out: u64,
     pub max_insurance_draw: u64,
@@ -93,7 +93,7 @@ impl<'info> Liquidate<'info> {
         );
         validate_liquidation_accounts(
             &self.market,
-            args.debt_asset_is_asset0,
+            args.debt_asset_is_base,
             self.liquidator.key(),
             &self.debt_asset_mint,
             &self.collateral_asset_mint,
@@ -112,7 +112,7 @@ impl<'info> Liquidate<'info> {
         );
         let health_bps = self
             .market
-            .position_health_bps(&self.margin_position, args.debt_asset_is_asset0)?;
+            .position_health_bps(&self.margin_position, args.debt_asset_is_base)?;
         require!(
             health_bps < self.market.config.market_health_min_bps as u64,
             ErrorCode::PositionNotLiquidatable
@@ -154,7 +154,7 @@ impl<'info> Liquidate<'info> {
         let insurance_request = insurance_request_for_liquidation(
             &ctx.accounts.market,
             &ctx.accounts.margin_position,
-            args.debt_asset_is_asset0,
+            args.debt_asset_is_base,
             repay_credit,
             args.max_insurance_draw,
         )?;
@@ -189,7 +189,7 @@ impl<'info> Liquidate<'info> {
         };
 
         let liquidation_receipt = Liquidation::new(
-            args.debt_asset_is_asset0,
+            args.debt_asset_is_base,
             repay_credit,
             insurance_spent,
             insurance_credit,
@@ -228,7 +228,7 @@ impl<'info> Liquidate<'info> {
             ErrorCode::SlippageExceeded
         );
 
-        emit_cpi!(MarketLiquidated {
+        emit_cpi!(PositionLiquidated {
             market: market_key,
             borrower: borrower_key,
             liquidator: liquidator_key,
@@ -248,7 +248,7 @@ impl<'info> Liquidate<'info> {
 
 fn validate_liquidation_accounts<'info>(
     market: &Account<'info, Market>,
-    debt_asset_is_asset0: bool,
+    debt_asset_is_base: bool,
     liquidator: Pubkey,
     debt_asset_mint: &InterfaceAccount<'info, Mint>,
     collateral_asset_mint: &InterfaceAccount<'info, Mint>,
@@ -258,17 +258,17 @@ fn validate_liquidation_accounts<'info>(
     liquidator_debt_account: &InterfaceAccount<'info, TokenAccount>,
     liquidator_collateral_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
-    let (debt_side, collateral_side, insurance_vault_key) = if debt_asset_is_asset0 {
+    let (debt_side, collateral_side, insurance_vault_key) = if debt_asset_is_base {
         (
             &market.base_side,
             &market.quote_side,
-            market.insurance_reserve.vault0,
+            market.insurance_reserve.base_vault,
         )
     } else {
         (
             &market.quote_side,
             &market.base_side,
-            market.insurance_reserve.vault1,
+            market.insurance_reserve.quote_vault,
         )
     };
     require_keys_eq!(

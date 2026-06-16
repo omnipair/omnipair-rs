@@ -50,14 +50,14 @@ pub(super) fn validate_collateral_accounts<'info>(
 
 pub(super) fn validate_borrow_accounts<'info>(
     market: &Account<'info, Market>,
-    borrow_asset_is_asset0: bool,
+    borrow_asset_is_base: bool,
     owner: Pubkey,
     debt_asset_mint: &InterfaceAccount<'info, Mint>,
     collateral_asset_mint: &InterfaceAccount<'info, Mint>,
     reserve_vault: &InterfaceAccount<'info, TokenAccount>,
     owner_debt_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
-    let (debt_side, collateral_side) = if borrow_asset_is_asset0 {
+    let (debt_side, collateral_side) = if borrow_asset_is_base {
         (&market.base_side, &market.quote_side)
     } else {
         (&market.quote_side, &market.base_side)
@@ -80,13 +80,13 @@ pub(super) fn validate_borrow_accounts<'info>(
 
 pub(super) fn validate_repay_accounts<'info>(
     market: &Account<'info, Market>,
-    repay_asset_is_asset0: bool,
+    repay_asset_is_base: bool,
     owner: Pubkey,
     debt_asset_mint: &InterfaceAccount<'info, Mint>,
     reserve_vault: &InterfaceAccount<'info, TokenAccount>,
     owner_debt_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
-    let debt_side = if repay_asset_is_asset0 {
+    let debt_side = if repay_asset_is_base {
         &market.base_side
     } else {
         &market.quote_side

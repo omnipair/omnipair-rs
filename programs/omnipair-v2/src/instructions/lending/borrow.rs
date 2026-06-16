@@ -22,7 +22,7 @@ use super::common::validate_borrow_accounts;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct BorrowArgs {
-    pub borrow_asset_is_asset0: bool,
+    pub borrow_asset_is_base: bool,
     pub borrow_amount: u64,
     pub min_debt_amount_out: u64,
     pub min_health_bps: u64,
@@ -87,7 +87,7 @@ impl<'info> Borrow<'info> {
         );
         validate_borrow_accounts(
             &self.market,
-            args.borrow_asset_is_asset0,
+            args.borrow_asset_is_base,
             self.owner.key(),
             &self.debt_asset_mint,
             &self.collateral_asset_mint,
@@ -106,7 +106,7 @@ impl<'info> Borrow<'info> {
         let debt_asset_mint_key = ctx.accounts.debt_asset_mint.key();
 
         let debt_receipt = BorrowTransition::new(
-            args.borrow_asset_is_asset0,
+            args.borrow_asset_is_base,
             args.borrow_amount,
             args.min_health_bps,
         )
@@ -142,28 +142,28 @@ impl<'info> Borrow<'info> {
             owner: owner_key,
             debt_asset_mint: debt_asset_mint_key,
             debt_delta: debt_receipt.debt_delta,
-            fixed_debt0: debt_receipt.fixed_debt0,
-            fixed_debt1: debt_receipt.fixed_debt1,
-            health0_bps: debt_receipt.health0_bps,
-            health1_bps: debt_receipt.health1_bps,
+            fixed_base_debt: debt_receipt.fixed_base_debt,
+            fixed_quote_debt: debt_receipt.fixed_quote_debt,
+            base_debt_health_bps: debt_receipt.base_debt_health_bps,
+            quote_debt_health_bps: debt_receipt.quote_debt_health_bps,
             metadata: MarketEventMetadata::new(owner_key, market_key)?,
         });
         emit_cpi!(MarketHealthUpdated {
             market: market_key,
-            recognized_collateral0_for_debt1: ctx
+            recognized_base_collateral_for_quote_debt: ctx
                 .accounts
                 .market
                 .health
-                .recognized_collateral0_for_debt1,
-            recognized_collateral1_for_debt0: ctx
+                .recognized_base_collateral_for_quote_debt,
+            recognized_quote_collateral_for_base_debt: ctx
                 .accounts
                 .market
                 .health
-                .recognized_collateral1_for_debt0,
-            effective_debt0_nad: ctx.accounts.market.health.effective_debt0_nad,
-            effective_debt1_nad: ctx.accounts.market.health.effective_debt1_nad,
-            health0_bps: ctx.accounts.market.health.health0_bps,
-            health1_bps: ctx.accounts.market.health.health1_bps,
+                .recognized_quote_collateral_for_base_debt,
+            effective_base_debt_nad: ctx.accounts.market.health.effective_base_debt_nad,
+            effective_quote_debt_nad: ctx.accounts.market.health.effective_quote_debt_nad,
+            base_debt_health_bps: ctx.accounts.market.health.base_debt_health_bps,
+            quote_debt_health_bps: ctx.accounts.market.health.quote_debt_health_bps,
             metadata: MarketEventMetadata::new(owner_key, market_key)?,
         });
         Ok(())

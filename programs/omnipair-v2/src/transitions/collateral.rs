@@ -9,8 +9,8 @@ use crate::{
 pub struct CollateralReceipt {
     pub collateral_credit: u64,
     pub collateral_debit: u64,
-    pub collateral0: u64,
-    pub collateral1: u64,
+    pub base_collateral: u64,
+    pub quote_collateral: u64,
 }
 
 pub struct DepositCollateral {
@@ -35,14 +35,14 @@ impl DepositCollateral {
         require!(self.collateral_credit > 0, ErrorCode::AmountZero);
         match self.market_side_index {
             0 => {
-                margin_position.collateral0 = margin_position
-                    .collateral0
+                margin_position.base_collateral = margin_position
+                    .base_collateral
                     .checked_add(self.collateral_credit)
                     .ok_or(ErrorCode::MarketMathOverflow)?;
             }
             1 => {
-                margin_position.collateral1 = margin_position
-                    .collateral1
+                margin_position.quote_collateral = margin_position
+                    .quote_collateral
                     .checked_add(self.collateral_credit)
                     .ok_or(ErrorCode::MarketMathOverflow)?;
             }
@@ -52,8 +52,8 @@ impl DepositCollateral {
         Ok(CollateralReceipt {
             collateral_credit: self.collateral_credit,
             collateral_debit: 0,
-            collateral0: margin_position.collateral0,
-            collateral1: margin_position.collateral1,
+            base_collateral: margin_position.base_collateral,
+            quote_collateral: margin_position.quote_collateral,
         })
     }
 }
@@ -76,23 +76,23 @@ impl WithdrawCollateral {
         match self.market_side_index {
             0 => {
                 require_gte!(
-                    margin_position.idle_collateral0()?,
+                    margin_position.idle_base_collateral()?,
                     self.collateral_debit,
                     ErrorCode::InsufficientRecognizedCollateral
                 );
-                margin_position.collateral0 = margin_position
-                    .collateral0
+                margin_position.base_collateral = margin_position
+                    .base_collateral
                     .checked_sub(self.collateral_debit)
                     .ok_or(ErrorCode::MarketMathOverflow)?;
             }
             1 => {
                 require_gte!(
-                    margin_position.idle_collateral1()?,
+                    margin_position.idle_quote_collateral()?,
                     self.collateral_debit,
                     ErrorCode::InsufficientRecognizedCollateral
                 );
-                margin_position.collateral1 = margin_position
-                    .collateral1
+                margin_position.quote_collateral = margin_position
+                    .quote_collateral
                     .checked_sub(self.collateral_debit)
                     .ok_or(ErrorCode::MarketMathOverflow)?;
             }
@@ -104,8 +104,8 @@ impl WithdrawCollateral {
         Ok(CollateralReceipt {
             collateral_credit: 0,
             collateral_debit: self.collateral_debit,
-            collateral0: margin_position.collateral0,
-            collateral1: margin_position.collateral1,
+            base_collateral: margin_position.base_collateral,
+            quote_collateral: margin_position.quote_collateral,
         })
     }
 }

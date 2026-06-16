@@ -190,7 +190,7 @@ pub fn validate_fee_accounts<'info>(
 
 pub fn validate_swap_accounts<'info>(
     market: &Account<'info, Market>,
-    asset_in_is_asset0: bool,
+    asset_in_is_base: bool,
     trader: Pubkey,
     asset_in_mint: &InterfaceAccount<'info, Mint>,
     asset_out_mint: &InterfaceAccount<'info, Mint>,
@@ -200,7 +200,7 @@ pub fn validate_swap_accounts<'info>(
     trader_asset_in_account: &InterfaceAccount<'info, TokenAccount>,
     trader_asset_out_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
-    let (market_side_in, market_side_out) = if asset_in_is_asset0 {
+    let (market_side_in, market_side_out) = if asset_in_is_base {
         (&market.base_side, &market.quote_side)
     } else {
         (&market.quote_side, &market.base_side)

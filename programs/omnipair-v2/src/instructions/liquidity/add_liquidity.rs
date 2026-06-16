@@ -7,7 +7,7 @@ use anchor_spl::{
 use crate::{
     constants::*,
     errors::ErrorCode,
-    events::{MarketEventMetadata, MarketReserveDeposited},
+    events::{LiquidityAdded, MarketEventMetadata},
     generate_market_seeds,
     shared::{
         account::get_size_with_discriminator,
@@ -189,7 +189,7 @@ impl<'info> AddLiquidity<'info> {
             &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
 
-        emit_cpi!(MarketReserveDeposited {
+        emit_cpi!(LiquidityAdded {
             market: market_key,
             owner: owner_key,
             asset_mint: asset_mint_key,

@@ -7,7 +7,7 @@ use anchor_spl::{
 use crate::{
     constants::*,
     errors::ErrorCode,
-    events::{MarketEventMetadata, MarketSwapEvent},
+    events::{MarketEventMetadata, SwapExecuted},
     generate_market_seeds,
     shared::{
         gamm_math::CPCurve,
@@ -27,7 +27,7 @@ use crate::instructions::common::{
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct SwapArgs {
-    pub asset_in_is_asset0: bool,
+    pub asset_in_is_base: bool,
     pub exact_asset_in: u64,
     pub min_asset_out: u64,
 }
@@ -85,7 +85,7 @@ impl<'info> Swap<'info> {
         );
         validate_swap_accounts(
             &self.market,
-            args.asset_in_is_asset0,
+            args.asset_in_is_base,
             self.trader.key(),
             &self.asset_in_mint,
             &self.asset_out_mint,
@@ -126,7 +126,7 @@ impl<'info> Swap<'info> {
 
         let amount_out = {
             let (market_side_in, market_side_out) =
-                ctx.accounts.market.swap_sides(args.asset_in_is_asset0);
+                ctx.accounts.market.swap_sides(args.asset_in_is_base);
             CPCurve::calculate_amount_out(
                 market_side_in.reserve_ledger.live_reserve,
                 market_side_out.reserve_ledger.live_reserve,
@@ -163,7 +163,7 @@ impl<'info> Swap<'info> {
 
         let swap_receipt = {
             let (market_side_in, market_side_out) =
-                ctx.accounts.market.swap_sides_mut(args.asset_in_is_asset0);
+                ctx.accounts.market.swap_sides_mut(args.asset_in_is_base);
             SwapTransition::new(
                 amount_in_after_fee,
                 amount_out,
@@ -176,7 +176,7 @@ impl<'info> Swap<'info> {
         ctx.accounts.market.refresh_risk_book()?;
         ctx.accounts.market.assert_risk_circuit_breakers()?;
 
-        emit_cpi!(MarketSwapEvent {
+        emit_cpi!(SwapExecuted {
             market: market_key,
             trader: trader_key,
             asset_in_mint: asset_in_mint_key,

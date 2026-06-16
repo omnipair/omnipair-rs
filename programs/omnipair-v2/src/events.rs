@@ -56,17 +56,17 @@ pub struct MarketUpdated {
 #[event]
 pub struct MarketHealthUpdated {
     pub market: Pubkey,
-    pub recognized_collateral0_for_debt1: u64,
-    pub recognized_collateral1_for_debt0: u64,
-    pub effective_debt0_nad: u128,
-    pub effective_debt1_nad: u128,
-    pub health0_bps: u64,
-    pub health1_bps: u64,
+    pub recognized_base_collateral_for_quote_debt: u64,
+    pub recognized_quote_collateral_for_base_debt: u64,
+    pub effective_base_debt_nad: u128,
+    pub effective_quote_debt_nad: u128,
+    pub base_debt_health_bps: u64,
+    pub quote_debt_health_bps: u64,
     pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketReserveDeposited {
+pub struct LiquidityAdded {
     pub market: Pubkey,
     pub owner: Pubkey,
     pub asset_mint: Pubkey,
@@ -79,7 +79,7 @@ pub struct MarketReserveDeposited {
 }
 
 #[event]
-pub struct MarketClaimRedeemed {
+pub struct LiquidityRemoved {
     pub market: Pubkey,
     pub owner: Pubkey,
     pub asset_mint: Pubkey,
@@ -123,7 +123,7 @@ pub struct MarketFeeLiabilityClaimed {
 }
 
 #[event]
-pub struct MarketSwapEvent {
+pub struct SwapExecuted {
     pub market: Pubkey,
     pub trader: Pubkey,
     pub asset_in_mint: Pubkey,
@@ -141,8 +141,8 @@ pub struct MarketCollateralDeposited {
     pub owner: Pubkey,
     pub asset_mint: Pubkey,
     pub collateral_credit: u64,
-    pub collateral0: u64,
-    pub collateral1: u64,
+    pub base_collateral: u64,
+    pub quote_collateral: u64,
     pub metadata: MarketEventMetadata,
 }
 
@@ -153,8 +153,8 @@ pub struct MarketCollateralWithdrawn {
     pub asset_mint: Pubkey,
     pub collateral_debit: u64,
     pub asset_credit: u64,
-    pub collateral0: u64,
-    pub collateral1: u64,
+    pub base_collateral: u64,
+    pub quote_collateral: u64,
     pub metadata: MarketEventMetadata,
 }
 
@@ -164,10 +164,10 @@ pub struct MarketDebtUpdated {
     pub owner: Pubkey,
     pub debt_asset_mint: Pubkey,
     pub debt_delta: i64,
-    pub fixed_debt0: u128,
-    pub fixed_debt1: u128,
-    pub health0_bps: u64,
-    pub health1_bps: u64,
+    pub fixed_base_debt: u128,
+    pub fixed_quote_debt: u128,
+    pub base_debt_health_bps: u64,
+    pub quote_debt_health_bps: u64,
     pub metadata: MarketEventMetadata,
 }
 
@@ -177,13 +177,13 @@ pub struct MarketInsuranceFunded {
     pub sponsor: Pubkey,
     pub asset_mint: Pubkey,
     pub insurance_credit: u64,
-    pub available0: u64,
-    pub available1: u64,
+    pub base_available: u64,
+    pub quote_available: u64,
     pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketLiquidated {
+pub struct PositionLiquidated {
     pub market: Pubkey,
     pub borrower: Pubkey,
     pub liquidator: Pubkey,

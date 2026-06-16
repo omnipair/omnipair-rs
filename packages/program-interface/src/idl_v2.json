@@ -3124,16 +3124,29 @@
   ],
   "events": [
     {
-      "name": "MarketClaimRedeemed",
+      "name": "LiquidityAdded",
       "discriminator": [
-        50,
-        153,
-        187,
-        123,
-        193,
-        146,
-        241,
-        226
+        154,
+        26,
+        221,
+        108,
+        238,
+        64,
+        217,
+        161
+      ]
+    },
+    {
+      "name": "LiquidityRemoved",
+      "discriminator": [
+        225,
+        105,
+        216,
+        39,
+        124,
+        116,
+        169,
+        189
       ]
     },
     {
@@ -3280,32 +3293,6 @@
       ]
     },
     {
-      "name": "MarketLiquidated",
-      "discriminator": [
-        25,
-        212,
-        62,
-        118,
-        20,
-        243,
-        110,
-        123
-      ]
-    },
-    {
-      "name": "MarketReserveDeposited",
-      "discriminator": [
-        70,
-        93,
-        14,
-        17,
-        165,
-        18,
-        30,
-        69
-      ]
-    },
-    {
       "name": "MarketStakeUpdated",
       "discriminator": [
         63,
@@ -3319,19 +3306,6 @@
       ]
     },
     {
-      "name": "MarketSwapEvent",
-      "discriminator": [
-        170,
-        26,
-        199,
-        196,
-        42,
-        99,
-        119,
-        83
-      ]
-    },
-    {
       "name": "MarketUpdated",
       "discriminator": [
         170,
@@ -3342,6 +3316,32 @@
         168,
         217,
         251
+      ]
+    },
+    {
+      "name": "PositionLiquidated",
+      "discriminator": [
+        40,
+        107,
+        90,
+        214,
+        96,
+        30,
+        61,
+        128
+      ]
+    },
+    {
+      "name": "SwapExecuted",
+      "discriminator": [
+        150,
+        166,
+        26,
+        225,
+        28,
+        89,
+        38,
+        79
       ]
     }
   ],
@@ -3883,7 +3883,7 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "borrow_asset_is_asset0",
+            "name": "borrow_asset_is_base",
             "type": "bool"
           },
           {
@@ -4047,27 +4047,27 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "fixed_debt0_shares",
+            "name": "fixed_base_debt_shares",
             "type": "u128"
           },
           {
-            "name": "fixed_debt1_shares",
+            "name": "fixed_quote_debt_shares",
             "type": "u128"
           },
           {
-            "name": "soft_debt0_shares",
+            "name": "soft_base_debt_shares",
             "type": "u128"
           },
           {
-            "name": "soft_debt1_shares",
+            "name": "soft_quote_debt_shares",
             "type": "u128"
           },
           {
-            "name": "borrow_index0_nad",
+            "name": "base_borrow_index_nad",
             "type": "u128"
           },
           {
-            "name": "borrow_index1_nad",
+            "name": "quote_borrow_index_nad",
             "type": "u128"
           }
         ]
@@ -4224,19 +4224,19 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "vault0",
+            "name": "base_vault",
             "type": "pubkey"
           },
           {
-            "name": "vault1",
+            "name": "quote_vault",
             "type": "pubkey"
           },
           {
-            "name": "available0",
+            "name": "base_available",
             "type": "u64"
           },
           {
-            "name": "available1",
+            "name": "quote_available",
             "type": "u64"
           }
         ]
@@ -4248,7 +4248,7 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "debt_asset_is_asset0",
+            "name": "debt_asset_is_base",
             "type": "bool"
           },
           {
@@ -4271,6 +4271,94 @@
       }
     },
     {
+      "name": "LiquidityAdded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "asset_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "reserve_credit",
+            "type": "u64"
+          },
+          {
+            "name": "claim_amount",
+            "type": "u64"
+          },
+          {
+            "name": "buffer_amount",
+            "type": "u64"
+          },
+          {
+            "name": "protected_claim_token_supply",
+            "type": "u64"
+          },
+          {
+            "name": "required_buffer",
+            "type": "u64"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "MarketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "LiquidityRemoved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "asset_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "claim_amount",
+            "type": "u64"
+          },
+          {
+            "name": "protected_claim_token_supply",
+            "type": "u64"
+          },
+          {
+            "name": "required_buffer",
+            "type": "u64"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "MarketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "MarginPosition",
       "type": {
         "kind": "struct",
@@ -4284,27 +4372,27 @@
             "type": "pubkey"
           },
           {
-            "name": "collateral0",
+            "name": "base_collateral",
             "type": "u64"
           },
           {
-            "name": "collateral1",
+            "name": "quote_collateral",
             "type": "u64"
           },
           {
-            "name": "recognized_collateral0_for_debt1",
+            "name": "recognized_base_collateral_for_quote_debt",
             "type": "u64"
           },
           {
-            "name": "recognized_collateral1_for_debt0",
+            "name": "recognized_quote_collateral_for_base_debt",
             "type": "u64"
           },
           {
-            "name": "fixed_debt0_shares",
+            "name": "fixed_base_debt_shares",
             "type": "u128"
           },
           {
-            "name": "fixed_debt1_shares",
+            "name": "fixed_quote_debt_shares",
             "type": "u128"
           },
           {
@@ -4428,46 +4516,6 @@
       }
     },
     {
-      "name": "MarketClaimRedeemed",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "owner",
-            "type": "pubkey"
-          },
-          {
-            "name": "asset_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "claim_amount",
-            "type": "u64"
-          },
-          {
-            "name": "protected_claim_token_supply",
-            "type": "u64"
-          },
-          {
-            "name": "required_buffer",
-            "type": "u64"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "MarketEventMetadata"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "MarketCollateralDeposited",
       "type": {
         "kind": "struct",
@@ -4489,11 +4537,11 @@
             "type": "u64"
           },
           {
-            "name": "collateral0",
+            "name": "base_collateral",
             "type": "u64"
           },
           {
-            "name": "collateral1",
+            "name": "quote_collateral",
             "type": "u64"
           },
           {
@@ -4533,11 +4581,11 @@
             "type": "u64"
           },
           {
-            "name": "collateral0",
+            "name": "base_collateral",
             "type": "u64"
           },
           {
-            "name": "collateral1",
+            "name": "quote_collateral",
             "type": "u64"
           },
           {
@@ -4758,19 +4806,19 @@
             "type": "i64"
           },
           {
-            "name": "fixed_debt0",
+            "name": "fixed_base_debt",
             "type": "u128"
           },
           {
-            "name": "fixed_debt1",
+            "name": "fixed_quote_debt",
             "type": "u128"
           },
           {
-            "name": "health0_bps",
+            "name": "base_debt_health_bps",
             "type": "u64"
           },
           {
-            "name": "health1_bps",
+            "name": "quote_debt_health_bps",
             "type": "u64"
           },
           {
@@ -4900,27 +4948,27 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "recognized_collateral0_for_debt1",
+            "name": "recognized_base_collateral_for_quote_debt",
             "type": "u64"
           },
           {
-            "name": "recognized_collateral1_for_debt0",
+            "name": "recognized_quote_collateral_for_base_debt",
             "type": "u64"
           },
           {
-            "name": "effective_debt0_nad",
+            "name": "effective_base_debt_nad",
             "type": "u128"
           },
           {
-            "name": "effective_debt1_nad",
+            "name": "effective_quote_debt_nad",
             "type": "u128"
           },
           {
-            "name": "health0_bps",
+            "name": "base_debt_health_bps",
             "type": "u64"
           },
           {
-            "name": "health1_bps",
+            "name": "quote_debt_health_bps",
             "type": "u64"
           }
         ]
@@ -4936,27 +4984,27 @@
             "type": "pubkey"
           },
           {
-            "name": "recognized_collateral0_for_debt1",
+            "name": "recognized_base_collateral_for_quote_debt",
             "type": "u64"
           },
           {
-            "name": "recognized_collateral1_for_debt0",
+            "name": "recognized_quote_collateral_for_base_debt",
             "type": "u64"
           },
           {
-            "name": "effective_debt0_nad",
+            "name": "effective_base_debt_nad",
             "type": "u128"
           },
           {
-            "name": "effective_debt1_nad",
+            "name": "effective_quote_debt_nad",
             "type": "u128"
           },
           {
-            "name": "health0_bps",
+            "name": "base_debt_health_bps",
             "type": "u64"
           },
           {
-            "name": "health1_bps",
+            "name": "quote_debt_health_bps",
             "type": "u64"
           },
           {
@@ -5108,115 +5156,11 @@
             "type": "u64"
           },
           {
-            "name": "available0",
+            "name": "base_available",
             "type": "u64"
           },
           {
-            "name": "available1",
-            "type": "u64"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "MarketEventMetadata"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "MarketLiquidated",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "borrower",
-            "type": "pubkey"
-          },
-          {
-            "name": "liquidator",
-            "type": "pubkey"
-          },
-          {
-            "name": "debt_asset_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "collateral_asset_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "repaid_amount",
-            "type": "u64"
-          },
-          {
-            "name": "collateral_seized",
-            "type": "u64"
-          },
-          {
-            "name": "insurance_drawn",
-            "type": "u64"
-          },
-          {
-            "name": "socialized_loss",
-            "type": "u64"
-          },
-          {
-            "name": "remaining_debt",
-            "type": "u128"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "MarketEventMetadata"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "MarketReserveDeposited",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "owner",
-            "type": "pubkey"
-          },
-          {
-            "name": "asset_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "reserve_credit",
-            "type": "u64"
-          },
-          {
-            "name": "claim_amount",
-            "type": "u64"
-          },
-          {
-            "name": "buffer_amount",
-            "type": "u64"
-          },
-          {
-            "name": "protected_claim_token_supply",
-            "type": "u64"
-          },
-          {
-            "name": "required_buffer",
+            "name": "quote_available",
             "type": "u64"
           },
           {
@@ -5359,54 +5303,6 @@
       }
     },
     {
-      "name": "MarketSwapEvent",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "trader",
-            "type": "pubkey"
-          },
-          {
-            "name": "asset_in_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "asset_out_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "reserve_credit",
-            "type": "u64"
-          },
-          {
-            "name": "amount_in_after_fee",
-            "type": "u64"
-          },
-          {
-            "name": "amount_out",
-            "type": "u64"
-          },
-          {
-            "name": "fee_credit",
-            "type": "u64"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "MarketEventMetadata"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "MarketUpdated",
       "type": {
         "kind": "struct",
@@ -5463,16 +5359,72 @@
       }
     },
     {
+      "name": "PositionLiquidated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "borrower",
+            "type": "pubkey"
+          },
+          {
+            "name": "liquidator",
+            "type": "pubkey"
+          },
+          {
+            "name": "debt_asset_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "collateral_asset_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "repaid_amount",
+            "type": "u64"
+          },
+          {
+            "name": "collateral_seized",
+            "type": "u64"
+          },
+          {
+            "name": "insurance_drawn",
+            "type": "u64"
+          },
+          {
+            "name": "socialized_loss",
+            "type": "u64"
+          },
+          {
+            "name": "remaining_debt",
+            "type": "u128"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "MarketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "RecognitionLedger",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "debt_bearing_collateral0_for_debt1",
+            "name": "debt_bearing_base_collateral_for_quote_debt",
             "type": "u64"
           },
           {
-            "name": "debt_bearing_collateral1_for_debt0",
+            "name": "debt_bearing_quote_collateral_for_base_debt",
             "type": "u64"
           },
           {
@@ -5508,7 +5460,7 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "repay_asset_is_asset0",
+            "name": "repay_asset_is_base",
             "type": "bool"
           },
           {
@@ -5544,27 +5496,27 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "price0_ema_nad",
+            "name": "base_price_ema_nad",
             "type": "u64"
           },
           {
-            "name": "price1_ema_nad",
+            "name": "quote_price_ema_nad",
             "type": "u64"
           },
           {
-            "name": "directional_price0_ema_nad",
+            "name": "directional_base_price_ema_nad",
             "type": "u64"
           },
           {
-            "name": "directional_price1_ema_nad",
+            "name": "directional_quote_price_ema_nad",
             "type": "u64"
           },
           {
-            "name": "cached_spot_price0_nad",
+            "name": "cached_spot_base_price_nad",
             "type": "u64"
           },
           {
-            "name": "cached_spot_price1_nad",
+            "name": "cached_spot_quote_price_nad",
             "type": "u64"
           },
           {
@@ -5576,11 +5528,11 @@
             "type": "u128"
           },
           {
-            "name": "cached_liquidity0_nad",
+            "name": "cached_base_liquidity_nad",
             "type": "u128"
           },
           {
-            "name": "cached_liquidity1_nad",
+            "name": "cached_quote_liquidity_nad",
             "type": "u128"
           },
           {
@@ -5592,11 +5544,11 @@
             "type": "u128"
           },
           {
-            "name": "liquidity0_ema",
+            "name": "base_liquidity_ema",
             "type": "u128"
           },
           {
-            "name": "liquidity1_ema",
+            "name": "quote_liquidity_ema",
             "type": "u128"
           },
           {
@@ -5692,7 +5644,7 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "asset_in_is_asset0",
+            "name": "asset_in_is_base",
             "type": "bool"
           },
           {
@@ -5702,6 +5654,54 @@
           {
             "name": "min_asset_out",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SwapExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "trader",
+            "type": "pubkey"
+          },
+          {
+            "name": "asset_in_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "asset_out_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "reserve_credit",
+            "type": "u64"
+          },
+          {
+            "name": "amount_in_after_fee",
+            "type": "u64"
+          },
+          {
+            "name": "amount_out",
+            "type": "u64"
+          },
+          {
+            "name": "fee_credit",
+            "type": "u64"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "MarketEventMetadata"
+              }
+            }
           }
         ]
       }

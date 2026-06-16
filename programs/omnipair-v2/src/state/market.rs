@@ -174,55 +174,55 @@ impl RiskBook {
         config: &MarketConfig,
         current_slot: u64,
     ) -> Result<Self> {
-        let current_spot_price0_nad = market_spot_price_nad(base_side, quote_side)?;
-        let current_spot_price1_nad = market_spot_price_nad(quote_side, base_side)?;
-        let current_liquidity0_nad = normalize_to_nad(
+        let current_base_price_nad = market_spot_price_nad(base_side, quote_side)?;
+        let current_quote_price_nad = market_spot_price_nad(quote_side, base_side)?;
+        let current_base_liquidity_nad = normalize_to_nad(
             base_side.reserve_ledger.live_reserve as u128,
             base_side.asset_decimals,
         )?;
-        let current_liquidity1_nad = normalize_to_nad(
+        let current_quote_liquidity_nad = normalize_to_nad(
             quote_side.reserve_ledger.live_reserve as u128,
             quote_side.asset_decimals,
         )?;
         let current_liquidity_nad = market_liquidity_nad(base_side, quote_side)?;
         let current_k_nad = market_k_nad(base_side, quote_side)?;
 
-        let cached_spot_price0_nad =
-            observed_or_current_u64(self.cached_spot_price0_nad, current_spot_price0_nad);
-        let cached_spot_price1_nad =
-            observed_or_current_u64(self.cached_spot_price1_nad, current_spot_price1_nad);
-        let cached_liquidity0_nad =
-            observed_or_current_u128(self.cached_liquidity0_nad, current_liquidity0_nad);
-        let cached_liquidity1_nad =
-            observed_or_current_u128(self.cached_liquidity1_nad, current_liquidity1_nad);
+        let cached_spot_base_price_nad =
+            observed_or_current_u64(self.cached_spot_base_price_nad, current_base_price_nad);
+        let cached_spot_quote_price_nad =
+            observed_or_current_u64(self.cached_spot_quote_price_nad, current_quote_price_nad);
+        let cached_base_liquidity_nad =
+            observed_or_current_u128(self.cached_base_liquidity_nad, current_base_liquidity_nad);
+        let cached_quote_liquidity_nad =
+            observed_or_current_u128(self.cached_quote_liquidity_nad, current_quote_liquidity_nad);
         let cached_liquidity_nad =
             observed_or_current_u128(self.cached_liquidity_nad, current_liquidity_nad);
         let cached_k_nad = observed_or_current_u128(self.cached_k_nad, current_k_nad);
 
-        let price0_ema_nad = ema_u64(
-            self.price0_ema_nad,
-            cached_spot_price0_nad,
+        let base_price_ema_nad = ema_u64(
+            self.base_price_ema_nad,
+            cached_spot_base_price_nad,
             self.last_snapshot_slot,
             current_slot,
             config.ema_half_life_ms,
         );
-        let price1_ema_nad = ema_u64(
-            self.price1_ema_nad,
-            cached_spot_price1_nad,
+        let quote_price_ema_nad = ema_u64(
+            self.quote_price_ema_nad,
+            cached_spot_quote_price_nad,
             self.last_snapshot_slot,
             current_slot,
             config.ema_half_life_ms,
         );
-        let directional_price0_ema_nad = directional_ema_u64(
-            self.directional_price0_ema_nad,
-            cached_spot_price0_nad,
+        let directional_base_price_ema_nad = directional_ema_u64(
+            self.directional_base_price_ema_nad,
+            cached_spot_base_price_nad,
             self.last_snapshot_slot,
             current_slot,
             config.directional_ema_half_life_ms,
         );
-        let directional_price1_ema_nad = directional_ema_u64(
-            self.directional_price1_ema_nad,
-            cached_spot_price1_nad,
+        let directional_quote_price_ema_nad = directional_ema_u64(
+            self.directional_quote_price_ema_nad,
+            cached_spot_quote_price_nad,
             self.last_snapshot_slot,
             current_slot,
             config.directional_ema_half_life_ms,
@@ -241,36 +241,36 @@ impl RiskBook {
             current_slot,
             config.k_ema_half_life_ms,
         );
-        let liquidity0_ema = ema_u128(
-            self.liquidity0_ema,
-            cached_liquidity0_nad,
+        let base_liquidity_ema = ema_u128(
+            self.base_liquidity_ema,
+            cached_base_liquidity_nad,
             self.last_snapshot_slot,
             current_slot,
             config.k_ema_half_life_ms,
         );
-        let liquidity1_ema = ema_u128(
-            self.liquidity1_ema,
-            cached_liquidity1_nad,
+        let quote_liquidity_ema = ema_u128(
+            self.quote_liquidity_ema,
+            cached_quote_liquidity_nad,
             self.last_snapshot_slot,
             current_slot,
             config.k_ema_half_life_ms,
         );
 
         Ok(Self {
-            price0_ema_nad,
-            price1_ema_nad,
-            directional_price0_ema_nad,
-            directional_price1_ema_nad,
-            cached_spot_price0_nad: current_spot_price0_nad,
-            cached_spot_price1_nad: current_spot_price1_nad,
+            base_price_ema_nad,
+            quote_price_ema_nad,
+            directional_base_price_ema_nad,
+            directional_quote_price_ema_nad,
+            cached_spot_base_price_nad: current_base_price_nad,
+            cached_spot_quote_price_nad: current_quote_price_nad,
             cached_k_nad: current_k_nad,
             cached_liquidity_nad: current_liquidity_nad,
-            cached_liquidity0_nad: current_liquidity0_nad,
-            cached_liquidity1_nad: current_liquidity1_nad,
+            cached_base_liquidity_nad: current_base_liquidity_nad,
+            cached_quote_liquidity_nad: current_quote_liquidity_nad,
             k_ema,
             liquidity_ema,
-            liquidity0_ema,
-            liquidity1_ema,
+            base_liquidity_ema,
+            quote_liquidity_ema,
             last_snapshot_slot: current_slot,
         })
     }
@@ -329,8 +329,8 @@ impl Market {
             quote_side,
             config,
             debt_book: DebtBook {
-                borrow_index0_nad: NAD as u128,
-                borrow_index1_nad: NAD as u128,
+                base_borrow_index_nad: NAD as u128,
+                quote_borrow_index_nad: NAD as u128,
                 ..DebtBook::default()
             },
             risk_book: RiskBook {
@@ -378,19 +378,16 @@ impl Market {
         }
     }
 
-    pub fn swap_sides(&self, asset_in_is_asset0: bool) -> (&MarketSide, &MarketSide) {
-        if asset_in_is_asset0 {
+    pub fn swap_sides(&self, asset_in_is_base: bool) -> (&MarketSide, &MarketSide) {
+        if asset_in_is_base {
             (&self.base_side, &self.quote_side)
         } else {
             (&self.quote_side, &self.base_side)
         }
     }
 
-    pub fn swap_sides_mut(
-        &mut self,
-        asset_in_is_asset0: bool,
-    ) -> (&mut MarketSide, &mut MarketSide) {
-        if asset_in_is_asset0 {
+    pub fn swap_sides_mut(&mut self, asset_in_is_base: bool) -> (&mut MarketSide, &mut MarketSide) {
+        if asset_in_is_base {
             (&mut self.base_side, &mut self.quote_side)
         } else {
             (&mut self.quote_side, &mut self.base_side)
@@ -407,27 +404,37 @@ impl Market {
 
     pub fn refresh_market_health(&mut self) -> Result<()> {
         self.refresh_risk_book()?;
-        let effective_debt0_nad = self.effective_debt0_nad()?;
-        let effective_debt1_nad = self.effective_debt1_nad()?;
-        let collateral1_value_for_debt0_nad = self.collateral_value_for_debt0_nad(
-            self.recognition_ledger.debt_bearing_collateral1_for_debt0,
+        let effective_base_debt_nad = self.effective_base_debt_nad()?;
+        let effective_quote_debt_nad = self.effective_quote_debt_nad()?;
+        let quote_collateral_value_for_base_debt_nad = self
+            .quote_collateral_value_for_base_debt_nad(
+                self.recognition_ledger
+                    .debt_bearing_quote_collateral_for_base_debt,
+            )?;
+        let base_collateral_value_for_quote_debt_nad = self
+            .base_collateral_value_for_quote_debt_nad(
+                self.recognition_ledger
+                    .debt_bearing_base_collateral_for_quote_debt,
+            )?;
+        let base_debt_health_bps = health_bps(
+            quote_collateral_value_for_base_debt_nad,
+            effective_base_debt_nad,
         )?;
-        let collateral0_value_for_debt1_nad = self.collateral_value_for_debt1_nad(
-            self.recognition_ledger.debt_bearing_collateral0_for_debt1,
+        let quote_debt_health_bps = health_bps(
+            base_collateral_value_for_quote_debt_nad,
+            effective_quote_debt_nad,
         )?;
-        let health0_bps = health_bps(collateral1_value_for_debt0_nad, effective_debt0_nad)?;
-        let health1_bps = health_bps(collateral0_value_for_debt1_nad, effective_debt1_nad)?;
         self.health = MarketHealth {
-            recognized_collateral0_for_debt1: self
+            recognized_base_collateral_for_quote_debt: self
                 .recognition_ledger
-                .debt_bearing_collateral0_for_debt1,
-            recognized_collateral1_for_debt0: self
+                .debt_bearing_base_collateral_for_quote_debt,
+            recognized_quote_collateral_for_base_debt: self
                 .recognition_ledger
-                .debt_bearing_collateral1_for_debt0,
-            effective_debt0_nad,
-            effective_debt1_nad,
-            health0_bps,
-            health1_bps,
+                .debt_bearing_quote_collateral_for_base_debt,
+            effective_base_debt_nad,
+            effective_quote_debt_nad,
+            base_debt_health_bps,
+            quote_debt_health_bps,
         };
         Ok(())
     }
@@ -477,12 +484,12 @@ impl Market {
     pub fn assert_spot_ema_divergence(&self) -> Result<()> {
         assert_price_divergence(
             market_spot_price_nad(&self.base_side, &self.quote_side)?,
-            self.risk_book.price0_ema_nad,
+            self.risk_book.base_price_ema_nad,
             self.config.spot_ema_divergence_bps,
         )?;
         assert_price_divergence(
             market_spot_price_nad(&self.quote_side, &self.base_side)?,
-            self.risk_book.price1_ema_nad,
+            self.risk_book.quote_price_ema_nad,
             self.config.spot_ema_divergence_bps,
         )
     }
@@ -503,29 +510,35 @@ impl Market {
         )
     }
 
-    pub fn effective_debt0_nad(&self) -> Result<u128> {
+    pub fn effective_base_debt_nad(&self) -> Result<u128> {
         self.effective_debt_nad(true)
     }
 
-    pub fn effective_debt1_nad(&self) -> Result<u128> {
+    pub fn effective_quote_debt_nad(&self) -> Result<u128> {
         self.effective_debt_nad(false)
     }
 
-    pub fn collateral_value_for_debt0_nad(&self, collateral1_amount: u64) -> Result<u128> {
-        self.collateral_value_nad(false, collateral1_amount, &self.risk_book)
+    pub fn quote_collateral_value_for_base_debt_nad(
+        &self,
+        quote_collateral_amount: u64,
+    ) -> Result<u128> {
+        self.collateral_value_nad(false, quote_collateral_amount, &self.risk_book)
     }
 
-    pub fn collateral_value_for_debt1_nad(&self, collateral0_amount: u64) -> Result<u128> {
-        self.collateral_value_nad(true, collateral0_amount, &self.risk_book)
+    pub fn base_collateral_value_for_quote_debt_nad(
+        &self,
+        base_collateral_amount: u64,
+    ) -> Result<u128> {
+        self.collateral_value_nad(true, base_collateral_amount, &self.risk_book)
     }
 
     pub fn collateral_amount_for_debt_value(
         &self,
-        debt_asset_is_asset0: bool,
+        debt_asset_is_base: bool,
         debt_amount: u64,
     ) -> Result<u64> {
         self.collateral_amount_for_debt_value_with_risk(
-            debt_asset_is_asset0,
+            debt_asset_is_base,
             debt_amount,
             &self.current_risk_book()?,
         )
@@ -534,21 +547,21 @@ impl Market {
     pub fn debt_capped_recognized_collateral(
         &self,
         margin_position: &MarginPosition,
-        debt_asset_is_asset0: bool,
+        debt_asset_is_base: bool,
         risk_book: &RiskBook,
     ) -> Result<u64> {
         let cap_bps = self.config.recognized_collateral_cap_bps as u128;
-        let (fixed_debt, debt_decimals, total_collateral) = if debt_asset_is_asset0 {
+        let (fixed_debt, debt_decimals, total_collateral) = if debt_asset_is_base {
             (
-                margin_position.fixed_debt0(&self.debt_book)?,
+                margin_position.fixed_base_debt(&self.debt_book)?,
                 self.base_side.asset_decimals,
-                margin_position.collateral1,
+                margin_position.quote_collateral,
             )
         } else {
             (
-                margin_position.fixed_debt1(&self.debt_book)?,
+                margin_position.fixed_quote_debt(&self.debt_book)?,
                 self.quote_side.asset_decimals,
-                margin_position.collateral0,
+                margin_position.base_collateral,
             )
         };
         if fixed_debt == 0 || total_collateral == 0 {
@@ -561,7 +574,7 @@ impl Market {
             .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
             .ok_or(ErrorCode::MarketMathOverflow)?;
         let capped_collateral = self.collateral_amount_for_debt_value_cap_with_risk(
-            debt_asset_is_asset0,
+            debt_asset_is_base,
             recognized_value_cap_nad,
             risk_book,
         )?;
@@ -571,18 +584,18 @@ impl Market {
     pub fn position_health_bps(
         &self,
         margin_position: &MarginPosition,
-        debt_asset_is_asset0: bool,
+        debt_asset_is_base: bool,
     ) -> Result<u64> {
         let risk_book = self.current_risk_book()?;
-        if debt_asset_is_asset0 {
+        if debt_asset_is_base {
             health_bps(
                 self.collateral_value_nad(
                     false,
-                    margin_position.recognized_collateral1_for_debt0,
+                    margin_position.recognized_quote_collateral_for_base_debt,
                     &risk_book,
                 )?,
                 normalize_to_nad(
-                    margin_position.fixed_debt0(&self.debt_book)?,
+                    margin_position.fixed_base_debt(&self.debt_book)?,
                     self.base_side.asset_decimals,
                 )?,
             )
@@ -590,11 +603,11 @@ impl Market {
             health_bps(
                 self.collateral_value_nad(
                     true,
-                    margin_position.recognized_collateral0_for_debt1,
+                    margin_position.recognized_base_collateral_for_quote_debt,
                     &risk_book,
                 )?,
                 normalize_to_nad(
-                    margin_position.fixed_debt1(&self.debt_book)?,
+                    margin_position.fixed_quote_debt(&self.debt_book)?,
                     self.quote_side.asset_decimals,
                 )?,
             )
@@ -604,11 +617,11 @@ impl Market {
     pub fn assert_position_health(
         &self,
         margin_position: &MarginPosition,
-        debt_asset_is_asset0: bool,
+        debt_asset_is_base: bool,
         min_health_bps: u64,
     ) -> Result<()> {
         require_gte!(
-            self.position_health_bps(margin_position, debt_asset_is_asset0)?,
+            self.position_health_bps(margin_position, debt_asset_is_base)?,
             min_health_bps,
             ErrorCode::InsufficientMarketHealth
         );
@@ -618,18 +631,18 @@ impl Market {
     pub fn assert_recognition_cap(
         &self,
         margin_position: &MarginPosition,
-        debt_asset_is_asset0: bool,
+        debt_asset_is_base: bool,
     ) -> Result<()> {
         let risk_book = self.current_risk_book()?;
         let max_recognized = self.debt_capped_recognized_collateral(
             margin_position,
-            debt_asset_is_asset0,
+            debt_asset_is_base,
             &risk_book,
         )?;
-        let recognized = if debt_asset_is_asset0 {
-            margin_position.recognized_collateral1_for_debt0
+        let recognized = if debt_asset_is_base {
+            margin_position.recognized_quote_collateral_for_base_debt
         } else {
-            margin_position.recognized_collateral0_for_debt1
+            margin_position.recognized_base_collateral_for_quote_debt
         };
         require_gte!(
             max_recognized,
@@ -640,16 +653,16 @@ impl Market {
     }
 
     pub fn assert_market_health(&self) -> Result<()> {
-        if self.health.effective_debt0_nad > 0 {
+        if self.health.effective_base_debt_nad > 0 {
             require_gte!(
-                self.health.health0_bps,
+                self.health.base_debt_health_bps,
                 self.config.market_health_min_bps as u64,
                 ErrorCode::InsufficientMarketHealth
             );
         }
-        if self.health.effective_debt1_nad > 0 {
+        if self.health.effective_quote_debt_nad > 0 {
             require_gte!(
-                self.health.health1_bps,
+                self.health.quote_debt_health_bps,
                 self.config.market_health_min_bps as u64,
                 ErrorCode::InsufficientMarketHealth
             );
@@ -692,19 +705,19 @@ impl Market {
 }
 
 impl Market {
-    fn effective_debt_nad(&self, debt_asset_is_asset0: bool) -> Result<u128> {
-        let (fixed_debt, soft_debt, hedged_debt_nad, debt_side) = if debt_asset_is_asset0 {
+    fn effective_debt_nad(&self, debt_asset_is_base: bool) -> Result<u128> {
+        let (fixed_debt, soft_debt, hedged_debt_nad, debt_side) = if debt_asset_is_base {
             (
-                self.debt_book.fixed_debt0()?,
-                self.debt_book.soft_debt0()?,
-                self.hedged_debt0_nad(&self.risk_book)?,
+                self.debt_book.fixed_base_debt()?,
+                self.debt_book.soft_base_debt()?,
+                self.hedged_base_debt_nad(&self.risk_book)?,
                 &self.base_side,
             )
         } else {
             (
-                self.debt_book.fixed_debt1()?,
-                self.debt_book.soft_debt1()?,
-                self.hedged_debt1_nad(&self.risk_book)?,
+                self.debt_book.fixed_quote_debt()?,
+                self.debt_book.soft_quote_debt()?,
+                self.hedged_quote_debt_nad(&self.risk_book)?,
                 &self.quote_side,
             )
         };
@@ -723,7 +736,7 @@ impl Market {
             .ok_or(ErrorCode::MarketMathOverflow.into())
     }
 
-    fn hedged_debt0_nad(&self, risk_book: &RiskBook) -> Result<u128> {
+    fn hedged_base_debt_nad(&self, risk_book: &RiskBook) -> Result<u128> {
         self.collateral_value_nad(
             false,
             self.quote_side.claim_token_ledger.hedged_claim_token_supply,
@@ -731,7 +744,7 @@ impl Market {
         )
     }
 
-    fn hedged_debt1_nad(&self, risk_book: &RiskBook) -> Result<u128> {
+    fn hedged_quote_debt_nad(&self, risk_book: &RiskBook) -> Result<u128> {
         self.collateral_value_nad(
             true,
             self.base_side.claim_token_ledger.hedged_claim_token_supply,
@@ -741,7 +754,7 @@ impl Market {
 
     fn collateral_value_nad(
         &self,
-        collateral_is_asset0: bool,
+        collateral_is_base: bool,
         collateral_amount: u64,
         risk_book: &RiskBook,
     ) -> Result<u128> {
@@ -749,19 +762,19 @@ impl Market {
             return Ok(0);
         }
         let (collateral_side, debt_side, price_ema_nad, directional_price_ema_nad) =
-            if collateral_is_asset0 {
+            if collateral_is_base {
                 (
                     &self.base_side,
                     &self.quote_side,
-                    risk_book.price0_ema_nad,
-                    risk_book.directional_price0_ema_nad,
+                    risk_book.base_price_ema_nad,
+                    risk_book.directional_base_price_ema_nad,
                 )
             } else {
                 (
                     &self.quote_side,
                     &self.base_side,
-                    risk_book.price1_ema_nad,
-                    risk_book.directional_price1_ema_nad,
+                    risk_book.quote_price_ema_nad,
+                    risk_book.directional_quote_price_ema_nad,
                 )
             };
         let collateral_reserve = normalize_to_nad(
@@ -790,7 +803,7 @@ impl Market {
 
     fn collateral_amount_for_debt_value_with_risk(
         &self,
-        debt_asset_is_asset0: bool,
+        debt_asset_is_base: bool,
         debt_amount: u64,
         risk_book: &RiskBook,
     ) -> Result<u64> {
@@ -802,19 +815,19 @@ impl Market {
         )
         .ok_or(ErrorCode::MarketMathOverflow)?;
         let (collateral_side, debt_side, price_ema_nad, directional_price_ema_nad) =
-            if debt_asset_is_asset0 {
+            if debt_asset_is_base {
                 (
                     &self.quote_side,
                     &self.base_side,
-                    risk_book.price1_ema_nad,
-                    risk_book.directional_price1_ema_nad,
+                    risk_book.quote_price_ema_nad,
+                    risk_book.directional_quote_price_ema_nad,
                 )
             } else {
                 (
                     &self.base_side,
                     &self.quote_side,
-                    risk_book.price0_ema_nad,
-                    risk_book.directional_price0_ema_nad,
+                    risk_book.base_price_ema_nad,
+                    risk_book.directional_base_price_ema_nad,
                 )
             };
         let collateral_reserve = normalize_to_nad(
@@ -843,7 +856,7 @@ impl Market {
 
     fn collateral_amount_for_debt_value_cap_with_risk(
         &self,
-        debt_asset_is_asset0: bool,
+        debt_asset_is_base: bool,
         debt_value_nad: u128,
         risk_book: &RiskBook,
     ) -> Result<u64> {
@@ -851,19 +864,19 @@ impl Market {
             return Ok(0);
         }
         let (collateral_side, debt_side, price_ema_nad, directional_price_ema_nad) =
-            if debt_asset_is_asset0 {
+            if debt_asset_is_base {
                 (
                     &self.quote_side,
                     &self.base_side,
-                    risk_book.price1_ema_nad,
-                    risk_book.directional_price1_ema_nad,
+                    risk_book.quote_price_ema_nad,
+                    risk_book.directional_quote_price_ema_nad,
                 )
             } else {
                 (
                     &self.base_side,
                     &self.quote_side,
-                    risk_book.price0_ema_nad,
-                    risk_book.directional_price0_ema_nad,
+                    risk_book.base_price_ema_nad,
+                    risk_book.directional_base_price_ema_nad,
                 )
             };
         let collateral_reserve = normalize_to_nad(
@@ -891,9 +904,12 @@ impl Market {
 
     fn daily_limit_for_side(&self, market_side_index: u8, limit_bps: u16) -> Result<u64> {
         let (liquidity_ema, asset_decimals) = match market_side_index {
-            0 => (self.risk_book.liquidity0_ema, self.base_side.asset_decimals),
+            0 => (
+                self.risk_book.base_liquidity_ema,
+                self.base_side.asset_decimals,
+            ),
             1 => (
-                self.risk_book.liquidity1_ema,
+                self.risk_book.quote_liquidity_ema,
                 self.quote_side.asset_decimals,
             ),
             _ => return err!(ErrorCode::InvalidMarketSide),
@@ -1018,12 +1034,12 @@ mod tests {
         MarginPosition {
             owner: Pubkey::new_unique(),
             market: Pubkey::new_unique(),
-            collateral0: 0,
-            collateral1: 0,
-            recognized_collateral0_for_debt1: 0,
-            recognized_collateral1_for_debt0: 0,
-            fixed_debt0_shares: 0,
-            fixed_debt1_shares: 0,
+            base_collateral: 0,
+            quote_collateral: 0,
+            recognized_base_collateral_for_quote_debt: 0,
+            recognized_quote_collateral_for_base_debt: 0,
+            fixed_base_debt_shares: 0,
+            fixed_quote_debt_shares: 0,
             bump: 1,
         }
     }
@@ -1394,18 +1410,21 @@ mod tests {
         let mut market = test_market();
         market.base_side.reserve_ledger.live_reserve = 1_000_000_000;
         market.quote_side.reserve_ledger.live_reserve = 1_000_000_000;
-        market.debt_book.fixed_debt0_shares = DebtBook::debt_to_shares(1_000, NAD as u128).unwrap();
+        market.debt_book.fixed_base_debt_shares =
+            DebtBook::debt_to_shares(1_000, NAD as u128).unwrap();
 
         market.refresh_market_health().unwrap();
-        assert_eq!(market.health.health0_bps, 0);
+        assert_eq!(market.health.base_debt_health_bps, 0);
         assert_eq!(
             market.assert_market_health().unwrap_err(),
             error!(ErrorCode::InsufficientMarketHealth)
         );
 
-        market.recognition_ledger.debt_bearing_collateral1_for_debt0 = 1_500;
+        market
+            .recognition_ledger
+            .debt_bearing_quote_collateral_for_base_debt = 1_500;
         market.refresh_market_health().unwrap();
-        assert!(market.health.health0_bps >= 14_900);
+        assert!(market.health.base_debt_health_bps >= 14_900);
         market.assert_market_health().unwrap();
     }
 
@@ -1435,12 +1454,14 @@ mod tests {
             253,
         )
         .unwrap();
-        market.debt_book.fixed_debt0_shares =
+        market.debt_book.fixed_base_debt_shares =
             DebtBook::debt_to_shares(900_000_000, NAD as u128).unwrap();
-        market.recognition_ledger.debt_bearing_collateral1_for_debt0 = 1_000_000_000;
+        market
+            .recognition_ledger
+            .debt_bearing_quote_collateral_for_base_debt = 1_000_000_000;
         market.refresh_market_health().unwrap();
 
-        assert!(market.health.health0_bps < market.config.market_health_min_bps as u64);
+        assert!(market.health.base_debt_health_bps < market.config.market_health_min_bps as u64);
         assert_eq!(
             market.assert_market_health().unwrap_err(),
             error!(ErrorCode::InsufficientMarketHealth)
@@ -1574,10 +1595,10 @@ mod tests {
             .refreshed(&base_side, &quote_side, &test_market().config, 42)
             .unwrap();
 
-        assert_eq!(refreshed.price0_ema_nad, 2 * NAD);
-        assert_eq!(refreshed.price1_ema_nad, NAD / 2);
-        assert_eq!(refreshed.cached_spot_price0_nad, 2 * NAD);
-        assert_eq!(refreshed.cached_spot_price1_nad, NAD / 2);
+        assert_eq!(refreshed.base_price_ema_nad, 2 * NAD);
+        assert_eq!(refreshed.quote_price_ema_nad, NAD / 2);
+        assert_eq!(refreshed.cached_spot_base_price_nad, 2 * NAD);
+        assert_eq!(refreshed.cached_spot_quote_price_nad, NAD / 2);
         assert_eq!(refreshed.last_snapshot_slot, 42);
     }
 
@@ -1590,12 +1611,12 @@ mod tests {
         base_side.reserve_ledger.live_reserve = 1_000_000;
         quote_side.reserve_ledger.live_reserve = 2_000_000;
         let risk_book = RiskBook {
-            price0_ema_nad: NAD,
-            price1_ema_nad: NAD,
-            directional_price0_ema_nad: NAD,
-            directional_price1_ema_nad: NAD,
-            cached_spot_price0_nad: NAD,
-            cached_spot_price1_nad: NAD,
+            base_price_ema_nad: NAD,
+            quote_price_ema_nad: NAD,
+            directional_base_price_ema_nad: NAD,
+            directional_quote_price_ema_nad: NAD,
+            cached_spot_base_price_nad: NAD,
+            cached_spot_quote_price_nad: NAD,
             last_snapshot_slot: 0,
             ..RiskBook::default()
         };
@@ -1604,12 +1625,12 @@ mod tests {
             .refreshed(&base_side, &quote_side, &test_market().config, 10_000)
             .unwrap();
 
-        assert_eq!(refreshed.price0_ema_nad, NAD);
-        assert_eq!(refreshed.price1_ema_nad, NAD);
-        assert_eq!(refreshed.directional_price0_ema_nad, NAD);
-        assert_eq!(refreshed.directional_price1_ema_nad, NAD);
-        assert_eq!(refreshed.cached_spot_price0_nad, 2 * NAD);
-        assert_eq!(refreshed.cached_spot_price1_nad, NAD / 2);
+        assert_eq!(refreshed.base_price_ema_nad, NAD);
+        assert_eq!(refreshed.quote_price_ema_nad, NAD);
+        assert_eq!(refreshed.directional_base_price_ema_nad, NAD);
+        assert_eq!(refreshed.directional_quote_price_ema_nad, NAD);
+        assert_eq!(refreshed.cached_spot_base_price_nad, 2 * NAD);
+        assert_eq!(refreshed.cached_spot_quote_price_nad, NAD / 2);
     }
 
     #[test]
@@ -1617,8 +1638,8 @@ mod tests {
         let mut market = test_market();
         market.base_side.reserve_ledger.live_reserve = 1_000_000;
         market.quote_side.reserve_ledger.live_reserve = 2_000_000;
-        market.risk_book.price0_ema_nad = NAD;
-        market.risk_book.price1_ema_nad = NAD;
+        market.risk_book.base_price_ema_nad = NAD;
+        market.risk_book.quote_price_ema_nad = NAD;
 
         let err = market.assert_spot_ema_divergence().unwrap_err();
 
@@ -1630,8 +1651,8 @@ mod tests {
         let mut market = test_market();
         market.base_side.reserve_ledger.live_reserve = 900_000;
         market.quote_side.reserve_ledger.live_reserve = 900_000;
-        market.risk_book.price0_ema_nad = NAD;
-        market.risk_book.price1_ema_nad = NAD;
+        market.risk_book.base_price_ema_nad = NAD;
+        market.risk_book.quote_price_ema_nad = NAD;
         market.risk_book.k_ema = normalize_to_nad(1_000_000, market.base_side.asset_decimals)
             .unwrap()
             .checked_mul(normalize_to_nad(1_000_000, market.quote_side.asset_decimals).unwrap())
@@ -1652,14 +1673,14 @@ mod tests {
         market.config.effective_debt_weight_min_bps = 5_000;
         market.config.effective_debt_gamma_nad = 2 * NAD;
         market.risk_book.liquidity_ema = 1_000 * NAD as u128;
-        market.debt_book.fixed_debt0_shares =
+        market.debt_book.fixed_base_debt_shares =
             DebtBook::debt_to_shares(100_000_000, NAD as u128).unwrap();
         market
             .quote_side
             .claim_token_ledger
             .hedged_claim_token_supply = 100_000_000;
 
-        let raw_hedged_debt = market.hedged_debt0_nad(&market.risk_book).unwrap();
+        let raw_hedged_debt = market.hedged_base_debt_nad(&market.risk_book).unwrap();
         let effective_hedged_debt = effective_hedged_debt_nad(
             raw_hedged_debt,
             market.risk_book.liquidity_ema,
@@ -1667,7 +1688,7 @@ mod tests {
             market.config.effective_debt_gamma_nad,
         )
         .unwrap();
-        let effective = market.effective_debt0_nad().unwrap();
+        let effective = market.effective_base_debt_nad().unwrap();
 
         assert!(raw_hedged_debt > 0);
         assert!(effective_hedged_debt < raw_hedged_debt);
@@ -1682,9 +1703,9 @@ mod tests {
         market.quote_side.reserve_ledger.live_reserve = 1_000_000_000;
         market.refresh_risk_book().unwrap();
         let mut position = margin_position();
-        position.collateral1 = 1_000_000_000;
-        position.fixed_debt0_shares =
-            DebtBook::debt_to_shares(100_000_000, market.debt_book.borrow_index0_nad).unwrap();
+        position.quote_collateral = 1_000_000_000;
+        position.fixed_base_debt_shares =
+            DebtBook::debt_to_shares(100_000_000, market.debt_book.base_borrow_index_nad).unwrap();
 
         let recognized = market
             .debt_capped_recognized_collateral(&position, true, &market.risk_book)
@@ -1699,7 +1720,7 @@ mod tests {
             .unwrap();
 
         assert!(recognized > 100_000_000);
-        assert!(recognized < position.collateral1);
+        assert!(recognized < position.quote_collateral);
         assert!(recognized_value <= debt_value_cap);
     }
 
@@ -1711,10 +1732,10 @@ mod tests {
         market.quote_side.reserve_ledger.live_reserve = 1_000_000_000;
         market.refresh_risk_book().unwrap();
         let mut position = margin_position();
-        position.collateral1 = 1_000_000_000;
-        position.recognized_collateral1_for_debt0 = 1_000_000_000;
-        position.fixed_debt0_shares =
-            DebtBook::debt_to_shares(100_000_000, market.debt_book.borrow_index0_nad).unwrap();
+        position.quote_collateral = 1_000_000_000;
+        position.recognized_quote_collateral_for_base_debt = 1_000_000_000;
+        position.fixed_base_debt_shares =
+            DebtBook::debt_to_shares(100_000_000, market.debt_book.base_borrow_index_nad).unwrap();
 
         let err = market.assert_recognition_cap(&position, true).unwrap_err();
 
@@ -1724,13 +1745,13 @@ mod tests {
     #[test]
     fn stale_recognition_cannot_exceed_margin_collateral() {
         let mut position = margin_position();
-        position.collateral0 = 100;
-        position.recognized_collateral0_for_debt1 = 80;
-        assert_eq!(position.idle_collateral0().unwrap(), 20);
+        position.base_collateral = 100;
+        position.recognized_base_collateral_for_quote_debt = 80;
+        assert_eq!(position.idle_base_collateral().unwrap(), 20);
 
-        position.recognized_collateral0_for_debt1 = 101;
+        position.recognized_base_collateral_for_quote_debt = 101;
         assert_eq!(
-            position.idle_collateral0().unwrap_err(),
+            position.idle_base_collateral().unwrap_err(),
             error!(ErrorCode::InsufficientRecognizedCollateral)
         );
     }

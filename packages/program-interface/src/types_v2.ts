@@ -3130,16 +3130,29 @@ export type OmnipairV2 = {
   ],
   "events": [
     {
-      "name": "marketClaimRedeemed",
+      "name": "liquidityAdded",
       "discriminator": [
-        50,
-        153,
-        187,
-        123,
-        193,
-        146,
-        241,
-        226
+        154,
+        26,
+        221,
+        108,
+        238,
+        64,
+        217,
+        161
+      ]
+    },
+    {
+      "name": "liquidityRemoved",
+      "discriminator": [
+        225,
+        105,
+        216,
+        39,
+        124,
+        116,
+        169,
+        189
       ]
     },
     {
@@ -3286,32 +3299,6 @@ export type OmnipairV2 = {
       ]
     },
     {
-      "name": "marketLiquidated",
-      "discriminator": [
-        25,
-        212,
-        62,
-        118,
-        20,
-        243,
-        110,
-        123
-      ]
-    },
-    {
-      "name": "marketReserveDeposited",
-      "discriminator": [
-        70,
-        93,
-        14,
-        17,
-        165,
-        18,
-        30,
-        69
-      ]
-    },
-    {
       "name": "marketStakeUpdated",
       "discriminator": [
         63,
@@ -3325,19 +3312,6 @@ export type OmnipairV2 = {
       ]
     },
     {
-      "name": "marketSwapEvent",
-      "discriminator": [
-        170,
-        26,
-        199,
-        196,
-        42,
-        99,
-        119,
-        83
-      ]
-    },
-    {
       "name": "marketUpdated",
       "discriminator": [
         170,
@@ -3348,6 +3322,32 @@ export type OmnipairV2 = {
         168,
         217,
         251
+      ]
+    },
+    {
+      "name": "positionLiquidated",
+      "discriminator": [
+        40,
+        107,
+        90,
+        214,
+        96,
+        30,
+        61,
+        128
+      ]
+    },
+    {
+      "name": "swapExecuted",
+      "discriminator": [
+        150,
+        166,
+        26,
+        225,
+        28,
+        89,
+        38,
+        79
       ]
     }
   ],
@@ -3889,7 +3889,7 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "borrowAssetIsAsset0",
+            "name": "borrowAssetIsBase",
             "type": "bool"
           },
           {
@@ -4053,27 +4053,27 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "fixedDebt0Shares",
+            "name": "fixedBaseDebtShares",
             "type": "u128"
           },
           {
-            "name": "fixedDebt1Shares",
+            "name": "fixedQuoteDebtShares",
             "type": "u128"
           },
           {
-            "name": "softDebt0Shares",
+            "name": "softBaseDebtShares",
             "type": "u128"
           },
           {
-            "name": "softDebt1Shares",
+            "name": "softQuoteDebtShares",
             "type": "u128"
           },
           {
-            "name": "borrowIndex0Nad",
+            "name": "baseBorrowIndexNad",
             "type": "u128"
           },
           {
-            "name": "borrowIndex1Nad",
+            "name": "quoteBorrowIndexNad",
             "type": "u128"
           }
         ]
@@ -4230,19 +4230,19 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "vault0",
+            "name": "baseVault",
             "type": "pubkey"
           },
           {
-            "name": "vault1",
+            "name": "quoteVault",
             "type": "pubkey"
           },
           {
-            "name": "available0",
+            "name": "baseAvailable",
             "type": "u64"
           },
           {
-            "name": "available1",
+            "name": "quoteAvailable",
             "type": "u64"
           }
         ]
@@ -4254,7 +4254,7 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "debtAssetIsAsset0",
+            "name": "debtAssetIsBase",
             "type": "bool"
           },
           {
@@ -4277,6 +4277,94 @@ export type OmnipairV2 = {
       }
     },
     {
+      "name": "liquidityAdded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "assetMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "reserveCredit",
+            "type": "u64"
+          },
+          {
+            "name": "claimAmount",
+            "type": "u64"
+          },
+          {
+            "name": "bufferAmount",
+            "type": "u64"
+          },
+          {
+            "name": "protectedClaimTokenSupply",
+            "type": "u64"
+          },
+          {
+            "name": "requiredBuffer",
+            "type": "u64"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "marketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "liquidityRemoved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "assetMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "claimAmount",
+            "type": "u64"
+          },
+          {
+            "name": "protectedClaimTokenSupply",
+            "type": "u64"
+          },
+          {
+            "name": "requiredBuffer",
+            "type": "u64"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "marketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "marginPosition",
       "type": {
         "kind": "struct",
@@ -4290,27 +4378,27 @@ export type OmnipairV2 = {
             "type": "pubkey"
           },
           {
-            "name": "collateral0",
+            "name": "baseCollateral",
             "type": "u64"
           },
           {
-            "name": "collateral1",
+            "name": "quoteCollateral",
             "type": "u64"
           },
           {
-            "name": "recognizedCollateral0ForDebt1",
+            "name": "recognizedBaseCollateralForQuoteDebt",
             "type": "u64"
           },
           {
-            "name": "recognizedCollateral1ForDebt0",
+            "name": "recognizedQuoteCollateralForBaseDebt",
             "type": "u64"
           },
           {
-            "name": "fixedDebt0Shares",
+            "name": "fixedBaseDebtShares",
             "type": "u128"
           },
           {
-            "name": "fixedDebt1Shares",
+            "name": "fixedQuoteDebtShares",
             "type": "u128"
           },
           {
@@ -4434,46 +4522,6 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "marketClaimRedeemed",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "owner",
-            "type": "pubkey"
-          },
-          {
-            "name": "assetMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "claimAmount",
-            "type": "u64"
-          },
-          {
-            "name": "protectedClaimTokenSupply",
-            "type": "u64"
-          },
-          {
-            "name": "requiredBuffer",
-            "type": "u64"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "marketEventMetadata"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "marketCollateralDeposited",
       "type": {
         "kind": "struct",
@@ -4495,11 +4543,11 @@ export type OmnipairV2 = {
             "type": "u64"
           },
           {
-            "name": "collateral0",
+            "name": "baseCollateral",
             "type": "u64"
           },
           {
-            "name": "collateral1",
+            "name": "quoteCollateral",
             "type": "u64"
           },
           {
@@ -4539,11 +4587,11 @@ export type OmnipairV2 = {
             "type": "u64"
           },
           {
-            "name": "collateral0",
+            "name": "baseCollateral",
             "type": "u64"
           },
           {
-            "name": "collateral1",
+            "name": "quoteCollateral",
             "type": "u64"
           },
           {
@@ -4764,19 +4812,19 @@ export type OmnipairV2 = {
             "type": "i64"
           },
           {
-            "name": "fixedDebt0",
+            "name": "fixedBaseDebt",
             "type": "u128"
           },
           {
-            "name": "fixedDebt1",
+            "name": "fixedQuoteDebt",
             "type": "u128"
           },
           {
-            "name": "health0Bps",
+            "name": "baseDebtHealthBps",
             "type": "u64"
           },
           {
-            "name": "health1Bps",
+            "name": "quoteDebtHealthBps",
             "type": "u64"
           },
           {
@@ -4906,27 +4954,27 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "recognizedCollateral0ForDebt1",
+            "name": "recognizedBaseCollateralForQuoteDebt",
             "type": "u64"
           },
           {
-            "name": "recognizedCollateral1ForDebt0",
+            "name": "recognizedQuoteCollateralForBaseDebt",
             "type": "u64"
           },
           {
-            "name": "effectiveDebt0Nad",
+            "name": "effectiveBaseDebtNad",
             "type": "u128"
           },
           {
-            "name": "effectiveDebt1Nad",
+            "name": "effectiveQuoteDebtNad",
             "type": "u128"
           },
           {
-            "name": "health0Bps",
+            "name": "baseDebtHealthBps",
             "type": "u64"
           },
           {
-            "name": "health1Bps",
+            "name": "quoteDebtHealthBps",
             "type": "u64"
           }
         ]
@@ -4942,27 +4990,27 @@ export type OmnipairV2 = {
             "type": "pubkey"
           },
           {
-            "name": "recognizedCollateral0ForDebt1",
+            "name": "recognizedBaseCollateralForQuoteDebt",
             "type": "u64"
           },
           {
-            "name": "recognizedCollateral1ForDebt0",
+            "name": "recognizedQuoteCollateralForBaseDebt",
             "type": "u64"
           },
           {
-            "name": "effectiveDebt0Nad",
+            "name": "effectiveBaseDebtNad",
             "type": "u128"
           },
           {
-            "name": "effectiveDebt1Nad",
+            "name": "effectiveQuoteDebtNad",
             "type": "u128"
           },
           {
-            "name": "health0Bps",
+            "name": "baseDebtHealthBps",
             "type": "u64"
           },
           {
-            "name": "health1Bps",
+            "name": "quoteDebtHealthBps",
             "type": "u64"
           },
           {
@@ -5114,115 +5162,11 @@ export type OmnipairV2 = {
             "type": "u64"
           },
           {
-            "name": "available0",
+            "name": "baseAvailable",
             "type": "u64"
           },
           {
-            "name": "available1",
-            "type": "u64"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "marketEventMetadata"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "marketLiquidated",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "borrower",
-            "type": "pubkey"
-          },
-          {
-            "name": "liquidator",
-            "type": "pubkey"
-          },
-          {
-            "name": "debtAssetMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "collateralAssetMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "repaidAmount",
-            "type": "u64"
-          },
-          {
-            "name": "collateralSeized",
-            "type": "u64"
-          },
-          {
-            "name": "insuranceDrawn",
-            "type": "u64"
-          },
-          {
-            "name": "socializedLoss",
-            "type": "u64"
-          },
-          {
-            "name": "remainingDebt",
-            "type": "u128"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "marketEventMetadata"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "marketReserveDeposited",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "owner",
-            "type": "pubkey"
-          },
-          {
-            "name": "assetMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "reserveCredit",
-            "type": "u64"
-          },
-          {
-            "name": "claimAmount",
-            "type": "u64"
-          },
-          {
-            "name": "bufferAmount",
-            "type": "u64"
-          },
-          {
-            "name": "protectedClaimTokenSupply",
-            "type": "u64"
-          },
-          {
-            "name": "requiredBuffer",
+            "name": "quoteAvailable",
             "type": "u64"
           },
           {
@@ -5365,54 +5309,6 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "marketSwapEvent",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "trader",
-            "type": "pubkey"
-          },
-          {
-            "name": "assetInMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "assetOutMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "reserveCredit",
-            "type": "u64"
-          },
-          {
-            "name": "amountInAfterFee",
-            "type": "u64"
-          },
-          {
-            "name": "amountOut",
-            "type": "u64"
-          },
-          {
-            "name": "feeCredit",
-            "type": "u64"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "marketEventMetadata"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "marketUpdated",
       "type": {
         "kind": "struct",
@@ -5469,16 +5365,72 @@ export type OmnipairV2 = {
       }
     },
     {
+      "name": "positionLiquidated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "borrower",
+            "type": "pubkey"
+          },
+          {
+            "name": "liquidator",
+            "type": "pubkey"
+          },
+          {
+            "name": "debtAssetMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "collateralAssetMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "repaidAmount",
+            "type": "u64"
+          },
+          {
+            "name": "collateralSeized",
+            "type": "u64"
+          },
+          {
+            "name": "insuranceDrawn",
+            "type": "u64"
+          },
+          {
+            "name": "socializedLoss",
+            "type": "u64"
+          },
+          {
+            "name": "remainingDebt",
+            "type": "u128"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "marketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "recognitionLedger",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "debtBearingCollateral0ForDebt1",
+            "name": "debtBearingBaseCollateralForQuoteDebt",
             "type": "u64"
           },
           {
-            "name": "debtBearingCollateral1ForDebt0",
+            "name": "debtBearingQuoteCollateralForBaseDebt",
             "type": "u64"
           },
           {
@@ -5514,7 +5466,7 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "repayAssetIsAsset0",
+            "name": "repayAssetIsBase",
             "type": "bool"
           },
           {
@@ -5550,27 +5502,27 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "price0EmaNad",
+            "name": "basePriceEmaNad",
             "type": "u64"
           },
           {
-            "name": "price1EmaNad",
+            "name": "quotePriceEmaNad",
             "type": "u64"
           },
           {
-            "name": "directionalPrice0EmaNad",
+            "name": "directionalBasePriceEmaNad",
             "type": "u64"
           },
           {
-            "name": "directionalPrice1EmaNad",
+            "name": "directionalQuotePriceEmaNad",
             "type": "u64"
           },
           {
-            "name": "cachedSpotPrice0Nad",
+            "name": "cachedSpotBasePriceNad",
             "type": "u64"
           },
           {
-            "name": "cachedSpotPrice1Nad",
+            "name": "cachedSpotQuotePriceNad",
             "type": "u64"
           },
           {
@@ -5582,11 +5534,11 @@ export type OmnipairV2 = {
             "type": "u128"
           },
           {
-            "name": "cachedLiquidity0Nad",
+            "name": "cachedBaseLiquidityNad",
             "type": "u128"
           },
           {
-            "name": "cachedLiquidity1Nad",
+            "name": "cachedQuoteLiquidityNad",
             "type": "u128"
           },
           {
@@ -5598,11 +5550,11 @@ export type OmnipairV2 = {
             "type": "u128"
           },
           {
-            "name": "liquidity0Ema",
+            "name": "baseLiquidityEma",
             "type": "u128"
           },
           {
-            "name": "liquidity1Ema",
+            "name": "quoteLiquidityEma",
             "type": "u128"
           },
           {
@@ -5698,7 +5650,7 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "assetInIsAsset0",
+            "name": "assetInIsBase",
             "type": "bool"
           },
           {
@@ -5708,6 +5660,54 @@ export type OmnipairV2 = {
           {
             "name": "minAssetOut",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "swapExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "trader",
+            "type": "pubkey"
+          },
+          {
+            "name": "assetInMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "assetOutMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "reserveCredit",
+            "type": "u64"
+          },
+          {
+            "name": "amountInAfterFee",
+            "type": "u64"
+          },
+          {
+            "name": "amountOut",
+            "type": "u64"
+          },
+          {
+            "name": "feeCredit",
+            "type": "u64"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "marketEventMetadata"
+              }
+            }
           }
         ]
       }

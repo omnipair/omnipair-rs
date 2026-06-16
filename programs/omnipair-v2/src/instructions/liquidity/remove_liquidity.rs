@@ -7,7 +7,7 @@ use anchor_spl::{
 use crate::{
     constants::*,
     errors::ErrorCode,
-    events::{MarketClaimRedeemed, MarketEventMetadata},
+    events::{LiquidityRemoved, MarketEventMetadata},
     generate_market_seeds,
     shared::token::{token_burn, transfer_from_vault_to_user},
     state::Market,
@@ -144,7 +144,7 @@ impl<'info> RemoveLiquidity<'info> {
         ctx.accounts.market.refresh_risk_book()?;
         ctx.accounts.market.assert_risk_circuit_breakers()?;
 
-        emit_cpi!(MarketClaimRedeemed {
+        emit_cpi!(LiquidityRemoved {
             market: market_key,
             owner: owner_key,
             asset_mint: asset_mint_key,

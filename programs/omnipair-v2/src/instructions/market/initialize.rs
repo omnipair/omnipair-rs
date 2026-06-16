@@ -269,12 +269,12 @@ impl<'info> InitializeMarket<'info> {
             },
             ..MarketSide::default()
         };
-        market.insurance_reserve.vault0 = ctx.accounts.base_insurance_vault.key();
-        market.insurance_reserve.vault1 = ctx.accounts.quote_insurance_vault.key();
+        market.insurance_reserve.base_vault = ctx.accounts.base_insurance_vault.key();
+        market.insurance_reserve.quote_vault = ctx.accounts.quote_insurance_vault.key();
         market.config = args.config;
         market.debt_book = crate::state::DebtBook {
-            borrow_index0_nad: NAD as u128,
-            borrow_index1_nad: NAD as u128,
+            base_borrow_index_nad: NAD as u128,
+            quote_borrow_index_nad: NAD as u128,
             ..crate::state::DebtBook::default()
         };
         market.risk_book = crate::state::RiskBook {

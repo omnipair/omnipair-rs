@@ -10,8 +10,8 @@ pub struct DepositInsurance {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct InsuranceReceipt {
     pub insurance_credit: u64,
-    pub available0: u64,
-    pub available1: u64,
+    pub base_available: u64,
+    pub quote_available: u64,
 }
 
 impl DepositInsurance {
@@ -26,14 +26,14 @@ impl DepositInsurance {
         require!(self.insurance_credit > 0, ErrorCode::AmountZero);
         match self.market_side_index {
             0 => {
-                insurance_reserve.available0 = insurance_reserve
-                    .available0
+                insurance_reserve.base_available = insurance_reserve
+                    .base_available
                     .checked_add(self.insurance_credit)
                     .ok_or(ErrorCode::MarketMathOverflow)?;
             }
             1 => {
-                insurance_reserve.available1 = insurance_reserve
-                    .available1
+                insurance_reserve.quote_available = insurance_reserve
+                    .quote_available
                     .checked_add(self.insurance_credit)
                     .ok_or(ErrorCode::MarketMathOverflow)?;
             }
@@ -41,8 +41,8 @@ impl DepositInsurance {
         }
         Ok(InsuranceReceipt {
             insurance_credit: self.insurance_credit,
-            available0: insurance_reserve.available0,
-            available1: insurance_reserve.available1,
+            base_available: insurance_reserve.base_available,
+            quote_available: insurance_reserve.quote_available,
         })
     }
 }
@@ -54,8 +54,8 @@ mod tests {
     #[test]
     fn deposit_insurance_credits_base_side() {
         let mut insurance_reserve = InsuranceReserve {
-            available0: 10,
-            available1: 20,
+            base_available: 10,
+            quote_available: 20,
             ..InsuranceReserve::default()
         };
 
@@ -64,16 +64,16 @@ mod tests {
             .unwrap();
 
         assert_eq!(receipt.insurance_credit, 15);
-        assert_eq!(receipt.available0, 25);
-        assert_eq!(receipt.available1, 20);
-        assert_eq!(insurance_reserve.available0, 25);
+        assert_eq!(receipt.base_available, 25);
+        assert_eq!(receipt.quote_available, 20);
+        assert_eq!(insurance_reserve.base_available, 25);
     }
 
     #[test]
     fn deposit_insurance_credits_quote_side() {
         let mut insurance_reserve = InsuranceReserve {
-            available0: 10,
-            available1: 20,
+            base_available: 10,
+            quote_available: 20,
             ..InsuranceReserve::default()
         };
 
@@ -82,8 +82,8 @@ mod tests {
             .unwrap();
 
         assert_eq!(receipt.insurance_credit, 15);
-        assert_eq!(receipt.available0, 10);
-        assert_eq!(receipt.available1, 35);
-        assert_eq!(insurance_reserve.available1, 35);
+        assert_eq!(receipt.base_available, 10);
+        assert_eq!(receipt.quote_available, 35);
+        assert_eq!(insurance_reserve.quote_available, 35);
     }
 }

@@ -4,41 +4,41 @@ use crate::{constants::NAD, errors::ErrorCode, shared::math::ceil_div};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct DebtBook {
-    pub fixed_debt0_shares: u128,
-    pub fixed_debt1_shares: u128,
-    pub soft_debt0_shares: u128,
-    pub soft_debt1_shares: u128,
-    pub borrow_index0_nad: u128,
-    pub borrow_index1_nad: u128,
+    pub fixed_base_debt_shares: u128,
+    pub fixed_quote_debt_shares: u128,
+    pub soft_base_debt_shares: u128,
+    pub soft_quote_debt_shares: u128,
+    pub base_borrow_index_nad: u128,
+    pub quote_borrow_index_nad: u128,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct RiskBook {
-    pub price0_ema_nad: u64,
-    pub price1_ema_nad: u64,
-    pub directional_price0_ema_nad: u64,
-    pub directional_price1_ema_nad: u64,
-    pub cached_spot_price0_nad: u64,
-    pub cached_spot_price1_nad: u64,
+    pub base_price_ema_nad: u64,
+    pub quote_price_ema_nad: u64,
+    pub directional_base_price_ema_nad: u64,
+    pub directional_quote_price_ema_nad: u64,
+    pub cached_spot_base_price_nad: u64,
+    pub cached_spot_quote_price_nad: u64,
     pub cached_k_nad: u128,
     pub cached_liquidity_nad: u128,
-    pub cached_liquidity0_nad: u128,
-    pub cached_liquidity1_nad: u128,
+    pub cached_base_liquidity_nad: u128,
+    pub cached_quote_liquidity_nad: u128,
     pub k_ema: u128,
     pub liquidity_ema: u128,
-    pub liquidity0_ema: u128,
-    pub liquidity1_ema: u128,
+    pub base_liquidity_ema: u128,
+    pub quote_liquidity_ema: u128,
     pub last_snapshot_slot: u64,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct MarketHealth {
-    pub recognized_collateral0_for_debt1: u64,
-    pub recognized_collateral1_for_debt0: u64,
-    pub effective_debt0_nad: u128,
-    pub effective_debt1_nad: u128,
-    pub health0_bps: u64,
-    pub health1_bps: u64,
+    pub recognized_base_collateral_for_quote_debt: u64,
+    pub recognized_quote_collateral_for_base_debt: u64,
+    pub effective_base_debt_nad: u128,
+    pub effective_quote_debt_nad: u128,
+    pub base_debt_health_bps: u64,
+    pub quote_debt_health_bps: u64,
 }
 
 impl DebtBook {
@@ -60,37 +60,37 @@ impl DebtBook {
             .ok_or(ErrorCode::MarketMathOverflow.into())
     }
 
-    pub fn fixed_debt0(&self) -> Result<u128> {
-        Self::shares_to_debt(self.fixed_debt0_shares, self.borrow_index0_nad)
+    pub fn fixed_base_debt(&self) -> Result<u128> {
+        Self::shares_to_debt(self.fixed_base_debt_shares, self.base_borrow_index_nad)
     }
 
-    pub fn fixed_debt1(&self) -> Result<u128> {
-        Self::shares_to_debt(self.fixed_debt1_shares, self.borrow_index1_nad)
+    pub fn fixed_quote_debt(&self) -> Result<u128> {
+        Self::shares_to_debt(self.fixed_quote_debt_shares, self.quote_borrow_index_nad)
     }
 
-    pub fn soft_debt0(&self) -> Result<u128> {
-        self.soft_debt0_shares
-            .checked_mul(self.borrow_index0_nad)
+    pub fn soft_base_debt(&self) -> Result<u128> {
+        self.soft_base_debt_shares
+            .checked_mul(self.base_borrow_index_nad)
             .and_then(|value| value.checked_div(NAD as u128))
             .ok_or(ErrorCode::MarketMathOverflow.into())
     }
 
-    pub fn soft_debt1(&self) -> Result<u128> {
-        self.soft_debt1_shares
-            .checked_mul(self.borrow_index1_nad)
+    pub fn soft_quote_debt(&self) -> Result<u128> {
+        self.soft_quote_debt_shares
+            .checked_mul(self.quote_borrow_index_nad)
             .and_then(|value| value.checked_div(NAD as u128))
             .ok_or(ErrorCode::MarketMathOverflow.into())
     }
 
-    pub fn total_debt0(&self) -> Result<u128> {
-        self.fixed_debt0()?
-            .checked_add(self.soft_debt0()?)
+    pub fn total_base_debt(&self) -> Result<u128> {
+        self.fixed_base_debt()?
+            .checked_add(self.soft_base_debt()?)
             .ok_or(ErrorCode::MarketMathOverflow.into())
     }
 
-    pub fn total_debt1(&self) -> Result<u128> {
-        self.fixed_debt1()?
-            .checked_add(self.soft_debt1()?)
+    pub fn total_quote_debt(&self) -> Result<u128> {
+        self.fixed_quote_debt()?
+            .checked_add(self.soft_quote_debt()?)
             .ok_or(ErrorCode::MarketMathOverflow.into())
     }
 }

@@ -111,8 +111,8 @@ impl<'info> DepositInsurance<'info> {
             sponsor: sponsor_key,
             asset_mint: asset_mint_key,
             insurance_credit: receipt.insurance_credit,
-            available0: receipt.available0,
-            available1: receipt.available1,
+            base_available: receipt.base_available,
+            quote_available: receipt.quote_available,
             metadata: MarketEventMetadata::new(sponsor_key, market_key)?,
         });
 
@@ -130,9 +130,9 @@ fn validate_insurance_accounts<'info>(
 ) -> Result<()> {
     let market_side = market.side(market_side_index)?;
     let expected_vault = if market_side_index == 0 {
-        market.insurance_reserve.vault0
+        market.insurance_reserve.base_vault
     } else {
-        market.insurance_reserve.vault1
+        market.insurance_reserve.quote_vault
     };
     require_keys_eq!(
         market_side.asset_mint,
