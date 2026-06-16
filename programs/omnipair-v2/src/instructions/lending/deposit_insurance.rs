@@ -10,6 +10,7 @@ use crate::{
     events::{MarketEventMetadata, MarketInsuranceFunded},
     shared::token::transfer_from_user_to_vault,
     state::Market,
+    transitions::insurance::DepositInsurance as DepositInsuranceTransition,
 };
 
 use crate::instructions::common::{require_supported_asset_mint, token_program_for_mint};
@@ -102,31 +103,16 @@ impl<'info> DepositInsurance<'info> {
             .ok_or(ErrorCode::MarketMathOverflow)?;
         require!(insurance_credit > 0, ErrorCode::AmountZero);
 
-        if args.market_side_index == 0 {
-            ctx.accounts.market.insurance_reserve.available0 = ctx
-                .accounts
-                .market
-                .insurance_reserve
-                .available0
-                .checked_add(insurance_credit)
-                .ok_or(ErrorCode::MarketMathOverflow)?;
-        } else {
-            ctx.accounts.market.insurance_reserve.available1 = ctx
-                .accounts
-                .market
-                .insurance_reserve
-                .available1
-                .checked_add(insurance_credit)
-                .ok_or(ErrorCode::MarketMathOverflow)?;
-        }
+        let receipt = DepositInsuranceTransition::new(args.market_side_index, insurance_credit)
+            .apply(&mut ctx.accounts.market.insurance_reserve)?;
 
         emit_cpi!(MarketInsuranceFunded {
             market: market_key,
             sponsor: sponsor_key,
             asset_mint: asset_mint_key,
-            insurance_credit,
-            available0: ctx.accounts.market.insurance_reserve.available0,
-            available1: ctx.accounts.market.insurance_reserve.available1,
+            insurance_credit: receipt.insurance_credit,
+            available0: receipt.available0,
+            available1: receipt.available1,
             metadata: MarketEventMetadata::new(sponsor_key, market_key),
         });
 
