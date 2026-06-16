@@ -6,6 +6,15 @@ use crate::{
     shared::math::{slots_to_ms, taylor_exp},
 };
 
+use super::{
+    fixed_point::{denormalize_from_nad_ceil, denormalize_from_nad_floor, normalize_to_nad},
+    gamm::{
+        calculate_normalized_amount_in, calculate_normalized_amount_in_floor,
+        calculate_normalized_amount_out,
+        construct_normalized_virtual_reserves_at_pessimistic_price,
+    },
+};
+
 pub(crate) fn health_bps(
     recognized_collateral_value_nad: u128,
     effective_debt_nad: u128,
@@ -54,6 +63,94 @@ pub(crate) fn effective_hedged_debt_nad(
         .checked_mul(weight_bps)
         .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
         .ok_or(ErrorCode::MarketMathOverflow.into())
+}
+
+pub(crate) fn collateral_value_from_pessimistic_reserves_nad(
+    collateral_reserve_amount: u64,
+    collateral_decimals: u8,
+    debt_reserve_amount: u64,
+    debt_decimals: u8,
+    collateral_amount: u64,
+    price_ema_nad: u64,
+    directional_price_ema_nad: u64,
+) -> Result<u128> {
+    if collateral_amount == 0 {
+        return Ok(0);
+    }
+    let collateral_reserve =
+        normalize_to_nad(collateral_reserve_amount as u128, collateral_decimals)?;
+    let debt_reserve = normalize_to_nad(debt_reserve_amount as u128, debt_decimals)?;
+    let collateral_amount = normalize_to_nad(collateral_amount as u128, collateral_decimals)?;
+    let (collateral_virtual_reserve, debt_virtual_reserve) =
+        construct_normalized_virtual_reserves_at_pessimistic_price(
+            collateral_reserve,
+            debt_reserve,
+            price_ema_nad,
+            directional_price_ema_nad,
+        )?;
+    calculate_normalized_amount_out(
+        collateral_virtual_reserve,
+        debt_virtual_reserve,
+        collateral_amount,
+    )
+}
+
+pub(crate) fn collateral_amount_for_debt_amount_ceil(
+    collateral_reserve_amount: u64,
+    collateral_decimals: u8,
+    debt_reserve_amount: u64,
+    debt_decimals: u8,
+    debt_amount: u128,
+    price_ema_nad: u64,
+    directional_price_ema_nad: u64,
+) -> Result<u64> {
+    let collateral_reserve =
+        normalize_to_nad(collateral_reserve_amount as u128, collateral_decimals)?;
+    let debt_reserve = normalize_to_nad(debt_reserve_amount as u128, debt_decimals)?;
+    let debt_amount_nad = normalize_to_nad(debt_amount, debt_decimals)?;
+    let (collateral_virtual_reserve, debt_virtual_reserve) =
+        construct_normalized_virtual_reserves_at_pessimistic_price(
+            collateral_reserve,
+            debt_reserve,
+            price_ema_nad,
+            directional_price_ema_nad,
+        )?;
+    let collateral_amount_nad = calculate_normalized_amount_in(
+        collateral_virtual_reserve,
+        debt_virtual_reserve,
+        debt_amount_nad,
+    )?;
+    denormalize_from_nad_ceil(collateral_amount_nad, collateral_decimals)
+}
+
+pub(crate) fn collateral_amount_for_debt_value_floor(
+    collateral_reserve_amount: u64,
+    collateral_decimals: u8,
+    debt_reserve_amount: u64,
+    debt_decimals: u8,
+    debt_value_nad: u128,
+    price_ema_nad: u64,
+    directional_price_ema_nad: u64,
+) -> Result<u64> {
+    if debt_value_nad == 0 {
+        return Ok(0);
+    }
+    let collateral_reserve =
+        normalize_to_nad(collateral_reserve_amount as u128, collateral_decimals)?;
+    let debt_reserve = normalize_to_nad(debt_reserve_amount as u128, debt_decimals)?;
+    let (collateral_virtual_reserve, debt_virtual_reserve) =
+        construct_normalized_virtual_reserves_at_pessimistic_price(
+            collateral_reserve,
+            debt_reserve,
+            price_ema_nad,
+            directional_price_ema_nad,
+        )?;
+    let collateral_amount_nad = calculate_normalized_amount_in_floor(
+        collateral_virtual_reserve,
+        debt_virtual_reserve,
+        debt_value_nad,
+    )?;
+    denormalize_from_nad_floor(collateral_amount_nad, collateral_decimals)
 }
 
 pub(crate) fn ema_u64(
@@ -184,4 +281,52 @@ pub(crate) fn assert_k_drawdown(
         ErrorCode::MarketRiskCircuitBreaker
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pessimistic_reserve_value_uses_normalized_curve_output() {
+        let value = collateral_value_from_pessimistic_reserves_nad(
+            1_000_000,
+            6,
+            2_000_000,
+            6,
+            100_000,
+            2 * NAD,
+            2 * NAD,
+        )
+        .unwrap();
+
+        assert_eq!(value, 181_818_181);
+    }
+
+    #[test]
+    fn debt_value_to_collateral_amount_uses_requested_rounding() {
+        let ceil_amount = collateral_amount_for_debt_amount_ceil(
+            1_000_000,
+            6,
+            2_000_000,
+            6,
+            100_000,
+            2 * NAD,
+            2 * NAD,
+        )
+        .unwrap();
+        let floor_amount = collateral_amount_for_debt_value_floor(
+            1_000_000,
+            6,
+            2_000_000,
+            6,
+            100_000_000,
+            2 * NAD,
+            2 * NAD,
+        )
+        .unwrap();
+
+        assert_eq!(ceil_amount, 52_632);
+        assert_eq!(floor_amount, 52_631);
+    }
 }

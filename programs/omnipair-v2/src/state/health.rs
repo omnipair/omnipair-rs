@@ -328,9 +328,6 @@ impl Market {
         collateral_amount: u64,
         risk_book: &RiskBook,
     ) -> Result<u128> {
-        if collateral_amount == 0 {
-            return Ok(0);
-        }
         let (collateral_side, debt_side, price_ema_nad, directional_price_ema_nad) =
             match collateral_asset {
                 MarketAsset::Base => (
@@ -346,27 +343,15 @@ impl Market {
                     risk_book.directional_quote_price_ema_nad,
                 ),
             };
-        let collateral_reserve = normalize_to_nad(
-            collateral_side.reserve_ledger.live_reserve as u128,
+
+        collateral_value_from_pessimistic_reserves_nad(
+            collateral_side.reserve_ledger.live_reserve,
             collateral_side.asset_decimals,
-        )?;
-        let debt_reserve = normalize_to_nad(
-            debt_side.reserve_ledger.live_reserve as u128,
+            debt_side.reserve_ledger.live_reserve,
             debt_side.asset_decimals,
-        )?;
-        let collateral_amount =
-            normalize_to_nad(collateral_amount as u128, collateral_side.asset_decimals)?;
-        let (collateral_virtual_reserve, debt_virtual_reserve) =
-            construct_normalized_virtual_reserves_at_pessimistic_price(
-                collateral_reserve,
-                debt_reserve,
-                price_ema_nad,
-                directional_price_ema_nad,
-            )?;
-        calculate_normalized_amount_out(
-            collateral_virtual_reserve,
-            debt_virtual_reserve,
             collateral_amount,
+            price_ema_nad,
+            directional_price_ema_nad,
         )
     }
 
@@ -398,28 +383,16 @@ impl Market {
                     risk_book.directional_base_price_ema_nad,
                 ),
             };
-        let collateral_reserve = normalize_to_nad(
-            collateral_side.reserve_ledger.live_reserve as u128,
+
+        collateral_amount_for_debt_amount_ceil(
+            collateral_side.reserve_ledger.live_reserve,
             collateral_side.asset_decimals,
-        )?;
-        let debt_reserve = normalize_to_nad(
-            debt_side.reserve_ledger.live_reserve as u128,
+            debt_side.reserve_ledger.live_reserve,
             debt_side.asset_decimals,
-        )?;
-        let debt_amount_nad = normalize_to_nad(debt_with_incentive, debt_side.asset_decimals)?;
-        let (collateral_virtual_reserve, debt_virtual_reserve) =
-            construct_normalized_virtual_reserves_at_pessimistic_price(
-                collateral_reserve,
-                debt_reserve,
-                price_ema_nad,
-                directional_price_ema_nad,
-            )?;
-        let collateral_amount_nad = calculate_normalized_amount_in(
-            collateral_virtual_reserve,
-            debt_virtual_reserve,
-            debt_amount_nad,
-        )?;
-        denormalize_from_nad_ceil(collateral_amount_nad, collateral_side.asset_decimals)
+            debt_with_incentive,
+            price_ema_nad,
+            directional_price_ema_nad,
+        )
     }
 
     fn collateral_amount_for_debt_value_cap_with_risk(
@@ -428,9 +401,6 @@ impl Market {
         debt_value_nad: u128,
         risk_book: &RiskBook,
     ) -> Result<u64> {
-        if debt_value_nad == 0 {
-            return Ok(0);
-        }
         let (collateral_side, debt_side, price_ema_nad, directional_price_ema_nad) =
             match debt_asset {
                 MarketAsset::Base => (
@@ -446,27 +416,16 @@ impl Market {
                     risk_book.directional_base_price_ema_nad,
                 ),
             };
-        let collateral_reserve = normalize_to_nad(
-            collateral_side.reserve_ledger.live_reserve as u128,
+
+        collateral_amount_for_debt_value_floor(
+            collateral_side.reserve_ledger.live_reserve,
             collateral_side.asset_decimals,
-        )?;
-        let debt_reserve = normalize_to_nad(
-            debt_side.reserve_ledger.live_reserve as u128,
+            debt_side.reserve_ledger.live_reserve,
             debt_side.asset_decimals,
-        )?;
-        let (collateral_virtual_reserve, debt_virtual_reserve) =
-            construct_normalized_virtual_reserves_at_pessimistic_price(
-                collateral_reserve,
-                debt_reserve,
-                price_ema_nad,
-                directional_price_ema_nad,
-            )?;
-        let collateral_amount_nad = calculate_normalized_amount_in_floor(
-            collateral_virtual_reserve,
-            debt_virtual_reserve,
             debt_value_nad,
-        )?;
-        denormalize_from_nad_floor(collateral_amount_nad, collateral_side.asset_decimals)
+            price_ema_nad,
+            directional_price_ema_nad,
+        )
     }
 
     fn daily_limit_for_side(&self, market_asset: MarketAsset, limit_bps: u16) -> Result<u64> {
