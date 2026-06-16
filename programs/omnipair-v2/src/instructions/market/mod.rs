@@ -1,7 +1,7 @@
-pub mod initialize_market;
-pub mod set_market_reduce_only;
-pub mod update_market_config;
+pub mod initialize;
+pub mod set_reduce_only;
+pub mod update_config;
 
-pub use initialize_market::*;
-pub use set_market_reduce_only::*;
-pub use update_market_config::*;
+pub use initialize::*;
+pub use set_reduce_only::*;
+pub use update_config::*;

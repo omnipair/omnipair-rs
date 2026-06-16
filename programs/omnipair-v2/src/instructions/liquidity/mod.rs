@@ -1,5 +1,20 @@
 mod add_liquidity;
+pub mod claim_fees;
+pub mod claim_hedge_fees;
+pub mod claim_market_fees;
+pub mod close_hedge;
+mod hedge_common;
+pub mod open_hedge;
 mod remove_liquidity;
+pub mod stake;
+pub mod unstake;
 
 pub use add_liquidity::*;
+pub use claim_fees::*;
+pub use claim_hedge_fees::*;
+pub use claim_market_fees::*;
+pub use close_hedge::*;
+pub use open_hedge::*;
 pub use remove_liquidity::*;
+pub use stake::*;
+pub use unstake::*;

@@ -13,7 +13,7 @@ use crate::{
     state::{HedgePosition, Market},
 };
 
-use super::common::validate_hedge_accounts;
+use super::hedge_common::validate_hedge_accounts;
 use crate::instructions::common::{token_account_credit, token_program_for_mint};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
