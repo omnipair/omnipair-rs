@@ -1234,6 +1234,158 @@ describe("Omnipair Market LiteSVM", () => {
     expect(ownerDebtBalanceAfter - ownerDebtBalanceBefore).to.equal(BigInt(4));
   });
 
+  it("enforces daily borrow and redeem limits from liquidity EMA", async () => {
+    const borrowFixture = await fundRoundedBorrowMarket();
+    const borrowLimitConfig = marketConfig();
+    borrowLimitConfig.maxDailyBorrowBps = 300;
+    await program.methods
+      .updateMarketConfig({ config: borrowLimitConfig })
+      .accounts({
+        market: borrowFixture.market,
+        operator: payer.publicKey,
+        eventAuthority: borrowFixture.eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    const marginPosition = deriveAddress(
+      Buffer.from("margin"),
+      borrowFixture.market.toBuffer(),
+      payer.publicKey.toBuffer()
+    );
+    await program.methods
+      .depositCollateral({
+        marketSideIndex: 1,
+        depositAmount: new BN(200),
+      })
+      .accounts({
+        market: borrowFixture.market,
+        owner: payer.publicKey,
+        assetMint: borrowFixture.asset1Mint,
+        collateralVault: borrowFixture.collateral1Vault,
+        ownerAssetAccount: borrowFixture.ownerAsset1Account,
+        marginPosition,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        eventAuthority: borrowFixture.eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await program.methods
+      .marketBorrow({
+        borrowAssetIsAsset0: true,
+        borrowAmount: new BN(9),
+        minDebtAmountOut: new BN(9),
+        minHealthBps: new BN(11_000),
+      })
+      .accounts({
+        market: borrowFixture.market,
+        owner: payer.publicKey,
+        debtAssetMint: borrowFixture.asset0Mint,
+        collateralAssetMint: borrowFixture.asset1Mint,
+        reserveVault: borrowFixture.reserve0Vault,
+        ownerDebtAccount: borrowFixture.ownerAsset0Account,
+        marginPosition,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority: borrowFixture.eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
+      .rpc();
+
+    await expectRejects(() =>
+      program.methods
+        .marketBorrow({
+          borrowAssetIsAsset0: true,
+          borrowAmount: new BN(1),
+          minDebtAmountOut: new BN(1),
+          minHealthBps: new BN(11_000),
+        })
+        .accounts({
+          market: borrowFixture.market,
+          owner: payer.publicKey,
+          debtAssetMint: borrowFixture.asset0Mint,
+          collateralAssetMint: borrowFixture.asset1Mint,
+          reserveVault: borrowFixture.reserve0Vault,
+          ownerDebtAccount: borrowFixture.ownerAsset0Account,
+          marginPosition,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          eventAuthority: borrowFixture.eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
+        .rpc()
+    );
+
+    const redeemFixture = await fundTwoSidedMarket();
+    const redeemLimitConfig = marketConfig();
+    redeemLimitConfig.maxDailyWithdrawBps = 1;
+    await program.methods
+      .updateMarketConfig({ config: redeemLimitConfig })
+      .accounts({
+        market: redeemFixture.market,
+        operator: payer.publicKey,
+        eventAuthority: redeemFixture.eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await program.methods
+      .redeemClaim({
+        marketSideIndex: 0,
+        claimAmount: new BN(100),
+        minAssetAmountOut: new BN(100),
+      })
+      .accounts({
+        market: redeemFixture.market,
+        owner: payer.publicKey,
+        assetMint: redeemFixture.asset0Mint,
+        claimMint: redeemFixture.claim0Mint,
+        reserveVault: redeemFixture.reserve0Vault,
+        ownerAssetAccount: redeemFixture.ownerAsset0Account,
+        ownerClaimAccount: redeemFixture.ownerClaim0Account,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority: redeemFixture.eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await expectRejects(() =>
+      program.methods
+        .redeemClaim({
+          marketSideIndex: 0,
+          claimAmount: new BN(1),
+          minAssetAmountOut: new BN(1),
+        })
+        .accounts({
+          market: redeemFixture.market,
+          owner: payer.publicKey,
+          assetMint: redeemFixture.asset0Mint,
+          claimMint: redeemFixture.claim0Mint,
+          reserveVault: redeemFixture.reserve0Vault,
+          ownerAssetAccount: redeemFixture.ownerAsset0Account,
+          ownerClaimAccount: redeemFixture.ownerClaim0Account,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          eventAuthority: redeemFixture.eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .rpc()
+    );
+  });
+
   it("swaps against market reserve floor excess", async () => {
     trackInstruction("marketSwap", "swaps against rounded market reserve excess");
 
