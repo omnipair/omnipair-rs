@@ -9,8 +9,8 @@ use crate::{
     errors::ErrorCode,
     events::{MarketEventMetadata, SwapExecuted},
     generate_market_seeds,
+    math::calculate_raw_amount_out,
     shared::{
-        gamm_math::CPCurve,
         math::ceil_div,
         token::{
             transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault,
@@ -127,7 +127,7 @@ impl<'info> Swap<'info> {
 
         let amount_out = {
             let (market_side_in, market_side_out) = ctx.accounts.market.swap_sides(args.asset_in);
-            CPCurve::calculate_amount_out(
+            calculate_raw_amount_out(
                 market_side_in.reserve_ledger.live_reserve,
                 market_side_out.reserve_ledger.live_reserve,
                 amount_in_after_fee,

@@ -132,6 +132,11 @@ pub(crate) fn calculate_normalized_amount_out(x: u128, y: u128, dx: u128) -> Res
     Ok(dy)
 }
 
+pub(crate) fn calculate_raw_amount_out(x: u64, y: u64, dx: u64) -> Result<u64> {
+    let dy = calculate_normalized_amount_out(x as u128, y as u128, dx as u128)?;
+    u64::try_from(dy).map_err(|_| ErrorCode::OutputAmountOverflow.into())
+}
+
 /// Calculate dx required to remove dy from a constant-product coordinate.
 /// ```text
 /// Δx = (Δy * x) / (y - Δy)
@@ -187,5 +192,12 @@ mod tests {
             x_virt.checked_mul(y_virt).unwrap(),
             x.checked_mul(y).unwrap()
         );
+    }
+
+    #[test]
+    fn raw_amount_out_matches_constant_product_rounding_down() {
+        let dy = calculate_raw_amount_out(1_000, 2_000, 100).unwrap();
+
+        assert_eq!(dy, 181);
     }
 }
