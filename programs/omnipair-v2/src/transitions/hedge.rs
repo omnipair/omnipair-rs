@@ -111,6 +111,7 @@ mod tests {
         constants::{MARKET_VERSION, NAD},
         state::{ClaimTokenLedger, MarketAsset, MarketConfig, MarketSide, ReserveLedger},
     };
+    use proptest::prelude::*;
 
     fn market_side(asset_mint: Pubkey) -> MarketSide {
         MarketSide {
@@ -231,5 +232,61 @@ mod tests {
                 .hedged_claim_token_supply,
             375
         );
+    }
+
+    #[test]
+    fn close_hedge_rejects_unbacked_position_decrease() {
+        let mut market = test_market();
+        market.base_side.claim_token_ledger = ClaimTokenLedger {
+            hedged_claim_token_supply: 100,
+            ..ClaimTokenLedger::default()
+        };
+        let mut hedge_position = hedge_position();
+        hedge_position.hedged_claim_token_amount = 100;
+
+        let err = CloseHedge::new(MarketAsset::Base, 101)
+            .apply(&mut market, &mut hedge_position)
+            .unwrap_err();
+
+        assert_eq!(err, error!(ErrorCode::MarketMathOverflow));
+    }
+
+    proptest! {
+        #[test]
+        fn hedge_open_close_is_one_to_one_claim_wrapper(
+            open_amount in 1_u64..1_000_000_000_u64,
+            close_amount in 1_u64..1_000_000_000_u64,
+        ) {
+            let mut market = test_market();
+            let mut hedge_position = hedge_position();
+            let close_amount = close_amount.min(open_amount);
+
+            let open_receipt = OpenHedge::new(MarketAsset::Base, open_amount)
+                .apply(&mut market, &mut hedge_position)
+                .unwrap();
+
+            prop_assert_eq!(open_receipt.claim_amount, open_amount);
+            prop_assert_eq!(open_receipt.hedge_amount, open_amount);
+            prop_assert_eq!(open_receipt.hedged_claim_token_supply, open_amount);
+            prop_assert_eq!(hedge_position.hedged_claim_token_amount, open_amount);
+            prop_assert_eq!(
+                market.base_side.claim_token_ledger.hedged_claim_token_supply,
+                open_amount
+            );
+
+            let close_receipt = CloseHedge::new(MarketAsset::Base, close_amount)
+                .apply(&mut market, &mut hedge_position)
+                .unwrap();
+            let remaining = open_amount - close_amount;
+
+            prop_assert_eq!(close_receipt.claim_amount, close_amount);
+            prop_assert_eq!(close_receipt.hedge_amount, close_amount);
+            prop_assert_eq!(close_receipt.hedged_claim_token_supply, remaining);
+            prop_assert_eq!(hedge_position.hedged_claim_token_amount, remaining);
+            prop_assert_eq!(
+                market.base_side.claim_token_ledger.hedged_claim_token_supply,
+                remaining
+            );
+        }
     }
 }

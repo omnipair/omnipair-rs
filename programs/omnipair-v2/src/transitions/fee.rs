@@ -526,6 +526,7 @@ fn dynamic_free_fee_share_nad(eta_nad: u128, fee_routing_k_nad: u64) -> Result<u
 mod tests {
     use super::*;
     use crate::state::{BufferLedger, ClaimTokenLedger, FeeLedger};
+    use proptest::prelude::*;
 
     fn market_side() -> MarketSide {
         MarketSide {
@@ -658,5 +659,53 @@ mod tests {
         assert_eq!(market_side.fee_ledger.fee_liability, 700);
         assert_eq!(market_side.fee_ledger.total_liability().unwrap(), 1_000);
         market_side.fee_ledger.assert_backed().unwrap();
+    }
+
+    proptest! {
+        #[test]
+        fn fee_credit_remains_backed_and_does_not_reprice_claim_principal(
+            fee_credit in 1_u64..1_000_000_000_u64,
+            operator_fee_bps in 0_u16..4_000_u16,
+            protocol_fee_bps in 0_u16..4_000_u16,
+            stake_half in 1_u64..500_000_000_u64,
+            protected_claim_token_supply in 1_u64..1_000_000_000_u64,
+        ) {
+            let mut market_side = market_side();
+            market_side.buffer_ledger.buffer_ratio_bps = 5_000;
+            market_side.claim_token_ledger.protected_claim_token_supply = protected_claim_token_supply;
+            market_side.claim_token_ledger.staked_claim_token_supply = stake_half;
+            market_side.buffer_ledger.staked_buffer_share_amount = stake_half;
+            let protected_before = market_side.claim_token_ledger.protected_claim_token_supply;
+            let reserve_before = market_side.reserve_ledger;
+
+            RecordFeeCredit::new(fee_credit, operator_fee_bps, protocol_fee_bps, NAD)
+                .apply(&mut market_side)
+                .unwrap();
+
+            prop_assert_eq!(market_side.fee_ledger.fee_vault_balance, fee_credit);
+            prop_assert_eq!(market_side.fee_ledger.total_liability().unwrap(), fee_credit);
+            market_side.fee_ledger.assert_backed().unwrap();
+            prop_assert_eq!(market_side.claim_token_ledger.protected_claim_token_supply, protected_before);
+            prop_assert_eq!(market_side.reserve_ledger.live_reserve, reserve_before.live_reserve);
+            prop_assert_eq!(market_side.reserve_ledger.cash_reserve, reserve_before.cash_reserve);
+        }
+
+        #[test]
+        fn no_stake_fee_credit_carries_lp_fees_without_growth(
+            fee_credit in 1_u64..1_000_000_000_u64,
+            operator_fee_bps in 0_u16..2_000_u16,
+            protocol_fee_bps in 0_u16..2_000_u16,
+        ) {
+            let mut market_side = market_side();
+
+            RecordFeeCredit::new(fee_credit, operator_fee_bps, protocol_fee_bps, NAD)
+                .apply(&mut market_side)
+                .unwrap();
+
+            prop_assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 0);
+            prop_assert_eq!(market_side.fee_ledger.fee_liability, 0);
+            prop_assert_eq!(market_side.fee_ledger.total_liability().unwrap(), fee_credit);
+            market_side.fee_ledger.assert_backed().unwrap();
+        }
     }
 }

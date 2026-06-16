@@ -345,6 +345,7 @@ mod tests {
         constants::{MARKET_VERSION, NAD},
         state::{BufferLedger, MarketAsset, MarketConfig, MarketSide, ReserveLedger},
     };
+    use proptest::prelude::*;
 
     fn market_side(asset_mint: Pubkey) -> MarketSide {
         MarketSide {
@@ -505,5 +506,34 @@ mod tests {
 
         assert_eq!(decrease, 55);
         assert_eq!(80 - decrease, 25);
+    }
+
+    proptest! {
+        #[test]
+        fn recognized_decrease_keeps_remaining_recognition_collateralized(
+            recognized_before in 1_u64..1_000_000_000_u64,
+            collateral_after in 0_u64..1_000_000_000_u64,
+            shares_to_burn in 1_u128..1_000_000_u128,
+            extra_shares in 1_u128..1_000_000_u128,
+        ) {
+            let shares_before = shares_to_burn + extra_shares;
+            let decrease = recognized_decrease_after_seizure(
+                recognized_before,
+                collateral_after,
+                shares_to_burn,
+                shares_before,
+            ).unwrap();
+
+            let recognized_after = recognized_before - decrease;
+            prop_assert!(decrease <= recognized_before);
+            prop_assert!(
+                recognized_after <= collateral_after,
+                "recognized_after={} collateral_after={} recognized_before={} decrease={}",
+                recognized_after,
+                collateral_after,
+                recognized_before,
+                decrease
+            );
+        }
     }
 }
