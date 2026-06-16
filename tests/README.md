@@ -81,6 +81,21 @@ Tests for futarchy authority initialization:
 - IDL loading and inspection
 - Account setup validation
 
+### V2 Market Tests: `v2-market.test.ts`
+
+The V2 suite loads the standalone `omnipair_v2` program into LiteSVM and exercises the market architecture end to end. It is the main integration smoke suite for the V2 PR.
+
+Covered flows include:
+- Market initialization, creator-chosen base/quote ordering, config updates, and reduce-only mode
+- Liquidity add/remove, fixed-principal claim tokens, buffer accounting, and Token-2022 transfer-fee inventory credits
+- Staking, unstaking, staker fee claims, market fee liability claims, and no-stake fee carry-forward
+- Swaps against reserve-floor excess and cached-EMA circuit breaker rejection
+- Collateral deposit/withdraw, fixed debt borrow/repay, recognized collateral health, and same-side idle collateral rejection
+- Insurance funding, liquidation, insurance usage, and LP socialization
+- Hedge token open/claim/close flows and disabled-hedge/circuit-breaker rejection
+
+The V2 suite should keep the smoke coverage report at `19/19` V2 instructions. When adding a V2 instruction, update both the LiteSVM flow and the coverage tracker in `tests/utils/instruction-coverage.ts`.
+
 ## Test Helpers
 
 The `utils/test-helpers.ts` module provides reusable functions:
