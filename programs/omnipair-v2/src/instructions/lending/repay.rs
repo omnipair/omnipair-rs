@@ -10,7 +10,7 @@ use crate::{
     events::{MarketDebtUpdated, MarketEventMetadata, MarketHealthUpdated},
     shared::token::transfer_from_user_to_vault,
     state::{MarginPosition, Market},
-    transitions::debt::Repay,
+    transitions::debt::Repay as RepayTransition,
 };
 
 use crate::instructions::common::{require_supported_asset_mint, token_program_for_mint};
@@ -18,15 +18,15 @@ use crate::instructions::common::{require_supported_asset_mint, token_program_fo
 use super::common::validate_repay_accounts;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct MarketRepayArgs {
+pub struct RepayArgs {
     pub repay_asset_is_asset0: bool,
     pub repay_amount: u64,
 }
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: MarketRepayArgs)]
-pub struct MarketRepay<'info> {
+#[instruction(args: RepayArgs)]
+pub struct Repay<'info> {
     #[account(
         mut,
         seeds = [
@@ -65,8 +65,8 @@ pub struct MarketRepay<'info> {
     pub token_2022_program: Program<'info, Token2022>,
 }
 
-impl<'info> MarketRepay<'info> {
-    pub fn validate(&self, args: &MarketRepayArgs) -> Result<()> {
+impl<'info> Repay<'info> {
+    pub fn validate(&self, args: &RepayArgs) -> Result<()> {
         self.market.assert_started()?;
         require!(args.repay_amount > 0, ErrorCode::AmountZero);
         require_gte!(
@@ -88,7 +88,7 @@ impl<'info> MarketRepay<'info> {
         Ok(())
     }
 
-    pub fn handle_repay(ctx: Context<Self>, args: MarketRepayArgs) -> Result<()> {
+    pub fn handle_repay(ctx: Context<Self>, args: RepayArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let debt_asset_mint_key = ctx.accounts.debt_asset_mint.key();
@@ -116,7 +116,7 @@ impl<'info> MarketRepay<'info> {
             .ok_or(ErrorCode::MarketMathOverflow)?;
         require!(repay_credit > 0, ErrorCode::AmountZero);
 
-        let debt_receipt = Repay::new(args.repay_asset_is_asset0, repay_credit)
+        let debt_receipt = RepayTransition::new(args.repay_asset_is_asset0, repay_credit)
             .apply(&mut ctx.accounts.market, &mut ctx.accounts.margin_position)?;
 
         emit_cpi!(MarketDebtUpdated {

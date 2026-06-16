@@ -88,8 +88,8 @@ pub mod omnipair_v2 {
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn swap(ctx: Context<MarketSwap>, args: MarketSwapArgs) -> Result<()> {
-        MarketSwap::handle_swap(ctx, args)
+    pub fn swap(ctx: Context<Swap>, args: SwapArgs) -> Result<()> {
+        Swap::handle_swap(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
@@ -109,13 +109,13 @@ pub mod omnipair_v2 {
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn borrow(ctx: Context<MarketBorrow>, args: MarketBorrowArgs) -> Result<()> {
-        MarketBorrow::handle_borrow(ctx, args)
+    pub fn borrow(ctx: Context<Borrow>, args: BorrowArgs) -> Result<()> {
+        Borrow::handle_borrow(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn repay(ctx: Context<MarketRepay>, args: MarketRepayArgs) -> Result<()> {
-        MarketRepay::handle_repay(ctx, args)
+    pub fn repay(ctx: Context<Repay>, args: RepayArgs) -> Result<()> {
+        Repay::handle_repay(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
@@ -127,8 +127,8 @@ pub mod omnipair_v2 {
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn liquidate(ctx: Context<MarketLiquidate>, args: MarketLiquidateArgs) -> Result<()> {
-        MarketLiquidate::handle_liquidate(ctx, args)
+    pub fn liquidate(ctx: Context<Liquidate>, args: LiquidateArgs) -> Result<()> {
+        Liquidate::handle_liquidate(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]

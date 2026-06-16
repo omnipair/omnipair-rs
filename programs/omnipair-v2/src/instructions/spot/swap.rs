@@ -17,7 +17,7 @@ use crate::{
         },
     },
     state::Market,
-    transitions::swap::Swap,
+    transitions::swap::Swap as SwapTransition,
 };
 
 use crate::instructions::common::{
@@ -26,7 +26,7 @@ use crate::instructions::common::{
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct MarketSwapArgs {
+pub struct SwapArgs {
     pub asset_in_is_asset0: bool,
     pub exact_asset_in: u64,
     pub min_asset_out: u64,
@@ -34,8 +34,8 @@ pub struct MarketSwapArgs {
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: MarketSwapArgs)]
-pub struct MarketSwap<'info> {
+#[instruction(args: SwapArgs)]
+pub struct Swap<'info> {
     #[account(
         mut,
         seeds = [
@@ -74,8 +74,8 @@ pub struct MarketSwap<'info> {
     pub token_2022_program: Program<'info, Token2022>,
 }
 
-impl<'info> MarketSwap<'info> {
-    pub fn validate(&self, args: &MarketSwapArgs) -> Result<()> {
+impl<'info> Swap<'info> {
+    pub fn validate(&self, args: &SwapArgs) -> Result<()> {
         self.market.assert_live()?;
         require!(args.exact_asset_in > 0, ErrorCode::AmountZero);
         require_gte!(
@@ -100,7 +100,7 @@ impl<'info> MarketSwap<'info> {
         Ok(())
     }
 
-    pub fn handle_swap(mut ctx: Context<Self>, args: MarketSwapArgs) -> Result<()> {
+    pub fn handle_swap(mut ctx: Context<Self>, args: SwapArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let trader_key = ctx.accounts.trader.key();
         let asset_in_mint_key = ctx.accounts.asset_in_mint.key();
@@ -164,7 +164,7 @@ impl<'info> MarketSwap<'info> {
         let swap_receipt = {
             let (market_side_in, market_side_out) =
                 ctx.accounts.market.swap_sides_mut(args.asset_in_is_asset0);
-            Swap::new(
+            SwapTransition::new(
                 amount_in_after_fee,
                 amount_out,
                 fee_credit,
@@ -193,7 +193,7 @@ impl<'info> MarketSwap<'info> {
 }
 
 fn receive_swap_inventory<'info>(
-    ctx: &mut Context<MarketSwap<'info>>,
+    ctx: &mut Context<Swap<'info>>,
     exact_asset_in: u64,
 ) -> Result<u64> {
     let reserve_balance_before = ctx.accounts.reserve_in_vault.amount;
@@ -219,7 +219,7 @@ fn receive_swap_inventory<'info>(
         .ok_or(ErrorCode::MarketMathOverflow.into())
 }
 
-fn move_swap_fee<'info>(ctx: &mut Context<MarketSwap<'info>>, total_fee: u64) -> Result<u64> {
+fn move_swap_fee<'info>(ctx: &mut Context<Swap<'info>>, total_fee: u64) -> Result<u64> {
     if total_fee == 0 {
         return Ok(0);
     }

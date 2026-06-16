@@ -21,7 +21,7 @@ use crate::instructions::common::{
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct MarketLiquidateArgs {
+pub struct LiquidateArgs {
     pub debt_asset_is_asset0: bool,
     pub repay_amount: u64,
     pub min_collateral_out: u64,
@@ -31,8 +31,8 @@ pub struct MarketLiquidateArgs {
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: MarketLiquidateArgs)]
-pub struct MarketLiquidate<'info> {
+#[instruction(args: LiquidateArgs)]
+pub struct Liquidate<'info> {
     #[account(
         mut,
         seeds = [
@@ -82,8 +82,8 @@ pub struct MarketLiquidate<'info> {
     pub token_2022_program: Program<'info, Token2022>,
 }
 
-impl<'info> MarketLiquidate<'info> {
-    pub fn validate(&self, args: &MarketLiquidateArgs) -> Result<()> {
+impl<'info> Liquidate<'info> {
+    pub fn validate(&self, args: &LiquidateArgs) -> Result<()> {
         self.market.assert_started()?;
         require!(args.repay_amount > 0, ErrorCode::AmountZero);
         require_gte!(
@@ -120,7 +120,7 @@ impl<'info> MarketLiquidate<'info> {
         Ok(())
     }
 
-    pub fn handle_liquidate(ctx: Context<Self>, args: MarketLiquidateArgs) -> Result<()> {
+    pub fn handle_liquidate(ctx: Context<Self>, args: LiquidateArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let borrower_key = ctx.accounts.margin_position.owner;
         let liquidator_key = ctx.accounts.liquidator.key();

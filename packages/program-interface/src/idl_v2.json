@@ -309,7 +309,7 @@
           "name": "args",
           "type": {
             "defined": {
-              "name": "MarketBorrowArgs"
+              "name": "BorrowArgs"
             }
           }
         }
@@ -1842,7 +1842,7 @@
           "name": "args",
           "type": {
             "defined": {
-              "name": "MarketLiquidateArgs"
+              "name": "LiquidateArgs"
             }
           }
         }
@@ -2285,7 +2285,7 @@
           "name": "args",
           "type": {
             "defined": {
-              "name": "MarketRepayArgs"
+              "name": "RepayArgs"
             }
           }
         }
@@ -2667,7 +2667,7 @@
           "name": "args",
           "type": {
             "defined": {
-              "name": "MarketSwapArgs"
+              "name": "SwapArgs"
             }
           }
         }
@@ -3854,6 +3854,30 @@
   ],
   "types": [
     {
+      "name": "BorrowArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "borrow_asset_is_asset0",
+            "type": "bool"
+          },
+          {
+            "name": "borrow_amount",
+            "type": "u64"
+          },
+          {
+            "name": "min_debt_amount_out",
+            "type": "u64"
+          },
+          {
+            "name": "min_health_bps",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "BufferLedger",
       "type": {
         "kind": "struct",
@@ -4219,6 +4243,34 @@
       }
     },
     {
+      "name": "LiquidateArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "debt_asset_is_asset0",
+            "type": "bool"
+          },
+          {
+            "name": "repay_amount",
+            "type": "u64"
+          },
+          {
+            "name": "min_collateral_out",
+            "type": "u64"
+          },
+          {
+            "name": "max_insurance_draw",
+            "type": "u64"
+          },
+          {
+            "name": "max_socialized_loss",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "MarginPosition",
       "type": {
         "kind": "struct",
@@ -4371,30 +4423,6 @@
           {
             "name": "bump",
             "type": "u8"
-          }
-        ]
-      }
-    },
-    {
-      "name": "MarketBorrowArgs",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "borrow_asset_is_asset0",
-            "type": "bool"
-          },
-          {
-            "name": "borrow_amount",
-            "type": "u64"
-          },
-          {
-            "name": "min_debt_amount_out",
-            "type": "u64"
-          },
-          {
-            "name": "min_health_bps",
-            "type": "u64"
           }
         ]
       }
@@ -5099,34 +5127,6 @@
       }
     },
     {
-      "name": "MarketLiquidateArgs",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "debt_asset_is_asset0",
-            "type": "bool"
-          },
-          {
-            "name": "repay_amount",
-            "type": "u64"
-          },
-          {
-            "name": "min_collateral_out",
-            "type": "u64"
-          },
-          {
-            "name": "max_insurance_draw",
-            "type": "u64"
-          },
-          {
-            "name": "max_socialized_loss",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
       "name": "MarketLiquidated",
       "type": {
         "kind": "struct",
@@ -5178,22 +5178,6 @@
                 "name": "MarketEventMetadata"
               }
             }
-          }
-        ]
-      }
-    },
-    {
-      "name": "MarketRepayArgs",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "repay_asset_is_asset0",
-            "type": "bool"
-          },
-          {
-            "name": "repay_amount",
-            "type": "u64"
           }
         ]
       }
@@ -5375,26 +5359,6 @@
       }
     },
     {
-      "name": "MarketSwapArgs",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "asset_in_is_asset0",
-            "type": "bool"
-          },
-          {
-            "name": "exact_asset_in",
-            "type": "u64"
-          },
-          {
-            "name": "min_asset_out",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
       "name": "MarketSwapEvent",
       "type": {
         "kind": "struct",
@@ -5533,6 +5497,22 @@
           },
           {
             "name": "min_asset_amount_out",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RepayArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "repay_asset_is_asset0",
+            "type": "bool"
+          },
+          {
+            "name": "repay_amount",
             "type": "u64"
           }
         ]
@@ -5702,6 +5682,26 @@
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SwapArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "asset_in_is_asset0",
+            "type": "bool"
+          },
+          {
+            "name": "exact_asset_in",
+            "type": "u64"
+          },
+          {
+            "name": "min_asset_out",
+            "type": "u64"
           }
         ]
       }

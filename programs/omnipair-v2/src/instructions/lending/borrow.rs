@@ -11,7 +11,7 @@ use crate::{
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
     state::{MarginPosition, Market},
-    transitions::debt::Borrow,
+    transitions::debt::Borrow as BorrowTransition,
 };
 
 use crate::instructions::common::{
@@ -21,7 +21,7 @@ use crate::instructions::common::{
 use super::common::validate_borrow_accounts;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct MarketBorrowArgs {
+pub struct BorrowArgs {
     pub borrow_asset_is_asset0: bool,
     pub borrow_amount: u64,
     pub min_debt_amount_out: u64,
@@ -30,8 +30,8 @@ pub struct MarketBorrowArgs {
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: MarketBorrowArgs)]
-pub struct MarketBorrow<'info> {
+#[instruction(args: BorrowArgs)]
+pub struct Borrow<'info> {
     #[account(
         mut,
         seeds = [
@@ -72,8 +72,8 @@ pub struct MarketBorrow<'info> {
     pub token_2022_program: Program<'info, Token2022>,
 }
 
-impl<'info> MarketBorrow<'info> {
-    pub fn validate(&self, args: &MarketBorrowArgs) -> Result<()> {
+impl<'info> Borrow<'info> {
+    pub fn validate(&self, args: &BorrowArgs) -> Result<()> {
         self.market.assert_live()?;
         require!(
             !self.market.config.soft_borrow_enabled,
@@ -100,12 +100,12 @@ impl<'info> MarketBorrow<'info> {
         Ok(())
     }
 
-    pub fn handle_borrow(ctx: Context<Self>, args: MarketBorrowArgs) -> Result<()> {
+    pub fn handle_borrow(ctx: Context<Self>, args: BorrowArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let debt_asset_mint_key = ctx.accounts.debt_asset_mint.key();
 
-        let debt_receipt = Borrow::new(
+        let debt_receipt = BorrowTransition::new(
             args.borrow_asset_is_asset0,
             args.borrow_amount,
             args.min_health_bps,

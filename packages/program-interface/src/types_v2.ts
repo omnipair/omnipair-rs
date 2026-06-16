@@ -315,7 +315,7 @@ export type OmnipairV2 = {
           "name": "args",
           "type": {
             "defined": {
-              "name": "marketBorrowArgs"
+              "name": "borrowArgs"
             }
           }
         }
@@ -1848,7 +1848,7 @@ export type OmnipairV2 = {
           "name": "args",
           "type": {
             "defined": {
-              "name": "marketLiquidateArgs"
+              "name": "liquidateArgs"
             }
           }
         }
@@ -2291,7 +2291,7 @@ export type OmnipairV2 = {
           "name": "args",
           "type": {
             "defined": {
-              "name": "marketRepayArgs"
+              "name": "repayArgs"
             }
           }
         }
@@ -2673,7 +2673,7 @@ export type OmnipairV2 = {
           "name": "args",
           "type": {
             "defined": {
-              "name": "marketSwapArgs"
+              "name": "swapArgs"
             }
           }
         }
@@ -3860,6 +3860,30 @@ export type OmnipairV2 = {
   ],
   "types": [
     {
+      "name": "borrowArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "borrowAssetIsAsset0",
+            "type": "bool"
+          },
+          {
+            "name": "borrowAmount",
+            "type": "u64"
+          },
+          {
+            "name": "minDebtAmountOut",
+            "type": "u64"
+          },
+          {
+            "name": "minHealthBps",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "bufferLedger",
       "type": {
         "kind": "struct",
@@ -4225,6 +4249,34 @@ export type OmnipairV2 = {
       }
     },
     {
+      "name": "liquidateArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "debtAssetIsAsset0",
+            "type": "bool"
+          },
+          {
+            "name": "repayAmount",
+            "type": "u64"
+          },
+          {
+            "name": "minCollateralOut",
+            "type": "u64"
+          },
+          {
+            "name": "maxInsuranceDraw",
+            "type": "u64"
+          },
+          {
+            "name": "maxSocializedLoss",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "marginPosition",
       "type": {
         "kind": "struct",
@@ -4377,30 +4429,6 @@ export type OmnipairV2 = {
           {
             "name": "bump",
             "type": "u8"
-          }
-        ]
-      }
-    },
-    {
-      "name": "marketBorrowArgs",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "borrowAssetIsAsset0",
-            "type": "bool"
-          },
-          {
-            "name": "borrowAmount",
-            "type": "u64"
-          },
-          {
-            "name": "minDebtAmountOut",
-            "type": "u64"
-          },
-          {
-            "name": "minHealthBps",
-            "type": "u64"
           }
         ]
       }
@@ -5105,34 +5133,6 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "marketLiquidateArgs",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "debtAssetIsAsset0",
-            "type": "bool"
-          },
-          {
-            "name": "repayAmount",
-            "type": "u64"
-          },
-          {
-            "name": "minCollateralOut",
-            "type": "u64"
-          },
-          {
-            "name": "maxInsuranceDraw",
-            "type": "u64"
-          },
-          {
-            "name": "maxSocializedLoss",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
       "name": "marketLiquidated",
       "type": {
         "kind": "struct",
@@ -5184,22 +5184,6 @@ export type OmnipairV2 = {
                 "name": "marketEventMetadata"
               }
             }
-          }
-        ]
-      }
-    },
-    {
-      "name": "marketRepayArgs",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "repayAssetIsAsset0",
-            "type": "bool"
-          },
-          {
-            "name": "repayAmount",
-            "type": "u64"
           }
         ]
       }
@@ -5381,26 +5365,6 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "marketSwapArgs",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "assetInIsAsset0",
-            "type": "bool"
-          },
-          {
-            "name": "exactAssetIn",
-            "type": "u64"
-          },
-          {
-            "name": "minAssetOut",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
       "name": "marketSwapEvent",
       "type": {
         "kind": "struct",
@@ -5539,6 +5503,22 @@ export type OmnipairV2 = {
           },
           {
             "name": "minAssetAmountOut",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "repayArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "repayAssetIsAsset0",
+            "type": "bool"
+          },
+          {
+            "name": "repayAmount",
             "type": "u64"
           }
         ]
@@ -5708,6 +5688,26 @@ export type OmnipairV2 = {
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "swapArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "assetInIsAsset0",
+            "type": "bool"
+          },
+          {
+            "name": "exactAssetIn",
+            "type": "u64"
+          },
+          {
+            "name": "minAssetOut",
+            "type": "u64"
           }
         ]
       }
