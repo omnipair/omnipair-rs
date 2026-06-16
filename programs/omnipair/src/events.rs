@@ -225,6 +225,16 @@ pub struct MarketHedgeClosed {
 }
 
 #[event]
+pub struct MarketHedgeFeesClaimed {
+    pub market: Pubkey,
+    pub owner: Pubkey,
+    pub asset_mint: Pubkey,
+    pub fee_amount: u64,
+    pub remaining_fee_liability: u64,
+    pub metadata: MarketEventMetadata,
+}
+
+#[event]
 pub struct SwapEvent {
     pub reserve0: u64,
     pub reserve1: u64,

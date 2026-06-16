@@ -115,6 +115,15 @@ impl<'info> CloseHedge<'info> {
         ctx.accounts.market.refresh_risk_book()?;
         ctx.accounts.market.assert_risk_circuit_breakers()?;
 
+        let hedged_fee_growth_index_nad = {
+            let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
+            market_side.carry_forward_unallocated_hedged_fee()?;
+            market_side.fee_ledger.hedged_fee_growth_index_nad
+        };
+        ctx.accounts
+            .hedge_position
+            .accrue_fees(hedged_fee_growth_index_nad)?;
+
         let hedge_token_program = token_program_for_mint(
             &ctx.accounts.hedge_mint,
             &ctx.accounts.token_program,

@@ -192,6 +192,11 @@ pub mod omnipair {
         CloseHedge::handle_close(ctx, args)
     }
 
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn claim_hedge_fees(ctx: Context<ClaimHedgeFees>, args: ClaimHedgeFeesArgs) -> Result<()> {
+        ClaimHedgeFees::handle_claim(ctx, args)
+    }
+
     // Pair instructions
     #[access_control(ctx.accounts.validate(&args))]
     pub fn initialize(ctx: Context<InitializeAndBootstrap>, args: InitializeAndBootstrapArgs) -> Result<()> {

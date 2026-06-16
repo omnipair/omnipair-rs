@@ -2502,17 +2502,38 @@ describe("Omnipair Market LiteSVM", () => {
 
   it("opens and closes hedged market claim wrappers", async () => {
     trackInstruction("openHedge", "wraps market claims into hedged claim tokens");
+    trackInstruction("claimHedgeFees", "claims routed hedged market fees");
     trackInstruction("closeHedge", "unwraps hedged claim tokens into market claims");
 
     const {
       asset0Mint,
+      asset1Mint,
       claim0Mint,
       hedge0Mint,
       market,
+      reserve0Vault,
+      reserve1Vault,
+      fee0Vault,
       hedge0Vault,
+      ownerAsset0Account,
+      ownerAsset1Account,
       ownerClaim0Account,
       eventAuthority,
-    } = await fundTwoSidedMarket();
+    } = await fundTinyRoundingMarket();
+    const hedgeFeeConfig = marketConfig();
+    hedgeFeeConfig.spotEmaDivergenceBps = 10_000;
+    hedgeFeeConfig.kEmaDrawdownBps = 10_000;
+    await program.methods
+      .updateMarketConfig({ config: hedgeFeeConfig })
+      .accounts({
+        market,
+        operator: payer.publicKey,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
     const ownerHedge0Account = await createAccount(
       connection as any,
       payer,
@@ -2529,8 +2550,8 @@ describe("Omnipair Market LiteSVM", () => {
     await program.methods
       .openHedge({
         marketSideIndex: 0,
-        claimAmount: new BN(200_000),
-        minHedgeAmount: new BN(200_000),
+        claimAmount: new BN(1),
+        minHedgeAmount: new BN(1),
       })
       .accounts({
         market,
@@ -2552,14 +2573,66 @@ describe("Omnipair Market LiteSVM", () => {
       .rpc();
 
     expect((await getAccount(connection as any, ownerClaim0Account)).amount).to.equal(
-      BigInt(600_000)
+      BigInt(3)
     );
     expect((await getAccount(connection as any, ownerHedge0Account)).amount).to.equal(
-      BigInt(200_000)
+      BigInt(1)
     );
     expect((await getAccount(connection as any, hedge0Vault)).amount).to.equal(
-      BigInt(200_000)
+      BigInt(1)
     );
+
+    await program.methods
+      .marketSwap({
+        assetInIsAsset0: true,
+        exactAssetIn: new BN(3),
+        minAssetOut: new BN(1),
+      })
+      .accounts({
+        market,
+        trader: payer.publicKey,
+        assetInMint: asset0Mint,
+        assetOutMint: asset1Mint,
+        reserveInVault: reserve0Vault,
+        reserveOutVault: reserve1Vault,
+        feeInVault: fee0Vault,
+        traderAssetInAccount: ownerAsset0Account,
+        traderAssetOutAccount: ownerAsset1Account,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    const ownerAsset0BeforeHedgeFeeClaim = (await getAccount(
+      connection as any,
+      ownerAsset0Account
+    )).amount;
+    await program.methods
+      .claimHedgeFees({
+        marketSideIndex: 0,
+        minFeeAmount: new BN(1),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        assetMint: asset0Mint,
+        feeVault: fee0Vault,
+        ownerFeeAccount: ownerAsset0Account,
+        hedgePosition: hedge0Position,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+    expect(
+      (await getAccount(connection as any, ownerAsset0Account)).amount >
+        ownerAsset0BeforeHedgeFeeClaim
+    ).to.equal(true);
 
     await program.methods
       .setMarketReduceOnly({ reduceOnly: true })
@@ -2576,8 +2649,8 @@ describe("Omnipair Market LiteSVM", () => {
       program.methods
         .openHedge({
           marketSideIndex: 0,
-          claimAmount: new BN(10_000),
-          minHedgeAmount: new BN(10_000),
+          claimAmount: new BN(1),
+          minHedgeAmount: new BN(1),
         })
         .accounts({
           market,
@@ -2602,8 +2675,8 @@ describe("Omnipair Market LiteSVM", () => {
     await program.methods
       .closeHedge({
         marketSideIndex: 0,
-        hedgeAmount: new BN(50_000),
-        minClaimAmountOut: new BN(50_000),
+        hedgeAmount: new BN(1),
+        minClaimAmountOut: new BN(1),
       })
       .accounts({
         market,
@@ -2624,13 +2697,13 @@ describe("Omnipair Market LiteSVM", () => {
       .rpc();
 
     expect((await getAccount(connection as any, ownerClaim0Account)).amount).to.equal(
-      BigInt(650_000)
+      BigInt(4)
     );
     expect((await getAccount(connection as any, ownerHedge0Account)).amount).to.equal(
-      BigInt(150_000)
+      BigInt(0)
     );
     expect((await getAccount(connection as any, hedge0Vault)).amount).to.equal(
-      BigInt(150_000)
+      BigInt(0)
     );
   });
 

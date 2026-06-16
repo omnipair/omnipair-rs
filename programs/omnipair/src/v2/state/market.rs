@@ -100,9 +100,12 @@ pub struct BufferBook {
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct FeeLedger {
     pub fee_growth_index_nad: u128,
+    pub hedged_fee_growth_index_nad: u128,
     pub fee_vault_balance: u64,
     pub fee_liability: u64,
+    pub hedged_fee_liability: u64,
     pub unallocated_fee_liability: u64,
+    pub unallocated_hedged_fee_liability: u64,
     pub protocol_fee_liability: u64,
     pub operator_fee_liability: u64,
 }
@@ -125,7 +128,9 @@ impl MarketFeeClaimKind {
 impl FeeLedger {
     pub fn total_liability(&self) -> Result<u64> {
         self.fee_liability
-            .checked_add(self.protocol_fee_liability)
+            .checked_add(self.hedged_fee_liability)
+            .and_then(|value| value.checked_add(self.unallocated_hedged_fee_liability))
+            .and_then(|value| value.checked_add(self.protocol_fee_liability))
             .and_then(|value| value.checked_add(self.operator_fee_liability))
             .and_then(|value| value.checked_add(self.unallocated_fee_liability))
             .ok_or(ErrorCode::MarketMathOverflow.into())
@@ -392,11 +397,7 @@ impl MarketSide {
             .checked_add(operator_fee)
             .ok_or(ErrorCode::MarketMathOverflow)?;
         let (free_lp_fee, routed_fee) = self.routed_lp_fee(lp_fee, fee_routing_k_nad)?;
-        self.fee_ledger.protocol_fee_liability = self
-            .fee_ledger
-            .protocol_fee_liability
-            .checked_add(routed_fee)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
+        self.record_hedged_fee_credit(routed_fee)?;
 
         let active_units = active_stake_units(
             self.claim_ledger.staked_claim_supply,
@@ -422,6 +423,10 @@ impl MarketSide {
             self.buffer_book.buffer_ratio_bps,
         )?;
         self.carry_forward_unallocated_fee_with_units(active_units)
+    }
+
+    pub fn carry_forward_unallocated_hedged_fee(&mut self) -> Result<()> {
+        self.carry_forward_unallocated_hedged_fee_with_supply(self.claim_ledger.hedged_claim_supply)
     }
 
     fn carry_forward_unallocated_fee_with_units(&mut self, active_units: u64) -> Result<()> {
@@ -463,6 +468,60 @@ impl MarketSide {
         Ok(())
     }
 
+    fn record_hedged_fee_credit(&mut self, fee_amount: u64) -> Result<()> {
+        if fee_amount == 0 {
+            return Ok(());
+        }
+        self.fee_ledger.unallocated_hedged_fee_liability = self
+            .fee_ledger
+            .unallocated_hedged_fee_liability
+            .checked_add(fee_amount)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        self.carry_forward_unallocated_hedged_fee_with_supply(self.claim_ledger.hedged_claim_supply)
+    }
+
+    fn carry_forward_unallocated_hedged_fee_with_supply(
+        &mut self,
+        hedged_claim_supply: u64,
+    ) -> Result<()> {
+        if hedged_claim_supply == 0 || self.fee_ledger.unallocated_hedged_fee_liability == 0 {
+            return Ok(());
+        }
+
+        let fee_amount = self.fee_ledger.unallocated_hedged_fee_liability;
+        self.fee_ledger.unallocated_hedged_fee_liability = 0;
+        let index_delta = (fee_amount as u128)
+            .checked_mul(NAD as u128)
+            .and_then(|value| value.checked_div(hedged_claim_supply as u128))
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        let allocated_fee = index_delta
+            .checked_mul(hedged_claim_supply as u128)
+            .and_then(|value| value.checked_div(NAD as u128))
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        let allocated_fee =
+            u64::try_from(allocated_fee).map_err(|_| ErrorCode::MarketMathOverflow)?;
+        let unallocated_fee = fee_amount
+            .checked_sub(allocated_fee)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+
+        self.fee_ledger.hedged_fee_growth_index_nad = self
+            .fee_ledger
+            .hedged_fee_growth_index_nad
+            .checked_add(index_delta)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        self.fee_ledger.hedged_fee_liability = self
+            .fee_ledger
+            .hedged_fee_liability
+            .checked_add(allocated_fee)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        self.fee_ledger.unallocated_hedged_fee_liability = self
+            .fee_ledger
+            .unallocated_hedged_fee_liability
+            .checked_add(unallocated_fee)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        Ok(())
+    }
+
     fn routed_lp_fee(&self, lp_fee: u64, fee_routing_k_nad: u64) -> Result<(u64, u64)> {
         if lp_fee == 0 || self.claim_ledger.hedged_claim_supply == 0 {
             return Ok((lp_fee, 0));
@@ -480,8 +539,7 @@ impl MarketSide {
             .checked_mul(free_share_nad)
             .and_then(|value| value.checked_div(NAD as u128))
             .ok_or(ErrorCode::MarketMathOverflow)?;
-        let free_lp_fee =
-            u64::try_from(free_lp_fee).map_err(|_| ErrorCode::MarketMathOverflow)?;
+        let free_lp_fee = u64::try_from(free_lp_fee).map_err(|_| ErrorCode::MarketMathOverflow)?;
         let routed_fee = lp_fee
             .checked_sub(free_lp_fee)
             .ok_or(ErrorCode::MarketMathOverflow)?;
@@ -882,6 +940,8 @@ pub struct HedgePosition {
     pub market: Pubkey,
     pub asset_mint: Pubkey,
     pub hedged_claim_amount: u64,
+    pub fee_growth_checkpoint_nad: u128,
+    pub accrued_fee_amount: u64,
     pub bump: u8,
 }
 
@@ -903,6 +963,20 @@ impl HedgePosition {
         require_keys_eq!(self.owner, owner, ErrorCode::InvalidHedgePosition);
         require_keys_eq!(self.market, market, ErrorCode::InvalidHedgePosition);
         require_keys_eq!(self.asset_mint, asset_mint, ErrorCode::InvalidHedgePosition);
+        Ok(())
+    }
+
+    pub fn accrue_fees(&mut self, hedged_fee_growth_index_nad: u128) -> Result<()> {
+        let accrued_amount = accrue_fee_liability(
+            self.hedged_claim_amount,
+            hedged_fee_growth_index_nad,
+            self.fee_growth_checkpoint_nad,
+        )?;
+        self.accrued_fee_amount = self
+            .accrued_fee_amount
+            .checked_add(accrued_amount)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        self.fee_growth_checkpoint_nad = hedged_fee_growth_index_nad;
         Ok(())
     }
 
@@ -2023,6 +2097,8 @@ mod tests {
             market: Pubkey::new_unique(),
             asset_mint: Pubkey::new_unique(),
             hedged_claim_amount: 0,
+            fee_growth_checkpoint_nad: 0,
+            accrued_fee_amount: 0,
             bump: 1,
         }
     }
@@ -2199,7 +2275,7 @@ mod tests {
     }
 
     #[test]
-    fn fee_ledger_routes_pressure_share_to_protocol_liability() {
+    fn fee_ledger_routes_pressure_share_to_hedged_liability() {
         let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
         market_side.reserve_ledger.live_reserve = 1_000_000;
         market_side.claim_ledger.protected_claim_supply = 800_000;
@@ -2210,7 +2286,9 @@ mod tests {
         market_side.record_fee_credit(1_000, 0, NAD).unwrap();
 
         assert_eq!(market_side.fee_ledger.fee_vault_balance, 1_000);
-        assert!(market_side.fee_ledger.protocol_fee_liability > 0);
+        assert_eq!(market_side.fee_ledger.protocol_fee_liability, 0);
+        assert!(market_side.fee_ledger.hedged_fee_liability > 0);
+        assert!(market_side.fee_ledger.hedged_fee_growth_index_nad > 0);
         assert!(market_side.fee_ledger.fee_liability < 1_000);
         assert_eq!(
             market_side.fee_ledger.total_liability().unwrap(),
@@ -2330,6 +2408,20 @@ mod tests {
             .unwrap();
         assert_eq!(position.hedged_claim_amount, 375_000);
         assert_eq!(market_side.claim_ledger.hedged_claim_supply, 375_000);
+    }
+
+    #[test]
+    fn hedge_position_accrues_checkpointed_routed_fees() {
+        let mut position = hedge_position();
+        position.increase(200_000).unwrap();
+        position.fee_growth_checkpoint_nad = NAD as u128;
+
+        position.accrue_fees(4 * NAD as u128).unwrap();
+        assert_eq!(position.accrued_fee_amount, 600_000);
+        assert_eq!(position.fee_growth_checkpoint_nad, 4 * NAD as u128);
+
+        position.accrue_fees(4 * NAD as u128).unwrap();
+        assert_eq!(position.accrued_fee_amount, 600_000);
     }
 
     #[test]

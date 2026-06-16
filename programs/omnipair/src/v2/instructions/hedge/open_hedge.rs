@@ -122,6 +122,12 @@ impl<'info> OpenHedge<'info> {
         ctx.accounts.market.refresh_risk_book()?;
         ctx.accounts.market.assert_risk_circuit_breakers()?;
 
+        let hedged_fee_growth_index_nad = {
+            let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
+            market_side.carry_forward_unallocated_hedged_fee()?;
+            market_side.fee_ledger.hedged_fee_growth_index_nad
+        };
+
         if !ctx.accounts.hedge_position.is_initialized() {
             ctx.accounts.hedge_position.initialize(
                 owner_key,
@@ -133,6 +139,9 @@ impl<'info> OpenHedge<'info> {
         ctx.accounts
             .hedge_position
             .assert_position(owner_key, market_key, asset_mint_key)?;
+        ctx.accounts
+            .hedge_position
+            .accrue_fees(hedged_fee_growth_index_nad)?;
 
         let hedge_vault_before = ctx.accounts.hedge_vault.amount;
         let claim_token_program = token_program_for_mint(
