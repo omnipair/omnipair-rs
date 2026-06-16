@@ -1,5 +1,9 @@
 use anchor_lang::prelude::*;
 
+use super::{
+    DailyLimitBook, DebtBook, FeeLedger, HedgePosition, InsuranceReserve, MarginPosition,
+    MarketFeeClaimKind, MarketHealth, MarketSide, RecognitionLedger, RiskBook, StakePosition,
+};
 use crate::constants::*;
 use crate::errors::ErrorCode;
 use crate::shared::math::{ceil_div, slots_to_ms, taylor_exp, SqrtU128};
@@ -75,47 +79,6 @@ fn half_life_in_bounds(half_life_ms: u64) -> bool {
     (MIN_HALF_LIFE_MS..=MAX_HALF_LIFE_MS).contains(&half_life_ms)
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
-pub struct ReserveLedger {
-    pub live_reserve: u64,
-    pub cash_reserve: u64,
-    pub reserved_liability: u64,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
-pub struct ClaimLedger {
-    pub protected_claim_supply: u64,
-    pub hedged_claim_supply: u64,
-    pub staked_claim_supply: u64,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
-pub struct BufferBook {
-    pub buffer_shares: u64,
-    pub staked_buffer_shares: u64,
-    pub required_buffer: u64,
-    pub buffer_ratio_bps: u16,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
-pub struct FeeLedger {
-    pub fee_growth_index_nad: u128,
-    pub hedged_fee_growth_index_nad: u128,
-    pub fee_vault_balance: u64,
-    pub fee_liability: u64,
-    pub hedged_fee_liability: u64,
-    pub unallocated_fee_liability: u64,
-    pub unallocated_hedged_fee_liability: u64,
-    pub protocol_fee_liability: u64,
-    pub operator_fee_liability: u64,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
-pub enum MarketFeeClaimKind {
-    Operator,
-    Protocol,
-}
-
 impl MarketFeeClaimKind {
     pub fn event_code(self) -> u8 {
         match self {
@@ -163,13 +126,6 @@ impl FeeLedger {
     }
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
-pub struct DailyLimitBook {
-    pub borrowed_bucket: u64,
-    pub withdrawn_bucket: u64,
-    pub last_decay_slot: u64,
-}
-
 impl DailyLimitBook {
     pub fn decay_to_slot(&mut self, current_slot: u64) -> Result<()> {
         self.borrowed_bucket =
@@ -201,24 +157,6 @@ impl DailyLimitBook {
         self.withdrawn_bucket = next_bucket;
         Ok(())
     }
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
-pub struct MarketSide {
-    pub asset_mint: Pubkey,
-    pub asset_decimals: u8,
-    pub claim_mint: Pubkey,
-    pub hedge_mint: Pubkey,
-    pub hedge_vault: Pubkey,
-    pub reserve_vault: Pubkey,
-    pub collateral_vault: Pubkey,
-    pub fee_vault: Pubkey,
-    pub stake_vault: Pubkey,
-    pub reserve_ledger: ReserveLedger,
-    pub claim_ledger: ClaimLedger,
-    pub buffer_book: BufferBook,
-    pub fee_ledger: FeeLedger,
-    pub daily_limit_book: DailyLimitBook,
 }
 
 impl MarketSide {
@@ -547,16 +485,6 @@ impl MarketSide {
     }
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
-pub struct DebtBook {
-    pub fixed_debt0_shares: u128,
-    pub fixed_debt1_shares: u128,
-    pub soft_debt0_shares: u128,
-    pub soft_debt1_shares: u128,
-    pub borrow_index0_nad: u128,
-    pub borrow_index1_nad: u128,
-}
-
 impl DebtBook {
     pub fn debt_to_shares(amount: u64, borrow_index_nad: u128) -> Result<u128> {
         require!(amount > 0, ErrorCode::AmountZero);
@@ -609,25 +537,6 @@ impl DebtBook {
             .checked_add(self.soft_debt1()?)
             .ok_or(ErrorCode::MarketMathOverflow.into())
     }
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
-pub struct RiskBook {
-    pub price0_ema_nad: u64,
-    pub price1_ema_nad: u64,
-    pub directional_price0_ema_nad: u64,
-    pub directional_price1_ema_nad: u64,
-    pub cached_spot_price0_nad: u64,
-    pub cached_spot_price1_nad: u64,
-    pub cached_k_nad: u128,
-    pub cached_liquidity_nad: u128,
-    pub cached_liquidity0_nad: u128,
-    pub cached_liquidity1_nad: u128,
-    pub k_ema: u128,
-    pub liquidity_ema: u128,
-    pub liquidity0_ema: u128,
-    pub liquidity1_ema: u128,
-    pub last_snapshot_slot: u64,
 }
 
 impl RiskBook {
@@ -740,45 +649,6 @@ impl RiskBook {
     }
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
-pub struct MarketHealth {
-    pub recognized_collateral0_for_debt1: u64,
-    pub recognized_collateral1_for_debt0: u64,
-    pub effective_debt0_nad: u128,
-    pub effective_debt1_nad: u128,
-    pub health0_bps: u64,
-    pub health1_bps: u64,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
-pub struct InsuranceReserve {
-    pub vault0: Pubkey,
-    pub vault1: Pubkey,
-    pub available0: u64,
-    pub available1: u64,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
-pub struct RecognitionLedger {
-    pub debt_bearing_collateral0_for_debt1: u64,
-    pub debt_bearing_collateral1_for_debt0: u64,
-    pub last_recognition_slot: u64,
-}
-
-#[account]
-#[derive(InitSpace)]
-pub struct MarginPosition {
-    pub owner: Pubkey,
-    pub market: Pubkey,
-    pub collateral0: u64,
-    pub collateral1: u64,
-    pub recognized_collateral0_for_debt1: u64,
-    pub recognized_collateral1_for_debt0: u64,
-    pub fixed_debt0_shares: u128,
-    pub fixed_debt1_shares: u128,
-    pub bump: u8,
-}
-
 impl MarginPosition {
     pub fn initialize(&mut self, owner: Pubkey, market: Pubkey, bump: u8) {
         self.owner = owner;
@@ -815,20 +685,6 @@ impl MarginPosition {
     pub fn fixed_debt1(&self, debt_book: &DebtBook) -> Result<u128> {
         DebtBook::shares_to_debt(self.fixed_debt1_shares, debt_book.borrow_index1_nad)
     }
-}
-
-#[account]
-#[derive(InitSpace)]
-pub struct StakePosition {
-    pub owner: Pubkey,
-    pub market: Pubkey,
-    pub asset_mint: Pubkey,
-    pub available_buffer_shares: u64,
-    pub staked_claim_amount: u64,
-    pub staked_buffer_shares: u64,
-    pub fee_growth_checkpoint_nad: u128,
-    pub accrued_fee_amount: u64,
-    pub bump: u8,
 }
 
 impl StakePosition {
@@ -931,18 +787,6 @@ impl StakePosition {
             .ok_or(ErrorCode::MarketMathOverflow)?;
         Ok(())
     }
-}
-
-#[account]
-#[derive(InitSpace)]
-pub struct HedgePosition {
-    pub owner: Pubkey,
-    pub market: Pubkey,
-    pub asset_mint: Pubkey,
-    pub hedged_claim_amount: u64,
-    pub fee_growth_checkpoint_nad: u128,
-    pub accrued_fee_amount: u64,
-    pub bump: u8,
 }
 
 impl HedgePosition {
@@ -2016,6 +1860,7 @@ macro_rules! generate_market_seeds {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::BufferBook;
 
     fn test_market_side(asset_mint: Pubkey, buffer_ratio_bps: u16) -> MarketSide {
         MarketSide {
