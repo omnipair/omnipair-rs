@@ -3178,6 +3178,136 @@ describe("Omnipair Market LiteSVM", () => {
     };
   }
 
+  it("rejects liquidations while fixed market debt is healthy", async () => {
+    const {
+      asset0Mint,
+      asset1Mint,
+      market,
+      reserve0Vault,
+      collateral1Vault,
+      insurance0Vault,
+      ownerAsset0Account,
+      ownerAsset1Account,
+      eventAuthority,
+    } = await fundRoundedBorrowMarket();
+    const marginPosition = deriveAddress(
+      Buffer.from("margin"),
+      market.toBuffer(),
+      payer.publicKey.toBuffer()
+    );
+
+    await program.methods
+      .depositCollateral({
+        marketSideIndex: 1,
+        depositAmount: new BN(60),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        assetMint: asset1Mint,
+        collateralVault: collateral1Vault,
+        ownerAssetAccount: ownerAsset1Account,
+        marginPosition,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await program.methods
+      .marketBorrow({
+        borrowAssetIsAsset0: true,
+        borrowAmount: new BN(5),
+        minDebtAmountOut: new BN(5),
+        minHealthBps: new BN(11_000),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        debtAssetMint: asset0Mint,
+        collateralAssetMint: asset1Mint,
+        reserveVault: reserve0Vault,
+        ownerDebtAccount: ownerAsset0Account,
+        marginPosition,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
+      .rpc();
+
+    const liquidator = Keypair.generate();
+    await connection.requestAirdrop(liquidator.publicKey, LAMPORTS_PER_SOL);
+    const liquidatorDebtAccount = await createAccount(
+      connection as any,
+      payer,
+      asset0Mint,
+      liquidator.publicKey
+    );
+    const liquidatorCollateralAccount = await createAccount(
+      connection as any,
+      payer,
+      asset1Mint,
+      liquidator.publicKey
+    );
+    await mintTo(
+      connection as any,
+      payer,
+      asset0Mint,
+      liquidatorDebtAccount,
+      payer,
+      10
+    );
+
+    await expectRejects(() =>
+      program.methods
+        .marketLiquidate({
+          debtAssetIsAsset0: true,
+          repayAmount: new BN(5),
+          minCollateralOut: new BN(1),
+          maxInsuranceDraw: new BN(0),
+          maxSocializedLoss: new BN(0),
+        })
+        .accounts({
+          market,
+          liquidator: liquidator.publicKey,
+          debtAssetMint: asset0Mint,
+          collateralAssetMint: asset1Mint,
+          reserveVault: reserve0Vault,
+          collateralVault: collateral1Vault,
+          insuranceVault: insurance0Vault,
+          liquidatorDebtAccount,
+          liquidatorCollateralAccount,
+          marginPosition,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([liquidator])
+        .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 })])
+        .rpc()
+    );
+
+    expect((await getAccount(connection as any, reserve0Vault)).amount).to.equal(
+      BigInt(307)
+    );
+    expect((await getAccount(connection as any, collateral1Vault)).amount).to.equal(
+      BigInt(60)
+    );
+    expect((await getAccount(connection as any, liquidatorDebtAccount)).amount).to.equal(
+      BigInt(10)
+    );
+    expect((await getAccount(connection as any, liquidatorCollateralAccount)).amount).to.equal(
+      BigInt(0)
+    );
+  });
+
   it("liquidates unhealthy fixed market debt", async () => {
     trackInstruction("marketLiquidate", "liquidates fixed market debt");
 
