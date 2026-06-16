@@ -108,6 +108,10 @@ impl<'info> WithdrawCollateral<'info> {
         let owner_asset_balance_before = ctx.accounts.owner_asset_account.amount;
         let collateral_balance_before = ctx.accounts.collateral_vault.amount;
 
+        ctx.accounts
+            .market
+            .enforce_daily_withdraw_limit(args.market_side_index, args.withdraw_amount)?;
+
         let asset_token_program = token_program_for_mint(
             &ctx.accounts.asset_mint,
             &ctx.accounts.token_program,

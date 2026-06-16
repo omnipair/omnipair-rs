@@ -1706,7 +1706,7 @@ describe("Omnipair Market LiteSVM", () => {
     expect(ownerDebtBalanceAfter - ownerDebtBalanceBefore).to.equal(BigInt(4));
   });
 
-  it("enforces daily borrow and redeem limits from liquidity EMA", async () => {
+  it("enforces daily borrow, redeem, and collateral withdraw limits from liquidity EMA", async () => {
     const borrowFixture = await fundRoundedBorrowMarket();
     const borrowLimitConfig = marketConfig();
     borrowLimitConfig.maxDailyBorrowBps = 300;
@@ -1854,6 +1854,92 @@ describe("Omnipair Market LiteSVM", () => {
           program: OMNIPAIR_PROGRAM_ID,
         })
         .signers([payer])
+        .rpc()
+    );
+
+    const collateralWithdrawFixture = await fundRoundedBorrowMarket();
+    const collateralWithdrawLimitConfig = marketConfig();
+    collateralWithdrawLimitConfig.maxDailyWithdrawBps = 300;
+    await program.methods
+      .updateMarketConfig({ config: collateralWithdrawLimitConfig })
+      .accounts({
+        market: collateralWithdrawFixture.market,
+        operator: payer.publicKey,
+        eventAuthority: collateralWithdrawFixture.eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    const collateralWithdrawMarginPosition = deriveAddress(
+      Buffer.from("margin"),
+      collateralWithdrawFixture.market.toBuffer(),
+      payer.publicKey.toBuffer()
+    );
+    await program.methods
+      .depositCollateral({
+        marketSideIndex: 1,
+        depositAmount: new BN(20),
+      })
+      .accounts({
+        market: collateralWithdrawFixture.market,
+        owner: payer.publicKey,
+        assetMint: collateralWithdrawFixture.asset1Mint,
+        collateralVault: collateralWithdrawFixture.collateral1Vault,
+        ownerAssetAccount: collateralWithdrawFixture.ownerAsset1Account,
+        marginPosition: collateralWithdrawMarginPosition,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        eventAuthority: collateralWithdrawFixture.eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await program.methods
+      .withdrawCollateral({
+        marketSideIndex: 1,
+        withdrawAmount: new BN(9),
+        minAssetAmountOut: new BN(9),
+      })
+      .accounts({
+        market: collateralWithdrawFixture.market,
+        owner: payer.publicKey,
+        assetMint: collateralWithdrawFixture.asset1Mint,
+        collateralVault: collateralWithdrawFixture.collateral1Vault,
+        ownerAssetAccount: collateralWithdrawFixture.ownerAsset1Account,
+        marginPosition: collateralWithdrawMarginPosition,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority: collateralWithdrawFixture.eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
+      .rpc();
+
+    await expectRejects(() =>
+      program.methods
+        .withdrawCollateral({
+          marketSideIndex: 1,
+          withdrawAmount: new BN(1),
+          minAssetAmountOut: new BN(1),
+        })
+        .accounts({
+          market: collateralWithdrawFixture.market,
+          owner: payer.publicKey,
+          assetMint: collateralWithdrawFixture.asset1Mint,
+          collateralVault: collateralWithdrawFixture.collateral1Vault,
+          ownerAssetAccount: collateralWithdrawFixture.ownerAsset1Account,
+          marginPosition: collateralWithdrawMarginPosition,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          eventAuthority: collateralWithdrawFixture.eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
         .rpc()
     );
   });
