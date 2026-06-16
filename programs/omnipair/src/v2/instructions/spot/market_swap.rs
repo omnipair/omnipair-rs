@@ -175,7 +175,7 @@ impl<'info> MarketSwap<'info> {
             )?;
         }
         ctx.accounts.market.refresh_risk_book()?;
-        ctx.accounts.market.assert_spot_ema_divergence()?;
+        ctx.accounts.market.assert_risk_circuit_breakers()?;
 
         emit_cpi!(MarketSwapEvent {
             market: market_key,

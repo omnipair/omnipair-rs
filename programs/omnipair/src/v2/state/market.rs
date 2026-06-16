@@ -1133,6 +1133,22 @@ impl Market {
         )
     }
 
+    pub fn assert_risk_circuit_breakers(&self) -> Result<()> {
+        self.assert_spot_ema_divergence()?;
+        self.assert_k_ema_drawdown()
+    }
+
+    pub fn assert_k_ema_drawdown(&self) -> Result<()> {
+        if self.risk_book.k_ema == 0 {
+            return Ok(());
+        }
+        assert_k_drawdown(
+            market_k_nad(&self.side0, &self.side1)?,
+            self.risk_book.k_ema,
+            self.config.spot_ema_divergence_bps,
+        )
+    }
+
     pub fn effective_debt0_nad(&self) -> Result<u128> {
         self.effective_debt_nad(true)
     }
@@ -1894,6 +1910,24 @@ fn assert_price_divergence(
     Ok(())
 }
 
+fn assert_k_drawdown(current_k_nad: u128, k_ema_nad: u128, max_drawdown_bps: u16) -> Result<()> {
+    if current_k_nad >= k_ema_nad {
+        return Ok(());
+    }
+    require!(k_ema_nad > 0, ErrorCode::InsufficientLiquidity);
+    let drawdown_bps = k_ema_nad
+        .checked_sub(current_k_nad)
+        .and_then(|value| value.checked_mul(BPS_DENOMINATOR as u128))
+        .and_then(|value| value.checked_div(k_ema_nad))
+        .ok_or(ErrorCode::MarketMathOverflow)?;
+    require_gte!(
+        max_drawdown_bps as u128,
+        drawdown_bps,
+        ErrorCode::MarketRiskCircuitBreaker
+    );
+    Ok(())
+}
+
 #[macro_export]
 macro_rules! generate_market_seeds {
     ($market:expr) => {
@@ -2498,6 +2532,24 @@ mod tests {
         market.risk_book.price1_ema_nad = NAD;
 
         let err = market.assert_spot_ema_divergence().unwrap_err();
+
+        assert_eq!(err, error!(ErrorCode::MarketRiskCircuitBreaker));
+    }
+
+    #[test]
+    fn circuit_breaker_rejects_k_ema_drawdown() {
+        let mut market = test_market();
+        market.side0.reserve_ledger.live_reserve = 900_000;
+        market.side1.reserve_ledger.live_reserve = 900_000;
+        market.risk_book.price0_ema_nad = NAD;
+        market.risk_book.price1_ema_nad = NAD;
+        market.risk_book.k_ema = normalize_to_nad(1_000_000, market.side0.asset_decimals)
+            .unwrap()
+            .checked_mul(normalize_to_nad(1_000_000, market.side1.asset_decimals).unwrap())
+            .unwrap();
+
+        market.assert_spot_ema_divergence().unwrap();
+        let err = market.assert_risk_circuit_breakers().unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::MarketRiskCircuitBreaker));
     }

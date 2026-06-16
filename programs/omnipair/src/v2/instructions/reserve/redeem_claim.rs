@@ -145,7 +145,7 @@ impl<'info> RedeemClaim<'info> {
             )
         };
         ctx.accounts.market.refresh_risk_book()?;
-        ctx.accounts.market.assert_spot_ema_divergence()?;
+        ctx.accounts.market.assert_risk_circuit_breakers()?;
 
         emit_cpi!(MarketClaimRedeemed {
             market: market_key,

@@ -194,7 +194,7 @@ pub(super) fn apply_borrow_state(
     sync_borrow_recognition(market, margin_position, borrow_asset_is_asset0)?;
     market.refresh_market_health()?;
     market.assert_market_health()?;
-    market.assert_spot_ema_divergence()?;
+    market.assert_risk_circuit_breakers()?;
     market.assert_recognition_cap(margin_position, borrow_asset_is_asset0)?;
     market.assert_position_health(margin_position, borrow_asset_is_asset0, min_health_bps)?;
     let health = if borrow_asset_is_asset0 {
@@ -378,7 +378,7 @@ pub(super) fn apply_repay_state(
             .ok_or(ErrorCode::ReserveOverflow)?;
     }
     market.refresh_market_health()?;
-    market.assert_spot_ema_divergence()
+    market.assert_risk_circuit_breakers()
 }
 
 fn require_borrow_headroom(debt_side: &MarketSide, borrow_amount: u64) -> Result<()> {

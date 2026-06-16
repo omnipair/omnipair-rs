@@ -93,7 +93,7 @@ impl<'info> ClaimFees<'info> {
         let asset_mint_key = ctx.accounts.asset_mint.key();
 
         ctx.accounts.market.refresh_risk_book()?;
-        ctx.accounts.market.assert_spot_ema_divergence()?;
+        ctx.accounts.market.assert_risk_circuit_breakers()?;
 
         let fee_amount = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
