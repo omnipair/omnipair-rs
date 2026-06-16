@@ -144,10 +144,13 @@ describe("Omnipair Market LiteSVM", () => {
     program = new Program(omnipairV2Idl as any, provider as any);
   });
 
-  async function initializeMarketFixture() {
+  async function initializeMarketFixture(mintOrder: "canonical" | "reversed" = "canonical") {
     const mintA = await createMint(connection as any, payer, payer.publicKey, null, 6);
     const mintB = await createMint(connection as any, payer, payer.publicKey, null, 6);
-    const [baseMint, quoteMint] = orderedMints(mintA, mintB);
+    const [lowerMint, higherMint] = orderedMints(mintA, mintB);
+    const [baseMint, quoteMint] = mintOrder === "reversed"
+      ? [higherMint, lowerMint]
+      : [lowerMint, higherMint];
     const paramsHash = Buffer.alloc(32, 7);
     const [market] = PublicKey.findProgramAddressSync(
       [Buffer.from("market_v2"), baseMint.toBuffer(), quoteMint.toBuffer(), paramsHash],
@@ -174,7 +177,7 @@ describe("Omnipair Market LiteSVM", () => {
     const baseStakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), baseClaimTokenMint.toBuffer());
     const quoteStakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), quoteClaimTokenMint.toBuffer());
 
-    await program.methods
+    const signature = await program.methods
       .initialize({
         operator: payer.publicKey,
         manager: payer.publicKey,
@@ -213,6 +216,7 @@ describe("Omnipair Market LiteSVM", () => {
       .rpc();
 
     return {
+      signature,
       baseMint,
       quoteMint,
       baseClaimTokenMint,
@@ -874,6 +878,20 @@ describe("Omnipair Market LiteSVM", () => {
       expect(vaultAccount).to.not.equal(null);
       expect(vaultAccount.owner.toString()).to.equal(TOKEN_PROGRAM_ID.toString());
     }
+  });
+
+  it("preserves creator-chosen non-canonical base and quote order", async () => {
+    const fixture = await initializeMarketFixture("reversed");
+    expect(Buffer.compare(fixture.baseMint.toBuffer(), fixture.quoteMint.toBuffer())).to.equal(1);
+
+    const marketAccount = await connection.getAccountInfo(fixture.market);
+    expect(marketAccount).to.not.equal(null);
+
+    const events = decodeCpiEvents(svm, fixture.signature);
+    const marketCreated = events.find((event) => event.name === "MarketCreated");
+    expect(marketCreated).to.not.equal(undefined);
+    expect(marketCreated.data.base_mint.toString()).to.equal(fixture.baseMint.toString());
+    expect(marketCreated.data.quote_mint.toString()).to.equal(fixture.quoteMint.toString());
   });
 
   it("updates market config and enforces reduce-only mode", async () => {
