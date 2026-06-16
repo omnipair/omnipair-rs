@@ -770,6 +770,63 @@ describe("Omnipair Market LiteSVM", () => {
     );
   });
 
+  it("locks buffer-ratio updates while market stake is active", async () => {
+    const {
+      asset0Mint,
+      claim0Mint,
+      market,
+      claim0StakeVault,
+      ownerClaim0Account,
+      stake0Position,
+      eventAuthority,
+    } = await fundTwoSidedMarket();
+
+    await program.methods
+      .stake({
+        marketSideIndex: 0,
+        claimAmount: new BN(400_000),
+        bufferShares: new BN(100_000),
+        minActiveStakeUnits: new BN(500_000),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        assetMint: asset0Mint,
+        claimMint: claim0Mint,
+        stakeVault: claim0StakeVault,
+        ownerClaimAccount: ownerClaim0Account,
+        stakePosition: stake0Position,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    const lockedConfig = marketConfig();
+    lockedConfig.bufferRatioBps = 1_500;
+    await expectRejects(() =>
+      program.methods
+        .updateMarketConfig({ config: lockedConfig })
+        .accounts({
+          market,
+          operator: payer.publicKey,
+          eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .rpc()
+    );
+
+    expect((await getAccount(connection as any, ownerClaim0Account)).amount).to.equal(
+      BigInt(400_000)
+    );
+    expect((await getAccount(connection as any, claim0StakeVault)).amount).to.equal(
+      BigInt(400_000)
+    );
+  });
+
   it("deposits reserve inventory and redeems fixed principal", async () => {
     trackInstruction("depositReserve", "deposits reserve inventory");
     trackInstruction("redeemClaim", "redeems fixed principal");
