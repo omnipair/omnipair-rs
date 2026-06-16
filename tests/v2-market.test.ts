@@ -951,6 +951,50 @@ describe("Omnipair Market LiteSVM", () => {
     expect((await getAccount(connection as any, fee0Vault)).amount).to.equal(BigInt(10));
   });
 
+  it("rejects buffer-ratio updates when the recomputed floor is uncovered", async () => {
+    const {
+      asset0Mint,
+      claim0Mint,
+      market,
+      reserve0Vault,
+      ownerAsset0Account,
+      ownerClaim0Account,
+      eventAuthority,
+    } = await fundTwoSidedMarket();
+
+    const uncoveredConfig = marketConfig();
+    uncoveredConfig.bufferRatioBps = 2_500;
+    await expectRejects(() =>
+      program.methods
+        .updateMarketConfig({ config: uncoveredConfig })
+        .accounts({
+          market,
+          operator: payer.publicKey,
+          eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .rpc()
+    );
+
+    await depositReserveSide(
+      { market, eventAuthority },
+      0,
+      asset0Mint,
+      claim0Mint,
+      reserve0Vault,
+      ownerAsset0Account,
+      ownerClaim0Account,
+      1_000,
+      800,
+      200
+    );
+
+    expect((await getAccount(connection as any, ownerClaim0Account)).amount).to.equal(
+      BigInt(800_800)
+    );
+  });
+
   it("deposits reserve inventory and redeems fixed principal", async () => {
     trackInstruction("depositReserve", "deposits reserve inventory");
     trackInstruction("redeemClaim", "redeems fixed principal");
