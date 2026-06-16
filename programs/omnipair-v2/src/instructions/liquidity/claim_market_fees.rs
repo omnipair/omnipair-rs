@@ -11,6 +11,7 @@ use crate::{
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
     state::{Market, MarketFeeClaimKind},
+    transitions::fee::{PrepareMarketFeeClaim, SettleMarketFeeClaim},
 };
 
 use crate::instructions::common::{
@@ -91,16 +92,10 @@ impl<'info> ClaimMarketFees<'info> {
         ctx.accounts.market.refresh_risk_book()?;
         ctx.accounts.market.assert_risk_circuit_breakers()?;
 
-        let fee_amount = {
+        let pending_claim = {
             let market_side = ctx.accounts.market.side(args.market_side_index)?;
-            let fee_amount = market_side.fee_ledger.market_fee_liability(args.claim_kind);
-            require!(fee_amount > 0, ErrorCode::AmountZero);
-            require_gte!(
-                ctx.accounts.fee_vault.amount,
-                fee_amount,
-                ErrorCode::UnbackedFeeLiability
-            );
-            fee_amount
+            PrepareMarketFeeClaim::new(args.claim_kind, ctx.accounts.fee_vault.amount)
+                .apply(market_side)?
         };
 
         let recipient_fee_balance_before = ctx.accounts.recipient_fee_account.amount;
@@ -115,7 +110,7 @@ impl<'info> ClaimMarketFees<'info> {
             ctx.accounts.recipient_fee_account.to_account_info(),
             ctx.accounts.asset_mint.to_account_info(),
             asset_token_program,
-            fee_amount,
+            pending_claim.fee_amount,
             ctx.accounts.asset_mint.decimals,
             &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
@@ -127,15 +122,14 @@ impl<'info> ClaimMarketFees<'info> {
         )?;
         require_gte!(fee_credit, args.min_fee_amount, ErrorCode::SlippageExceeded);
 
-        let remaining_fee_liability = {
+        let settled_claim = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
-            let claimed_amount = market_side
-                .fee_ledger
-                .claim_market_fee_liability(args.claim_kind)?;
-            require_eq!(claimed_amount, fee_amount, ErrorCode::UnbackedFeeLiability);
-            market_side.fee_ledger.fee_vault_balance = ctx.accounts.fee_vault.amount;
-            market_side.fee_ledger.assert_backed()?;
-            market_side.fee_ledger.market_fee_liability(args.claim_kind)
+            SettleMarketFeeClaim::new(
+                args.claim_kind,
+                pending_claim.fee_amount,
+                ctx.accounts.fee_vault.amount,
+            )
+            .apply(market_side)?
         };
 
         emit_cpi!(MarketFeeLiabilityClaimed {
@@ -143,8 +137,8 @@ impl<'info> ClaimMarketFees<'info> {
             authority: fee_authority_key,
             asset_mint: asset_mint_key,
             claim_kind: args.claim_kind.event_code(),
-            fee_amount,
-            remaining_fee_liability,
+            fee_amount: settled_claim.fee_amount,
+            remaining_fee_liability: settled_claim.remaining_fee_liability,
             metadata: MarketEventMetadata::new(fee_authority_key, market_key),
         });
 

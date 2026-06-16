@@ -11,7 +11,7 @@ use crate::{
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
     state::{HedgePosition, Market},
-    transitions::fee::CarryForwardHedgedFees,
+    transitions::fee::{PrepareHedgedFeeClaim, SettleHedgedFeeClaim},
 };
 
 use crate::instructions::common::{
@@ -95,25 +95,10 @@ impl<'info> ClaimHedgeFees<'info> {
         ctx.accounts.market.refresh_risk_book()?;
         ctx.accounts.market.assert_risk_circuit_breakers()?;
 
-        let fee_amount = {
+        let pending_claim = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
-            CarryForwardHedgedFees.apply(market_side)?;
-            ctx.accounts
-                .hedge_position
-                .accrue_fees(market_side.fee_ledger.hedged_fee_growth_index_nad)?;
-            let fee_amount = ctx.accounts.hedge_position.accrued_fee_amount;
-            require!(fee_amount > 0, ErrorCode::AmountZero);
-            require_gte!(
-                market_side.fee_ledger.hedged_fee_liability,
-                fee_amount,
-                ErrorCode::UnbackedFeeLiability
-            );
-            require_gte!(
-                ctx.accounts.fee_vault.amount,
-                fee_amount,
-                ErrorCode::UnbackedFeeLiability
-            );
-            fee_amount
+            PrepareHedgedFeeClaim::new(ctx.accounts.fee_vault.amount)
+                .apply(market_side, &mut ctx.accounts.hedge_position)?
         };
 
         let owner_fee_balance_before = ctx.accounts.owner_fee_account.amount;
@@ -128,7 +113,7 @@ impl<'info> ClaimHedgeFees<'info> {
             ctx.accounts.owner_fee_account.to_account_info(),
             ctx.accounts.asset_mint.to_account_info(),
             asset_token_program,
-            fee_amount,
+            pending_claim.fee_amount,
             ctx.accounts.asset_mint.decimals,
             &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
@@ -138,25 +123,18 @@ impl<'info> ClaimHedgeFees<'info> {
             token_account_credit(owner_fee_balance_before, &ctx.accounts.owner_fee_account)?;
         require_gte!(fee_credit, args.min_fee_amount, ErrorCode::SlippageExceeded);
 
-        let remaining_fee_liability = {
+        let settled_claim = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
-            market_side.fee_ledger.hedged_fee_liability = market_side
-                .fee_ledger
-                .hedged_fee_liability
-                .checked_sub(fee_amount)
-                .ok_or(ErrorCode::MarketMathOverflow)?;
-            market_side.fee_ledger.fee_vault_balance = ctx.accounts.fee_vault.amount;
-            ctx.accounts.hedge_position.accrued_fee_amount = 0;
-            market_side.fee_ledger.assert_backed()?;
-            market_side.fee_ledger.hedged_fee_liability
+            SettleHedgedFeeClaim::new(pending_claim.fee_amount, ctx.accounts.fee_vault.amount)
+                .apply(market_side, &mut ctx.accounts.hedge_position)?
         };
 
         emit_cpi!(MarketHedgeFeesClaimed {
             market: market_key,
             owner: owner_key,
             asset_mint: asset_mint_key,
-            fee_amount,
-            remaining_fee_liability,
+            fee_amount: settled_claim.fee_amount,
+            remaining_fee_liability: settled_claim.remaining_fee_liability,
             metadata: MarketEventMetadata::new(owner_key, market_key),
         });
 

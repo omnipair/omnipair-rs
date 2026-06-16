@@ -4,7 +4,7 @@ use crate::{
     constants::{BPS_DENOMINATOR, NAD, TAYLOR_TERMS},
     errors::ErrorCode,
     shared::math::taylor_exp,
-    state::MarketSide,
+    state::{HedgePosition, MarketFeeClaimKind, MarketSide, StakePosition},
     utils::market_math::active_stake_units,
 };
 
@@ -17,6 +17,35 @@ pub struct RecordFeeCredit {
 pub struct CarryForwardStakerFees;
 
 pub struct CarryForwardHedgedFees;
+
+pub struct PrepareStakerFeeClaim {
+    pub fee_vault_balance: u64,
+}
+
+pub struct SettleStakerFeeClaim {
+    pub fee_amount: u64,
+    pub fee_vault_balance: u64,
+}
+
+pub struct PrepareHedgedFeeClaim {
+    pub fee_vault_balance: u64,
+}
+
+pub struct SettleHedgedFeeClaim {
+    pub fee_amount: u64,
+    pub fee_vault_balance: u64,
+}
+
+pub struct PrepareMarketFeeClaim {
+    pub claim_kind: MarketFeeClaimKind,
+    pub fee_vault_balance: u64,
+}
+
+pub struct SettleMarketFeeClaim {
+    pub claim_kind: MarketFeeClaimKind,
+    pub fee_amount: u64,
+    pub fee_vault_balance: u64,
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FeeLedgerReceipt {
@@ -46,6 +75,13 @@ impl FeeLedgerReceipt {
             fee_vault_balance: ledger.fee_vault_balance,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FeeClaimReceipt {
+    pub fee_amount: u64,
+    pub remaining_fee_liability: u64,
+    pub fee_vault_balance: u64,
 }
 
 impl RecordFeeCredit {
@@ -131,6 +167,186 @@ impl CarryForwardHedgedFees {
             market_side.claim_token_ledger.hedged_claim_token_supply,
         )?;
         Ok(FeeLedgerReceipt::from_side(market_side))
+    }
+}
+
+impl PrepareStakerFeeClaim {
+    pub fn new(fee_vault_balance: u64) -> Self {
+        Self { fee_vault_balance }
+    }
+
+    pub fn apply(
+        self,
+        market_side: &mut MarketSide,
+        stake_position: &mut StakePosition,
+    ) -> Result<FeeClaimReceipt> {
+        CarryForwardStakerFees.apply(market_side)?;
+        stake_position.accrue_fees(
+            market_side.fee_ledger.fee_growth_index_nad,
+            market_side.buffer_ledger.buffer_ratio_bps,
+        )?;
+        let fee_amount = stake_position.accrued_fee_amount;
+        require!(fee_amount > 0, ErrorCode::AmountZero);
+        require_gte!(
+            market_side.fee_ledger.fee_liability,
+            fee_amount,
+            ErrorCode::UnbackedFeeLiability
+        );
+        require_gte!(
+            self.fee_vault_balance,
+            fee_amount,
+            ErrorCode::UnbackedFeeLiability
+        );
+        Ok(FeeClaimReceipt {
+            fee_amount,
+            remaining_fee_liability: market_side.fee_ledger.fee_liability,
+            fee_vault_balance: self.fee_vault_balance,
+        })
+    }
+}
+
+impl SettleStakerFeeClaim {
+    pub fn new(fee_amount: u64, fee_vault_balance: u64) -> Self {
+        Self {
+            fee_amount,
+            fee_vault_balance,
+        }
+    }
+
+    pub fn apply(
+        self,
+        market_side: &mut MarketSide,
+        stake_position: &mut StakePosition,
+    ) -> Result<FeeClaimReceipt> {
+        require!(self.fee_amount > 0, ErrorCode::AmountZero);
+        market_side.fee_ledger.fee_liability = market_side
+            .fee_ledger
+            .fee_liability
+            .checked_sub(self.fee_amount)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        market_side.fee_ledger.fee_vault_balance = self.fee_vault_balance;
+        stake_position.accrued_fee_amount = 0;
+        market_side.fee_ledger.assert_backed()?;
+        Ok(FeeClaimReceipt {
+            fee_amount: self.fee_amount,
+            remaining_fee_liability: market_side.fee_ledger.fee_liability,
+            fee_vault_balance: self.fee_vault_balance,
+        })
+    }
+}
+
+impl PrepareHedgedFeeClaim {
+    pub fn new(fee_vault_balance: u64) -> Self {
+        Self { fee_vault_balance }
+    }
+
+    pub fn apply(
+        self,
+        market_side: &mut MarketSide,
+        hedge_position: &mut HedgePosition,
+    ) -> Result<FeeClaimReceipt> {
+        CarryForwardHedgedFees.apply(market_side)?;
+        hedge_position.accrue_fees(market_side.fee_ledger.hedged_fee_growth_index_nad)?;
+        let fee_amount = hedge_position.accrued_fee_amount;
+        require!(fee_amount > 0, ErrorCode::AmountZero);
+        require_gte!(
+            market_side.fee_ledger.hedged_fee_liability,
+            fee_amount,
+            ErrorCode::UnbackedFeeLiability
+        );
+        require_gte!(
+            self.fee_vault_balance,
+            fee_amount,
+            ErrorCode::UnbackedFeeLiability
+        );
+        Ok(FeeClaimReceipt {
+            fee_amount,
+            remaining_fee_liability: market_side.fee_ledger.hedged_fee_liability,
+            fee_vault_balance: self.fee_vault_balance,
+        })
+    }
+}
+
+impl SettleHedgedFeeClaim {
+    pub fn new(fee_amount: u64, fee_vault_balance: u64) -> Self {
+        Self {
+            fee_amount,
+            fee_vault_balance,
+        }
+    }
+
+    pub fn apply(
+        self,
+        market_side: &mut MarketSide,
+        hedge_position: &mut HedgePosition,
+    ) -> Result<FeeClaimReceipt> {
+        require!(self.fee_amount > 0, ErrorCode::AmountZero);
+        market_side.fee_ledger.hedged_fee_liability = market_side
+            .fee_ledger
+            .hedged_fee_liability
+            .checked_sub(self.fee_amount)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        market_side.fee_ledger.fee_vault_balance = self.fee_vault_balance;
+        hedge_position.accrued_fee_amount = 0;
+        market_side.fee_ledger.assert_backed()?;
+        Ok(FeeClaimReceipt {
+            fee_amount: self.fee_amount,
+            remaining_fee_liability: market_side.fee_ledger.hedged_fee_liability,
+            fee_vault_balance: self.fee_vault_balance,
+        })
+    }
+}
+
+impl PrepareMarketFeeClaim {
+    pub fn new(claim_kind: MarketFeeClaimKind, fee_vault_balance: u64) -> Self {
+        Self {
+            claim_kind,
+            fee_vault_balance,
+        }
+    }
+
+    pub fn apply(self, market_side: &MarketSide) -> Result<FeeClaimReceipt> {
+        let fee_amount = market_side.fee_ledger.market_fee_liability(self.claim_kind);
+        require!(fee_amount > 0, ErrorCode::AmountZero);
+        require_gte!(
+            self.fee_vault_balance,
+            fee_amount,
+            ErrorCode::UnbackedFeeLiability
+        );
+        Ok(FeeClaimReceipt {
+            fee_amount,
+            remaining_fee_liability: fee_amount,
+            fee_vault_balance: self.fee_vault_balance,
+        })
+    }
+}
+
+impl SettleMarketFeeClaim {
+    pub fn new(claim_kind: MarketFeeClaimKind, fee_amount: u64, fee_vault_balance: u64) -> Self {
+        Self {
+            claim_kind,
+            fee_amount,
+            fee_vault_balance,
+        }
+    }
+
+    pub fn apply(self, market_side: &mut MarketSide) -> Result<FeeClaimReceipt> {
+        require!(self.fee_amount > 0, ErrorCode::AmountZero);
+        let claimed_amount = market_side
+            .fee_ledger
+            .claim_market_fee_liability(self.claim_kind)?;
+        require_eq!(
+            claimed_amount,
+            self.fee_amount,
+            ErrorCode::UnbackedFeeLiability
+        );
+        market_side.fee_ledger.fee_vault_balance = self.fee_vault_balance;
+        market_side.fee_ledger.assert_backed()?;
+        Ok(FeeClaimReceipt {
+            fee_amount: self.fee_amount,
+            remaining_fee_liability: market_side.fee_ledger.market_fee_liability(self.claim_kind),
+            fee_vault_balance: self.fee_vault_balance,
+        })
     }
 }
 
@@ -273,4 +489,126 @@ fn dynamic_free_fee_share_nad(eta_nad: u128, fee_routing_k_nad: u64) -> Result<u
         .min(i64::MAX as u128) as i64;
     let hedged_share_nad = taylor_exp(-x_nad, NAD, TAYLOR_TERMS) as u128;
     Ok((NAD as u128).saturating_sub(hedged_share_nad))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::{BufferLedger, ClaimTokenLedger, FeeLedger};
+
+    fn market_side() -> MarketSide {
+        MarketSide {
+            buffer_ledger: BufferLedger {
+                buffer_ratio_bps: 2_000,
+                ..BufferLedger::default()
+            },
+            ..MarketSide::default()
+        }
+    }
+
+    fn stake_position(accrued_fee_amount: u64) -> StakePosition {
+        StakePosition {
+            owner: Pubkey::new_unique(),
+            market: Pubkey::new_unique(),
+            asset_mint: Pubkey::new_unique(),
+            available_buffer_share_amount: 0,
+            staked_claim_token_amount: 800,
+            staked_buffer_share_amount: 200,
+            fee_growth_checkpoint_nad: 0,
+            accrued_fee_amount,
+            bump: 1,
+        }
+    }
+
+    fn hedge_position(accrued_fee_amount: u64) -> HedgePosition {
+        HedgePosition {
+            owner: Pubkey::new_unique(),
+            market: Pubkey::new_unique(),
+            asset_mint: Pubkey::new_unique(),
+            hedged_claim_token_amount: 500,
+            fee_growth_checkpoint_nad: 0,
+            accrued_fee_amount,
+            bump: 1,
+        }
+    }
+
+    #[test]
+    fn staker_fee_claim_settles_position_and_liability() {
+        let mut market_side = market_side();
+        market_side.fee_ledger = FeeLedger {
+            fee_vault_balance: 100,
+            fee_liability: 75,
+            ..FeeLedger::default()
+        };
+        let mut stake_position = stake_position(75);
+
+        let pending = PrepareStakerFeeClaim::new(100)
+            .apply(&mut market_side, &mut stake_position)
+            .unwrap();
+        assert_eq!(pending.fee_amount, 75);
+
+        let settled = SettleStakerFeeClaim::new(pending.fee_amount, 25)
+            .apply(&mut market_side, &mut stake_position)
+            .unwrap();
+
+        assert_eq!(settled.remaining_fee_liability, 0);
+        assert_eq!(market_side.fee_ledger.fee_liability, 0);
+        assert_eq!(market_side.fee_ledger.fee_vault_balance, 25);
+        assert_eq!(stake_position.accrued_fee_amount, 0);
+    }
+
+    #[test]
+    fn hedged_fee_claim_settles_position_and_liability() {
+        let mut market_side = market_side();
+        market_side.claim_token_ledger = ClaimTokenLedger {
+            hedged_claim_token_supply: 500,
+            ..ClaimTokenLedger::default()
+        };
+        market_side.fee_ledger = FeeLedger {
+            fee_vault_balance: 90,
+            hedged_fee_liability: 60,
+            ..FeeLedger::default()
+        };
+        let mut hedge_position = hedge_position(60);
+
+        let pending = PrepareHedgedFeeClaim::new(90)
+            .apply(&mut market_side, &mut hedge_position)
+            .unwrap();
+        assert_eq!(pending.fee_amount, 60);
+
+        let settled = SettleHedgedFeeClaim::new(pending.fee_amount, 30)
+            .apply(&mut market_side, &mut hedge_position)
+            .unwrap();
+
+        assert_eq!(settled.remaining_fee_liability, 0);
+        assert_eq!(market_side.fee_ledger.hedged_fee_liability, 0);
+        assert_eq!(market_side.fee_ledger.fee_vault_balance, 30);
+        assert_eq!(hedge_position.accrued_fee_amount, 0);
+    }
+
+    #[test]
+    fn market_fee_claim_settles_selected_liability() {
+        let mut market_side = market_side();
+        market_side.fee_ledger = FeeLedger {
+            fee_vault_balance: 100,
+            operator_fee_liability: 40,
+            protocol_fee_liability: 20,
+            ..FeeLedger::default()
+        };
+
+        let pending = PrepareMarketFeeClaim::new(MarketFeeClaimKind::Operator, 100)
+            .apply(&market_side)
+            .unwrap();
+        assert_eq!(pending.fee_amount, 40);
+
+        let settled =
+            SettleMarketFeeClaim::new(MarketFeeClaimKind::Operator, pending.fee_amount, 60)
+                .apply(&mut market_side)
+                .unwrap();
+
+        assert_eq!(settled.remaining_fee_liability, 0);
+        assert_eq!(market_side.fee_ledger.operator_fee_liability, 0);
+        assert_eq!(market_side.fee_ledger.protocol_fee_liability, 20);
+        assert_eq!(market_side.fee_ledger.fee_vault_balance, 60);
+    }
 }
