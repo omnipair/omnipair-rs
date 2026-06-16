@@ -34,8 +34,8 @@ pub struct Stake<'info> {
         mut,
         seeds = [
             MARKET_V2_SEED_PREFIX,
-            market.asset0_mint.as_ref(),
-            market.asset1_mint.as_ref(),
+            market.base_mint.as_ref(),
+            market.quote_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
@@ -158,7 +158,7 @@ impl<'info> Stake<'info> {
             staked_buffer_share_amount: stake_receipt.staked_buffer_share_amount,
             active_stake_units: stake_receipt.active_stake_units,
             accrued_fee_amount: stake_receipt.accrued_fee_amount,
-            metadata: MarketEventMetadata::new(owner_key, market_key),
+            metadata: MarketEventMetadata::new(owner_key, market_key)?,
         });
 
         Ok(())

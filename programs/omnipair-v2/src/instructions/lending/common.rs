@@ -58,9 +58,9 @@ pub(super) fn validate_borrow_accounts<'info>(
     owner_debt_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
     let (debt_side, collateral_side) = if borrow_asset_is_asset0 {
-        (&market.side0, &market.side1)
+        (&market.base_side, &market.quote_side)
     } else {
-        (&market.side1, &market.side0)
+        (&market.quote_side, &market.base_side)
     };
     validate_debt_reserve_accounts(
         market,
@@ -87,9 +87,9 @@ pub(super) fn validate_repay_accounts<'info>(
     owner_debt_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
     let debt_side = if repay_asset_is_asset0 {
-        &market.side0
+        &market.base_side
     } else {
-        &market.side1
+        &market.quote_side
     };
     validate_debt_reserve_accounts(
         market,

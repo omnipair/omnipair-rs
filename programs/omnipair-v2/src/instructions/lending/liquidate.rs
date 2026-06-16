@@ -37,8 +37,8 @@ pub struct Liquidate<'info> {
         mut,
         seeds = [
             MARKET_V2_SEED_PREFIX,
-            market.asset0_mint.as_ref(),
-            market.asset1_mint.as_ref(),
+            market.base_mint.as_ref(),
+            market.quote_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
@@ -239,7 +239,7 @@ impl<'info> Liquidate<'info> {
             insurance_drawn: liquidation_receipt.insurance_drawn,
             socialized_loss: liquidation_receipt.socialized_loss,
             remaining_debt: liquidation_receipt.remaining_debt,
-            metadata: MarketEventMetadata::new(liquidator_key, market_key),
+            metadata: MarketEventMetadata::new(liquidator_key, market_key)?,
         });
 
         Ok(())
@@ -260,14 +260,14 @@ fn validate_liquidation_accounts<'info>(
 ) -> Result<()> {
     let (debt_side, collateral_side, insurance_vault_key) = if debt_asset_is_asset0 {
         (
-            &market.side0,
-            &market.side1,
+            &market.base_side,
+            &market.quote_side,
             market.insurance_reserve.vault0,
         )
     } else {
         (
-            &market.side1,
-            &market.side0,
+            &market.quote_side,
+            &market.base_side,
             market.insurance_reserve.vault1,
         )
     };

@@ -11,7 +11,7 @@ use crate::{
     generate_market_seeds,
     shared::token::{token_burn, transfer_from_vault_to_user},
     state::Market,
-    transitions::reserve::RemoveLiquidity,
+    transitions::reserve::RemoveLiquidity as RemoveLiquidityTransition,
 };
 
 use crate::instructions::common::{
@@ -20,7 +20,7 @@ use crate::instructions::common::{
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct RedeemClaimArgs {
+pub struct RemoveLiquidityArgs {
     pub market_side_index: u8,
     pub claim_amount: u64,
     pub min_asset_amount_out: u64,
@@ -28,14 +28,14 @@ pub struct RedeemClaimArgs {
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: RedeemClaimArgs)]
-pub struct RedeemClaim<'info> {
+#[instruction(args: RemoveLiquidityArgs)]
+pub struct RemoveLiquidity<'info> {
     #[account(
         mut,
         seeds = [
             MARKET_V2_SEED_PREFIX,
-            market.asset0_mint.as_ref(),
-            market.asset1_mint.as_ref(),
+            market.base_mint.as_ref(),
+            market.quote_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
@@ -63,8 +63,8 @@ pub struct RedeemClaim<'info> {
     pub token_2022_program: Program<'info, Token2022>,
 }
 
-impl<'info> RedeemClaim<'info> {
-    pub fn validate(&self, args: &RedeemClaimArgs) -> Result<()> {
+impl<'info> RemoveLiquidity<'info> {
+    pub fn validate(&self, args: &RemoveLiquidityArgs) -> Result<()> {
         self.market.assert_started()?;
         require!(args.claim_amount > 0, ErrorCode::AmountZero);
         require_gte!(
@@ -87,7 +87,7 @@ impl<'info> RedeemClaim<'info> {
         Ok(())
     }
 
-    pub fn handle_redeem(ctx: Context<Self>, args: RedeemClaimArgs) -> Result<()> {
+    pub fn handle_remove_liquidity(ctx: Context<Self>, args: RemoveLiquidityArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
@@ -139,7 +139,7 @@ impl<'info> RedeemClaim<'info> {
 
         let receipt = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
-            RemoveLiquidity::new(args.claim_amount).apply(market_side)?
+            RemoveLiquidityTransition::new(args.claim_amount).apply(market_side)?
         };
         ctx.accounts.market.refresh_risk_book()?;
         ctx.accounts.market.assert_risk_circuit_breakers()?;
@@ -151,7 +151,7 @@ impl<'info> RedeemClaim<'info> {
             claim_amount: receipt.claim_amount,
             protected_claim_token_supply: receipt.protected_claim_token_supply,
             required_buffer: receipt.required_buffer,
-            metadata: MarketEventMetadata::new(owner_key, market_key),
+            metadata: MarketEventMetadata::new(owner_key, market_key)?,
         });
 
         Ok(())

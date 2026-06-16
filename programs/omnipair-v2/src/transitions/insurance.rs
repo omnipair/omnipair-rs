@@ -52,7 +52,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn deposit_insurance_credits_side0() {
+    fn deposit_insurance_credits_base_side() {
         let mut insurance_reserve = InsuranceReserve {
             available0: 10,
             available1: 20,
@@ -70,7 +70,7 @@ mod tests {
     }
 
     #[test]
-    fn deposit_insurance_credits_side1() {
+    fn deposit_insurance_credits_quote_side() {
         let mut insurance_reserve = InsuranceReserve {
             available0: 10,
             available1: 20,

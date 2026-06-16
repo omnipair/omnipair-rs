@@ -14,7 +14,7 @@ use crate::{
         token::{token_mint_to, transfer_from_user_to_vault},
     },
     state::{Market, StakePosition},
-    transitions::reserve::AddLiquidity,
+    transitions::reserve::AddLiquidity as AddLiquidityTransition,
 };
 
 use crate::instructions::common::{
@@ -23,7 +23,7 @@ use crate::instructions::common::{
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct DepositReserveArgs {
+pub struct AddLiquidityArgs {
     pub market_side_index: u8,
     pub deposit_amount: u64,
     pub min_claim_amount: u64,
@@ -32,14 +32,14 @@ pub struct DepositReserveArgs {
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: DepositReserveArgs)]
-pub struct DepositReserve<'info> {
+#[instruction(args: AddLiquidityArgs)]
+pub struct AddLiquidity<'info> {
     #[account(
         mut,
         seeds = [
             MARKET_V2_SEED_PREFIX,
-            market.asset0_mint.as_ref(),
-            market.asset1_mint.as_ref(),
+            market.base_mint.as_ref(),
+            market.quote_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
@@ -82,8 +82,8 @@ pub struct DepositReserve<'info> {
     pub system_program: Program<'info, System>,
 }
 
-impl<'info> DepositReserve<'info> {
-    pub fn validate(&self, args: &DepositReserveArgs) -> Result<()> {
+impl<'info> AddLiquidity<'info> {
+    pub fn validate(&self, args: &AddLiquidityArgs) -> Result<()> {
         self.market.assert_live()?;
         require!(args.deposit_amount > 0, ErrorCode::AmountZero);
         require_gte!(
@@ -115,7 +115,7 @@ impl<'info> DepositReserve<'info> {
         Ok(())
     }
 
-    pub fn handle_deposit(ctx: Context<Self>, args: DepositReserveArgs) -> Result<()> {
+    pub fn handle_add_liquidity(ctx: Context<Self>, args: AddLiquidityArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
@@ -158,7 +158,7 @@ impl<'info> DepositReserve<'info> {
             .ok_or(ErrorCode::MarketMathOverflow)?;
         let receipt = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
-            AddLiquidity::new(reserve_credit).apply(market_side)?
+            AddLiquidityTransition::new(reserve_credit).apply(market_side)?
         };
         require_gte!(
             receipt.claim_amount,
@@ -198,7 +198,7 @@ impl<'info> DepositReserve<'info> {
             buffer_amount: receipt.buffer_amount,
             protected_claim_token_supply: receipt.protected_claim_token_supply,
             required_buffer: receipt.required_buffer,
-            metadata: MarketEventMetadata::new(owner_key, market_key),
+            metadata: MarketEventMetadata::new(owner_key, market_key)?,
         });
 
         Ok(())

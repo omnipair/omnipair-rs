@@ -99,9 +99,9 @@ impl Liquidation {
         )?;
 
         let debt_side = if self.debt_asset_is_asset0 {
-            &mut market.side0
+            &mut market.base_side
         } else {
-            &mut market.side1
+            &mut market.quote_side
         };
         debt_side.reserve_ledger.live_reserve = debt_side
             .reserve_ledger
@@ -372,15 +372,15 @@ mod tests {
     }
 
     fn test_market() -> Market {
-        let asset0_mint = Pubkey::new_unique();
-        let asset1_mint = Pubkey::new_unique();
+        let base_mint = Pubkey::new_unique();
+        let quote_mint = Pubkey::new_unique();
         let mut market = Market::initialize(
-            asset0_mint,
-            asset1_mint,
+            base_mint,
+            quote_mint,
             Pubkey::new_unique(),
             Pubkey::new_unique(),
-            market_side(asset0_mint),
-            market_side(asset1_mint),
+            market_side(base_mint),
+            market_side(quote_mint),
             MarketConfig {
                 swap_fee_bps: 30,
                 operator_fee_bps: 1_000,
@@ -477,8 +477,8 @@ mod tests {
         assert_eq!(position.fixed_debt0_shares, 0);
         assert_eq!(market.debt_book.fixed_debt0_shares, 0);
         assert_eq!(market.insurance_reserve.available0, 10);
-        assert_eq!(market.side0.reserve_ledger.live_reserve, 1_080);
-        assert_eq!(market.side0.reserve_ledger.cash_reserve, 1_080);
+        assert_eq!(market.base_side.reserve_ledger.live_reserve, 1_080);
+        assert_eq!(market.base_side.reserve_ledger.cash_reserve, 1_080);
     }
 
     #[test]

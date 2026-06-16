@@ -33,8 +33,8 @@ pub struct ClaimHedgeFees<'info> {
         mut,
         seeds = [
             MARKET_V2_SEED_PREFIX,
-            market.asset0_mint.as_ref(),
-            market.asset1_mint.as_ref(),
+            market.base_mint.as_ref(),
+            market.quote_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
@@ -135,7 +135,7 @@ impl<'info> ClaimHedgeFees<'info> {
             asset_mint: asset_mint_key,
             fee_amount: settled_claim.fee_amount,
             remaining_fee_liability: settled_claim.remaining_fee_liability,
-            metadata: MarketEventMetadata::new(owner_key, market_key),
+            metadata: MarketEventMetadata::new(owner_key, market_key)?,
         });
 
         Ok(())

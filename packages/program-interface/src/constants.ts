@@ -125,15 +125,15 @@ export function deriveCollateralVaultAddress(
  * Derive V2 Market PDA address
  */
 export function deriveMarketV2Address(
-  asset0Mint: PublicKey,
-  asset1Mint: PublicKey,
+  baseMint: PublicKey,
+  quoteMint: PublicKey,
   paramsHash: Uint8Array | Buffer | number[]
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [
       SEEDS.MARKET_V2,
-      asset0Mint.toBuffer(),
-      asset1Mint.toBuffer(),
+      baseMint.toBuffer(),
+      quoteMint.toBuffer(),
       normalizeParamsHash(paramsHash),
     ],
     OMNIPAIR_V2_PROGRAM_ID

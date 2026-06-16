@@ -40,8 +40,8 @@ pub struct Swap<'info> {
         mut,
         seeds = [
             MARKET_V2_SEED_PREFIX,
-            market.asset0_mint.as_ref(),
-            market.asset1_mint.as_ref(),
+            market.base_mint.as_ref(),
+            market.quote_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
@@ -185,7 +185,7 @@ impl<'info> Swap<'info> {
             amount_in_after_fee: swap_receipt.amount_in_after_fee,
             amount_out: swap_receipt.amount_out,
             fee_credit: swap_receipt.fee_credit,
-            metadata: MarketEventMetadata::new(trader_key, market_key),
+            metadata: MarketEventMetadata::new(trader_key, market_key)?,
         });
 
         Ok(())

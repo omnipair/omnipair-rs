@@ -169,23 +169,23 @@ impl MarketSide {
 impl RiskBook {
     pub fn refreshed(
         &self,
-        side0: &MarketSide,
-        side1: &MarketSide,
+        base_side: &MarketSide,
+        quote_side: &MarketSide,
         config: &MarketConfig,
         current_slot: u64,
     ) -> Result<Self> {
-        let current_spot_price0_nad = market_spot_price_nad(side0, side1)?;
-        let current_spot_price1_nad = market_spot_price_nad(side1, side0)?;
+        let current_spot_price0_nad = market_spot_price_nad(base_side, quote_side)?;
+        let current_spot_price1_nad = market_spot_price_nad(quote_side, base_side)?;
         let current_liquidity0_nad = normalize_to_nad(
-            side0.reserve_ledger.live_reserve as u128,
-            side0.asset_decimals,
+            base_side.reserve_ledger.live_reserve as u128,
+            base_side.asset_decimals,
         )?;
         let current_liquidity1_nad = normalize_to_nad(
-            side1.reserve_ledger.live_reserve as u128,
-            side1.asset_decimals,
+            quote_side.reserve_ledger.live_reserve as u128,
+            quote_side.asset_decimals,
         )?;
-        let current_liquidity_nad = market_liquidity_nad(side0, side1)?;
-        let current_k_nad = market_k_nad(side0, side1)?;
+        let current_liquidity_nad = market_liquidity_nad(base_side, quote_side)?;
+        let current_k_nad = market_k_nad(base_side, quote_side)?;
 
         let cached_spot_price0_nad =
             observed_or_current_u64(self.cached_spot_price0_nad, current_spot_price0_nad);
@@ -280,12 +280,12 @@ impl RiskBook {
 #[derive(InitSpace)]
 pub struct Market {
     pub version: u8,
-    pub asset0_mint: Pubkey,
-    pub asset1_mint: Pubkey,
+    pub base_mint: Pubkey,
+    pub quote_mint: Pubkey,
     pub operator: Pubkey,
     pub manager: Pubkey,
-    pub side0: MarketSide,
-    pub side1: MarketSide,
+    pub base_side: MarketSide,
+    pub quote_side: MarketSide,
     pub config: MarketConfig,
     pub debt_book: DebtBook,
     pub risk_book: RiskBook,
@@ -301,32 +301,32 @@ pub struct Market {
 impl Market {
     #[allow(clippy::too_many_arguments)]
     pub fn initialize(
-        asset0_mint: Pubkey,
-        asset1_mint: Pubkey,
+        base_mint: Pubkey,
+        quote_mint: Pubkey,
         operator: Pubkey,
         manager: Pubkey,
-        side0: MarketSide,
-        side1: MarketSide,
+        base_side: MarketSide,
+        quote_side: MarketSide,
         config: MarketConfig,
         params_hash: [u8; 32],
         current_slot: u64,
         bump: u8,
     ) -> Result<Self> {
         config.validate()?;
-        require_keys_neq!(asset0_mint, asset1_mint, ErrorCode::InvalidMint);
+        require_keys_neq!(base_mint, quote_mint, ErrorCode::InvalidMint);
         require_keys_neq!(operator, Pubkey::default(), ErrorCode::InvalidMarketConfig);
         require_keys_neq!(manager, Pubkey::default(), ErrorCode::InvalidMarketConfig);
-        require_keys_eq!(asset0_mint, side0.asset_mint, ErrorCode::InvalidMint);
-        require_keys_eq!(asset1_mint, side1.asset_mint, ErrorCode::InvalidMint);
+        require_keys_eq!(base_mint, base_side.asset_mint, ErrorCode::InvalidMint);
+        require_keys_eq!(quote_mint, quote_side.asset_mint, ErrorCode::InvalidMint);
 
         Ok(Self {
             version: MARKET_VERSION,
-            asset0_mint,
-            asset1_mint,
+            base_mint,
+            quote_mint,
             operator,
             manager,
-            side0,
-            side1,
+            base_side,
+            quote_side,
             config,
             debt_book: DebtBook {
                 borrow_index0_nad: NAD as u128,
@@ -364,25 +364,25 @@ impl Market {
 
     pub fn side(&self, market_side_index: u8) -> Result<&MarketSide> {
         match market_side_index {
-            0 => Ok(&self.side0),
-            1 => Ok(&self.side1),
+            0 => Ok(&self.base_side),
+            1 => Ok(&self.quote_side),
             _ => err!(ErrorCode::InvalidMarketSide),
         }
     }
 
     pub fn side_mut(&mut self, market_side_index: u8) -> Result<&mut MarketSide> {
         match market_side_index {
-            0 => Ok(&mut self.side0),
-            1 => Ok(&mut self.side1),
+            0 => Ok(&mut self.base_side),
+            1 => Ok(&mut self.quote_side),
             _ => err!(ErrorCode::InvalidMarketSide),
         }
     }
 
     pub fn swap_sides(&self, asset_in_is_asset0: bool) -> (&MarketSide, &MarketSide) {
         if asset_in_is_asset0 {
-            (&self.side0, &self.side1)
+            (&self.base_side, &self.quote_side)
         } else {
-            (&self.side1, &self.side0)
+            (&self.quote_side, &self.base_side)
         }
     }
 
@@ -391,17 +391,17 @@ impl Market {
         asset_in_is_asset0: bool,
     ) -> (&mut MarketSide, &mut MarketSide) {
         if asset_in_is_asset0 {
-            (&mut self.side0, &mut self.side1)
+            (&mut self.base_side, &mut self.quote_side)
         } else {
-            (&mut self.side1, &mut self.side0)
+            (&mut self.quote_side, &mut self.base_side)
         }
     }
 
     pub fn assert_market_invariants(&self) -> Result<()> {
-        self.side0.assert_claim_coverage()?;
-        self.side1.assert_claim_coverage()?;
-        self.side0.fee_ledger.assert_backed()?;
-        self.side1.fee_ledger.assert_backed()?;
+        self.base_side.assert_claim_coverage()?;
+        self.quote_side.assert_claim_coverage()?;
+        self.base_side.fee_ledger.assert_backed()?;
+        self.quote_side.fee_ledger.assert_backed()?;
         Ok(())
     }
 
@@ -436,8 +436,12 @@ impl Market {
         let current_slot = Clock::get()
             .map(|clock| clock.slot)
             .unwrap_or(self.last_update_slot);
-        self.risk_book
-            .refreshed(&self.side0, &self.side1, &self.config, current_slot)
+        self.risk_book.refreshed(
+            &self.base_side,
+            &self.quote_side,
+            &self.config,
+            current_slot,
+        )
     }
 
     pub fn refresh_risk_book(&mut self) -> Result<()> {
@@ -472,12 +476,12 @@ impl Market {
 
     pub fn assert_spot_ema_divergence(&self) -> Result<()> {
         assert_price_divergence(
-            market_spot_price_nad(&self.side0, &self.side1)?,
+            market_spot_price_nad(&self.base_side, &self.quote_side)?,
             self.risk_book.price0_ema_nad,
             self.config.spot_ema_divergence_bps,
         )?;
         assert_price_divergence(
-            market_spot_price_nad(&self.side1, &self.side0)?,
+            market_spot_price_nad(&self.quote_side, &self.base_side)?,
             self.risk_book.price1_ema_nad,
             self.config.spot_ema_divergence_bps,
         )
@@ -493,7 +497,7 @@ impl Market {
             return Ok(());
         }
         assert_k_drawdown(
-            market_k_nad(&self.side0, &self.side1)?,
+            market_k_nad(&self.base_side, &self.quote_side)?,
             self.risk_book.k_ema,
             self.config.k_ema_drawdown_bps,
         )
@@ -537,13 +541,13 @@ impl Market {
         let (fixed_debt, debt_decimals, total_collateral) = if debt_asset_is_asset0 {
             (
                 margin_position.fixed_debt0(&self.debt_book)?,
-                self.side0.asset_decimals,
+                self.base_side.asset_decimals,
                 margin_position.collateral1,
             )
         } else {
             (
                 margin_position.fixed_debt1(&self.debt_book)?,
-                self.side1.asset_decimals,
+                self.quote_side.asset_decimals,
                 margin_position.collateral0,
             )
         };
@@ -579,7 +583,7 @@ impl Market {
                 )?,
                 normalize_to_nad(
                     margin_position.fixed_debt0(&self.debt_book)?,
-                    self.side0.asset_decimals,
+                    self.base_side.asset_decimals,
                 )?,
             )
         } else {
@@ -591,7 +595,7 @@ impl Market {
                 )?,
                 normalize_to_nad(
                     margin_position.fixed_debt1(&self.debt_book)?,
-                    self.side1.asset_decimals,
+                    self.quote_side.asset_decimals,
                 )?,
             )
         }
@@ -655,28 +659,32 @@ impl Market {
 
     pub fn apply_buffer_ratio_update(&mut self, buffer_ratio_bps: u16) -> Result<()> {
         self.assert_buffer_ratio_change_unlocked(buffer_ratio_bps)?;
-        let required_buffer0 = self.side0.assert_buffer_floor_for_ratio(buffer_ratio_bps)?;
-        let required_buffer1 = self.side1.assert_buffer_floor_for_ratio(buffer_ratio_bps)?;
-        self.side0
+        let required_buffer0 = self
+            .base_side
+            .assert_buffer_floor_for_ratio(buffer_ratio_bps)?;
+        let required_buffer1 = self
+            .quote_side
+            .assert_buffer_floor_for_ratio(buffer_ratio_bps)?;
+        self.base_side
             .apply_buffer_ratio(buffer_ratio_bps, required_buffer0);
-        self.side1
+        self.quote_side
             .apply_buffer_ratio(buffer_ratio_bps, required_buffer1);
         Ok(())
     }
 
     fn assert_buffer_ratio_change_unlocked(&self, buffer_ratio_bps: u16) -> Result<()> {
-        if buffer_ratio_bps == self.side0.buffer_ledger.buffer_ratio_bps
-            && buffer_ratio_bps == self.side1.buffer_ledger.buffer_ratio_bps
+        if buffer_ratio_bps == self.base_side.buffer_ledger.buffer_ratio_bps
+            && buffer_ratio_bps == self.quote_side.buffer_ledger.buffer_ratio_bps
         {
             return Ok(());
         }
         require!(
-            self.side0.claim_token_ledger.staked_claim_token_supply == 0
-                && self.side1.claim_token_ledger.staked_claim_token_supply == 0
-                && self.side0.buffer_ledger.staked_buffer_share_amount == 0
-                && self.side1.buffer_ledger.staked_buffer_share_amount == 0
-                && self.side0.fee_ledger.fee_liability == 0
-                && self.side1.fee_ledger.fee_liability == 0,
+            self.base_side.claim_token_ledger.staked_claim_token_supply == 0
+                && self.quote_side.claim_token_ledger.staked_claim_token_supply == 0
+                && self.base_side.buffer_ledger.staked_buffer_share_amount == 0
+                && self.quote_side.buffer_ledger.staked_buffer_share_amount == 0
+                && self.base_side.fee_ledger.fee_liability == 0
+                && self.quote_side.fee_ledger.fee_liability == 0,
             ErrorCode::InvalidMarketConfig
         );
         Ok(())
@@ -690,14 +698,14 @@ impl Market {
                 self.debt_book.fixed_debt0()?,
                 self.debt_book.soft_debt0()?,
                 self.hedged_debt0_nad(&self.risk_book)?,
-                &self.side0,
+                &self.base_side,
             )
         } else {
             (
                 self.debt_book.fixed_debt1()?,
                 self.debt_book.soft_debt1()?,
                 self.hedged_debt1_nad(&self.risk_book)?,
-                &self.side1,
+                &self.quote_side,
             )
         };
         let fixed_debt_nad = normalize_to_nad(fixed_debt, debt_side.asset_decimals)?;
@@ -718,7 +726,7 @@ impl Market {
     fn hedged_debt0_nad(&self, risk_book: &RiskBook) -> Result<u128> {
         self.collateral_value_nad(
             false,
-            self.side1.claim_token_ledger.hedged_claim_token_supply,
+            self.quote_side.claim_token_ledger.hedged_claim_token_supply,
             risk_book,
         )
     }
@@ -726,7 +734,7 @@ impl Market {
     fn hedged_debt1_nad(&self, risk_book: &RiskBook) -> Result<u128> {
         self.collateral_value_nad(
             true,
-            self.side0.claim_token_ledger.hedged_claim_token_supply,
+            self.base_side.claim_token_ledger.hedged_claim_token_supply,
             risk_book,
         )
     }
@@ -743,15 +751,15 @@ impl Market {
         let (collateral_side, debt_side, price_ema_nad, directional_price_ema_nad) =
             if collateral_is_asset0 {
                 (
-                    &self.side0,
-                    &self.side1,
+                    &self.base_side,
+                    &self.quote_side,
                     risk_book.price0_ema_nad,
                     risk_book.directional_price0_ema_nad,
                 )
             } else {
                 (
-                    &self.side1,
-                    &self.side0,
+                    &self.quote_side,
+                    &self.base_side,
                     risk_book.price1_ema_nad,
                     risk_book.directional_price1_ema_nad,
                 )
@@ -796,15 +804,15 @@ impl Market {
         let (collateral_side, debt_side, price_ema_nad, directional_price_ema_nad) =
             if debt_asset_is_asset0 {
                 (
-                    &self.side1,
-                    &self.side0,
+                    &self.quote_side,
+                    &self.base_side,
                     risk_book.price1_ema_nad,
                     risk_book.directional_price1_ema_nad,
                 )
             } else {
                 (
-                    &self.side0,
-                    &self.side1,
+                    &self.base_side,
+                    &self.quote_side,
                     risk_book.price0_ema_nad,
                     risk_book.directional_price0_ema_nad,
                 )
@@ -845,15 +853,15 @@ impl Market {
         let (collateral_side, debt_side, price_ema_nad, directional_price_ema_nad) =
             if debt_asset_is_asset0 {
                 (
-                    &self.side1,
-                    &self.side0,
+                    &self.quote_side,
+                    &self.base_side,
                     risk_book.price1_ema_nad,
                     risk_book.directional_price1_ema_nad,
                 )
             } else {
                 (
-                    &self.side0,
-                    &self.side1,
+                    &self.base_side,
+                    &self.quote_side,
                     risk_book.price0_ema_nad,
                     risk_book.directional_price0_ema_nad,
                 )
@@ -883,8 +891,11 @@ impl Market {
 
     fn daily_limit_for_side(&self, market_side_index: u8, limit_bps: u16) -> Result<u64> {
         let (liquidity_ema, asset_decimals) = match market_side_index {
-            0 => (self.risk_book.liquidity0_ema, self.side0.asset_decimals),
-            1 => (self.risk_book.liquidity1_ema, self.side1.asset_decimals),
+            0 => (self.risk_book.liquidity0_ema, self.base_side.asset_decimals),
+            1 => (
+                self.risk_book.liquidity1_ema,
+                self.quote_side.asset_decimals,
+            ),
             _ => return err!(ErrorCode::InvalidMarketSide),
         };
         require!(liquidity_ema > 0, ErrorCode::InsufficientLiquidity);
@@ -901,8 +912,8 @@ macro_rules! generate_market_seeds {
     ($market:expr) => {
         [
             MARKET_V2_SEED_PREFIX,
-            $market.asset0_mint.as_ref(),
-            $market.asset1_mint.as_ref(),
+            $market.base_mint.as_ref(),
+            $market.quote_mint.as_ref(),
             $market.params_hash.as_ref(),
             &[$market.bump],
         ]
@@ -941,15 +952,15 @@ mod tests {
     }
 
     fn test_market() -> Market {
-        let asset0_mint = Pubkey::new_unique();
-        let asset1_mint = Pubkey::new_unique();
+        let base_mint = Pubkey::new_unique();
+        let quote_mint = Pubkey::new_unique();
         Market::initialize(
-            asset0_mint,
-            asset1_mint,
+            base_mint,
+            quote_mint,
             Pubkey::new_unique(),
             Pubkey::new_unique(),
-            test_market_side(asset0_mint, 2_000),
-            test_market_side(asset1_mint, 2_000),
+            test_market_side(base_mint, 2_000),
+            test_market_side(quote_mint, 2_000),
             MarketConfig {
                 swap_fee_bps: 30,
                 operator_fee_bps: 1_000,
@@ -1018,20 +1029,44 @@ mod tests {
     }
 
     #[test]
+    fn market_initialize_preserves_creator_chosen_base_quote_order() {
+        let base_mint = Pubkey::new_from_array([2_u8; 32]);
+        let quote_mint = Pubkey::new_from_array([1_u8; 32]);
+        let market = Market::initialize(
+            base_mint,
+            quote_mint,
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            test_market_side(base_mint, 2_000),
+            test_market_side(quote_mint, 2_000),
+            test_market().config,
+            [7_u8; 32],
+            42,
+            254,
+        )
+        .unwrap();
+
+        assert_eq!(market.base_mint, base_mint);
+        assert_eq!(market.quote_mint, quote_mint);
+        assert_eq!(market.base_side.asset_mint, base_mint);
+        assert_eq!(market.quote_side.asset_mint, quote_mint);
+    }
+
+    #[test]
     fn market_initialize_rejects_default_authorities() {
-        let asset0_mint = Pubkey::new_unique();
-        let asset1_mint = Pubkey::new_unique();
-        let side0 = test_market_side(asset0_mint, 2_000);
-        let side1 = test_market_side(asset1_mint, 2_000);
+        let base_mint = Pubkey::new_unique();
+        let quote_mint = Pubkey::new_unique();
+        let base_side = test_market_side(base_mint, 2_000);
+        let quote_side = test_market_side(quote_mint, 2_000);
         let config = test_market().config;
 
         let default_operator = Market::initialize(
-            asset0_mint,
-            asset1_mint,
+            base_mint,
+            quote_mint,
             Pubkey::default(),
             Pubkey::new_unique(),
-            side0,
-            side1,
+            base_side,
+            quote_side,
             config,
             [7_u8; 32],
             42,
@@ -1040,12 +1075,12 @@ mod tests {
         .err()
         .unwrap();
         let default_manager = Market::initialize(
-            asset0_mint,
-            asset1_mint,
+            base_mint,
+            quote_mint,
             Pubkey::new_unique(),
             Pubkey::default(),
-            side0,
-            side1,
+            base_side,
+            quote_side,
             config,
             [7_u8; 32],
             42,
@@ -1357,8 +1392,8 @@ mod tests {
     #[test]
     fn market_health_uses_recognized_collateral_not_idle_inventory() {
         let mut market = test_market();
-        market.side0.reserve_ledger.live_reserve = 1_000_000_000;
-        market.side1.reserve_ledger.live_reserve = 1_000_000_000;
+        market.base_side.reserve_ledger.live_reserve = 1_000_000_000;
+        market.quote_side.reserve_ledger.live_reserve = 1_000_000_000;
         market.debt_book.fixed_debt0_shares = DebtBook::debt_to_shares(1_000, NAD as u128).unwrap();
 
         market.refresh_market_health().unwrap();
@@ -1376,21 +1411,21 @@ mod tests {
 
     #[test]
     fn market_health_rejects_raw_unit_decimal_pump() {
-        let asset0_mint = Pubkey::new_unique();
-        let asset1_mint = Pubkey::new_unique();
-        let mut side0 = test_market_side(asset0_mint, 2_000);
-        let mut side1 = test_market_side(asset1_mint, 2_000);
-        side0.asset_decimals = 6;
-        side1.asset_decimals = 9;
-        side0.reserve_ledger.live_reserve = 1_000_000_000;
-        side1.reserve_ledger.live_reserve = 1_000_000_000_000_000;
+        let base_mint = Pubkey::new_unique();
+        let quote_mint = Pubkey::new_unique();
+        let mut base_side = test_market_side(base_mint, 2_000);
+        let mut quote_side = test_market_side(quote_mint, 2_000);
+        base_side.asset_decimals = 6;
+        quote_side.asset_decimals = 9;
+        base_side.reserve_ledger.live_reserve = 1_000_000_000;
+        quote_side.reserve_ledger.live_reserve = 1_000_000_000_000_000;
         let mut market = Market::initialize(
-            asset0_mint,
-            asset1_mint,
+            base_mint,
+            quote_mint,
             Pubkey::new_unique(),
             Pubkey::new_unique(),
-            side0,
-            side1,
+            base_side,
+            quote_side,
             MarketConfig {
                 recognized_collateral_cap_bps: 11_000,
                 ..test_market().config
@@ -1416,87 +1451,90 @@ mod tests {
     fn buffer_ratio_update_recomputes_required_floor() {
         let mut market = test_market();
         AddLiquidity::new(1_000_000)
-            .apply(&mut market.side0)
+            .apply(&mut market.base_side)
             .unwrap();
         AddLiquidity::new(2_000_000)
-            .apply(&mut market.side1)
+            .apply(&mut market.quote_side)
             .unwrap();
-        market.side0.buffer_ledger.buffer_share_supply += 100_000;
-        market.side0.reserve_ledger.live_reserve += 100_000;
-        market.side1.buffer_ledger.buffer_share_supply += 200_000;
-        market.side1.reserve_ledger.live_reserve += 200_000;
+        market.base_side.buffer_ledger.buffer_share_supply += 100_000;
+        market.base_side.reserve_ledger.live_reserve += 100_000;
+        market.quote_side.buffer_ledger.buffer_share_supply += 200_000;
+        market.quote_side.reserve_ledger.live_reserve += 200_000;
 
         market.apply_buffer_ratio_update(2_500).unwrap();
 
-        assert_eq!(market.side0.buffer_ledger.buffer_ratio_bps, 2_500);
-        assert_eq!(market.side0.buffer_ledger.required_buffer, 266_667);
-        assert_eq!(market.side1.buffer_ledger.required_buffer, 533_334);
+        assert_eq!(market.base_side.buffer_ledger.buffer_ratio_bps, 2_500);
+        assert_eq!(market.base_side.buffer_ledger.required_buffer, 266_667);
+        assert_eq!(market.quote_side.buffer_ledger.required_buffer, 533_334);
     }
 
     #[test]
     fn buffer_ratio_update_rejects_uncovered_floor() {
         let mut market = test_market();
         AddLiquidity::new(1_000_000)
-            .apply(&mut market.side0)
+            .apply(&mut market.base_side)
             .unwrap();
         AddLiquidity::new(1_000_000)
-            .apply(&mut market.side1)
+            .apply(&mut market.quote_side)
             .unwrap();
 
         let err = market.apply_buffer_ratio_update(2_500).unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::InsufficientBufferShares));
-        assert_eq!(market.side0.buffer_ledger.buffer_ratio_bps, 2_000);
-        assert_eq!(market.side0.buffer_ledger.required_buffer, 200_000);
+        assert_eq!(market.base_side.buffer_ledger.buffer_ratio_bps, 2_000);
+        assert_eq!(market.base_side.buffer_ledger.required_buffer, 200_000);
     }
 
     #[test]
     fn buffer_ratio_update_rejects_active_stake() {
         let mut market = test_market();
         AddLiquidity::new(1_000_000)
-            .apply(&mut market.side0)
+            .apply(&mut market.base_side)
             .unwrap();
         AddLiquidity::new(1_000_000)
-            .apply(&mut market.side1)
+            .apply(&mut market.quote_side)
             .unwrap();
-        market.side0.claim_token_ledger.staked_claim_token_supply = 800_000;
-        market.side0.buffer_ledger.staked_buffer_share_amount = 200_000;
+        market
+            .base_side
+            .claim_token_ledger
+            .staked_claim_token_supply = 800_000;
+        market.base_side.buffer_ledger.staked_buffer_share_amount = 200_000;
 
         let err = market.apply_buffer_ratio_update(1_500).unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::InvalidMarketConfig));
-        assert_eq!(market.side0.buffer_ledger.buffer_ratio_bps, 2_000);
+        assert_eq!(market.base_side.buffer_ledger.buffer_ratio_bps, 2_000);
     }
 
     #[test]
     fn buffer_ratio_update_rejects_staker_fee_liability() {
         let mut market = test_market();
         AddLiquidity::new(1_000_000)
-            .apply(&mut market.side0)
+            .apply(&mut market.base_side)
             .unwrap();
         AddLiquidity::new(1_000_000)
-            .apply(&mut market.side1)
+            .apply(&mut market.quote_side)
             .unwrap();
-        market.side1.fee_ledger.fee_liability = 1;
+        market.quote_side.fee_ledger.fee_liability = 1;
 
         let err = market.apply_buffer_ratio_update(1_500).unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::InvalidMarketConfig));
-        assert_eq!(market.side1.buffer_ledger.buffer_ratio_bps, 2_000);
+        assert_eq!(market.quote_side.buffer_ledger.buffer_ratio_bps, 2_000);
     }
 
     #[test]
     fn daily_borrow_limit_uses_side_liquidity_ema() {
         let mut market = test_market();
-        market.side0.reserve_ledger.live_reserve = 1_000_000;
-        market.side1.reserve_ledger.live_reserve = 1_000_000;
+        market.base_side.reserve_ledger.live_reserve = 1_000_000;
+        market.quote_side.reserve_ledger.live_reserve = 1_000_000;
         market.refresh_risk_book().unwrap();
 
         market.enforce_daily_borrow_limit(0, 200_000).unwrap();
         let err = market.enforce_daily_borrow_limit(0, 1).unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::DailyLimitExceeded));
-        assert_eq!(market.side0.daily_limit_book.borrowed_bucket, 200_000);
+        assert_eq!(market.base_side.daily_limit_book.borrowed_bucket, 200_000);
     }
 
     #[test]
@@ -1525,15 +1563,15 @@ mod tests {
 
     #[test]
     fn risk_book_bootstraps_cached_spot_observation() {
-        let asset0_mint = Pubkey::new_unique();
-        let asset1_mint = Pubkey::new_unique();
-        let mut side0 = test_market_side(asset0_mint, 2_000);
-        let mut side1 = test_market_side(asset1_mint, 2_000);
-        side0.reserve_ledger.live_reserve = 1_000_000;
-        side1.reserve_ledger.live_reserve = 2_000_000;
+        let base_mint = Pubkey::new_unique();
+        let quote_mint = Pubkey::new_unique();
+        let mut base_side = test_market_side(base_mint, 2_000);
+        let mut quote_side = test_market_side(quote_mint, 2_000);
+        base_side.reserve_ledger.live_reserve = 1_000_000;
+        quote_side.reserve_ledger.live_reserve = 2_000_000;
 
         let refreshed = RiskBook::default()
-            .refreshed(&side0, &side1, &test_market().config, 42)
+            .refreshed(&base_side, &quote_side, &test_market().config, 42)
             .unwrap();
 
         assert_eq!(refreshed.price0_ema_nad, 2 * NAD);
@@ -1545,12 +1583,12 @@ mod tests {
 
     #[test]
     fn risk_book_rolls_ema_from_cached_spot_not_current_spot() {
-        let asset0_mint = Pubkey::new_unique();
-        let asset1_mint = Pubkey::new_unique();
-        let mut side0 = test_market_side(asset0_mint, 2_000);
-        let mut side1 = test_market_side(asset1_mint, 2_000);
-        side0.reserve_ledger.live_reserve = 1_000_000;
-        side1.reserve_ledger.live_reserve = 2_000_000;
+        let base_mint = Pubkey::new_unique();
+        let quote_mint = Pubkey::new_unique();
+        let mut base_side = test_market_side(base_mint, 2_000);
+        let mut quote_side = test_market_side(quote_mint, 2_000);
+        base_side.reserve_ledger.live_reserve = 1_000_000;
+        quote_side.reserve_ledger.live_reserve = 2_000_000;
         let risk_book = RiskBook {
             price0_ema_nad: NAD,
             price1_ema_nad: NAD,
@@ -1563,7 +1601,7 @@ mod tests {
         };
 
         let refreshed = risk_book
-            .refreshed(&side0, &side1, &test_market().config, 10_000)
+            .refreshed(&base_side, &quote_side, &test_market().config, 10_000)
             .unwrap();
 
         assert_eq!(refreshed.price0_ema_nad, NAD);
@@ -1577,8 +1615,8 @@ mod tests {
     #[test]
     fn circuit_breaker_rejects_spot_ema_divergence() {
         let mut market = test_market();
-        market.side0.reserve_ledger.live_reserve = 1_000_000;
-        market.side1.reserve_ledger.live_reserve = 2_000_000;
+        market.base_side.reserve_ledger.live_reserve = 1_000_000;
+        market.quote_side.reserve_ledger.live_reserve = 2_000_000;
         market.risk_book.price0_ema_nad = NAD;
         market.risk_book.price1_ema_nad = NAD;
 
@@ -1590,13 +1628,13 @@ mod tests {
     #[test]
     fn circuit_breaker_rejects_k_ema_drawdown() {
         let mut market = test_market();
-        market.side0.reserve_ledger.live_reserve = 900_000;
-        market.side1.reserve_ledger.live_reserve = 900_000;
+        market.base_side.reserve_ledger.live_reserve = 900_000;
+        market.quote_side.reserve_ledger.live_reserve = 900_000;
         market.risk_book.price0_ema_nad = NAD;
         market.risk_book.price1_ema_nad = NAD;
-        market.risk_book.k_ema = normalize_to_nad(1_000_000, market.side0.asset_decimals)
+        market.risk_book.k_ema = normalize_to_nad(1_000_000, market.base_side.asset_decimals)
             .unwrap()
-            .checked_mul(normalize_to_nad(1_000_000, market.side1.asset_decimals).unwrap())
+            .checked_mul(normalize_to_nad(1_000_000, market.quote_side.asset_decimals).unwrap())
             .unwrap();
 
         market.assert_spot_ema_divergence().unwrap();
@@ -1608,15 +1646,18 @@ mod tests {
     #[test]
     fn effective_debt_applies_gamma_only_to_hedged_overlay() {
         let mut market = test_market();
-        market.side0.reserve_ledger.live_reserve = 2_000_000_000;
-        market.side1.reserve_ledger.live_reserve = 2_000_000_000;
+        market.base_side.reserve_ledger.live_reserve = 2_000_000_000;
+        market.quote_side.reserve_ledger.live_reserve = 2_000_000_000;
         market.refresh_risk_book().unwrap();
         market.config.effective_debt_weight_min_bps = 5_000;
         market.config.effective_debt_gamma_nad = 2 * NAD;
         market.risk_book.liquidity_ema = 1_000 * NAD as u128;
         market.debt_book.fixed_debt0_shares =
             DebtBook::debt_to_shares(100_000_000, NAD as u128).unwrap();
-        market.side1.claim_token_ledger.hedged_claim_token_supply = 100_000_000;
+        market
+            .quote_side
+            .claim_token_ledger
+            .hedged_claim_token_supply = 100_000_000;
 
         let raw_hedged_debt = market.hedged_debt0_nad(&market.risk_book).unwrap();
         let effective_hedged_debt = effective_hedged_debt_nad(
@@ -1637,8 +1678,8 @@ mod tests {
     fn recognized_collateral_is_capped_by_debt_value() {
         let mut market = test_market();
         market.config.recognized_collateral_cap_bps = 15_000;
-        market.side0.reserve_ledger.live_reserve = 1_000_000_000;
-        market.side1.reserve_ledger.live_reserve = 1_000_000_000;
+        market.base_side.reserve_ledger.live_reserve = 1_000_000_000;
+        market.quote_side.reserve_ledger.live_reserve = 1_000_000_000;
         market.refresh_risk_book().unwrap();
         let mut position = margin_position();
         position.collateral1 = 1_000_000_000;
@@ -1651,7 +1692,7 @@ mod tests {
         let recognized_value = market
             .collateral_value_nad(false, recognized, &market.risk_book)
             .unwrap();
-        let debt_value_cap = normalize_to_nad(100_000_000, market.side0.asset_decimals)
+        let debt_value_cap = normalize_to_nad(100_000_000, market.base_side.asset_decimals)
             .unwrap()
             .checked_mul(15_000)
             .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
@@ -1666,8 +1707,8 @@ mod tests {
     fn recognition_cap_rejects_idle_collateral_pump() {
         let mut market = test_market();
         market.config.recognized_collateral_cap_bps = 15_000;
-        market.side0.reserve_ledger.live_reserve = 1_000_000_000;
-        market.side1.reserve_ledger.live_reserve = 1_000_000_000;
+        market.base_side.reserve_ledger.live_reserve = 1_000_000_000;
+        market.quote_side.reserve_ledger.live_reserve = 1_000_000_000;
         market.refresh_risk_book().unwrap();
         let mut position = margin_position();
         position.collateral1 = 1_000_000_000;

@@ -35,8 +35,8 @@ pub struct OpenHedge<'info> {
         mut,
         seeds = [
             MARKET_V2_SEED_PREFIX,
-            market.asset0_mint.as_ref(),
-            market.asset1_mint.as_ref(),
+            market.base_mint.as_ref(),
+            market.quote_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
@@ -188,7 +188,7 @@ impl<'info> OpenHedge<'info> {
             claim_amount: receipt.claim_amount,
             hedge_amount: receipt.hedge_amount,
             hedged_claim_token_supply: receipt.hedged_claim_token_supply,
-            metadata: MarketEventMetadata::new(owner_key, market_key),
+            metadata: MarketEventMetadata::new(owner_key, market_key)?,
         });
 
         Ok(())

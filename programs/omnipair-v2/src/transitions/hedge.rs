@@ -133,15 +133,15 @@ mod tests {
     }
 
     fn test_market() -> Market {
-        let asset0_mint = Pubkey::new_unique();
-        let asset1_mint = Pubkey::new_unique();
+        let base_mint = Pubkey::new_unique();
+        let quote_mint = Pubkey::new_unique();
         let market = Market::initialize(
-            asset0_mint,
-            asset1_mint,
+            base_mint,
+            quote_mint,
             Pubkey::new_unique(),
             Pubkey::new_unique(),
-            market_side(asset0_mint),
-            market_side(asset1_mint),
+            market_side(base_mint),
+            market_side(quote_mint),
             MarketConfig {
                 swap_fee_bps: 30,
                 operator_fee_bps: 1_000,
@@ -197,7 +197,10 @@ mod tests {
         assert_eq!(receipt.hedged_claim_token_supply, 500);
         assert_eq!(hedge_position.hedged_claim_token_amount, 500);
         assert_eq!(
-            market.side0.claim_token_ledger.hedged_claim_token_supply,
+            market
+                .base_side
+                .claim_token_ledger
+                .hedged_claim_token_supply,
             500
         );
     }
@@ -205,7 +208,7 @@ mod tests {
     #[test]
     fn close_hedge_updates_position_and_side_supply() {
         let mut market = test_market();
-        market.side0.claim_token_ledger = ClaimTokenLedger {
+        market.base_side.claim_token_ledger = ClaimTokenLedger {
             hedged_claim_token_supply: 500,
             ..ClaimTokenLedger::default()
         };
@@ -221,7 +224,10 @@ mod tests {
         assert_eq!(receipt.hedged_claim_token_supply, 375);
         assert_eq!(hedge_position.hedged_claim_token_amount, 375);
         assert_eq!(
-            market.side0.claim_token_ledger.hedged_claim_token_supply,
+            market
+                .base_side
+                .claim_token_ledger
+                .hedged_claim_token_supply,
             375
         );
     }

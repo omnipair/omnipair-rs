@@ -29,8 +29,8 @@ pub struct DepositInsurance<'info> {
         mut,
         seeds = [
             MARKET_V2_SEED_PREFIX,
-            market.asset0_mint.as_ref(),
-            market.asset1_mint.as_ref(),
+            market.base_mint.as_ref(),
+            market.quote_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
@@ -113,7 +113,7 @@ impl<'info> DepositInsurance<'info> {
             insurance_credit: receipt.insurance_credit,
             available0: receipt.available0,
             available1: receipt.available1,
-            metadata: MarketEventMetadata::new(sponsor_key, market_key),
+            metadata: MarketEventMetadata::new(sponsor_key, market_key)?,
         });
 
         Ok(())

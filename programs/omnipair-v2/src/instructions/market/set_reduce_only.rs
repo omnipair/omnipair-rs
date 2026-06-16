@@ -19,8 +19,8 @@ pub struct SetMarketReduceOnly<'info> {
         mut,
         seeds = [
             MARKET_V2_SEED_PREFIX,
-            market.asset0_mint.as_ref(),
-            market.asset1_mint.as_ref(),
+            market.base_mint.as_ref(),
+            market.quote_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
@@ -42,7 +42,7 @@ impl<'info> SetMarketReduceOnly<'info> {
             buffer_ratio_bps: market.config.buffer_ratio_bps,
             swap_fee_bps: market.config.swap_fee_bps,
             operator_fee_bps: market.config.operator_fee_bps,
-            metadata: MarketEventMetadata::new(ctx.accounts.operator.key(), market.key()),
+            metadata: MarketEventMetadata::new(ctx.accounts.operator.key(), market.key())?,
         });
 
         Ok(())

@@ -31,8 +31,8 @@ pub struct DepositCollateral<'info> {
         mut,
         seeds = [
             MARKET_V2_SEED_PREFIX,
-            market.asset0_mint.as_ref(),
-            market.asset1_mint.as_ref(),
+            market.base_mint.as_ref(),
+            market.quote_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
@@ -144,7 +144,7 @@ impl<'info> DepositCollateral<'info> {
             collateral_credit: collateral_receipt.collateral_credit,
             collateral0: collateral_receipt.collateral0,
             collateral1: collateral_receipt.collateral1,
-            metadata: MarketEventMetadata::new(owner_key, market_key),
+            metadata: MarketEventMetadata::new(owner_key, market_key)?,
         });
 
         Ok(())

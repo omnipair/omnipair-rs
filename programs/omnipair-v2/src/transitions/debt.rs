@@ -61,9 +61,9 @@ impl Borrow {
         let debt_side_index = if self.borrow_asset_is_asset0 { 0 } else { 1 };
         market.enforce_daily_borrow_limit(debt_side_index, self.borrow_amount)?;
         let debt_side = if self.borrow_asset_is_asset0 {
-            &mut market.side0
+            &mut market.base_side
         } else {
-            &mut market.side1
+            &mut market.quote_side
         };
         require_borrow_headroom(debt_side, self.borrow_amount)?;
         debt_side.reserve_ledger.live_reserve = debt_side
@@ -173,14 +173,14 @@ impl Repay {
                 .debt_bearing_collateral1_for_debt0
                 .checked_sub(release_collateral)
                 .ok_or(ErrorCode::MarketMathOverflow)?;
-            market.side0.reserve_ledger.live_reserve = market
-                .side0
+            market.base_side.reserve_ledger.live_reserve = market
+                .base_side
                 .reserve_ledger
                 .live_reserve
                 .checked_add(self.repay_credit)
                 .ok_or(ErrorCode::ReserveOverflow)?;
-            market.side0.reserve_ledger.cash_reserve = market
-                .side0
+            market.base_side.reserve_ledger.cash_reserve = market
+                .base_side
                 .reserve_ledger
                 .cash_reserve
                 .checked_add(self.repay_credit)
@@ -222,14 +222,14 @@ impl Repay {
                 .debt_bearing_collateral0_for_debt1
                 .checked_sub(release_collateral)
                 .ok_or(ErrorCode::MarketMathOverflow)?;
-            market.side1.reserve_ledger.live_reserve = market
-                .side1
+            market.quote_side.reserve_ledger.live_reserve = market
+                .quote_side
                 .reserve_ledger
                 .live_reserve
                 .checked_add(self.repay_credit)
                 .ok_or(ErrorCode::ReserveOverflow)?;
-            market.side1.reserve_ledger.cash_reserve = market
-                .side1
+            market.quote_side.reserve_ledger.cash_reserve = market
+                .quote_side
                 .reserve_ledger
                 .cash_reserve
                 .checked_add(self.repay_credit)

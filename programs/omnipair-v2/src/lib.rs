@@ -55,13 +55,16 @@ pub mod omnipair_v2 {
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn add_liquidity(ctx: Context<DepositReserve>, args: DepositReserveArgs) -> Result<()> {
-        DepositReserve::handle_deposit(ctx, args)
+    pub fn add_liquidity(ctx: Context<AddLiquidity>, args: AddLiquidityArgs) -> Result<()> {
+        AddLiquidity::handle_add_liquidity(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn remove_liquidity(ctx: Context<RedeemClaim>, args: RedeemClaimArgs) -> Result<()> {
-        RedeemClaim::handle_redeem(ctx, args)
+    pub fn remove_liquidity(
+        ctx: Context<RemoveLiquidity>,
+        args: RemoveLiquidityArgs,
+    ) -> Result<()> {
+        RemoveLiquidity::handle_remove_liquidity(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]

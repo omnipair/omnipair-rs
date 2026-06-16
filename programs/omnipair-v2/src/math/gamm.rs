@@ -31,20 +31,23 @@ pub(crate) fn market_spot_price_nad(
     u64::try_from(price).map_err(|_| ErrorCode::MarketMathOverflow.into())
 }
 
-pub(crate) fn market_k_nad(side0: &MarketSide, side1: &MarketSide) -> Result<u128> {
+pub(crate) fn market_k_nad(base_side: &MarketSide, quote_side: &MarketSide) -> Result<u128> {
     normalize_to_nad(
-        side0.reserve_ledger.live_reserve as u128,
-        side0.asset_decimals,
+        base_side.reserve_ledger.live_reserve as u128,
+        base_side.asset_decimals,
     )?
     .checked_mul(normalize_to_nad(
-        side1.reserve_ledger.live_reserve as u128,
-        side1.asset_decimals,
+        quote_side.reserve_ledger.live_reserve as u128,
+        quote_side.asset_decimals,
     )?)
     .ok_or(ErrorCode::MarketMathOverflow.into())
 }
 
-pub(crate) fn market_liquidity_nad(side0: &MarketSide, side1: &MarketSide) -> Result<u128> {
-    market_k_nad(side0, side1)?
+pub(crate) fn market_liquidity_nad(
+    base_side: &MarketSide,
+    quote_side: &MarketSide,
+) -> Result<u128> {
+    market_k_nad(base_side, quote_side)?
         .sqrt()
         .ok_or(ErrorCode::MarketMathOverflow.into())
 }
@@ -59,8 +62,7 @@ pub(crate) fn construct_normalized_virtual_reserves_at_pessimistic_price(
     collateral_directional_ema_price_nad: u64,
 ) -> Result<(u128, u128)> {
     // Minimum liquidity check to prevent sqrt precision loss
-    if collateral_spot_reserve < MIN_LIQUIDITY as u128
-        || debt_spot_reserve < MIN_LIQUIDITY as u128
+    if collateral_spot_reserve < MIN_LIQUIDITY as u128 || debt_spot_reserve < MIN_LIQUIDITY as u128
     {
         return Ok((0, 0));
     }
@@ -93,9 +95,7 @@ pub(crate) fn construct_normalized_virtual_reserves_at_pessimistic_price(
         }
     };
     // sqrt(k * NAD / P_pessimistic)
-    let collateral_ema_reserve = x_virt_squared
-        .sqrt()
-        .ok_or(ErrorCode::MarketMathOverflow)?;
+    let collateral_ema_reserve = x_virt_squared.sqrt().ok_or(ErrorCode::MarketMathOverflow)?;
 
     // k * P_pessimistic / NAD
     // Try direct multiplication first; on overflow, split as (R_d * P / NAD) * R_c.
@@ -115,68 +115,43 @@ pub(crate) fn construct_normalized_virtual_reserves_at_pessimistic_price(
         }
     };
     // sqrt(k * P_pessimistic / NAD)
-    let debt_ema_reserve = y_virt_squared
-        .sqrt()
-        .ok_or(ErrorCode::MarketMathOverflow)?;
+    let debt_ema_reserve = y_virt_squared.sqrt().ok_or(ErrorCode::MarketMathOverflow)?;
 
     Ok((collateral_ema_reserve, debt_ema_reserve))
 }
 
-/// Calculate amount out given amount in.
+/// Calculate dy for adding dx to a constant-product coordinate.
 /// ```text
 /// Δy = (Δx * y) / (x + Δx)
-/// amount_out = (amount_in * reserve_out) / (reserve_in + amount_in)
 /// ```
-pub(crate) fn calculate_normalized_amount_out(
-    reserve_in: u128,
-    reserve_out: u128,
-    amount_in: u128,
-) -> Result<u128> {
-    let denominator = reserve_in
-        .checked_add(amount_in)
-        .ok_or(ErrorCode::DenominatorOverflow)?;
-    let amount_out = amount_in
-        .checked_mul(reserve_out)
+pub(crate) fn calculate_normalized_amount_out(x: u128, y: u128, dx: u128) -> Result<u128> {
+    let denominator = x.checked_add(dx).ok_or(ErrorCode::DenominatorOverflow)?;
+    let dy = dx
+        .checked_mul(y)
         .ok_or(ErrorCode::OutputAmountOverflow)?
         .checked_div(denominator)
         .ok_or(ErrorCode::OutputAmountOverflow)?;
-    Ok(amount_out)
+    Ok(dy)
 }
 
-/// Calculate amount in required to obtain a given amount out.
+/// Calculate dx required to remove dy from a constant-product coordinate.
 /// ```text
 /// Δx = (Δy * x) / (y - Δy)
-/// amount_in = (amount_out * reserve_in) / (reserve_out - amount_out)
 /// ```
-pub(crate) fn calculate_normalized_amount_in(
-    reserve_in: u128,
-    reserve_out: u128,
-    amount_out: u128,
-) -> Result<u128> {
-    let denominator = reserve_out
-        .checked_sub(amount_out)
-        .ok_or(ErrorCode::DenominatorOverflow)?;
-    let numerator = amount_out
-        .checked_mul(reserve_in)
-        .ok_or(ErrorCode::OutputAmountOverflow)?;
-    let amount_in = ceil_div(numerator, denominator).ok_or(ErrorCode::OutputAmountOverflow)?;
-    Ok(amount_in)
+pub(crate) fn calculate_normalized_amount_in(x: u128, y: u128, dy: u128) -> Result<u128> {
+    let denominator = y.checked_sub(dy).ok_or(ErrorCode::DenominatorOverflow)?;
+    let numerator = dy.checked_mul(x).ok_or(ErrorCode::OutputAmountOverflow)?;
+    let dx = ceil_div(numerator, denominator).ok_or(ErrorCode::OutputAmountOverflow)?;
+    Ok(dx)
 }
 
-pub(crate) fn calculate_normalized_amount_in_floor(
-    reserve_in: u128,
-    reserve_out: u128,
-    amount_out: u128,
-) -> Result<u128> {
-    if amount_out == 0 {
+pub(crate) fn calculate_normalized_amount_in_floor(x: u128, y: u128, dy: u128) -> Result<u128> {
+    if dy == 0 {
         return Ok(0);
     }
-    let denominator = reserve_out
-        .checked_sub(amount_out)
-        .ok_or(ErrorCode::DenominatorOverflow)?;
+    let denominator = y.checked_sub(dy).ok_or(ErrorCode::DenominatorOverflow)?;
     require!(denominator > 0, ErrorCode::DenominatorOverflow);
-    amount_out
-        .checked_mul(reserve_in)
+    dy.checked_mul(x)
         .ok_or(ErrorCode::OutputAmountOverflow)?
         .checked_div(denominator)
         .ok_or(ErrorCode::OutputAmountOverflow.into())

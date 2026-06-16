@@ -201,9 +201,9 @@ pub fn validate_swap_accounts<'info>(
     trader_asset_out_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
     let (market_side_in, market_side_out) = if asset_in_is_asset0 {
-        (&market.side0, &market.side1)
+        (&market.base_side, &market.quote_side)
     } else {
-        (&market.side1, &market.side0)
+        (&market.quote_side, &market.base_side)
     };
     require_keys_eq!(
         market_side_in.asset_mint,

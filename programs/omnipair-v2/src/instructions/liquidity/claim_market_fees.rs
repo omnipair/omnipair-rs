@@ -34,8 +34,8 @@ pub struct ClaimMarketFees<'info> {
         mut,
         seeds = [
             MARKET_V2_SEED_PREFIX,
-            market.asset0_mint.as_ref(),
-            market.asset1_mint.as_ref(),
+            market.base_mint.as_ref(),
+            market.quote_mint.as_ref(),
             market.params_hash.as_ref(),
         ],
         bump = market.bump
@@ -139,7 +139,7 @@ impl<'info> ClaimMarketFees<'info> {
             claim_kind: args.claim_kind.event_code(),
             fee_amount: settled_claim.fee_amount,
             remaining_fee_liability: settled_claim.remaining_fee_liability,
-            metadata: MarketEventMetadata::new(fee_authority_key, market_key),
+            metadata: MarketEventMetadata::new(fee_authority_key, market_key)?,
         });
 
         Ok(())

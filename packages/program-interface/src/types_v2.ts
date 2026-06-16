@@ -47,12 +47,12 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "market.asset0_mint",
+                "path": "market.base_mint",
                 "account": "market"
               },
               {
                 "kind": "account",
-                "path": "market.asset1_mint",
+                "path": "market.quote_mint",
                 "account": "market"
               },
               {
@@ -167,7 +167,7 @@ export type OmnipairV2 = {
           "name": "args",
           "type": {
             "defined": {
-              "name": "depositReserveArgs"
+              "name": "addLiquidityArgs"
             }
           }
         }
@@ -207,12 +207,12 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "market.asset0_mint",
+                "path": "market.base_mint",
                 "account": "market"
               },
               {
                 "kind": "account",
-                "path": "market.asset1_mint",
+                "path": "market.quote_mint",
                 "account": "market"
               },
               {
@@ -355,12 +355,12 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "market.asset0_mint",
+                "path": "market.base_mint",
                 "account": "market"
               },
               {
                 "kind": "account",
-                "path": "market.asset1_mint",
+                "path": "market.quote_mint",
                 "account": "market"
               },
               {
@@ -503,12 +503,12 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "market.asset0_mint",
+                "path": "market.base_mint",
                 "account": "market"
               },
               {
                 "kind": "account",
-                "path": "market.asset1_mint",
+                "path": "market.quote_mint",
                 "account": "market"
               },
               {
@@ -660,12 +660,12 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "market.asset0_mint",
+                "path": "market.base_mint",
                 "account": "market"
               },
               {
                 "kind": "account",
-                "path": "market.asset1_mint",
+                "path": "market.quote_mint",
                 "account": "market"
               },
               {
@@ -778,12 +778,12 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "market.asset0_mint",
+                "path": "market.base_mint",
                 "account": "market"
               },
               {
                 "kind": "account",
-                "path": "market.asset1_mint",
+                "path": "market.quote_mint",
                 "account": "market"
               },
               {
@@ -946,12 +946,12 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "market.asset0_mint",
+                "path": "market.base_mint",
                 "account": "market"
               },
               {
                 "kind": "account",
-                "path": "market.asset1_mint",
+                "path": "market.quote_mint",
                 "account": "market"
               },
               {
@@ -1095,12 +1095,12 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "market.asset0_mint",
+                "path": "market.base_mint",
                 "account": "market"
               },
               {
                 "kind": "account",
-                "path": "market.asset1_mint",
+                "path": "market.quote_mint",
                 "account": "market"
               },
               {
@@ -1198,10 +1198,10 @@ export type OmnipairV2 = {
           "signer": true
         },
         {
-          "name": "asset0Mint"
+          "name": "baseMint"
         },
         {
-          "name": "asset1Mint"
+          "name": "quoteMint"
         },
         {
           "name": "market",
@@ -1224,11 +1224,11 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "asset0Mint"
+                "path": "baseMint"
               },
               {
                 "kind": "account",
-                "path": "asset1Mint"
+                "path": "quoteMint"
               },
               {
                 "kind": "arg",
@@ -1238,19 +1238,19 @@ export type OmnipairV2 = {
           }
         },
         {
-          "name": "claim0TokenMint"
+          "name": "baseClaimTokenMint"
         },
         {
-          "name": "claim1TokenMint"
+          "name": "quoteClaimTokenMint"
         },
         {
-          "name": "hedge0TokenMint"
+          "name": "baseHedgeTokenMint"
         },
         {
-          "name": "hedge1TokenMint"
+          "name": "quoteHedgeTokenMint"
         },
         {
-          "name": "hedge0Vault",
+          "name": "baseHedgeVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1271,13 +1271,13 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "claim0TokenMint"
+                "path": "baseClaimTokenMint"
               }
             ]
           }
         },
         {
-          "name": "hedge1Vault",
+          "name": "quoteHedgeVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1298,13 +1298,13 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "claim1TokenMint"
+                "path": "quoteClaimTokenMint"
               }
             ]
           }
         },
         {
-          "name": "reserve0Vault",
+          "name": "baseReserveVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1333,13 +1333,13 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "asset0Mint"
+                "path": "baseMint"
               }
             ]
           }
         },
         {
-          "name": "reserve1Vault",
+          "name": "quoteReserveVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1368,13 +1368,13 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "asset1Mint"
+                "path": "quoteMint"
               }
             ]
           }
         },
         {
-          "name": "collateral0Vault",
+          "name": "baseCollateralVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1406,13 +1406,13 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "asset0Mint"
+                "path": "baseMint"
               }
             ]
           }
         },
         {
-          "name": "collateral1Vault",
+          "name": "quoteCollateralVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1444,13 +1444,13 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "asset1Mint"
+                "path": "quoteMint"
               }
             ]
           }
         },
         {
-          "name": "insurance0Vault",
+          "name": "baseInsuranceVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1474,13 +1474,13 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "asset0Mint"
+                "path": "baseMint"
               }
             ]
           }
         },
         {
-          "name": "insurance1Vault",
+          "name": "quoteInsuranceVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1504,13 +1504,13 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "asset1Mint"
+                "path": "quoteMint"
               }
             ]
           }
         },
         {
-          "name": "fee0Vault",
+          "name": "baseFeeVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1535,13 +1535,13 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "asset0Mint"
+                "path": "baseMint"
               }
             ]
           }
         },
         {
-          "name": "fee1Vault",
+          "name": "quoteFeeVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1566,13 +1566,13 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "asset1Mint"
+                "path": "quoteMint"
               }
             ]
           }
         },
         {
-          "name": "claim0StakeVault",
+          "name": "baseStakeVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1599,13 +1599,13 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "claim0TokenMint"
+                "path": "baseClaimTokenMint"
               }
             ]
           }
         },
         {
-          "name": "claim1StakeVault",
+          "name": "quoteStakeVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1632,7 +1632,7 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "claim1TokenMint"
+                "path": "quoteClaimTokenMint"
               }
             ]
           }
@@ -1727,12 +1727,12 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "market.asset0_mint",
+                "path": "market.base_mint",
                 "account": "market"
               },
               {
                 "kind": "account",
-                "path": "market.asset1_mint",
+                "path": "market.quote_mint",
                 "account": "market"
               },
               {
@@ -1888,12 +1888,12 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "market.asset0_mint",
+                "path": "market.base_mint",
                 "account": "market"
               },
               {
                 "kind": "account",
-                "path": "market.asset1_mint",
+                "path": "market.quote_mint",
                 "account": "market"
               },
               {
@@ -2060,12 +2060,12 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "market.asset0_mint",
+                "path": "market.base_mint",
                 "account": "market"
               },
               {
                 "kind": "account",
-                "path": "market.asset1_mint",
+                "path": "market.quote_mint",
                 "account": "market"
               },
               {
@@ -2146,7 +2146,7 @@ export type OmnipairV2 = {
           "name": "args",
           "type": {
             "defined": {
-              "name": "redeemClaimArgs"
+              "name": "removeLiquidityArgs"
             }
           }
         }
@@ -2186,12 +2186,12 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "market.asset0_mint",
+                "path": "market.base_mint",
                 "account": "market"
               },
               {
                 "kind": "account",
-                "path": "market.asset1_mint",
+                "path": "market.quote_mint",
                 "account": "market"
               },
               {
@@ -2331,12 +2331,12 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "market.asset0_mint",
+                "path": "market.base_mint",
                 "account": "market"
               },
               {
                 "kind": "account",
-                "path": "market.asset1_mint",
+                "path": "market.quote_mint",
                 "account": "market"
               },
               {
@@ -2429,12 +2429,12 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "market.asset0_mint",
+                "path": "market.base_mint",
                 "account": "market"
               },
               {
                 "kind": "account",
-                "path": "market.asset1_mint",
+                "path": "market.quote_mint",
                 "account": "market"
               },
               {
@@ -2580,12 +2580,12 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "market.asset0_mint",
+                "path": "market.base_mint",
                 "account": "market"
               },
               {
                 "kind": "account",
-                "path": "market.asset1_mint",
+                "path": "market.quote_mint",
                 "account": "market"
               },
               {
@@ -2713,12 +2713,12 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "market.asset0_mint",
+                "path": "market.base_mint",
                 "account": "market"
               },
               {
                 "kind": "account",
-                "path": "market.asset1_mint",
+                "path": "market.quote_mint",
                 "account": "market"
               },
               {
@@ -2864,12 +2864,12 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "market.asset0_mint",
+                "path": "market.base_mint",
                 "account": "market"
               },
               {
                 "kind": "account",
-                "path": "market.asset1_mint",
+                "path": "market.quote_mint",
                 "account": "market"
               },
               {
@@ -2962,12 +2962,12 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "market.asset0_mint",
+                "path": "market.base_mint",
                 "account": "market"
               },
               {
                 "kind": "account",
-                "path": "market.asset1_mint",
+                "path": "market.quote_mint",
                 "account": "market"
               },
               {
@@ -3860,6 +3860,30 @@ export type OmnipairV2 = {
   ],
   "types": [
     {
+      "name": "addLiquidityArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "marketSideIndex",
+            "type": "u8"
+          },
+          {
+            "name": "depositAmount",
+            "type": "u64"
+          },
+          {
+            "name": "minClaimAmount",
+            "type": "u64"
+          },
+          {
+            "name": "maxBufferAmount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "borrowArgs",
       "type": {
         "kind": "struct",
@@ -4088,30 +4112,6 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "depositReserveArgs",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "marketSideIndex",
-            "type": "u8"
-          },
-          {
-            "name": "depositAmount",
-            "type": "u64"
-          },
-          {
-            "name": "minClaimAmount",
-            "type": "u64"
-          },
-          {
-            "name": "maxBufferAmount",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
       "name": "feeLedger",
       "type": {
         "kind": "struct",
@@ -4330,11 +4330,11 @@ export type OmnipairV2 = {
             "type": "u8"
           },
           {
-            "name": "asset0Mint",
+            "name": "baseMint",
             "type": "pubkey"
           },
           {
-            "name": "asset1Mint",
+            "name": "quoteMint",
             "type": "pubkey"
           },
           {
@@ -4346,7 +4346,7 @@ export type OmnipairV2 = {
             "type": "pubkey"
           },
           {
-            "name": "side0",
+            "name": "baseSide",
             "type": {
               "defined": {
                 "name": "marketSide"
@@ -4354,7 +4354,7 @@ export type OmnipairV2 = {
             }
           },
           {
-            "name": "side1",
+            "name": "quoteSide",
             "type": {
               "defined": {
                 "name": "marketSide"
@@ -4647,59 +4647,59 @@ export type OmnipairV2 = {
             "type": "pubkey"
           },
           {
-            "name": "asset0Mint",
+            "name": "baseMint",
             "type": "pubkey"
           },
           {
-            "name": "asset1Mint",
+            "name": "quoteMint",
             "type": "pubkey"
           },
           {
-            "name": "claim0TokenMint",
+            "name": "baseClaimTokenMint",
             "type": "pubkey"
           },
           {
-            "name": "claim1TokenMint",
+            "name": "quoteClaimTokenMint",
             "type": "pubkey"
           },
           {
-            "name": "claim0StakeVault",
+            "name": "baseStakeVault",
             "type": "pubkey"
           },
           {
-            "name": "claim1StakeVault",
+            "name": "quoteStakeVault",
             "type": "pubkey"
           },
           {
-            "name": "collateral0Vault",
+            "name": "baseCollateralVault",
             "type": "pubkey"
           },
           {
-            "name": "collateral1Vault",
+            "name": "quoteCollateralVault",
             "type": "pubkey"
           },
           {
-            "name": "insurance0Vault",
+            "name": "baseInsuranceVault",
             "type": "pubkey"
           },
           {
-            "name": "insurance1Vault",
+            "name": "quoteInsuranceVault",
             "type": "pubkey"
           },
           {
-            "name": "hedge0TokenMint",
+            "name": "baseHedgeTokenMint",
             "type": "pubkey"
           },
           {
-            "name": "hedge1TokenMint",
+            "name": "quoteHedgeTokenMint",
             "type": "pubkey"
           },
           {
-            "name": "hedge0Vault",
+            "name": "baseHedgeVault",
             "type": "pubkey"
           },
           {
-            "name": "hedge1Vault",
+            "name": "quoteHedgeVault",
             "type": "pubkey"
           },
           {
@@ -5489,7 +5489,7 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "redeemClaimArgs",
+      "name": "removeLiquidityArgs",
       "type": {
         "kind": "struct",
         "fields": [

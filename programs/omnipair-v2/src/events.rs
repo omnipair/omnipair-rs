@@ -8,32 +8,32 @@ pub struct MarketEventMetadata {
 }
 
 impl MarketEventMetadata {
-    pub fn new(signer: Pubkey, market: Pubkey) -> Self {
-        Self {
+    pub fn new(signer: Pubkey, market: Pubkey) -> Result<Self> {
+        Ok(Self {
             signer,
             market,
-            slot: Clock::get().unwrap().slot,
-        }
+            slot: Clock::get()?.slot,
+        })
     }
 }
 
 #[event]
 pub struct MarketCreated {
     pub market: Pubkey,
-    pub asset0_mint: Pubkey,
-    pub asset1_mint: Pubkey,
-    pub claim0_token_mint: Pubkey,
-    pub claim1_token_mint: Pubkey,
-    pub claim0_stake_vault: Pubkey,
-    pub claim1_stake_vault: Pubkey,
-    pub collateral0_vault: Pubkey,
-    pub collateral1_vault: Pubkey,
-    pub insurance0_vault: Pubkey,
-    pub insurance1_vault: Pubkey,
-    pub hedge0_token_mint: Pubkey,
-    pub hedge1_token_mint: Pubkey,
-    pub hedge0_vault: Pubkey,
-    pub hedge1_vault: Pubkey,
+    pub base_mint: Pubkey,
+    pub quote_mint: Pubkey,
+    pub base_claim_token_mint: Pubkey,
+    pub quote_claim_token_mint: Pubkey,
+    pub base_stake_vault: Pubkey,
+    pub quote_stake_vault: Pubkey,
+    pub base_collateral_vault: Pubkey,
+    pub quote_collateral_vault: Pubkey,
+    pub base_insurance_vault: Pubkey,
+    pub quote_insurance_vault: Pubkey,
+    pub base_hedge_token_mint: Pubkey,
+    pub quote_hedge_token_mint: Pubkey,
+    pub base_hedge_vault: Pubkey,
+    pub quote_hedge_vault: Pubkey,
     pub operator: Pubkey,
     pub manager: Pubkey,
     pub buffer_ratio_bps: u16,
