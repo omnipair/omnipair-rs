@@ -164,4 +164,30 @@ mod tests {
         assert_eq!(book.borrowed_bucket, 50_000);
         assert_eq!(book.withdrawn_bucket, 25_000);
     }
+
+    #[test]
+    fn market_fee_liabilities_settle_operator_and_protocol_buckets() {
+        let mut fee_ledger = FeeLedger {
+            fee_vault_balance: 700,
+            operator_fee_liability: 400,
+            protocol_fee_liability: 300,
+            ..FeeLedger::default()
+        };
+
+        let operator_fee = fee_ledger
+            .claim_market_fee_liability(MarketFeeClaimKind::Operator)
+            .unwrap();
+        let protocol_fee = fee_ledger
+            .claim_market_fee_liability(MarketFeeClaimKind::Protocol)
+            .unwrap();
+        let err = fee_ledger
+            .claim_market_fee_liability(MarketFeeClaimKind::Operator)
+            .unwrap_err();
+
+        assert_eq!(operator_fee, 400);
+        assert_eq!(protocol_fee, 300);
+        assert_eq!(fee_ledger.operator_fee_liability, 0);
+        assert_eq!(fee_ledger.protocol_fee_liability, 0);
+        assert_eq!(err, error!(ErrorCode::AmountZero));
+    }
 }

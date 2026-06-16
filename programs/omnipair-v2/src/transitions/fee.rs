@@ -661,6 +661,101 @@ mod tests {
         market_side.fee_ledger.assert_backed().unwrap();
     }
 
+    #[test]
+    fn fee_credit_allocates_only_to_matched_stake() {
+        let mut market_side = market_side();
+        market_side.claim_token_ledger.staked_claim_token_supply = 800_000;
+        market_side.buffer_ledger.staked_buffer_share_amount = 100_000;
+
+        RecordFeeCredit::new(1_000, 1_000, 0, NAD)
+            .apply(&mut market_side)
+            .unwrap();
+
+        assert_eq!(market_side.fee_ledger.fee_vault_balance, 1_000);
+        assert_eq!(market_side.fee_ledger.operator_fee_liability, 100);
+        assert_eq!(market_side.fee_ledger.protocol_fee_liability, 0);
+        assert_eq!(market_side.fee_ledger.fee_liability, 900);
+        assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 0);
+        assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 1_800_000);
+        market_side.fee_ledger.assert_backed().unwrap();
+    }
+
+    #[test]
+    fn fee_credit_routes_pressure_share_to_hedged_liability() {
+        let mut market_side = market_side();
+        market_side.reserve_ledger.live_reserve = 1_000_000;
+        market_side.claim_token_ledger.protected_claim_token_supply = 800_000;
+        market_side.claim_token_ledger.hedged_claim_token_supply = 200_000;
+        market_side.claim_token_ledger.staked_claim_token_supply = 800_000;
+        market_side.buffer_ledger.staked_buffer_share_amount = 200_000;
+
+        RecordFeeCredit::new(1_000, 0, 0, NAD)
+            .apply(&mut market_side)
+            .unwrap();
+
+        assert_eq!(market_side.fee_ledger.fee_vault_balance, 1_000);
+        assert_eq!(market_side.fee_ledger.protocol_fee_liability, 0);
+        assert!(market_side.fee_ledger.hedged_fee_liability > 0);
+        assert!(market_side.fee_ledger.hedged_fee_growth_index_nad > 0);
+        assert!(market_side.fee_ledger.fee_liability < 1_000);
+        assert_eq!(
+            market_side.fee_ledger.total_liability().unwrap(),
+            market_side.fee_ledger.fee_vault_balance
+        );
+    }
+
+    #[test]
+    fn unstaked_claims_do_not_receive_fee_growth() {
+        let mut market_side = market_side();
+        market_side.claim_token_ledger.protected_claim_token_supply = 800_000;
+
+        RecordFeeCredit::new(1_000, 0, 0, NAD)
+            .apply(&mut market_side)
+            .unwrap();
+
+        assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 0);
+        assert_eq!(market_side.fee_ledger.fee_liability, 0);
+        assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 1_000);
+        market_side.fee_ledger.assert_backed().unwrap();
+    }
+
+    #[test]
+    fn unallocated_fees_carry_forward_to_next_active_stake() {
+        let mut market_side = market_side();
+
+        RecordFeeCredit::new(1_000, 0, 0, NAD)
+            .apply(&mut market_side)
+            .unwrap();
+        assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 0);
+        assert_eq!(market_side.fee_ledger.fee_liability, 0);
+        assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 1_000);
+
+        market_side.claim_token_ledger.staked_claim_token_supply = 800_000;
+        market_side.buffer_ledger.staked_buffer_share_amount = 200_000;
+        CarryForwardStakerFees.apply(&mut market_side).unwrap();
+
+        assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 1_000_000);
+        assert_eq!(market_side.fee_ledger.fee_liability, 1_000);
+        assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 0);
+        market_side.fee_ledger.assert_backed().unwrap();
+    }
+
+    #[test]
+    fn unallocated_fee_rounding_dust_stays_carried_forward() {
+        let mut market_side = market_side();
+        market_side.claim_token_ledger.staked_claim_token_supply = 1_600_000_000;
+        market_side.buffer_ledger.staked_buffer_share_amount = 400_000_000;
+
+        RecordFeeCredit::new(1, 0, 0, NAD)
+            .apply(&mut market_side)
+            .unwrap();
+
+        assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 0);
+        assert_eq!(market_side.fee_ledger.fee_liability, 0);
+        assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 1);
+        market_side.fee_ledger.assert_backed().unwrap();
+    }
+
     proptest! {
         #[test]
         fn fee_credit_remains_backed_and_does_not_reprice_claim_principal(

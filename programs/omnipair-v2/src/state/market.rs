@@ -179,11 +179,7 @@ macro_rules! generate_market_seeds {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        state::{BufferLedger, FeeLedger, MarketFeeClaimKind},
-        transitions::fee::{CarryForwardStakerFees, RecordFeeCredit},
-        transitions::reserve::AddLiquidity,
-    };
+    use crate::{state::BufferLedger, transitions::reserve::AddLiquidity};
 
     fn test_market_side(asset_mint: Pubkey, buffer_ratio_bps: u16) -> MarketSide {
         MarketSide {
@@ -305,127 +301,6 @@ mod tests {
 
         assert_eq!(default_operator, error!(ErrorCode::InvalidMarketConfig));
         assert_eq!(default_manager, error!(ErrorCode::InvalidMarketConfig));
-    }
-
-    #[test]
-    fn fee_ledger_allocates_only_to_matched_stake() {
-        let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
-        market_side.claim_token_ledger.staked_claim_token_supply = 800_000;
-        market_side.buffer_ledger.staked_buffer_share_amount = 100_000;
-
-        RecordFeeCredit::new(1_000, 1_000, 0, NAD)
-            .apply(&mut market_side)
-            .unwrap();
-
-        assert_eq!(market_side.fee_ledger.fee_vault_balance, 1_000);
-        assert_eq!(market_side.fee_ledger.operator_fee_liability, 100);
-        assert_eq!(market_side.fee_ledger.protocol_fee_liability, 0);
-        assert_eq!(market_side.fee_ledger.fee_liability, 900);
-        assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 0);
-        assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 1_800_000);
-        market_side.fee_ledger.assert_backed().unwrap();
-    }
-
-    #[test]
-    fn fee_ledger_routes_pressure_share_to_hedged_liability() {
-        let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
-        market_side.reserve_ledger.live_reserve = 1_000_000;
-        market_side.claim_token_ledger.protected_claim_token_supply = 800_000;
-        market_side.claim_token_ledger.hedged_claim_token_supply = 200_000;
-        market_side.claim_token_ledger.staked_claim_token_supply = 800_000;
-        market_side.buffer_ledger.staked_buffer_share_amount = 200_000;
-
-        RecordFeeCredit::new(1_000, 0, 0, NAD)
-            .apply(&mut market_side)
-            .unwrap();
-
-        assert_eq!(market_side.fee_ledger.fee_vault_balance, 1_000);
-        assert_eq!(market_side.fee_ledger.protocol_fee_liability, 0);
-        assert!(market_side.fee_ledger.hedged_fee_liability > 0);
-        assert!(market_side.fee_ledger.hedged_fee_growth_index_nad > 0);
-        assert!(market_side.fee_ledger.fee_liability < 1_000);
-        assert_eq!(
-            market_side.fee_ledger.total_liability().unwrap(),
-            market_side.fee_ledger.fee_vault_balance
-        );
-    }
-
-    #[test]
-    fn unstaked_claims_do_not_receive_fee_growth() {
-        let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
-        market_side.claim_token_ledger.protected_claim_token_supply = 800_000;
-
-        RecordFeeCredit::new(1_000, 0, 0, NAD)
-            .apply(&mut market_side)
-            .unwrap();
-
-        assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 0);
-        assert_eq!(market_side.fee_ledger.fee_liability, 0);
-        assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 1_000);
-        market_side.fee_ledger.assert_backed().unwrap();
-    }
-
-    #[test]
-    fn unallocated_fees_carry_forward_to_next_active_stake() {
-        let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
-
-        RecordFeeCredit::new(1_000, 0, 0, NAD)
-            .apply(&mut market_side)
-            .unwrap();
-        assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 0);
-        assert_eq!(market_side.fee_ledger.fee_liability, 0);
-        assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 1_000);
-
-        market_side.claim_token_ledger.staked_claim_token_supply = 800_000;
-        market_side.buffer_ledger.staked_buffer_share_amount = 200_000;
-        CarryForwardStakerFees.apply(&mut market_side).unwrap();
-
-        assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 1_000_000);
-        assert_eq!(market_side.fee_ledger.fee_liability, 1_000);
-        assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 0);
-        market_side.fee_ledger.assert_backed().unwrap();
-    }
-
-    #[test]
-    fn unallocated_fee_rounding_dust_stays_carried_forward() {
-        let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
-        market_side.claim_token_ledger.staked_claim_token_supply = 1_600_000_000;
-        market_side.buffer_ledger.staked_buffer_share_amount = 400_000_000;
-
-        RecordFeeCredit::new(1, 0, 0, NAD)
-            .apply(&mut market_side)
-            .unwrap();
-
-        assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 0);
-        assert_eq!(market_side.fee_ledger.fee_liability, 0);
-        assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 1);
-        market_side.fee_ledger.assert_backed().unwrap();
-    }
-
-    #[test]
-    fn market_fee_liabilities_settle_operator_and_protocol_buckets() {
-        let mut fee_ledger = FeeLedger {
-            fee_vault_balance: 700,
-            operator_fee_liability: 400,
-            protocol_fee_liability: 300,
-            ..FeeLedger::default()
-        };
-
-        let operator_fee = fee_ledger
-            .claim_market_fee_liability(MarketFeeClaimKind::Operator)
-            .unwrap();
-        let protocol_fee = fee_ledger
-            .claim_market_fee_liability(MarketFeeClaimKind::Protocol)
-            .unwrap();
-        let err = fee_ledger
-            .claim_market_fee_liability(MarketFeeClaimKind::Operator)
-            .unwrap_err();
-
-        assert_eq!(operator_fee, 400);
-        assert_eq!(protocol_fee, 300);
-        assert_eq!(fee_ledger.operator_fee_liability, 0);
-        assert_eq!(fee_ledger.protocol_fee_liability, 0);
-        assert_eq!(err, error!(ErrorCode::AmountZero));
     }
 
     #[test]
