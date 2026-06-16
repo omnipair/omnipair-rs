@@ -1,6 +1,6 @@
 # @omnipair/program-interface
 
-TypeScript interface for the [Omnipair](https://omnipair.fi) Solana program - an oracleless spot and margin money market protocol.
+TypeScript interface for the [Omnipair](https://omnipair.fi) Solana programs: the legacy V1 pair program and the V2 market architecture program.
 
 ## Step 1: Install
 
@@ -15,7 +15,7 @@ yarn add @omnipair/program-interface
 ```typescript
 import * as anchor from "@coral-xyz/anchor";
 import type { Omnipair } from "@omnipair/program-interface";
-import { IDL } from "@omnipair/program-interface";
+import { IDL, PROGRAM_ID } from "@omnipair/program-interface";
 
 const connection = new anchor.web3.Connection(
   process.env.ANCHOR_PROVIDER_URL ?? "https://api.mainnet-beta.solana.com",
@@ -25,7 +25,17 @@ const wallet = new anchor.Wallet(anchor.web3.Keypair.generate());
 const provider = new anchor.AnchorProvider(connection, wallet, {
   commitment: "confirmed",
 });
-const program = new anchor.Program<Omnipair>(IDL, provider);
+const program = new anchor.Program<Omnipair>(IDL, PROGRAM_ID, provider);
+```
+
+For V2:
+
+```typescript
+import * as anchor from "@coral-xyz/anchor";
+import type { OmnipairV2 } from "@omnipair/program-interface";
+import { IDL_V2, OMNIPAIR_V2_PROGRAM_ID } from "@omnipair/program-interface";
+
+const program = new anchor.Program<OmnipairV2>(IDL_V2, OMNIPAIR_V2_PROGRAM_ID, provider);
 ```
 
 ## Step 3: Compute `paramsHash` (same as on-chain initialize)
@@ -120,17 +130,21 @@ This package ships strict ESM-compatible output (Node/tsx/bundlers). Relative mo
 ## Exports
 
 ### IDL
-The Anchor IDL JSON for the Omnipair program.
+The Anchor IDL JSON for both Omnipair programs:
+- `IDL` - V1 pair program IDL
+- `IDL_V2` - V2 market program IDL
 
 ### Types
 All TypeScript types generated from the IDL:
 - `Omnipair` - The program type (type-only export)
+- `OmnipairV2` - The V2 program type (type-only export)
 - Account types: `Pair`, `UserPosition`, `RateModel`, `FutarchyAuthority`
 - Instruction argument types
 - Event types
 
 ### Constants
-- `PROGRAM_ID` - The Omnipair program ID
+- `PROGRAM_ID` / `OMNIPAIR_PROGRAM_ID` - The Omnipair V1 program ID
+- `OMNIPAIR_V2_PROGRAM_ID` - The Omnipair V2 program ID
 - `SEEDS` - PDA seed constants
 
 ### Utilities
@@ -139,7 +153,8 @@ All TypeScript types generated from the IDL:
 - `deriveFutarchyAuthorityAddress()` - Derive FutarchyAuthority PDA
 - `deriveReserveVaultAddress(pair, reserveMint)` - Derive a reserve vault PDA
 - `deriveCollateralVaultAddress(pair, collateralMint)` - Derive a collateral vault PDA
-- `deriveMarketV2Address(asset0Mint, asset1Mint, paramsHash)` - Derive a V2 Market PDA
+- `deriveMarketAddress(asset0Mint, asset1Mint, paramsHash)` - Derive a V2 Market PDA
+- `deriveMarketV2Address(asset0Mint, asset1Mint, paramsHash)` - Backward-compatible alias for `deriveMarketAddress`
 - `deriveMarketReserveVaultAddress(market, reserveMint)` - Derive a V2 market reserve vault PDA
 - `deriveMarketCollateralVaultAddress(market, collateralMint)` - Derive a V2 market collateral vault PDA
 - `deriveMarketFeeVaultAddress(market, feeMint)` - Derive a V2 market fee vault PDA

@@ -33,6 +33,10 @@
     "./idl": {
       "import": "./dist/idl.js",
       "types": "./dist/idl.d.ts"
+    },
+    "./idl-v2": {
+      "import": "./dist/idl_v2.js",
+      "types": "./dist/idl_v2.d.ts"
     }
   },
   "files": [
