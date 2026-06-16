@@ -45,6 +45,15 @@ pub fn token_account_credit(
         .ok_or(ErrorCode::MarketMathOverflow.into())
 }
 
+pub fn token_account_debit(
+    balance_before: u64,
+    token_account: &InterfaceAccount<TokenAccount>,
+) -> Result<u64> {
+    balance_before
+        .checked_sub(token_account.amount)
+        .ok_or(ErrorCode::MarketMathOverflow.into())
+}
+
 pub fn validate_reserve_accounts<'info>(
     market: &Account<'info, Market>,
     market_side_index: u8,

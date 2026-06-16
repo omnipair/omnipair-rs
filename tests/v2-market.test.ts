@@ -2948,6 +2948,7 @@ describe("Omnipair Market LiteSVM", () => {
   it("borrows and repays fixed market debt against recognized collateral", async () => {
     trackInstruction("marketBorrow", "borrows fixed market debt");
     trackInstruction("marketRepay", "repays fixed market debt");
+    trackInstruction("withdrawCollateral", "withdraws idle borrower collateral");
 
     const {
       asset0Mint,
@@ -3043,6 +3044,29 @@ describe("Omnipair Market LiteSVM", () => {
       BigInt(307)
     );
 
+    await expectRejects(() =>
+      program.methods
+        .withdrawCollateral({
+          marketSideIndex: 1,
+          withdrawAmount: new BN(60),
+          minAssetAmountOut: new BN(60),
+        })
+        .accounts({
+          market,
+          owner: payer.publicKey,
+          assetMint: asset1Mint,
+          collateralVault: collateral1Vault,
+          ownerAssetAccount: ownerAsset1Account,
+          marginPosition,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .rpc()
+    );
+
     await program.methods
       .marketRepay({
         repayAssetIsAsset0: true,
@@ -3075,6 +3099,35 @@ describe("Omnipair Market LiteSVM", () => {
     );
     expect((await getAccount(connection as any, collateral1Vault)).amount).to.equal(
       BigInt(60)
+    );
+
+    await program.methods
+      .withdrawCollateral({
+        marketSideIndex: 1,
+        withdrawAmount: new BN(60),
+        minAssetAmountOut: new BN(60),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        assetMint: asset1Mint,
+        collateralVault: collateral1Vault,
+        ownerAssetAccount: ownerAsset1Account,
+        marginPosition,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
+      .rpc();
+
+    expect((await getAccount(connection as any, ownerAsset1Account)).amount).to.equal(
+      BigInt(300)
+    );
+    expect((await getAccount(connection as any, collateral1Vault)).amount).to.equal(
+      BigInt(0)
     );
   });
 

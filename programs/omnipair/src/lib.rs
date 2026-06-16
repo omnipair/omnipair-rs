@@ -163,6 +163,14 @@ pub mod omnipair {
     }
 
     #[access_control(ctx.accounts.validate(&args))]
+    pub fn withdraw_collateral(
+        ctx: Context<WithdrawCollateral>,
+        args: WithdrawCollateralArgs,
+    ) -> Result<()> {
+        WithdrawCollateral::handle_withdraw(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.validate(&args))]
     pub fn market_borrow(ctx: Context<MarketBorrow>, args: MarketBorrowArgs) -> Result<()> {
         MarketBorrow::handle_borrow(ctx, args)
     }

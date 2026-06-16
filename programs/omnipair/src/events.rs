@@ -164,6 +164,18 @@ pub struct MarketCollateralDeposited {
 }
 
 #[event]
+pub struct MarketCollateralWithdrawn {
+    pub market: Pubkey,
+    pub owner: Pubkey,
+    pub asset_mint: Pubkey,
+    pub collateral_debit: u64,
+    pub asset_credit: u64,
+    pub collateral0: u64,
+    pub collateral1: u64,
+    pub metadata: MarketEventMetadata,
+}
+
+#[event]
 pub struct MarketDebtUpdated {
     pub market: Pubkey,
     pub owner: Pubkey,
