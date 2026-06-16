@@ -33,6 +33,7 @@ const { AnchorProvider, BN, Program, Wallet } = anchor;
 const NAD = new BN(1_000_000_000);
 const BASE_MARKET_ASSET = { base: {} };
 const QUOTE_MARKET_ASSET = { quote: {} };
+const ANCHOR_EVENT_IX_TAG = Buffer.from([0xe4, 0x45, 0xa5, 0x2e, 0x51, 0xcb, 0x9a, 0x1d]);
 
 const omnipairV2IdlPath = path.join(__dirname, "../target/idl/omnipair_v2.json");
 const omnipairV2IdlData = JSON.parse(fs.readFileSync(omnipairV2IdlPath, "utf-8")) as any;
@@ -61,6 +62,28 @@ function oppositeMarketAssetFromIndex(sideIndex: number) {
 
 function normalizeMarketAsset(marketAsset: number | { base?: {}; quote?: {} }) {
   return typeof marketAsset === "number" ? marketAssetFromIndex(marketAsset) : marketAsset;
+}
+
+function decodeCpiEvents(svm: LiteSVM, signature: string) {
+  const transaction = svm.getTransaction(Buffer.from(signature, "base64"));
+  expect(transaction).to.not.equal(null);
+  const eventCoder = new anchor.BorshEventCoder(omnipairV2IdlData as any);
+  const events: any[] = [];
+
+  for (const instructionGroup of (transaction as any).innerInstructions()) {
+    for (const innerInstruction of instructionGroup) {
+      const data = Buffer.from(innerInstruction.instruction().data());
+      if (!data.subarray(0, ANCHOR_EVENT_IX_TAG.length).equals(ANCHOR_EVENT_IX_TAG)) {
+        continue;
+      }
+      const event = eventCoder.decode(data.subarray(ANCHOR_EVENT_IX_TAG.length).toString("base64"));
+      if (event) {
+        events.push(event);
+      }
+    }
+  }
+
+  return events;
 }
 
 async function expectRejects(action) {
@@ -3897,7 +3920,7 @@ describe("Omnipair Market LiteSVM", () => {
       10
     );
 
-    await program.methods
+    const liquidationSignature = await program.methods
       .liquidate({
         debtAsset: { base: {} },
         repayAmount: new BN(5),
@@ -3924,6 +3947,14 @@ describe("Omnipair Market LiteSVM", () => {
       .signers([liquidator])
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 })])
       .rpc();
+
+    const liquidationEvents = decodeCpiEvents(svm, liquidationSignature);
+    const liquidationEventNames = liquidationEvents.map((event) => event.name);
+    expect(liquidationEventNames).to.include("PositionLiquidated");
+    expect(liquidationEventNames).to.include("MarketHealthUpdated");
+    const healthEvent = liquidationEvents.find((event) => event.name === "MarketHealthUpdated");
+    expect(healthEvent.data.market.toString()).to.equal(market.toString());
+    expect(healthEvent.data.effective_base_debt_nad.toString()).to.equal("0");
 
     expect((await getAccount(connection as any, baseReserveVault)).amount).to.equal(
       BigInt(312)
