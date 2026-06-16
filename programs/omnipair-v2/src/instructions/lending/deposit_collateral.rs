@@ -10,6 +10,7 @@ use crate::{
     events::{MarketCollateralDeposited, MarketEventMetadata},
     shared::{account::get_size_with_discriminator, token::transfer_from_user_to_vault},
     state::{MarginPosition, Market},
+    transitions::collateral::DepositCollateral as DepositCollateralTransition,
 };
 
 use crate::instructions::common::{require_supported_asset_mint, token_program_for_mint};
@@ -132,29 +133,17 @@ impl<'info> DepositCollateral<'info> {
             .ok_or(ErrorCode::MarketMathOverflow)?;
         require!(collateral_credit > 0, ErrorCode::AmountZero);
 
-        if args.market_side_index == 0 {
-            ctx.accounts.margin_position.collateral0 = ctx
-                .accounts
-                .margin_position
-                .collateral0
-                .checked_add(collateral_credit)
-                .ok_or(ErrorCode::MarketMathOverflow)?;
-        } else {
-            ctx.accounts.margin_position.collateral1 = ctx
-                .accounts
-                .margin_position
-                .collateral1
-                .checked_add(collateral_credit)
-                .ok_or(ErrorCode::MarketMathOverflow)?;
-        }
+        let collateral_receipt =
+            DepositCollateralTransition::new(args.market_side_index, collateral_credit)
+                .apply(&mut ctx.accounts.margin_position)?;
 
         emit_cpi!(MarketCollateralDeposited {
             market: market_key,
             owner: owner_key,
             asset_mint: asset_mint_key,
-            collateral_credit,
-            collateral0: ctx.accounts.margin_position.collateral0,
-            collateral1: ctx.accounts.margin_position.collateral1,
+            collateral_credit: collateral_receipt.collateral_credit,
+            collateral0: collateral_receipt.collateral0,
+            collateral1: collateral_receipt.collateral1,
             metadata: MarketEventMetadata::new(owner_key, market_key),
         });
 

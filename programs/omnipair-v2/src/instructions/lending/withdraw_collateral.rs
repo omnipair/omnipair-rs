@@ -11,6 +11,7 @@ use crate::{
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
     state::{MarginPosition, Market},
+    transitions::collateral::WithdrawCollateral as WithdrawCollateralTransition,
 };
 
 use crate::instructions::common::{
@@ -108,10 +109,6 @@ impl<'info> WithdrawCollateral<'info> {
         let owner_asset_balance_before = ctx.accounts.owner_asset_account.amount;
         let collateral_balance_before = ctx.accounts.collateral_vault.amount;
 
-        ctx.accounts
-            .market
-            .enforce_daily_withdraw_limit(args.market_side_index, args.withdraw_amount)?;
-
         let asset_token_program = token_program_for_mint(
             &ctx.accounts.asset_mint,
             &ctx.accounts.token_program,
@@ -146,46 +143,18 @@ impl<'info> WithdrawCollateral<'info> {
             ErrorCode::SlippageExceeded
         );
 
-        match args.market_side_index {
-            0 => {
-                require_gte!(
-                    ctx.accounts.margin_position.idle_collateral0()?,
-                    collateral_debit,
-                    ErrorCode::InsufficientRecognizedCollateral
-                );
-                ctx.accounts.margin_position.collateral0 = ctx
-                    .accounts
-                    .margin_position
-                    .collateral0
-                    .checked_sub(collateral_debit)
-                    .ok_or(ErrorCode::MarketMathOverflow)?;
-            }
-            1 => {
-                require_gte!(
-                    ctx.accounts.margin_position.idle_collateral1()?,
-                    collateral_debit,
-                    ErrorCode::InsufficientRecognizedCollateral
-                );
-                ctx.accounts.margin_position.collateral1 = ctx
-                    .accounts
-                    .margin_position
-                    .collateral1
-                    .checked_sub(collateral_debit)
-                    .ok_or(ErrorCode::MarketMathOverflow)?;
-            }
-            _ => return err!(ErrorCode::InvalidMarketSide),
-        }
-        ctx.accounts.market.refresh_market_health()?;
-        ctx.accounts.market.assert_risk_circuit_breakers()?;
+        let collateral_receipt =
+            WithdrawCollateralTransition::new(args.market_side_index, collateral_debit)
+                .apply(&mut ctx.accounts.market, &mut ctx.accounts.margin_position)?;
 
         emit_cpi!(MarketCollateralWithdrawn {
             market: market_key,
             owner: owner_key,
             asset_mint: asset_mint_key,
-            collateral_debit,
+            collateral_debit: collateral_receipt.collateral_debit,
             asset_credit,
-            collateral0: ctx.accounts.margin_position.collateral0,
-            collateral1: ctx.accounts.margin_position.collateral1,
+            collateral0: collateral_receipt.collateral0,
+            collateral1: collateral_receipt.collateral1,
             metadata: MarketEventMetadata::new(owner_key, market_key),
         });
 
