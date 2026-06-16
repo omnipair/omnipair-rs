@@ -106,6 +106,7 @@ impl<'info> MarketSwap<'info> {
         let asset_in_mint_key = ctx.accounts.asset_in_mint.key();
         let asset_out_mint_key = ctx.accounts.asset_out_mint.key();
         let operator_fee_bps = ctx.accounts.market.config.operator_fee_bps;
+        let fee_routing_k_nad = ctx.accounts.market.config.fee_routing_k_nad;
 
         let reserve_credit = receive_swap_inventory(&mut ctx, args.exact_asset_in)?;
         let total_fee = ceil_div(
@@ -170,6 +171,7 @@ impl<'info> MarketSwap<'info> {
                 amount_out,
                 fee_credit,
                 operator_fee_bps,
+                fee_routing_k_nad,
             )?;
         }
         ctx.accounts.market.refresh_risk_book()?;
@@ -254,6 +256,7 @@ fn apply_swap_state(
     amount_out: u64,
     fee_credit: u64,
     operator_fee_bps: u16,
+    fee_routing_k_nad: u64,
 ) -> Result<()> {
     require_gte!(
         market_side_out.reserve_ledger.cash_reserve,
@@ -287,7 +290,7 @@ fn apply_swap_state(
         .cash_reserve
         .checked_sub(amount_out)
         .ok_or(ErrorCode::CashReserveUnderflow)?;
-    market_side_in.record_fee_credit(fee_credit, operator_fee_bps)?;
+    market_side_in.record_fee_credit(fee_credit, operator_fee_bps, fee_routing_k_nad)?;
     market_side_in.assert_claim_coverage()?;
     market_side_out.assert_claim_coverage()?;
     market_side_in.fee_ledger.assert_backed()?;
@@ -337,14 +340,31 @@ mod tests {
         let mut market_side_in = market_side(10_000, 10_000, 8_000, 2_000);
         let mut market_side_out = market_side(12_000, 12_000, 8_000, 2_000);
 
-        apply_swap_state(&mut market_side_in, &mut market_side_out, 500, 2_000, 0, 0).unwrap();
+        apply_swap_state(
+            &mut market_side_in,
+            &mut market_side_out,
+            500,
+            2_000,
+            0,
+            0,
+            NAD,
+        )
+        .unwrap();
         assert_eq!(market_side_out.reserve_ledger.live_reserve, 10_000);
         assert_eq!(market_side_out.reserve_ledger.cash_reserve, 10_000);
 
         let mut market_side_in = market_side(10_000, 10_000, 8_000, 2_000);
         let mut market_side_out = market_side(12_000, 12_000, 8_000, 2_000);
-        let err = apply_swap_state(&mut market_side_in, &mut market_side_out, 500, 2_001, 0, 0)
-            .unwrap_err();
+        let err = apply_swap_state(
+            &mut market_side_in,
+            &mut market_side_out,
+            500,
+            2_001,
+            0,
+            0,
+            NAD,
+        )
+        .unwrap_err();
         assert_eq!(err, error!(ErrorCode::InsufficientMarketClaimCoverage));
     }
 
@@ -362,6 +382,7 @@ mod tests {
             100,
             1_000,
             1_000,
+            NAD,
         )
         .unwrap();
 
