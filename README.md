@@ -171,7 +171,7 @@ This project uses automated CI/CD with GitHub Actions for releases and program u
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    MANUAL: Deploy Buffer (~8 SOL)                   │
 ├─────────────────────────────────────────────────────────────────────┤
-│  4. Download from Release  →  Gets omnipair.so from GitHub          │
+│  4. Download from Release  →  Gets omnipair*.so from GitHub         │
 │  5. Deploy Buffer          →  solana program write-buffer           │
 │  6. Transfer to Squads     →  Buffer authority → multisig           │
 └─────────────────────────────────────────────────────────────────────┘
@@ -224,6 +224,7 @@ All manual triggers: **Actions → release-build → Run workflow**
 | `deploy_buffer` ✅ | Deploy buffer to Solana mainnet (~8 SOL) |
 | `verify_only` ✅ | Only verify on-chain program |
 | `publish_packages` ✅ | Verify + publish npm/crates.io |
+| `program` | Select V1 or V2 for manual deploy/verify jobs |
 
 **Typical Upgrade Flow:**
 ```
@@ -237,6 +238,7 @@ All manual triggers: **Actions → release-build → Run workflow**
 ```
 Actions → Manual Buffer Deploy → Run workflow
   ├── source: release (from GitHub release)
+  ├── program: v1 or v2
   └── release_tag: v0.4.0 (optional, defaults to latest)
 ```
 

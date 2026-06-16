@@ -39,6 +39,13 @@ on:
         description: 'Transfer to Squads vault (default: true)'
         type: boolean
         default: true
+      program:
+        description: 'Program binary to deploy'
+        type: choice
+        options:
+          - v1
+          - v2
+        default: v1
 
 env:
   SOLANA_VERSION: '1.18.18'
@@ -56,10 +63,23 @@ jobs:
       - name: Extract Program ID from source
         id: extract
         run: |
-          PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+          if [ "${{ inputs.program }}" = "v2" ]; then
+            PROGRAM_ID=$(grep 'declare_id!' programs/omnipair-v2/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+            PROGRAM_SO="omnipair_v2.so"
+            PROGRAM_LIBRARY="omnipair_v2"
+          else
+            PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+            PROGRAM_SO="omnipair.so"
+            PROGRAM_LIBRARY="omnipair"
+          fi
           echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
+          echo "PROGRAM_SO=$PROGRAM_SO" >> $GITHUB_ENV
+          echo "PROGRAM_LIBRARY=$PROGRAM_LIBRARY" >> $GITHUB_ENV
           echo "program_id=$PROGRAM_ID" >> $GITHUB_OUTPUT
+          echo "program_so=$PROGRAM_SO" >> $GITHUB_OUTPUT
+          echo "program_library=$PROGRAM_LIBRARY" >> $GITHUB_OUTPUT
           echo "Extracted Program ID: $PROGRAM_ID"
+          echo "Selected program: $PROGRAM_LIBRARY"
 
       - name: Install Solana CLI
         run: |
@@ -82,8 +102,8 @@ jobs:
           fi
           
           mkdir -p ./build
-          gh release download "$TAG" -p "omnipair.so" -D ./build
-          echo "Downloaded omnipair.so from release $TAG"
+          gh release download "$TAG" -p "$PROGRAM_SO" -D ./build
+          echo "Downloaded $PROGRAM_SO from release $TAG"
           ls -la ./build/
         env:
           GH_TOKEN: ${{ github.token }}
@@ -99,22 +119,22 @@ jobs:
         if: inputs.source == 'local'
         run: |
           mkdir -p ./build
-          if [ -f "./verifiable-builds/omnipair.so" ]; then
-            cp ./verifiable-builds/omnipair.so ./build/
+          if [ -f "./verifiable-builds/$PROGRAM_SO" ]; then
+            cp "./verifiable-builds/$PROGRAM_SO" ./build/
           else
-            echo "Error: verifiable-builds/omnipair.so not found"
+            echo "Error: verifiable-builds/$PROGRAM_SO not found"
             exit 1
           fi
 
       - name: Verify binary exists
         run: |
-          if [ ! -f "./build/omnipair.so" ]; then
-            echo "Error: omnipair.so not found in ./build/"
+          if [ ! -f "./build/$PROGRAM_SO" ]; then
+            echo "Error: $PROGRAM_SO not found in ./build/"
             ls -la ./build/ || echo "build directory doesn't exist"
             exit 1
           fi
           echo "Binary found:"
-          ls -la ./build/omnipair.so
+          ls -la "./build/$PROGRAM_SO"
 
       - name: Determine RPC URL
         id: rpc
@@ -154,7 +174,7 @@ jobs:
               --max-sign-attempts 50 \
               --with-compute-unit-price ${{ inputs.priority_fee }} \
               --use-rpc \
-              ./build/omnipair.so \
+              "./build/$PROGRAM_SO" \
               -u ${{ steps.rpc.outputs.url }}
             
             BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
@@ -182,7 +202,6 @@ jobs:
       - name: Output results
         run: |
           BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
-          PROGRAM_ID="${{ env.PROGRAM_ID }}"
           SQUADS_MULTISIG="${{ vars.SQUADS_MULTISIG_ADDRESS }}"
           
           echo "============================================"
@@ -224,7 +243,6 @@ jobs:
       - name: Create summary
         run: |
           BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
-          PROGRAM_ID="${{ env.PROGRAM_ID }}"
           SQUADS_MULTISIG="${{ vars.SQUADS_MULTISIG_ADDRESS }}"
           
           echo "## 🚀 Buffer Deployment Summary" >> $GITHUB_STEP_SUMMARY
@@ -233,6 +251,7 @@ jobs:
           echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| **Buffer Address** | \`$BUFFER_ADDRESS\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Program ID** | \`$PROGRAM_ID\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Program Binary** | \`$PROGRAM_SO\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Network** | ${{ inputs.network }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Source** | ${{ inputs.source }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Priority Fee** | ${{ inputs.priority_fee }} micro-lamports |" >> $GITHUB_STEP_SUMMARY
