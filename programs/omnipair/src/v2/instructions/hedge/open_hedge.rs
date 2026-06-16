@@ -173,6 +173,7 @@ impl<'info> OpenHedge<'info> {
             market_side.claim_ledger.hedged_claim_supply
         };
         ctx.accounts.hedge_position.increase(claim_credit)?;
+        ctx.accounts.market.refresh_market_health()?;
 
         let hedge_token_program = token_program_for_mint(
             &ctx.accounts.hedge_mint,

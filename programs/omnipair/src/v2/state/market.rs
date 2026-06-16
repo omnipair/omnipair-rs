@@ -1289,14 +1289,14 @@ impl Market {
             (
                 self.debt_book.fixed_debt0()?,
                 self.debt_book.soft_debt0()?,
-                self.debt_book.hedged_debt0_nad,
+                self.hedged_debt0_nad(&self.risk_book)?,
                 &self.side0,
             )
         } else {
             (
                 self.debt_book.fixed_debt1()?,
                 self.debt_book.soft_debt1()?,
-                self.debt_book.hedged_debt1_nad,
+                self.hedged_debt1_nad(&self.risk_book)?,
                 &self.side1,
             )
         };
@@ -1313,6 +1313,22 @@ impl Market {
             .checked_add(soft_debt_nad)
             .and_then(|value| value.checked_add(hedged_debt_nad))
             .ok_or(ErrorCode::MarketMathOverflow.into())
+    }
+
+    fn hedged_debt0_nad(&self, risk_book: &RiskBook) -> Result<u128> {
+        self.collateral_value_nad(
+            false,
+            self.side1.claim_ledger.hedged_claim_supply,
+            risk_book,
+        )
+    }
+
+    fn hedged_debt1_nad(&self, risk_book: &RiskBook) -> Result<u128> {
+        self.collateral_value_nad(
+            true,
+            self.side0.claim_ledger.hedged_claim_supply,
+            risk_book,
+        )
     }
 
     fn collateral_value_nad(
@@ -2412,16 +2428,28 @@ mod tests {
         let mut market = test_market();
         market.side0.reserve_ledger.live_reserve = 2_000_000_000;
         market.side1.reserve_ledger.live_reserve = 2_000_000_000;
+        market.refresh_risk_book().unwrap();
         market.config.effective_debt_weight_min_bps = 5_000;
         market.config.effective_debt_gamma_nad = 2 * NAD;
         market.risk_book.liquidity_ema = 1_000 * NAD as u128;
         market.debt_book.fixed_debt0_shares =
             DebtBook::debt_to_shares(100_000_000, NAD as u128).unwrap();
-        market.debt_book.hedged_debt0_nad = 100 * NAD as u128;
+        market.side1.claim_ledger.hedged_claim_supply = 100_000_000;
 
+        let raw_hedged_debt = market.hedged_debt0_nad(&market.risk_book).unwrap();
+        let effective_hedged_debt = effective_hedged_debt_nad(
+            raw_hedged_debt,
+            market.risk_book.liquidity_ema,
+            market.config.effective_debt_weight_min_bps,
+            market.config.effective_debt_gamma_nad,
+        )
+        .unwrap();
         let effective = market.effective_debt0_nad().unwrap();
 
-        assert_eq!(effective, 160 * NAD as u128);
+        assert_eq!(market.debt_book.hedged_debt0_nad, 0);
+        assert!(raw_hedged_debt > 0);
+        assert!(effective_hedged_debt < raw_hedged_debt);
+        assert_eq!(effective, 100 * NAD as u128 + effective_hedged_debt);
     }
 
     #[test]

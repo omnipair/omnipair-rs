@@ -139,6 +139,7 @@ impl<'info> CloseHedge<'info> {
             market_side.claim_ledger.hedged_claim_supply
         };
         ctx.accounts.hedge_position.decrease(args.hedge_amount)?;
+        ctx.accounts.market.refresh_market_health()?;
 
         let claim_token_program = token_program_for_mint(
             &ctx.accounts.claim_mint,
