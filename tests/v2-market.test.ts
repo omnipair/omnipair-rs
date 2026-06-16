@@ -71,6 +71,7 @@ function marketConfig() {
     maxDailyBorrowBps: 2_000,
     maxDailyWithdrawBps: 2_000,
     spotEmaDivergenceBps: 1_000,
+    kEmaDrawdownBps: 1_000,
     recognizedCollateralCapBps: 15_000,
     marketHealthMinBps: 11_000,
     effectiveDebtWeightMinBps: 10_000,
@@ -3322,6 +3323,7 @@ describe("Omnipair Market LiteSVM", () => {
     config.recognizedCollateralCapBps = 20_000;
     config.marketHealthMinBps = 20_000;
     config.spotEmaDivergenceBps = 10_000;
+    config.kEmaDrawdownBps = 10_000;
     await program.methods
       .updateMarketConfig({ config })
       .accounts({

@@ -19,6 +19,7 @@ pub struct MarketConfig {
     pub max_daily_borrow_bps: u16,
     pub max_daily_withdraw_bps: u16,
     pub spot_ema_divergence_bps: u16,
+    pub k_ema_drawdown_bps: u16,
     pub recognized_collateral_cap_bps: u16,
     pub market_health_min_bps: u16,
     pub effective_debt_weight_min_bps: u16,
@@ -48,7 +49,8 @@ impl MarketConfig {
         require!(
             self.max_daily_borrow_bps <= BPS_DENOMINATOR
                 && self.max_daily_withdraw_bps <= BPS_DENOMINATOR
-                && self.spot_ema_divergence_bps <= BPS_DENOMINATOR,
+                && self.spot_ema_divergence_bps <= BPS_DENOMINATOR
+                && self.k_ema_drawdown_bps <= BPS_DENOMINATOR,
             ErrorCode::InvalidMarketConfig
         );
         require!(
@@ -1145,7 +1147,7 @@ impl Market {
         assert_k_drawdown(
             market_k_nad(&self.side0, &self.side1)?,
             self.risk_book.k_ema,
-            self.config.spot_ema_divergence_bps,
+            self.config.k_ema_drawdown_bps,
         )
     }
 
@@ -1985,6 +1987,7 @@ mod tests {
                 max_daily_borrow_bps: 2_000,
                 max_daily_withdraw_bps: 2_000,
                 spot_ema_divergence_bps: 1_000,
+                k_ema_drawdown_bps: 1_000,
                 recognized_collateral_cap_bps: 15_000,
                 market_health_min_bps: 11_000,
                 effective_debt_weight_min_bps: 10_000,
@@ -2128,6 +2131,16 @@ mod tests {
     fn market_config_rejects_inert_fee_routing() {
         let mut config = test_market().config;
         config.fee_routing_k_nad = 0;
+
+        let err = config.validate().unwrap_err();
+
+        assert_eq!(err, error!(ErrorCode::InvalidMarketConfig));
+    }
+
+    #[test]
+    fn market_config_rejects_invalid_k_drawdown_limit() {
+        let mut config = test_market().config;
+        config.k_ema_drawdown_bps = BPS_DENOMINATOR + 1;
 
         let err = config.validate().unwrap_err();
 
