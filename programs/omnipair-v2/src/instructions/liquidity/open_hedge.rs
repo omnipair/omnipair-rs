@@ -14,6 +14,7 @@ use crate::{
         token::{token_mint_to, transfer_from_user_to_vault},
     },
     state::{HedgePosition, Market},
+    transitions::fee::CarryForwardHedgedFees,
 };
 
 use super::hedge_common::validate_hedge_accounts;
@@ -124,7 +125,7 @@ impl<'info> OpenHedge<'info> {
 
         let hedged_fee_growth_index_nad = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
-            market_side.carry_forward_unallocated_hedged_fee()?;
+            CarryForwardHedgedFees.apply(market_side)?;
             market_side.fee_ledger.hedged_fee_growth_index_nad
         };
 

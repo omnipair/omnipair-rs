@@ -10,6 +10,7 @@ use crate::{
     events::{MarketEventMetadata, MarketStakeUpdated},
     shared::token::transfer_from_user_to_vault,
     state::{Market, StakePosition},
+    transitions::fee::CarryForwardStakerFees,
     utils::market_math::active_stake_units,
 };
 
@@ -145,7 +146,7 @@ impl<'info> Stake<'info> {
 
         let (active_units, accrued_fee_amount, staked_claim_amount, staked_buffer_shares) = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
-            market_side.carry_forward_unallocated_fee()?;
+            CarryForwardStakerFees.apply(market_side)?;
             ctx.accounts.stake_position.accrue_fees(
                 market_side.fee_ledger.fee_growth_index_nad,
                 market_side.buffer_book.buffer_ratio_bps,
@@ -163,7 +164,7 @@ impl<'info> Stake<'info> {
                 .staked_buffer_shares
                 .checked_add(args.buffer_shares)
                 .ok_or(ErrorCode::MarketMathOverflow)?;
-            market_side.carry_forward_unallocated_fee()?;
+            CarryForwardStakerFees.apply(market_side)?;
             (
                 ctx.accounts
                     .stake_position

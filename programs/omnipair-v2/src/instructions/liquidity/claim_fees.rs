@@ -11,6 +11,7 @@ use crate::{
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
     state::{Market, StakePosition},
+    transitions::fee::CarryForwardStakerFees,
 };
 
 use crate::instructions::common::{
@@ -97,7 +98,7 @@ impl<'info> ClaimFees<'info> {
 
         let fee_amount = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
-            market_side.carry_forward_unallocated_fee()?;
+            CarryForwardStakerFees.apply(market_side)?;
             ctx.accounts.stake_position.accrue_fees(
                 market_side.fee_ledger.fee_growth_index_nad,
                 market_side.buffer_book.buffer_ratio_bps,

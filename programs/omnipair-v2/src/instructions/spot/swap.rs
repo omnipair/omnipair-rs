@@ -17,6 +17,7 @@ use crate::{
         },
     },
     state::{Market, MarketSide},
+    transitions::fee::RecordFeeCredit,
     utils::market_math::require_market_reserve_floor,
 };
 
@@ -290,7 +291,7 @@ fn apply_swap_state(
         .cash_reserve
         .checked_sub(amount_out)
         .ok_or(ErrorCode::CashReserveUnderflow)?;
-    market_side_in.record_fee_credit(fee_credit, operator_fee_bps, fee_routing_k_nad)?;
+    RecordFeeCredit::new(fee_credit, operator_fee_bps, fee_routing_k_nad).apply(market_side_in)?;
     market_side_in.assert_claim_coverage()?;
     market_side_out.assert_claim_coverage()?;
     market_side_in.fee_ledger.assert_backed()?;

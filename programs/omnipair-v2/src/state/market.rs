@@ -7,7 +7,7 @@ use super::{
 use crate::constants::*;
 use crate::errors::ErrorCode;
 use crate::shared::math::{ceil_div, slots_to_ms, taylor_exp, SqrtU128};
-use crate::utils::market_math::{active_stake_units, required_buffer_for_claims};
+use crate::utils::market_math::required_buffer_for_claims;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct MarketConfig {
@@ -159,192 +159,6 @@ impl MarketSide {
     pub fn apply_buffer_ratio(&mut self, buffer_ratio_bps: u16, required_buffer: u64) {
         self.buffer_book.buffer_ratio_bps = buffer_ratio_bps;
         self.buffer_book.required_buffer = required_buffer;
-    }
-
-    pub fn record_fee_credit(
-        &mut self,
-        fee_credit: u64,
-        operator_fee_bps: u16,
-        fee_routing_k_nad: u64,
-    ) -> Result<()> {
-        if fee_credit == 0 {
-            return Ok(());
-        }
-        require_gte!(
-            BPS_DENOMINATOR,
-            operator_fee_bps,
-            ErrorCode::InvalidMarketConfig
-        );
-        require!(fee_routing_k_nad > 0, ErrorCode::InvalidMarketConfig);
-
-        let operator_fee = (fee_credit as u128)
-            .checked_mul(operator_fee_bps as u128)
-            .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        let operator_fee =
-            u64::try_from(operator_fee).map_err(|_| ErrorCode::MarketMathOverflow)?;
-        let lp_fee = fee_credit
-            .checked_sub(operator_fee)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-
-        self.fee_ledger.fee_vault_balance = self
-            .fee_ledger
-            .fee_vault_balance
-            .checked_add(fee_credit)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        self.fee_ledger.operator_fee_liability = self
-            .fee_ledger
-            .operator_fee_liability
-            .checked_add(operator_fee)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        let (free_lp_fee, routed_fee) = self.routed_lp_fee(lp_fee, fee_routing_k_nad)?;
-        self.record_hedged_fee_credit(routed_fee)?;
-
-        let active_units = active_stake_units(
-            self.claim_ledger.staked_claim_supply,
-            self.buffer_book.staked_buffer_shares,
-            self.buffer_book.buffer_ratio_bps,
-        )?;
-        if free_lp_fee > 0 {
-            self.fee_ledger.unallocated_fee_liability = self
-                .fee_ledger
-                .unallocated_fee_liability
-                .checked_add(free_lp_fee)
-                .ok_or(ErrorCode::MarketMathOverflow)?;
-        }
-
-        self.carry_forward_unallocated_fee_with_units(active_units)?;
-        self.fee_ledger.assert_backed()
-    }
-
-    pub fn carry_forward_unallocated_fee(&mut self) -> Result<()> {
-        let active_units = active_stake_units(
-            self.claim_ledger.staked_claim_supply,
-            self.buffer_book.staked_buffer_shares,
-            self.buffer_book.buffer_ratio_bps,
-        )?;
-        self.carry_forward_unallocated_fee_with_units(active_units)
-    }
-
-    pub fn carry_forward_unallocated_hedged_fee(&mut self) -> Result<()> {
-        self.carry_forward_unallocated_hedged_fee_with_supply(self.claim_ledger.hedged_claim_supply)
-    }
-
-    fn carry_forward_unallocated_fee_with_units(&mut self, active_units: u64) -> Result<()> {
-        if active_units == 0 || self.fee_ledger.unallocated_fee_liability == 0 {
-            return Ok(());
-        }
-
-        let fee_amount = self.fee_ledger.unallocated_fee_liability;
-        self.fee_ledger.unallocated_fee_liability = 0;
-        let index_delta = (fee_amount as u128)
-            .checked_mul(NAD as u128)
-            .and_then(|value| value.checked_div(active_units as u128))
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        let allocated_fee = index_delta
-            .checked_mul(active_units as u128)
-            .and_then(|value| value.checked_div(NAD as u128))
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        let allocated_fee =
-            u64::try_from(allocated_fee).map_err(|_| ErrorCode::MarketMathOverflow)?;
-        let unallocated_fee = fee_amount
-            .checked_sub(allocated_fee)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-
-        self.fee_ledger.fee_growth_index_nad = self
-            .fee_ledger
-            .fee_growth_index_nad
-            .checked_add(index_delta)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        self.fee_ledger.fee_liability = self
-            .fee_ledger
-            .fee_liability
-            .checked_add(allocated_fee)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        self.fee_ledger.unallocated_fee_liability = self
-            .fee_ledger
-            .unallocated_fee_liability
-            .checked_add(unallocated_fee)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        Ok(())
-    }
-
-    fn record_hedged_fee_credit(&mut self, fee_amount: u64) -> Result<()> {
-        if fee_amount == 0 {
-            return Ok(());
-        }
-        self.fee_ledger.unallocated_hedged_fee_liability = self
-            .fee_ledger
-            .unallocated_hedged_fee_liability
-            .checked_add(fee_amount)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        self.carry_forward_unallocated_hedged_fee_with_supply(self.claim_ledger.hedged_claim_supply)
-    }
-
-    fn carry_forward_unallocated_hedged_fee_with_supply(
-        &mut self,
-        hedged_claim_supply: u64,
-    ) -> Result<()> {
-        if hedged_claim_supply == 0 || self.fee_ledger.unallocated_hedged_fee_liability == 0 {
-            return Ok(());
-        }
-
-        let fee_amount = self.fee_ledger.unallocated_hedged_fee_liability;
-        self.fee_ledger.unallocated_hedged_fee_liability = 0;
-        let index_delta = (fee_amount as u128)
-            .checked_mul(NAD as u128)
-            .and_then(|value| value.checked_div(hedged_claim_supply as u128))
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        let allocated_fee = index_delta
-            .checked_mul(hedged_claim_supply as u128)
-            .and_then(|value| value.checked_div(NAD as u128))
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        let allocated_fee =
-            u64::try_from(allocated_fee).map_err(|_| ErrorCode::MarketMathOverflow)?;
-        let unallocated_fee = fee_amount
-            .checked_sub(allocated_fee)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-
-        self.fee_ledger.hedged_fee_growth_index_nad = self
-            .fee_ledger
-            .hedged_fee_growth_index_nad
-            .checked_add(index_delta)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        self.fee_ledger.hedged_fee_liability = self
-            .fee_ledger
-            .hedged_fee_liability
-            .checked_add(allocated_fee)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        self.fee_ledger.unallocated_hedged_fee_liability = self
-            .fee_ledger
-            .unallocated_hedged_fee_liability
-            .checked_add(unallocated_fee)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        Ok(())
-    }
-
-    fn routed_lp_fee(&self, lp_fee: u64, fee_routing_k_nad: u64) -> Result<(u64, u64)> {
-        if lp_fee == 0 || self.claim_ledger.hedged_claim_supply == 0 {
-            return Ok((lp_fee, 0));
-        }
-        let free_buffer = self.free_buffer()?;
-        if free_buffer == 0 {
-            return Ok((lp_fee, 0));
-        }
-        let eta_nad = (self.claim_ledger.hedged_claim_supply as u128)
-            .checked_mul(NAD as u128)
-            .and_then(|value| value.checked_div(free_buffer as u128))
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        let free_share_nad = dynamic_free_fee_share_nad(eta_nad, fee_routing_k_nad)?;
-        let free_lp_fee = (lp_fee as u128)
-            .checked_mul(free_share_nad)
-            .and_then(|value| value.checked_div(NAD as u128))
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        let free_lp_fee = u64::try_from(free_lp_fee).map_err(|_| ErrorCode::MarketMathOverflow)?;
-        let routed_fee = lp_fee
-            .checked_sub(free_lp_fee)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        Ok((free_lp_fee, routed_fee))
     }
 }
 
@@ -1121,20 +935,6 @@ fn effective_hedged_debt_nad(
         .ok_or(ErrorCode::MarketMathOverflow.into())
 }
 
-fn dynamic_free_fee_share_nad(eta_nad: u128, fee_routing_k_nad: u64) -> Result<u128> {
-    require!(fee_routing_k_nad > 0, ErrorCode::InvalidMarketConfig);
-    if eta_nad == 0 {
-        return Ok(0);
-    }
-    let x_nad = eta_nad
-        .checked_mul(fee_routing_k_nad as u128)
-        .and_then(|value| value.checked_div(NAD as u128))
-        .unwrap_or(i64::MAX as u128)
-        .min(i64::MAX as u128) as i64;
-    let hedged_share_nad = taylor_exp(-x_nad, NAD, TAYLOR_TERMS) as u128;
-    Ok((NAD as u128).saturating_sub(hedged_share_nad))
-}
-
 fn market_spot_price_nad(collateral_side: &MarketSide, debt_side: &MarketSide) -> Result<u64> {
     let collateral_reserve = normalize_to_nad(
         collateral_side.reserve_ledger.live_reserve as u128,
@@ -1476,6 +1276,7 @@ mod tests {
         state::{
             BufferBook, FeeLedger, HedgePosition, MarginPosition, MarketFeeClaimKind, StakePosition,
         },
+        transitions::fee::{CarryForwardStakerFees, RecordFeeCredit},
         transitions::reserve::{AddLiquidity, RemoveLiquidity},
     };
 
@@ -1706,7 +1507,9 @@ mod tests {
         AddLiquidity::new(1_000_000)
             .apply(&mut market_side)
             .unwrap();
-        market_side.record_fee_credit(10_000, 0, NAD).unwrap();
+        RecordFeeCredit::new(10_000, 0, NAD)
+            .apply(&mut market_side)
+            .unwrap();
 
         RemoveLiquidity::new(100_000)
             .apply(&mut market_side)
@@ -1727,7 +1530,9 @@ mod tests {
         market_side.claim_ledger.staked_claim_supply = 800_000;
         market_side.buffer_book.staked_buffer_shares = 100_000;
 
-        market_side.record_fee_credit(1_000, 1_000, NAD).unwrap();
+        RecordFeeCredit::new(1_000, 1_000, NAD)
+            .apply(&mut market_side)
+            .unwrap();
 
         assert_eq!(market_side.fee_ledger.fee_vault_balance, 1_000);
         assert_eq!(market_side.fee_ledger.operator_fee_liability, 100);
@@ -1747,7 +1552,9 @@ mod tests {
         market_side.claim_ledger.staked_claim_supply = 800_000;
         market_side.buffer_book.staked_buffer_shares = 200_000;
 
-        market_side.record_fee_credit(1_000, 0, NAD).unwrap();
+        RecordFeeCredit::new(1_000, 0, NAD)
+            .apply(&mut market_side)
+            .unwrap();
 
         assert_eq!(market_side.fee_ledger.fee_vault_balance, 1_000);
         assert_eq!(market_side.fee_ledger.protocol_fee_liability, 0);
@@ -1765,7 +1572,9 @@ mod tests {
         let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
         market_side.claim_ledger.protected_claim_supply = 800_000;
 
-        market_side.record_fee_credit(1_000, 0, NAD).unwrap();
+        RecordFeeCredit::new(1_000, 0, NAD)
+            .apply(&mut market_side)
+            .unwrap();
 
         assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 0);
         assert_eq!(market_side.fee_ledger.fee_liability, 0);
@@ -1777,14 +1586,16 @@ mod tests {
     fn unallocated_fees_carry_forward_to_next_active_stake() {
         let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
 
-        market_side.record_fee_credit(1_000, 0, NAD).unwrap();
+        RecordFeeCredit::new(1_000, 0, NAD)
+            .apply(&mut market_side)
+            .unwrap();
         assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 0);
         assert_eq!(market_side.fee_ledger.fee_liability, 0);
         assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 1_000);
 
         market_side.claim_ledger.staked_claim_supply = 800_000;
         market_side.buffer_book.staked_buffer_shares = 200_000;
-        market_side.carry_forward_unallocated_fee().unwrap();
+        CarryForwardStakerFees.apply(&mut market_side).unwrap();
 
         assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 1_000_000);
         assert_eq!(market_side.fee_ledger.fee_liability, 1_000);
@@ -1798,7 +1609,9 @@ mod tests {
         market_side.claim_ledger.staked_claim_supply = 1_600_000_000;
         market_side.buffer_book.staked_buffer_shares = 400_000_000;
 
-        market_side.record_fee_credit(1, 0, NAD).unwrap();
+        RecordFeeCredit::new(1, 0, NAD)
+            .apply(&mut market_side)
+            .unwrap();
 
         assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 0);
         assert_eq!(market_side.fee_ledger.fee_liability, 0);

@@ -11,6 +11,7 @@ use crate::{
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
     state::{HedgePosition, Market},
+    transitions::fee::CarryForwardHedgedFees,
 };
 
 use crate::instructions::common::{
@@ -96,7 +97,7 @@ impl<'info> ClaimHedgeFees<'info> {
 
         let fee_amount = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
-            market_side.carry_forward_unallocated_hedged_fee()?;
+            CarryForwardHedgedFees.apply(market_side)?;
             ctx.accounts
                 .hedge_position
                 .accrue_fees(market_side.fee_ledger.hedged_fee_growth_index_nad)?;
