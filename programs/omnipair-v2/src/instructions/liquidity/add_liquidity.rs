@@ -14,6 +14,7 @@ use crate::{
         token::{token_mint_to, transfer_from_user_to_vault},
     },
     state::{Market, StakePosition},
+    transitions::reserve::AddLiquidity,
 };
 
 use crate::instructions::common::{
@@ -155,31 +156,24 @@ impl<'info> DepositReserve<'info> {
             .amount
             .checked_sub(reserve_balance_before)
             .ok_or(ErrorCode::MarketMathOverflow)?;
-        let (claim_amount, buffer_amount, protected_claim_supply, required_buffer) = {
+        let receipt = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
-            let (claim_amount, buffer_amount) =
-                market_side.apply_reserve_deposit(reserve_credit)?;
-            (
-                claim_amount,
-                buffer_amount,
-                market_side.claim_ledger.protected_claim_supply,
-                market_side.buffer_book.required_buffer,
-            )
+            AddLiquidity::new(reserve_credit).apply(market_side)?
         };
         require_gte!(
-            claim_amount,
+            receipt.claim_amount,
             args.min_claim_amount,
             ErrorCode::SlippageExceeded
         );
         require_gte!(
             args.max_buffer_amount,
-            buffer_amount,
+            receipt.buffer_amount,
             ErrorCode::SlippageExceeded
         );
 
         ctx.accounts
             .stake_position
-            .credit_buffer_shares(buffer_amount)?;
+            .credit_buffer_shares(receipt.buffer_amount)?;
 
         let claim_token_program = token_program_for_mint(
             &ctx.accounts.claim_mint,
@@ -191,7 +185,7 @@ impl<'info> DepositReserve<'info> {
             claim_token_program,
             ctx.accounts.claim_mint.to_account_info(),
             ctx.accounts.owner_claim_account.to_account_info(),
-            claim_amount,
+            receipt.claim_amount,
             &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
 
@@ -199,11 +193,11 @@ impl<'info> DepositReserve<'info> {
             market: market_key,
             owner: owner_key,
             asset_mint: asset_mint_key,
-            reserve_credit,
-            claim_amount,
-            buffer_amount,
-            protected_claim_supply,
-            required_buffer,
+            reserve_credit: receipt.reserve_credit,
+            claim_amount: receipt.claim_amount,
+            buffer_amount: receipt.buffer_amount,
+            protected_claim_supply: receipt.protected_claim_supply,
+            required_buffer: receipt.required_buffer,
             metadata: MarketEventMetadata::new(owner_key, market_key),
         });
 

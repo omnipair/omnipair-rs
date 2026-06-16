@@ -11,6 +11,7 @@ use crate::{
     generate_market_seeds,
     shared::token::{token_burn, transfer_from_vault_to_user},
     state::Market,
+    transitions::reserve::RemoveLiquidity,
 };
 
 use crate::instructions::common::{
@@ -136,13 +137,9 @@ impl<'info> RedeemClaim<'info> {
             ErrorCode::SlippageExceeded
         );
 
-        let (protected_claim_supply, required_buffer) = {
+        let receipt = {
             let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
-            market_side.apply_claim_redemption(args.claim_amount)?;
-            (
-                market_side.claim_ledger.protected_claim_supply,
-                market_side.buffer_book.required_buffer,
-            )
+            RemoveLiquidity::new(args.claim_amount).apply(market_side)?
         };
         ctx.accounts.market.refresh_risk_book()?;
         ctx.accounts.market.assert_risk_circuit_breakers()?;
@@ -151,9 +148,9 @@ impl<'info> RedeemClaim<'info> {
             market: market_key,
             owner: owner_key,
             asset_mint: asset_mint_key,
-            claim_amount: args.claim_amount,
-            protected_claim_supply,
-            required_buffer,
+            claim_amount: receipt.claim_amount,
+            protected_claim_supply: receipt.protected_claim_supply,
+            required_buffer: receipt.required_buffer,
             metadata: MarketEventMetadata::new(owner_key, market_key),
         });
 

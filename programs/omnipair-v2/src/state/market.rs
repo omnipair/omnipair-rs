@@ -7,9 +7,7 @@ use super::{
 use crate::constants::*;
 use crate::errors::ErrorCode;
 use crate::shared::math::{ceil_div, slots_to_ms, taylor_exp, SqrtU128};
-use crate::utils::market_math::{
-    active_stake_units, required_buffer_for_claims, split_claim_minus_buffer,
-};
+use crate::utils::market_math::{active_stake_units, required_buffer_for_claims};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct MarketConfig {
@@ -161,94 +159,6 @@ impl MarketSide {
     pub fn apply_buffer_ratio(&mut self, buffer_ratio_bps: u16, required_buffer: u64) {
         self.buffer_book.buffer_ratio_bps = buffer_ratio_bps;
         self.buffer_book.required_buffer = required_buffer;
-    }
-
-    pub fn apply_reserve_deposit(&mut self, reserve_credit: u64) -> Result<(u64, u64)> {
-        require!(reserve_credit > 0, ErrorCode::AmountZero);
-        let (claim_amount, buffer_amount) =
-            split_claim_minus_buffer(reserve_credit, self.buffer_book.buffer_ratio_bps)?;
-        require!(claim_amount > 0 && buffer_amount > 0, ErrorCode::AmountZero);
-
-        let next_claim_supply = self
-            .claim_ledger
-            .protected_claim_supply
-            .checked_add(claim_amount)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        let next_buffer_shares = self
-            .buffer_book
-            .buffer_shares
-            .checked_add(buffer_amount)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        let next_required_buffer =
-            required_buffer_for_claims(next_claim_supply, self.buffer_book.buffer_ratio_bps)?;
-        require_gte!(
-            next_buffer_shares,
-            next_required_buffer,
-            ErrorCode::InsufficientBufferShares
-        );
-
-        self.reserve_ledger.live_reserve = self
-            .reserve_ledger
-            .live_reserve
-            .checked_add(reserve_credit)
-            .ok_or(ErrorCode::ReserveOverflow)?;
-        self.reserve_ledger.cash_reserve = self
-            .reserve_ledger
-            .cash_reserve
-            .checked_add(reserve_credit)
-            .ok_or(ErrorCode::ReserveOverflow)?;
-        self.claim_ledger.protected_claim_supply = next_claim_supply;
-        self.buffer_book.buffer_shares = next_buffer_shares;
-        self.buffer_book.required_buffer = next_required_buffer;
-        self.assert_claim_coverage()?;
-
-        Ok((claim_amount, buffer_amount))
-    }
-
-    pub fn apply_claim_redemption(&mut self, claim_amount: u64) -> Result<()> {
-        require!(claim_amount > 0, ErrorCode::AmountZero);
-        require_gte!(
-            self.claim_ledger.protected_claim_supply,
-            claim_amount,
-            ErrorCode::InsufficientMarketClaimCoverage
-        );
-        require_gte!(
-            self.reserve_ledger.cash_reserve,
-            claim_amount,
-            ErrorCode::InsufficientMarketClaimCoverage
-        );
-
-        let next_claim_supply = self
-            .claim_ledger
-            .protected_claim_supply
-            .checked_sub(claim_amount)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        let next_required_buffer =
-            required_buffer_for_claims(next_claim_supply, self.buffer_book.buffer_ratio_bps)?;
-        let next_live_reserve = self
-            .reserve_ledger
-            .live_reserve
-            .checked_sub(claim_amount)
-            .ok_or(ErrorCode::ReserveUnderflow)?;
-        let reserve_floor = next_claim_supply
-            .checked_add(next_required_buffer)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        require_gte!(
-            next_live_reserve,
-            reserve_floor,
-            ErrorCode::InsufficientMarketClaimCoverage
-        );
-
-        self.reserve_ledger.live_reserve = next_live_reserve;
-        self.reserve_ledger.cash_reserve = self
-            .reserve_ledger
-            .cash_reserve
-            .checked_sub(claim_amount)
-            .ok_or(ErrorCode::CashReserveUnderflow)?;
-        self.claim_ledger.protected_claim_supply = next_claim_supply;
-        self.buffer_book.required_buffer = next_required_buffer;
-
-        Ok(())
     }
 
     pub fn record_fee_credit(
@@ -1562,8 +1472,11 @@ macro_rules! generate_market_seeds {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{
-        BufferBook, FeeLedger, HedgePosition, MarginPosition, MarketFeeClaimKind, StakePosition,
+    use crate::{
+        state::{
+            BufferBook, FeeLedger, HedgePosition, MarginPosition, MarketFeeClaimKind, StakePosition,
+        },
+        transitions::reserve::{AddLiquidity, RemoveLiquidity},
     };
 
     fn test_market_side(asset_mint: Pubkey, buffer_ratio_bps: u16) -> MarketSide {
@@ -1772,10 +1685,12 @@ mod tests {
     fn reserve_deposit_mints_claim_minus_buffer() {
         let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
 
-        let (claim_amount, buffer_amount) = market_side.apply_reserve_deposit(1_000_000).unwrap();
+        let receipt = AddLiquidity::new(1_000_000)
+            .apply(&mut market_side)
+            .unwrap();
 
-        assert_eq!(claim_amount, 800_000);
-        assert_eq!(buffer_amount, 200_000);
+        assert_eq!(receipt.claim_amount, 800_000);
+        assert_eq!(receipt.buffer_amount, 200_000);
         assert_eq!(market_side.reserve_ledger.live_reserve, 1_000_000);
         assert_eq!(market_side.reserve_ledger.cash_reserve, 1_000_000);
         assert_eq!(market_side.claim_ledger.protected_claim_supply, 800_000);
@@ -1788,10 +1703,14 @@ mod tests {
     #[test]
     fn claim_redemption_is_fixed_one_to_one_principal() {
         let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
-        market_side.apply_reserve_deposit(1_000_000).unwrap();
+        AddLiquidity::new(1_000_000)
+            .apply(&mut market_side)
+            .unwrap();
         market_side.record_fee_credit(10_000, 0, NAD).unwrap();
 
-        market_side.apply_claim_redemption(100_000).unwrap();
+        RemoveLiquidity::new(100_000)
+            .apply(&mut market_side)
+            .unwrap();
 
         assert_eq!(market_side.reserve_ledger.live_reserve, 900_000);
         assert_eq!(market_side.reserve_ledger.cash_reserve, 900_000);
@@ -2030,8 +1949,12 @@ mod tests {
     #[test]
     fn buffer_ratio_update_recomputes_required_floor() {
         let mut market = test_market();
-        market.side0.apply_reserve_deposit(1_000_000).unwrap();
-        market.side1.apply_reserve_deposit(2_000_000).unwrap();
+        AddLiquidity::new(1_000_000)
+            .apply(&mut market.side0)
+            .unwrap();
+        AddLiquidity::new(2_000_000)
+            .apply(&mut market.side1)
+            .unwrap();
         market.side0.buffer_book.buffer_shares += 100_000;
         market.side0.reserve_ledger.live_reserve += 100_000;
         market.side1.buffer_book.buffer_shares += 200_000;
@@ -2047,8 +1970,12 @@ mod tests {
     #[test]
     fn buffer_ratio_update_rejects_uncovered_floor() {
         let mut market = test_market();
-        market.side0.apply_reserve_deposit(1_000_000).unwrap();
-        market.side1.apply_reserve_deposit(1_000_000).unwrap();
+        AddLiquidity::new(1_000_000)
+            .apply(&mut market.side0)
+            .unwrap();
+        AddLiquidity::new(1_000_000)
+            .apply(&mut market.side1)
+            .unwrap();
 
         let err = market.apply_buffer_ratio_update(2_500).unwrap_err();
 
@@ -2060,8 +1987,12 @@ mod tests {
     #[test]
     fn buffer_ratio_update_rejects_active_stake() {
         let mut market = test_market();
-        market.side0.apply_reserve_deposit(1_000_000).unwrap();
-        market.side1.apply_reserve_deposit(1_000_000).unwrap();
+        AddLiquidity::new(1_000_000)
+            .apply(&mut market.side0)
+            .unwrap();
+        AddLiquidity::new(1_000_000)
+            .apply(&mut market.side1)
+            .unwrap();
         market.side0.claim_ledger.staked_claim_supply = 800_000;
         market.side0.buffer_book.staked_buffer_shares = 200_000;
 
@@ -2074,8 +2005,12 @@ mod tests {
     #[test]
     fn buffer_ratio_update_rejects_staker_fee_liability() {
         let mut market = test_market();
-        market.side0.apply_reserve_deposit(1_000_000).unwrap();
-        market.side1.apply_reserve_deposit(1_000_000).unwrap();
+        AddLiquidity::new(1_000_000)
+            .apply(&mut market.side0)
+            .unwrap();
+        AddLiquidity::new(1_000_000)
+            .apply(&mut market.side1)
+            .unwrap();
         market.side1.fee_ledger.fee_liability = 1;
 
         let err = market.apply_buffer_ratio_update(1_500).unwrap_err();

@@ -7,6 +7,7 @@ pub mod instructions;
 pub mod shared;
 pub mod state;
 pub mod tokens;
+pub mod transitions;
 pub mod utils;
 
 pub use instructions::*;
