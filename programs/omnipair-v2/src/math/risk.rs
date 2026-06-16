@@ -239,6 +239,19 @@ pub(crate) fn decayed_daily_bucket(bucket: u64, last_slot: u64, current_slot: u6
     u64::try_from(decayed).map_err(|_| ErrorCode::MarketMathOverflow.into())
 }
 
+pub(crate) fn daily_limit_from_liquidity_ema(
+    liquidity_ema: u128,
+    asset_decimals: u8,
+    limit_bps: u16,
+) -> Result<u64> {
+    require!(liquidity_ema > 0, ErrorCode::InsufficientLiquidity);
+    let limit_nad = liquidity_ema
+        .checked_mul(limit_bps as u128)
+        .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
+        .ok_or(ErrorCode::MarketMathOverflow)?;
+    denormalize_from_nad_floor(limit_nad, asset_decimals)
+}
+
 pub(crate) fn assert_price_divergence(
     spot_price_nad: u64,
     ema_price_nad: u64,
@@ -328,5 +341,19 @@ mod tests {
 
         assert_eq!(ceil_amount, 52_632);
         assert_eq!(floor_amount, 52_631);
+    }
+
+    #[test]
+    fn daily_limit_from_liquidity_ema_sizes_by_bps_and_decimals() {
+        let limit = daily_limit_from_liquidity_ema(1_000 * NAD as u128, 6, 2_000).unwrap();
+
+        assert_eq!(limit, 200_000_000);
+    }
+
+    #[test]
+    fn daily_limit_from_liquidity_ema_rejects_zero_liquidity() {
+        let err = daily_limit_from_liquidity_ema(0, 6, 2_000).unwrap_err();
+
+        assert_eq!(err, error!(ErrorCode::InsufficientLiquidity));
     }
 }

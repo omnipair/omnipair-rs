@@ -439,12 +439,7 @@ impl Market {
                 self.quote_side.asset_decimals,
             ),
         };
-        require!(liquidity_ema > 0, ErrorCode::InsufficientLiquidity);
-        let limit_nad = liquidity_ema
-            .checked_mul(limit_bps as u128)
-            .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        denormalize_from_nad_floor(limit_nad, asset_decimals)
+        daily_limit_from_liquidity_ema(liquidity_ema, asset_decimals, limit_bps)
     }
 }
 
