@@ -11,7 +11,7 @@ Omnipair V2 is a separate market architecture program. V1 remains the legacy GAM
 - `math/`: fixed-point, AMM, EMA, valuation, and circuit-breaker helpers.
 - `utils/`: remaining shared accounting helpers used across transitions.
 
-Instruction names are clean in the V2 namespace: `initialize`, `swap`, `add_liquidity`, `remove_liquidity`, `borrow`, `repay`, `liquidate`, `stake`, `unstake`, `claim_fees`, `claim_market_fees`, `open_hedge`, `claim_hedge_fees`, and `close_hedge`.
+Instruction names are clean in the V2 namespace: `initialize`, `update_config`, `set_reduce_only`, `swap`, `add_liquidity`, `remove_liquidity`, `stake`, `unstake`, `claim_fees`, `claim_market_fees`, `open_hedge`, `claim_hedge_fees`, `close_hedge`, `deposit_collateral`, `withdraw_collateral`, `borrow`, `repay`, `deposit_insurance`, and `liquidate`.
 
 ## Core Invariants
 
