@@ -2252,7 +2252,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     const impostor = Keypair.generate();
     await connection.requestAirdrop(impostor.publicKey, LAMPORTS_PER_SOL);
-    const impostorAsset0Account = await createAccount(
+    const impostorBaseAccount = await createAccount(
       connection as any,
       payer,
       baseMint,
@@ -2270,7 +2270,7 @@ describe("Omnipair Market LiteSVM", () => {
           feeAuthority: impostor.publicKey,
           assetMint: baseMint,
           feeVault: baseFeeVault,
-          recipientFeeAccount: impostorAsset0Account,
+          recipientFeeAccount: impostorBaseAccount,
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority,
@@ -2280,7 +2280,7 @@ describe("Omnipair Market LiteSVM", () => {
         .rpc()
     );
 
-    expect((await getAccount(connection as any, impostorAsset0Account)).amount).to.equal(
+    expect((await getAccount(connection as any, impostorBaseAccount)).amount).to.equal(
       BigInt(0)
     );
     expect((await getAccount(connection as any, baseFeeVault)).amount).to.equal(BigInt(3));
