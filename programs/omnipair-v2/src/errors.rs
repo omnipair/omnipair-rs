@@ -200,11 +200,11 @@ pub enum ErrorCode {
     #[msg("Invalid token order")]
     InvalidTokenOrder,
 
-    #[msg("Invalid rate model - rate_model does not match pair.rate_model")]
+    #[msg("Invalid rate model - rate_model does not match market configuration")]
     InvalidRateModel,
 
-    #[msg("Invalid pair - pair does not match user_position.pair")]
-    InvalidPair,
+    #[msg("Invalid position market - position does not match market")]
+    InvalidPositionMarket,
 
     #[msg("Invalid utilization bounds - must satisfy: MIN <= start < end <= MAX")]
     InvalidUtilBounds,

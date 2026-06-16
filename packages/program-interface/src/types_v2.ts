@@ -3685,12 +3685,12 @@ export type OmnipairV2 = {
     {
       "code": 6066,
       "name": "invalidRateModel",
-      "msg": "Invalid rate model - rate_model does not match pair.rate_model"
+      "msg": "Invalid rate model - rate_model does not match market configuration"
     },
     {
       "code": 6067,
-      "name": "invalidPair",
-      "msg": "Invalid pair - pair does not match user_position.pair"
+      "name": "invalidPositionMarket",
+      "msg": "Invalid position market - position does not match market"
     },
     {
       "code": 6068,

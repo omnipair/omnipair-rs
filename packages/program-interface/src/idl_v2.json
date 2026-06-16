@@ -3679,12 +3679,12 @@
     {
       "code": 6066,
       "name": "InvalidRateModel",
-      "msg": "Invalid rate model - rate_model does not match pair.rate_model"
+      "msg": "Invalid rate model - rate_model does not match market configuration"
     },
     {
       "code": 6067,
-      "name": "InvalidPair",
-      "msg": "Invalid pair - pair does not match user_position.pair"
+      "name": "InvalidPositionMarket",
+      "msg": "Invalid position market - position does not match market"
     },
     {
       "code": 6068,

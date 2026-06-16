@@ -160,7 +160,7 @@ fn calculate_utilized_collateral_with_impact(
     CPCurve::calculate_amount_in(collateral_ema_reserve, debt_ema_reserve, current_total_debt)
 }
 
-/// Calculates the pool's max total debt capacity given utilized + user collateral.
+/// Calculates the market's max total debt capacity given utilized + user collateral.
 /// Includes price impact from the constant product curve.
 /// Uses virtual reserves at min(directional_ema, ema) price to prevent manipulation.
 fn calculate_max_allowed_total_debt(
