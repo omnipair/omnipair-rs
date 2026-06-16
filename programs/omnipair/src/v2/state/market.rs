@@ -930,6 +930,8 @@ impl Market {
     ) -> Result<Self> {
         config.validate()?;
         require_keys_neq!(asset0_mint, asset1_mint, ErrorCode::InvalidMint);
+        require_keys_neq!(operator, Pubkey::default(), ErrorCode::InvalidMarketConfig);
+        require_keys_neq!(manager, Pubkey::default(), ErrorCode::InvalidMarketConfig);
         require_keys_eq!(asset0_mint, side0.asset_mint, ErrorCode::InvalidMint);
         require_keys_eq!(asset1_mint, side1.asset_mint, ErrorCode::InvalidMint);
 
@@ -1936,6 +1938,47 @@ mod tests {
             fixed_debt1_shares: 0,
             bump: 1,
         }
+    }
+
+    #[test]
+    fn market_initialize_rejects_default_authorities() {
+        let asset0_mint = Pubkey::new_unique();
+        let asset1_mint = Pubkey::new_unique();
+        let side0 = test_market_side(asset0_mint, 2_000);
+        let side1 = test_market_side(asset1_mint, 2_000);
+        let config = test_market().config;
+
+        let default_operator = Market::initialize(
+            asset0_mint,
+            asset1_mint,
+            Pubkey::default(),
+            Pubkey::new_unique(),
+            side0,
+            side1,
+            config,
+            [7_u8; 32],
+            42,
+            254,
+        )
+        .err()
+        .unwrap();
+        let default_manager = Market::initialize(
+            asset0_mint,
+            asset1_mint,
+            Pubkey::new_unique(),
+            Pubkey::default(),
+            side0,
+            side1,
+            config,
+            [7_u8; 32],
+            42,
+            254,
+        )
+        .err()
+        .unwrap();
+
+        assert_eq!(default_operator, error!(ErrorCode::InvalidMarketConfig));
+        assert_eq!(default_manager, error!(ErrorCode::InvalidMarketConfig));
     }
 
     #[test]
