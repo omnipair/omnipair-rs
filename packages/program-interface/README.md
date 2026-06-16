@@ -135,6 +135,16 @@ console.log("base mint:", market.baseMint.toBase58());
 console.log("quote mint:", market.quoteMint.toBase58());
 ```
 
+## V2 integration notes
+
+V2 is a separate market program, not a drop-in account rename for the legacy V1 pair program. Integrations should route by program generation and program ID:
+
+- Use `IDL` / `PROGRAM_ID` / `derivePairAddress` for legacy V1 pairs.
+- Use `IDL_V2` / `OMNIPAIR_V2_PROGRAM_ID` / `deriveMarketAddress` for V2 markets.
+- Store V1 pair metrics and V2 market metrics separately at the source level, then aggregate them under the Omnipair brand in analytics.
+- Do not sort V2 market mints client-side. The creator's chosen `baseMint` / `quoteMint` order defines the market and its price direction.
+- Treat V2 claim and hedge mints as distinct SPL token concepts. Base claim tokens are fixed-principal claims; fee rights come from staking matched claim tokens and buffer shares.
+
 ## JavaScript runtime-only imports
 
 ```javascript
