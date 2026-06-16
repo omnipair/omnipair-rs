@@ -147,3 +147,111 @@ impl RemoveLiquidity {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        constants::BPS_DENOMINATOR,
+        state::{BufferLedger, MarketSide},
+    };
+    use proptest::prelude::*;
+
+    fn market_side(buffer_ratio_bps: u16) -> MarketSide {
+        MarketSide {
+            buffer_ledger: BufferLedger {
+                buffer_ratio_bps,
+                ..BufferLedger::default()
+            },
+            ..MarketSide::default()
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn add_liquidity_preserves_principal_and_claim_floor(
+            reserve_credit in 10_000_u64..1_000_000_000_u64,
+            buffer_ratio_bps in 1_u16..BPS_DENOMINATOR,
+        ) {
+            let mut market_side = market_side(buffer_ratio_bps);
+
+            let receipt = AddLiquidity::new(reserve_credit)
+                .apply(&mut market_side)
+                .unwrap();
+
+            prop_assert_eq!(
+                receipt.claim_amount
+                    .checked_add(receipt.buffer_amount)
+                    .unwrap(),
+                reserve_credit
+            );
+            prop_assert_eq!(receipt.reserve_credit, reserve_credit);
+            prop_assert_eq!(market_side.reserve_ledger.live_reserve, reserve_credit);
+            prop_assert_eq!(market_side.reserve_ledger.cash_reserve, reserve_credit);
+            prop_assert_eq!(
+                market_side.claim_token_ledger.protected_claim_token_supply,
+                receipt.claim_amount
+            );
+            prop_assert_eq!(
+                market_side.buffer_ledger.buffer_share_supply,
+                receipt.buffer_amount
+            );
+            prop_assert_eq!(market_side.buffer_ledger.required_buffer, receipt.required_buffer);
+            prop_assert!(market_side.buffer_ledger.buffer_share_supply >= receipt.required_buffer);
+            market_side.assert_claim_coverage().unwrap();
+        }
+
+        #[test]
+        fn remove_liquidity_preserves_floor_and_buffer_shares(
+            reserve_credit in 10_000_u64..1_000_000_000_u64,
+            buffer_ratio_bps in 1_u16..BPS_DENOMINATOR,
+            redeem_bps in 1_u16..=BPS_DENOMINATOR,
+        ) {
+            let mut market_side = market_side(buffer_ratio_bps);
+            let add_receipt = AddLiquidity::new(reserve_credit)
+                .apply(&mut market_side)
+                .unwrap();
+            let claim_supply_before = market_side
+                .claim_token_ledger
+                .protected_claim_token_supply;
+            let buffer_share_supply_before = market_side.buffer_ledger.buffer_share_supply;
+            let live_reserve_before = market_side.reserve_ledger.live_reserve;
+            let cash_reserve_before = market_side.reserve_ledger.cash_reserve;
+            let redeem_amount = ((add_receipt.claim_amount as u128)
+                .checked_mul(redeem_bps as u128)
+                .unwrap()
+                .checked_div(BPS_DENOMINATOR as u128)
+                .unwrap())
+                .max(1) as u64;
+            let redeem_amount = redeem_amount.min(add_receipt.claim_amount);
+
+            let remove_receipt = RemoveLiquidity::new(redeem_amount)
+                .apply(&mut market_side)
+                .unwrap();
+
+            prop_assert_eq!(remove_receipt.claim_amount, redeem_amount);
+            prop_assert_eq!(
+                market_side.claim_token_ledger.protected_claim_token_supply,
+                claim_supply_before.checked_sub(redeem_amount).unwrap()
+            );
+            prop_assert_eq!(
+                market_side.reserve_ledger.live_reserve,
+                live_reserve_before.checked_sub(redeem_amount).unwrap()
+            );
+            prop_assert_eq!(
+                market_side.reserve_ledger.cash_reserve,
+                cash_reserve_before.checked_sub(redeem_amount).unwrap()
+            );
+            prop_assert_eq!(
+                market_side.buffer_ledger.buffer_share_supply,
+                buffer_share_supply_before
+            );
+            prop_assert_eq!(
+                market_side.buffer_ledger.required_buffer,
+                remove_receipt.required_buffer
+            );
+            prop_assert!(market_side.buffer_ledger.buffer_share_supply >= remove_receipt.required_buffer);
+            market_side.assert_claim_coverage().unwrap();
+        }
+    }
+}
