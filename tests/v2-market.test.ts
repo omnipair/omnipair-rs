@@ -313,6 +313,8 @@ describe("Omnipair Market LiteSVM", () => {
       reserve1Vault,
       collateral0Vault,
       collateral1Vault,
+      fee0Vault,
+      fee1Vault,
       eventAuthority,
       transferFeeMint,
       transferFeeMarketSideIndex,
@@ -838,6 +840,8 @@ describe("Omnipair Market LiteSVM", () => {
       reserve1Vault,
       collateral0Vault,
       collateral1Vault,
+      fee0Vault,
+      fee1Vault,
       eventAuthority,
       transferFeeMarketSideIndex,
     } = fixture;
@@ -924,6 +928,7 @@ describe("Omnipair Market LiteSVM", () => {
           assetMint: asset1Mint,
           claimMint: claim1Mint,
           reserveVault: reserve1Vault,
+          feeVault: fee1Vault,
           ownerAssetAccount: ownerAsset1Account,
           ownerClaimAccount: ownerClaim1Account,
         }
@@ -932,6 +937,7 @@ describe("Omnipair Market LiteSVM", () => {
           assetMint: asset0Mint,
           claimMint: claim0Mint,
           reserveVault: reserve0Vault,
+          feeVault: fee0Vault,
           ownerAssetAccount: ownerAsset0Account,
           ownerClaimAccount: ownerClaim0Account,
         };
@@ -948,7 +954,7 @@ describe("Omnipair Market LiteSVM", () => {
       720,
       180
     );
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 10; i++) {
       const lender = Keypair.generate();
       await connection.requestAirdrop(lender.publicKey, LAMPORTS_PER_SOL);
       const lenderAssetAccount = await createAccount(
@@ -1011,10 +1017,132 @@ describe("Omnipair Market LiteSVM", () => {
         undefined,
         TOKEN_2022_PROGRAM_ID
       )).amount
-    ).to.equal(BigInt(1_056));
+    ).to.equal(BigInt(1_160));
     expect(
       (await getAccount(connection as any, transferFeeSide.ownerClaimAccount)).amount
     ).to.equal(BigInt(720));
+
+    await expectRejects(() =>
+      program.methods
+        .redeemClaim({
+          marketSideIndex: transferFeeMarketSideIndex,
+          claimAmount: new BN(5),
+          minAssetAmountOut: new BN(5),
+        })
+        .accounts({
+          market,
+          owner: payer.publicKey,
+          assetMint: transferFeeSide.assetMint,
+          claimMint: transferFeeSide.claimMint,
+          reserveVault: transferFeeSide.reserveVault,
+          ownerAssetAccount: transferFeeSide.ownerAssetAccount,
+          ownerClaimAccount: transferFeeSide.ownerClaimAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .rpc()
+    );
+
+    const ownerRedeemBalanceBefore = (await getAccount(
+      connection as any,
+      transferFeeSide.ownerAssetAccount,
+      undefined,
+      TOKEN_2022_PROGRAM_ID
+    )).amount;
+    await program.methods
+      .redeemClaim({
+        marketSideIndex: transferFeeMarketSideIndex,
+        claimAmount: new BN(5),
+        minAssetAmountOut: new BN(4),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        assetMint: transferFeeSide.assetMint,
+        claimMint: transferFeeSide.claimMint,
+        reserveVault: transferFeeSide.reserveVault,
+        ownerAssetAccount: transferFeeSide.ownerAssetAccount,
+        ownerClaimAccount: transferFeeSide.ownerClaimAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+    const ownerRedeemBalanceAfter = (await getAccount(
+      connection as any,
+      transferFeeSide.ownerAssetAccount,
+      undefined,
+      TOKEN_2022_PROGRAM_ID
+    )).amount;
+    expect(ownerRedeemBalanceAfter - ownerRedeemBalanceBefore).to.equal(BigInt(4));
+
+    await expectRejects(() =>
+      program.methods
+        .marketSwap({
+          assetInIsAsset0: !transferFeeSide.borrowAssetIsAsset0,
+          exactAssetIn: new BN(5),
+          minAssetOut: new BN(4),
+        })
+        .accounts({
+          market,
+          trader: payer.publicKey,
+          assetInMint: vanillaSide.assetMint,
+          assetOutMint: transferFeeSide.assetMint,
+          reserveInVault: vanillaSide.reserveVault,
+          reserveOutVault: transferFeeSide.reserveVault,
+          feeInVault: vanillaSide.feeVault,
+          traderAssetInAccount: vanillaSide.ownerAssetAccount,
+          traderAssetOutAccount: transferFeeSide.ownerAssetAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .rpc()
+    );
+
+    const ownerSwapBalanceBefore = (await getAccount(
+      connection as any,
+      transferFeeSide.ownerAssetAccount,
+      undefined,
+      TOKEN_2022_PROGRAM_ID
+    )).amount;
+    await program.methods
+      .marketSwap({
+        assetInIsAsset0: !transferFeeSide.borrowAssetIsAsset0,
+        exactAssetIn: new BN(5),
+        minAssetOut: new BN(3),
+      })
+      .accounts({
+        market,
+        trader: payer.publicKey,
+        assetInMint: vanillaSide.assetMint,
+        assetOutMint: transferFeeSide.assetMint,
+        reserveInVault: vanillaSide.reserveVault,
+        reserveOutVault: transferFeeSide.reserveVault,
+        feeInVault: vanillaSide.feeVault,
+        traderAssetInAccount: vanillaSide.ownerAssetAccount,
+        traderAssetOutAccount: transferFeeSide.ownerAssetAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+    const ownerSwapBalanceAfter = (await getAccount(
+      connection as any,
+      transferFeeSide.ownerAssetAccount,
+      undefined,
+      TOKEN_2022_PROGRAM_ID
+    )).amount;
+    expect(ownerSwapBalanceAfter - ownerSwapBalanceBefore).to.equal(BigInt(3));
 
     const marginPosition = deriveAddress(
       Buffer.from("margin"),
