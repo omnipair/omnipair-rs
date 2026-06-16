@@ -203,6 +203,11 @@ impl<'info> InitializeMarket<'info> {
             Pubkey::default(),
             ErrorCode::InvalidMarketConfig
         );
+        require_keys_neq!(
+            args.manager,
+            Pubkey::default(),
+            ErrorCode::InvalidMarketConfig
+        );
         require_supported_asset_mint(&self.asset0_mint)?;
         require_supported_asset_mint(&self.asset1_mint)?;
         self.validate_claim_mint(&self.claim0_mint, self.asset0_mint.decimals)?;

@@ -735,6 +735,84 @@ describe("Omnipair Market LiteSVM", () => {
     await expectTransferFeeMintRejected("hedge", 21);
   });
 
+  it("rejects default market operator and manager authorities", async () => {
+    async function expectDefaultAuthorityRejected(operator: PublicKey, manager: PublicKey, paramsSeed: number) {
+      const mintA = await createMint(connection as any, payer, payer.publicKey, null, 6);
+      const mintB = await createMint(connection as any, payer, payer.publicKey, null, 6);
+      const [asset0Mint, asset1Mint] = orderedMints(mintA, mintB);
+      const paramsHash = Buffer.alloc(32, paramsSeed);
+      const [market] = PublicKey.findProgramAddressSync(
+        [Buffer.from("market_v2"), asset0Mint.toBuffer(), asset1Mint.toBuffer(), paramsHash],
+        OMNIPAIR_PROGRAM_ID
+      );
+      const [eventAuthority] = PublicKey.findProgramAddressSync(
+        [Buffer.from("__event_authority")],
+        OMNIPAIR_PROGRAM_ID
+      );
+      const claim0Mint = await createMint(connection as any, payer, market, null, 6);
+      const claim1Mint = await createMint(connection as any, payer, market, null, 6);
+      const hedge0Mint = await createMint(connection as any, payer, market, null, 6);
+      const hedge1Mint = await createMint(connection as any, payer, market, null, 6);
+      const hedge0Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim0Mint.toBuffer());
+      const hedge1Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim1Mint.toBuffer());
+      const reserve0Vault = deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset0Mint.toBuffer());
+      const reserve1Vault = deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset1Mint.toBuffer());
+      const collateral0Vault = deriveAddress(Buffer.from("market_collateral"), market.toBuffer(), asset0Mint.toBuffer());
+      const collateral1Vault = deriveAddress(Buffer.from("market_collateral"), market.toBuffer(), asset1Mint.toBuffer());
+      const insurance0Vault = deriveAddress(Buffer.from("insurance"), market.toBuffer(), asset0Mint.toBuffer());
+      const insurance1Vault = deriveAddress(Buffer.from("insurance"), market.toBuffer(), asset1Mint.toBuffer());
+      const fee0Vault = deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset0Mint.toBuffer());
+      const fee1Vault = deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset1Mint.toBuffer());
+      const claim0StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim0Mint.toBuffer());
+      const claim1StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim1Mint.toBuffer());
+
+      await expectRejects(() =>
+        program.methods
+          .initializeMarket({
+            operator,
+            manager,
+            config: marketConfig(),
+            paramsHash: [...paramsHash],
+          })
+          .accounts({
+            payer: payer.publicKey,
+            asset0Mint,
+            asset1Mint,
+            market,
+            claim0Mint,
+            claim1Mint,
+            hedge0Mint,
+            hedge1Mint,
+            hedge0Vault,
+            hedge1Vault,
+            reserve0Vault,
+            reserve1Vault,
+            collateral0Vault,
+            collateral1Vault,
+            insurance0Vault,
+            insurance1Vault,
+            fee0Vault,
+            fee1Vault,
+            claim0StakeVault,
+            claim1StakeVault,
+            systemProgram: SystemProgram.programId,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            token2022Program: TOKEN_2022_PROGRAM_ID,
+            eventAuthority,
+            program: OMNIPAIR_PROGRAM_ID,
+          })
+          .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
+          .signers([payer])
+          .rpc()
+      );
+
+      expect(await connection.getAccountInfo(market)).to.equal(null);
+    }
+
+    await expectDefaultAuthorityRejected(SystemProgram.programId, payer.publicKey, 22);
+    await expectDefaultAuthorityRejected(payer.publicKey, SystemProgram.programId, 23);
+  });
+
   it("initializes a market account", async () => {
     trackInstruction("initializeMarket", "initializes a market account");
 
