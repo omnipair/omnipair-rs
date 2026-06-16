@@ -903,6 +903,40 @@ describe("Omnipair Market LiteSVM", () => {
       .rpc();
   });
 
+  it("rejects non-operator market administration", async () => {
+    const { market, eventAuthority } = await initializeMarketFixture();
+    const impostor = Keypair.generate();
+    await connection.requestAirdrop(impostor.publicKey, LAMPORTS_PER_SOL);
+
+    const config = marketConfig();
+    config.swapFeeBps = 42;
+    await expectRejects(() =>
+      program.methods
+        .updateMarketConfig({ config })
+        .accounts({
+          market,
+          operator: impostor.publicKey,
+          eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([impostor])
+        .rpc()
+    );
+
+    await expectRejects(() =>
+      program.methods
+        .setMarketReduceOnly({ reduceOnly: true })
+        .accounts({
+          market,
+          operator: impostor.publicKey,
+          eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([impostor])
+        .rpc()
+    );
+  });
+
   it("locks buffer-ratio updates while market stake is active", async () => {
     const {
       asset0Mint,
@@ -2009,6 +2043,41 @@ describe("Omnipair Market LiteSVM", () => {
 
     expect((await getAccount(connection as any, ownerAsset0Account)).amount).to.equal(
       BigInt(91)
+    );
+    expect((await getAccount(connection as any, fee0Vault)).amount).to.equal(BigInt(1));
+
+    const impostor = Keypair.generate();
+    await connection.requestAirdrop(impostor.publicKey, LAMPORTS_PER_SOL);
+    const impostorAsset0Account = await createAccount(
+      connection as any,
+      payer,
+      asset0Mint,
+      impostor.publicKey
+    );
+    await expectRejects(() =>
+      program.methods
+        .claimMarketFees({
+          marketSideIndex: 0,
+          claimKind: { operator: {} },
+          minFeeAmount: new BN(1),
+        })
+        .accounts({
+          market,
+          feeAuthority: impostor.publicKey,
+          assetMint: asset0Mint,
+          feeVault: fee0Vault,
+          recipientFeeAccount: impostorAsset0Account,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([impostor])
+        .rpc()
+    );
+
+    expect((await getAccount(connection as any, impostorAsset0Account)).amount).to.equal(
+      BigInt(0)
     );
     expect((await getAccount(connection as any, fee0Vault)).amount).to.equal(BigInt(1));
 
