@@ -155,7 +155,7 @@ The Anchor IDL JSON for both Omnipair programs:
 - `IDL_V2` - V2 market program IDL
 
 ### Types
-All TypeScript types generated from the IDL:
+All TypeScript types generated from the IDL, plus named account and event aliases:
 - `Omnipair` - The program type (type-only export)
 - `OmnipairV2` - The V2 program type (type-only export)
 - V1 account types: `Pair`, `UserPosition`, `RateModel`, `FutarchyAuthority`
