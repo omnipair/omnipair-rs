@@ -29,8 +29,6 @@ export const SEEDS = {
   HEDGE_VAULT: Buffer.from("hedged"),
   HEDGE_POSITION: Buffer.from("hedge_position"),
   INSURANCE_RESERVE: Buffer.from("insurance"),
-  RECOGNITION_LEDGER: Buffer.from("recognized_collateral"),
-  DAILY_LIMIT: Buffer.from("daily_limit"),
   USER_POSITION: Buffer.from("gamm_position"),
   FUTARCHY_AUTHORITY: Buffer.from("futarchy_authority"),
   RESERVE_VAULT: Buffer.from("reserve_vault"),
@@ -261,29 +259,6 @@ export function deriveInsuranceReserveAddress(
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [SEEDS.INSURANCE_RESERVE, market.toBuffer(), assetMint.toBuffer()],
-    PROGRAM_ID
-  );
-}
-
-/**
- * Derive recognition ledger PDA address
- */
-export function deriveRecognitionLedgerAddress(market: PublicKey): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [SEEDS.RECOGNITION_LEDGER, market.toBuffer()],
-    PROGRAM_ID
-  );
-}
-
-/**
- * Derive daily limit book PDA address
- */
-export function deriveDailyLimitAddress(
-  market: PublicKey,
-  assetMint: PublicKey
-): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [SEEDS.DAILY_LIMIT, market.toBuffer(), assetMint.toBuffer()],
     PROGRAM_ID
   );
 }

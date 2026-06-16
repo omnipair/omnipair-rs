@@ -118,10 +118,6 @@ pub const HEDGE_POSITION_SEED_PREFIX: &[u8] = b"hedge_position";
 #[constant]
 pub const INSURANCE_RESERVE_SEED_PREFIX: &[u8] = b"insurance";
 #[constant]
-pub const RECOGNITION_LEDGER_SEED_PREFIX: &[u8] = b"recognized_collateral";
-#[constant]
-pub const DAILY_LIMIT_SEED_PREFIX: &[u8] = b"daily_limit";
-#[constant]
 pub const POSITION_SEED_PREFIX: &[u8] = b"gamm_position";
 #[constant]
 pub const FUTARCHY_AUTHORITY_SEED_PREFIX: &[u8] = b"futarchy_authority";
