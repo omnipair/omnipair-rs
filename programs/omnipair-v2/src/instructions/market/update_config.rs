@@ -44,6 +44,7 @@ impl<'info> UpdateMarketConfig<'info> {
             buffer_ratio_bps: market.config.buffer_ratio_bps,
             swap_fee_bps: market.config.swap_fee_bps,
             operator_fee_bps: market.config.operator_fee_bps,
+            protocol_fee_bps: market.config.protocol_fee_bps,
             metadata: MarketEventMetadata::new(ctx.accounts.operator.key(), market.key())?,
         });
 

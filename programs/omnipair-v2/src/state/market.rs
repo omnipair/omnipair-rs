@@ -14,6 +14,7 @@ use crate::utils::market_math::required_buffer_for_claims;
 pub struct MarketConfig {
     pub swap_fee_bps: u16,
     pub operator_fee_bps: u16,
+    pub protocol_fee_bps: u16,
     pub buffer_ratio_bps: u16,
     pub fee_routing_k_nad: u64,
     pub ema_half_life_ms: u64,
@@ -42,6 +43,18 @@ impl MarketConfig {
         require_gte!(
             BPS_DENOMINATOR,
             self.operator_fee_bps,
+            ErrorCode::InvalidMarketConfig
+        );
+        require_gte!(
+            BPS_DENOMINATOR,
+            self.protocol_fee_bps,
+            ErrorCode::InvalidMarketConfig
+        );
+        require_gte!(
+            BPS_DENOMINATOR,
+            self.operator_fee_bps
+                .checked_add(self.protocol_fee_bps)
+                .ok_or(ErrorCode::InvalidMarketConfig)?,
             ErrorCode::InvalidMarketConfig
         );
         require!(
@@ -980,6 +993,7 @@ mod tests {
             MarketConfig {
                 swap_fee_bps: 30,
                 operator_fee_bps: 1_000,
+                protocol_fee_bps: 0,
                 buffer_ratio_bps: 2_000,
                 fee_routing_k_nad: NAD,
                 ema_half_life_ms: 60_000,
@@ -1202,7 +1216,7 @@ mod tests {
         AddLiquidity::new(1_000_000)
             .apply(&mut market_side)
             .unwrap();
-        RecordFeeCredit::new(10_000, 0, NAD)
+        RecordFeeCredit::new(10_000, 0, 0, NAD)
             .apply(&mut market_side)
             .unwrap();
 
@@ -1228,7 +1242,7 @@ mod tests {
         market_side.claim_token_ledger.staked_claim_token_supply = 800_000;
         market_side.buffer_ledger.staked_buffer_share_amount = 100_000;
 
-        RecordFeeCredit::new(1_000, 1_000, NAD)
+        RecordFeeCredit::new(1_000, 1_000, 0, NAD)
             .apply(&mut market_side)
             .unwrap();
 
@@ -1250,7 +1264,7 @@ mod tests {
         market_side.claim_token_ledger.staked_claim_token_supply = 800_000;
         market_side.buffer_ledger.staked_buffer_share_amount = 200_000;
 
-        RecordFeeCredit::new(1_000, 0, NAD)
+        RecordFeeCredit::new(1_000, 0, 0, NAD)
             .apply(&mut market_side)
             .unwrap();
 
@@ -1270,7 +1284,7 @@ mod tests {
         let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
         market_side.claim_token_ledger.protected_claim_token_supply = 800_000;
 
-        RecordFeeCredit::new(1_000, 0, NAD)
+        RecordFeeCredit::new(1_000, 0, 0, NAD)
             .apply(&mut market_side)
             .unwrap();
 
@@ -1284,7 +1298,7 @@ mod tests {
     fn unallocated_fees_carry_forward_to_next_active_stake() {
         let mut market_side = test_market_side(Pubkey::new_unique(), 2_000);
 
-        RecordFeeCredit::new(1_000, 0, NAD)
+        RecordFeeCredit::new(1_000, 0, 0, NAD)
             .apply(&mut market_side)
             .unwrap();
         assert_eq!(market_side.fee_ledger.fee_growth_index_nad, 0);
@@ -1307,7 +1321,7 @@ mod tests {
         market_side.claim_token_ledger.staked_claim_token_supply = 1_600_000_000;
         market_side.buffer_ledger.staked_buffer_share_amount = 400_000_000;
 
-        RecordFeeCredit::new(1, 0, NAD)
+        RecordFeeCredit::new(1, 0, 0, NAD)
             .apply(&mut market_side)
             .unwrap();
 

@@ -4613,6 +4613,10 @@
             "type": "u16"
           },
           {
+            "name": "protocol_fee_bps",
+            "type": "u16"
+          },
+          {
             "name": "buffer_ratio_bps",
             "type": "u16"
           },
@@ -4758,6 +4762,10 @@
           },
           {
             "name": "swap_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "protocol_fee_bps",
             "type": "u16"
           },
           {
@@ -5325,6 +5333,10 @@
           },
           {
             "name": "operator_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "protocol_fee_bps",
             "type": "u16"
           },
           {

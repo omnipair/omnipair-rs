@@ -106,6 +106,7 @@ impl<'info> Swap<'info> {
         let asset_in_mint_key = ctx.accounts.asset_in_mint.key();
         let asset_out_mint_key = ctx.accounts.asset_out_mint.key();
         let operator_fee_bps = ctx.accounts.market.config.operator_fee_bps;
+        let protocol_fee_bps = ctx.accounts.market.config.protocol_fee_bps;
         let fee_routing_k_nad = ctx.accounts.market.config.fee_routing_k_nad;
 
         let reserve_credit = receive_swap_inventory(&mut ctx, args.exact_asset_in)?;
@@ -169,6 +170,7 @@ impl<'info> Swap<'info> {
                 amount_out,
                 fee_credit,
                 operator_fee_bps,
+                protocol_fee_bps,
                 fee_routing_k_nad,
             )
             .apply(market_side_in, market_side_out)?

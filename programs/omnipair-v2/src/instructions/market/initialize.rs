@@ -311,6 +311,7 @@ impl<'info> InitializeMarket<'info> {
             manager: args.manager,
             buffer_ratio_bps: args.config.buffer_ratio_bps,
             swap_fee_bps: args.config.swap_fee_bps,
+            protocol_fee_bps: args.config.protocol_fee_bps,
             params_hash: args.params_hash,
             version: MARKET_VERSION,
             metadata: MarketEventMetadata::new(ctx.accounts.payer.key(), market_key)?,

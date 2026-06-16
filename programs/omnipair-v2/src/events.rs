@@ -38,6 +38,7 @@ pub struct MarketCreated {
     pub manager: Pubkey,
     pub buffer_ratio_bps: u16,
     pub swap_fee_bps: u16,
+    pub protocol_fee_bps: u16,
     pub params_hash: [u8; 32],
     pub version: u8,
     pub metadata: MarketEventMetadata,
@@ -50,6 +51,7 @@ pub struct MarketUpdated {
     pub buffer_ratio_bps: u16,
     pub swap_fee_bps: u16,
     pub operator_fee_bps: u16,
+    pub protocol_fee_bps: u16,
     pub metadata: MarketEventMetadata,
 }
 

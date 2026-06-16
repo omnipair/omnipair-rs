@@ -63,6 +63,7 @@ function marketConfig() {
   return {
     swapFeeBps: 30,
     operatorFeeBps: 1_000,
+    protocolFeeBps: 0,
     bufferRatioBps: 2_000,
     feeRoutingKNad: NAD,
     emaHalfLifeMs: new BN(60_000),
@@ -2106,7 +2107,7 @@ describe("Omnipair Market LiteSVM", () => {
 
   it("claims staker and operator market fees", async () => {
     trackInstruction("claimFees", "claims non-compounding staker fees");
-    trackInstruction("claimMarketFees", "claims operator market fee liabilities");
+    trackInstruction("claimMarketFees", "claims operator and protocol market fee liabilities");
 
     const {
       baseMint,
@@ -2126,6 +2127,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     const config = marketConfig();
     config.swapFeeBps = 8_000;
+    config.protocolFeeBps = 2_000;
     await program.methods
       .updateConfig({ config })
       .accounts({
@@ -2189,7 +2191,7 @@ describe("Omnipair Market LiteSVM", () => {
     await program.methods
       .claimFees({
         marketSideIndex: 0,
-        minFeeAmount: new BN(9),
+        minFeeAmount: new BN(7),
       })
       .accounts({
         market,
@@ -2207,9 +2209,9 @@ describe("Omnipair Market LiteSVM", () => {
       .rpc();
 
     expect((await getAccount(connection as any, ownerBaseAccount)).amount).to.equal(
-      BigInt(91)
+      BigInt(89)
     );
-    expect((await getAccount(connection as any, baseFeeVault)).amount).to.equal(BigInt(1));
+    expect((await getAccount(connection as any, baseFeeVault)).amount).to.equal(BigInt(3));
 
     const impostor = Keypair.generate();
     await connection.requestAirdrop(impostor.publicKey, LAMPORTS_PER_SOL);
@@ -2244,13 +2246,38 @@ describe("Omnipair Market LiteSVM", () => {
     expect((await getAccount(connection as any, impostorAsset0Account)).amount).to.equal(
       BigInt(0)
     );
-    expect((await getAccount(connection as any, baseFeeVault)).amount).to.equal(BigInt(1));
+    expect((await getAccount(connection as any, baseFeeVault)).amount).to.equal(BigInt(3));
 
     await program.methods
       .claimMarketFees({
         marketSideIndex: 0,
         claimKind: { operator: {} },
         minFeeAmount: new BN(1),
+      })
+      .accounts({
+        market,
+        feeAuthority: payer.publicKey,
+        assetMint: baseMint,
+        feeVault: baseFeeVault,
+        recipientFeeAccount: ownerBaseAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_V2_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    expect((await getAccount(connection as any, ownerBaseAccount)).amount).to.equal(
+      BigInt(90)
+    );
+    expect((await getAccount(connection as any, baseFeeVault)).amount).to.equal(BigInt(2));
+
+    await program.methods
+      .claimMarketFees({
+        marketSideIndex: 0,
+        claimKind: { protocol: {} },
+        minFeeAmount: new BN(2),
       })
       .accounts({
         market,

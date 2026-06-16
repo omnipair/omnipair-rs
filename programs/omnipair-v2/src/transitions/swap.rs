@@ -12,6 +12,7 @@ pub struct Swap {
     pub amount_out: u64,
     pub fee_credit: u64,
     pub operator_fee_bps: u16,
+    pub protocol_fee_bps: u16,
     pub fee_routing_k_nad: u64,
 }
 
@@ -31,6 +32,7 @@ impl Swap {
         amount_out: u64,
         fee_credit: u64,
         operator_fee_bps: u16,
+        protocol_fee_bps: u16,
         fee_routing_k_nad: u64,
     ) -> Self {
         Self {
@@ -38,6 +40,7 @@ impl Swap {
             amount_out,
             fee_credit,
             operator_fee_bps,
+            protocol_fee_bps,
             fee_routing_k_nad,
         }
     }
@@ -84,6 +87,7 @@ impl Swap {
         let fee_ledger = RecordFeeCredit::new(
             self.fee_credit,
             self.operator_fee_bps,
+            self.protocol_fee_bps,
             self.fee_routing_k_nad,
         )
         .apply(market_side_in)?;
@@ -146,7 +150,7 @@ mod tests {
         let mut market_side_in = market_side(10_000, 10_000, 8_000, 2_000);
         let mut market_side_out = market_side(12_000, 12_000, 8_000, 2_000);
 
-        Swap::new(500, 2_000, 0, 0, NAD)
+        Swap::new(500, 2_000, 0, 0, 0, NAD)
             .apply(&mut market_side_in, &mut market_side_out)
             .unwrap();
         assert_eq!(market_side_out.reserve_ledger.live_reserve, 10_000);
@@ -154,7 +158,7 @@ mod tests {
 
         let mut market_side_in = market_side(10_000, 10_000, 8_000, 2_000);
         let mut market_side_out = market_side(12_000, 12_000, 8_000, 2_000);
-        let err = Swap::new(500, 2_001, 0, 0, NAD)
+        let err = Swap::new(500, 2_001, 0, 0, 0, NAD)
             .apply(&mut market_side_in, &mut market_side_out)
             .unwrap_err();
         assert_eq!(err, error!(ErrorCode::InsufficientMarketClaimCoverage));
@@ -167,7 +171,7 @@ mod tests {
         market_side_in.buffer_ledger.staked_buffer_share_amount = 2_000;
         let mut market_side_out = market_side(12_000, 12_000, 8_000, 2_000);
 
-        let receipt = Swap::new(500, 100, 1_000, 1_000, NAD)
+        let receipt = Swap::new(500, 100, 1_000, 1_000, 0, NAD)
             .apply(&mut market_side_in, &mut market_side_out)
             .unwrap();
 

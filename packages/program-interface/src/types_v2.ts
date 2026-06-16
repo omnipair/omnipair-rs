@@ -4619,6 +4619,10 @@ export type OmnipairV2 = {
             "type": "u16"
           },
           {
+            "name": "protocolFeeBps",
+            "type": "u16"
+          },
+          {
             "name": "bufferRatioBps",
             "type": "u16"
           },
@@ -4764,6 +4768,10 @@ export type OmnipairV2 = {
           },
           {
             "name": "swapFeeBps",
+            "type": "u16"
+          },
+          {
+            "name": "protocolFeeBps",
             "type": "u16"
           },
           {
@@ -5331,6 +5339,10 @@ export type OmnipairV2 = {
           },
           {
             "name": "operatorFeeBps",
+            "type": "u16"
+          },
+          {
+            "name": "protocolFeeBps",
             "type": "u16"
           },
           {

@@ -11,6 +11,7 @@ use crate::{
 pub struct RecordFeeCredit {
     pub fee_credit: u64,
     pub operator_fee_bps: u16,
+    pub protocol_fee_bps: u16,
     pub fee_routing_k_nad: u64,
 }
 
@@ -85,10 +86,16 @@ pub struct FeeClaimReceipt {
 }
 
 impl RecordFeeCredit {
-    pub fn new(fee_credit: u64, operator_fee_bps: u16, fee_routing_k_nad: u64) -> Self {
+    pub fn new(
+        fee_credit: u64,
+        operator_fee_bps: u16,
+        protocol_fee_bps: u16,
+        fee_routing_k_nad: u64,
+    ) -> Self {
         Self {
             fee_credit,
             operator_fee_bps,
+            protocol_fee_bps,
             fee_routing_k_nad,
         }
     }
@@ -102,6 +109,18 @@ impl RecordFeeCredit {
             self.operator_fee_bps,
             ErrorCode::InvalidMarketConfig
         );
+        require_gte!(
+            BPS_DENOMINATOR,
+            self.protocol_fee_bps,
+            ErrorCode::InvalidMarketConfig
+        );
+        require_gte!(
+            BPS_DENOMINATOR,
+            self.operator_fee_bps
+                .checked_add(self.protocol_fee_bps)
+                .ok_or(ErrorCode::InvalidMarketConfig)?,
+            ErrorCode::InvalidMarketConfig
+        );
         require!(self.fee_routing_k_nad > 0, ErrorCode::InvalidMarketConfig);
 
         let operator_fee = (self.fee_credit as u128)
@@ -110,9 +129,16 @@ impl RecordFeeCredit {
             .ok_or(ErrorCode::MarketMathOverflow)?;
         let operator_fee =
             u64::try_from(operator_fee).map_err(|_| ErrorCode::MarketMathOverflow)?;
+        let protocol_fee = (self.fee_credit as u128)
+            .checked_mul(self.protocol_fee_bps as u128)
+            .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        let protocol_fee =
+            u64::try_from(protocol_fee).map_err(|_| ErrorCode::MarketMathOverflow)?;
         let lp_fee = self
             .fee_credit
             .checked_sub(operator_fee)
+            .and_then(|value| value.checked_sub(protocol_fee))
             .ok_or(ErrorCode::MarketMathOverflow)?;
 
         market_side.fee_ledger.fee_vault_balance = market_side
@@ -124,6 +150,11 @@ impl RecordFeeCredit {
             .fee_ledger
             .operator_fee_liability
             .checked_add(operator_fee)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        market_side.fee_ledger.protocol_fee_liability = market_side
+            .fee_ledger
+            .protocol_fee_liability
+            .checked_add(protocol_fee)
             .ok_or(ErrorCode::MarketMathOverflow)?;
 
         let (free_lp_fee, routed_fee) = routed_lp_fee(market_side, lp_fee, self.fee_routing_k_nad)?;
@@ -610,5 +641,22 @@ mod tests {
         assert_eq!(market_side.fee_ledger.operator_fee_liability, 0);
         assert_eq!(market_side.fee_ledger.protocol_fee_liability, 20);
         assert_eq!(market_side.fee_ledger.fee_vault_balance, 60);
+    }
+
+    #[test]
+    fn fee_credit_accrues_protocol_liability_before_lp_allocation() {
+        let mut market_side = market_side();
+        market_side.claim_token_ledger.staked_claim_token_supply = 8_000;
+        market_side.buffer_ledger.staked_buffer_share_amount = 2_000;
+
+        RecordFeeCredit::new(1_000, 1_000, 2_000, NAD)
+            .apply(&mut market_side)
+            .unwrap();
+
+        assert_eq!(market_side.fee_ledger.operator_fee_liability, 100);
+        assert_eq!(market_side.fee_ledger.protocol_fee_liability, 200);
+        assert_eq!(market_side.fee_ledger.fee_liability, 700);
+        assert_eq!(market_side.fee_ledger.total_liability().unwrap(), 1_000);
+        market_side.fee_ledger.assert_backed().unwrap();
     }
 }

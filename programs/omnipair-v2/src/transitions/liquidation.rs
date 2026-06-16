@@ -384,6 +384,7 @@ mod tests {
             MarketConfig {
                 swap_fee_bps: 30,
                 operator_fee_bps: 1_000,
+                protocol_fee_bps: 0,
                 buffer_ratio_bps: 2_000,
                 fee_routing_k_nad: NAD,
                 ema_half_life_ms: 60_000,
