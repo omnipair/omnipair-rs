@@ -3,7 +3,7 @@ pub mod claim_fees;
 pub mod claim_hedge_fees;
 pub mod claim_market_fees;
 pub mod close_hedge;
-mod hedge_common;
+mod common;
 pub mod open_hedge;
 mod remove_liquidity;
 pub mod stake;
