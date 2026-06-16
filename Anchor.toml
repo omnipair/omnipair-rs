@@ -35,3 +35,5 @@ members = ["programs/omnipair", "programs/omnipair-v2", "programs/faucet"]
 [scripts]
 build-devnet = "anchor build -- --features \"development\""
 build-mainnet = "anchor build -p omnipair -- --features \"production\""
+build-v2-devnet = "anchor build -p omnipair-v2 -- --features \"development\""
+build-v2-mainnet = "anchor build -p omnipair-v2 -- --features \"production\""
