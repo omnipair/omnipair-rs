@@ -152,8 +152,9 @@ impl RemoveLiquidity {
 mod tests {
     use super::*;
     use crate::{
-        constants::BPS_DENOMINATOR,
+        constants::{BPS_DENOMINATOR, NAD},
         state::{BufferLedger, MarketSide},
+        transitions::fee::RecordFeeCredit,
     };
     use proptest::prelude::*;
 
@@ -165,6 +166,54 @@ mod tests {
             },
             ..MarketSide::default()
         }
+    }
+
+    #[test]
+    fn add_liquidity_mints_claim_minus_buffer() {
+        let mut market_side = market_side(2_000);
+
+        let receipt = AddLiquidity::new(1_000_000)
+            .apply(&mut market_side)
+            .unwrap();
+
+        assert_eq!(receipt.claim_amount, 800_000);
+        assert_eq!(receipt.buffer_amount, 200_000);
+        assert_eq!(market_side.reserve_ledger.live_reserve, 1_000_000);
+        assert_eq!(market_side.reserve_ledger.cash_reserve, 1_000_000);
+        assert_eq!(
+            market_side.claim_token_ledger.protected_claim_token_supply,
+            800_000
+        );
+        assert_eq!(market_side.buffer_ledger.buffer_share_supply, 200_000);
+        assert_eq!(market_side.buffer_ledger.required_buffer, 200_000);
+        assert_eq!(market_side.claim_floor().unwrap(), 1_000_000);
+        market_side.assert_claim_coverage().unwrap();
+    }
+
+    #[test]
+    fn remove_liquidity_redeems_fixed_one_to_one_principal() {
+        let mut market_side = market_side(2_000);
+        AddLiquidity::new(1_000_000)
+            .apply(&mut market_side)
+            .unwrap();
+        RecordFeeCredit::new(10_000, 0, 0, NAD)
+            .apply(&mut market_side)
+            .unwrap();
+
+        RemoveLiquidity::new(100_000)
+            .apply(&mut market_side)
+            .unwrap();
+
+        assert_eq!(market_side.reserve_ledger.live_reserve, 900_000);
+        assert_eq!(market_side.reserve_ledger.cash_reserve, 900_000);
+        assert_eq!(
+            market_side.claim_token_ledger.protected_claim_token_supply,
+            700_000
+        );
+        assert_eq!(market_side.buffer_ledger.required_buffer, 175_000);
+        assert_eq!(market_side.fee_ledger.fee_vault_balance, 10_000);
+        assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 10_000);
+        market_side.assert_claim_coverage().unwrap();
     }
 
     proptest! {
