@@ -457,8 +457,6 @@ pub struct DebtBook {
     pub soft_debt1_shares: u128,
     pub borrow_index0_nad: u128,
     pub borrow_index1_nad: u128,
-    pub hedged_debt0_nad: u128,
-    pub hedged_debt1_nad: u128,
 }
 
 impl DebtBook {
@@ -505,14 +503,12 @@ impl DebtBook {
     pub fn total_debt0(&self) -> Result<u128> {
         self.fixed_debt0()?
             .checked_add(self.soft_debt0()?)
-            .and_then(|value| value.checked_add(self.hedged_debt0_nad))
             .ok_or(ErrorCode::MarketMathOverflow.into())
     }
 
     pub fn total_debt1(&self) -> Result<u128> {
         self.fixed_debt1()?
             .checked_add(self.soft_debt1()?)
-            .and_then(|value| value.checked_add(self.hedged_debt1_nad))
             .ok_or(ErrorCode::MarketMathOverflow.into())
     }
 }
@@ -2446,7 +2442,6 @@ mod tests {
         .unwrap();
         let effective = market.effective_debt0_nad().unwrap();
 
-        assert_eq!(market.debt_book.hedged_debt0_nad, 0);
         assert!(raw_hedged_debt > 0);
         assert!(effective_hedged_debt < raw_hedged_debt);
         assert_eq!(effective, 100 * NAD as u128 + effective_hedged_debt);
