@@ -25,17 +25,17 @@ import {
 import { expect } from "chai";
 import { LiteSVM } from "litesvm";
 import { LiteSVMConnection } from "./utils/litesvm-connection.js";
-import { trackInstruction, getCoverageReport } from "./utils/instruction-coverage.js";
+import { trackV2Instruction as trackInstruction, getCoverageReport } from "./utils/instruction-coverage.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const OMNIPAIR_PROGRAM_ID = new PublicKey("omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE");
+const OMNIPAIR_V2_PROGRAM_ID = new PublicKey("358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv");
 const { AnchorProvider, BN, Program, Wallet } = anchor;
 const NAD = new BN(1_000_000_000);
 
-const omnipairIdlPath = path.join(__dirname, "../target/idl/omnipair.json");
-const omnipairIdlData = JSON.parse(fs.readFileSync(omnipairIdlPath, "utf-8")) as any;
-const omnipairIdl = {
-  ...omnipairIdlData,
+const omnipairV2IdlPath = path.join(__dirname, "../target/idl/omnipair_v2.json");
+const omnipairV2IdlData = JSON.parse(fs.readFileSync(omnipairV2IdlPath, "utf-8")) as any;
+const omnipairV2Idl = {
+  ...omnipairV2IdlData,
   accounts: [],
 } as any;
 
@@ -46,7 +46,7 @@ function orderedMints(mintA: PublicKey, mintB: PublicKey): [PublicKey, PublicKey
 }
 
 function deriveAddress(...seeds: Buffer[]): PublicKey {
-  return PublicKey.findProgramAddressSync(seeds, OMNIPAIR_PROGRAM_ID)[0];
+  return PublicKey.findProgramAddressSync(seeds, OMNIPAIR_V2_PROGRAM_ID)[0];
 }
 
 async function expectRejects(action) {
@@ -91,19 +91,19 @@ describe("Omnipair Market LiteSVM", () => {
 
   before(async () => {
     svm = new LiteSVM();
-    const programPath = path.join(__dirname, "../target/deploy/omnipair.so");
+    const programPath = path.join(__dirname, "../target/deploy/omnipair_v2.so");
     if (!fs.existsSync(programPath)) {
       throw new Error(`Program file not found at ${programPath}`);
     }
 
-    svm.addProgramFromFile(OMNIPAIR_PROGRAM_ID, programPath);
+    svm.addProgramFromFile(OMNIPAIR_V2_PROGRAM_ID, programPath);
     connection = new LiteSVMConnection(svm);
 
     payer = Keypair.generate();
     await connection.requestAirdrop(payer.publicKey, 10 * LAMPORTS_PER_SOL);
 
     provider = new AnchorProvider(connection as any, new Wallet(payer) as any, {});
-    program = new Program(omnipairIdl as any, provider as any);
+    program = new Program(omnipairV2Idl as any, provider as any);
   });
 
   async function initializeMarketFixture() {
@@ -113,11 +113,11 @@ describe("Omnipair Market LiteSVM", () => {
     const paramsHash = Buffer.alloc(32, 7);
     const [market] = PublicKey.findProgramAddressSync(
       [Buffer.from("market_v2"), asset0Mint.toBuffer(), asset1Mint.toBuffer(), paramsHash],
-      OMNIPAIR_PROGRAM_ID
+      OMNIPAIR_V2_PROGRAM_ID
     );
     const [eventAuthority] = PublicKey.findProgramAddressSync(
       [Buffer.from("__event_authority")],
-      OMNIPAIR_PROGRAM_ID
+      OMNIPAIR_V2_PROGRAM_ID
     );
     const claim0Mint = await createMint(connection as any, payer, market, null, 6);
     const claim1Mint = await createMint(connection as any, payer, market, null, 6);
@@ -137,7 +137,7 @@ describe("Omnipair Market LiteSVM", () => {
     const claim1StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim1Mint.toBuffer());
 
     await program.methods
-      .initializeMarket({
+      .initialize({
         operator: payer.publicKey,
         manager: payer.publicKey,
         config: marketConfig(),
@@ -168,7 +168,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
       .signers([payer])
@@ -245,11 +245,11 @@ describe("Omnipair Market LiteSVM", () => {
     const paramsHash = Buffer.alloc(32, 8);
     const [market] = PublicKey.findProgramAddressSync(
       [Buffer.from("market_v2"), asset0Mint.toBuffer(), asset1Mint.toBuffer(), paramsHash],
-      OMNIPAIR_PROGRAM_ID
+      OMNIPAIR_V2_PROGRAM_ID
     );
     const [eventAuthority] = PublicKey.findProgramAddressSync(
       [Buffer.from("__event_authority")],
-      OMNIPAIR_PROGRAM_ID
+      OMNIPAIR_V2_PROGRAM_ID
     );
     const claim0Mint = await createMint(connection as any, payer, market, null, 6);
     const claim1Mint = await createMint(connection as any, payer, market, null, 6);
@@ -269,7 +269,7 @@ describe("Omnipair Market LiteSVM", () => {
     const claim1StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim1Mint.toBuffer());
 
     await program.methods
-      .initializeMarket({
+      .initialize({
         operator: payer.publicKey,
         manager: payer.publicKey,
         config: marketConfig(),
@@ -300,7 +300,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
       .signers([payer])
@@ -324,7 +324,7 @@ describe("Omnipair Market LiteSVM", () => {
     };
   }
 
-  async function depositReserveSide(
+  async function addLiquiditySide(
     fixture,
     marketSideIndex,
     assetMint,
@@ -345,7 +345,7 @@ describe("Omnipair Market LiteSVM", () => {
     );
 
     await program.methods
-      .depositReserve({
+      .addLiquidity({
         marketSideIndex,
         depositAmount: new BN(depositAmount),
         minClaimAmount: new BN(minClaimAmount),
@@ -364,7 +364,7 @@ describe("Omnipair Market LiteSVM", () => {
         token2022Program: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         eventAuthority: fixture.eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([owner])
       .rpc();
@@ -416,7 +416,7 @@ describe("Omnipair Market LiteSVM", () => {
       2_000_000
     );
 
-    const stake0Position = await depositReserveSide(
+    const stake0Position = await addLiquiditySide(
       fixture,
       0,
       fixture.asset0Mint,
@@ -425,7 +425,7 @@ describe("Omnipair Market LiteSVM", () => {
       ownerAsset0Account,
       ownerClaim0Account
     );
-    const stake1Position = await depositReserveSide(
+    const stake1Position = await addLiquiditySide(
       fixture,
       1,
       fixture.asset1Mint,
@@ -490,7 +490,7 @@ describe("Omnipair Market LiteSVM", () => {
       100
     );
 
-    const stake0Position = await depositReserveSide(
+    const stake0Position = await addLiquiditySide(
       fixture,
       0,
       fixture.asset0Mint,
@@ -502,7 +502,7 @@ describe("Omnipair Market LiteSVM", () => {
       4,
       2
     );
-    const stake1Position = await depositReserveSide(
+    const stake1Position = await addLiquiditySide(
       fixture,
       1,
       fixture.asset1Mint,
@@ -615,7 +615,7 @@ describe("Omnipair Market LiteSVM", () => {
         26
       );
 
-      await depositReserveSide(
+      await addLiquiditySide(
         fixture,
         0,
         fixture.asset0Mint,
@@ -628,7 +628,7 @@ describe("Omnipair Market LiteSVM", () => {
         6,
         lender
       );
-      await depositReserveSide(
+      await addLiquiditySide(
         fixture,
         1,
         fixture.asset1Mint,
@@ -660,11 +660,11 @@ describe("Omnipair Market LiteSVM", () => {
       const paramsHash = Buffer.alloc(32, paramsSeed);
       const [market] = PublicKey.findProgramAddressSync(
         [Buffer.from("market_v2"), asset0Mint.toBuffer(), asset1Mint.toBuffer(), paramsHash],
-        OMNIPAIR_PROGRAM_ID
+        OMNIPAIR_V2_PROGRAM_ID
       );
       const [eventAuthority] = PublicKey.findProgramAddressSync(
         [Buffer.from("__event_authority")],
-        OMNIPAIR_PROGRAM_ID
+        OMNIPAIR_V2_PROGRAM_ID
       );
 
       const blockedMint = await createTransferFeeMint(6, 1_000, 1_000_000, market);
@@ -691,7 +691,7 @@ describe("Omnipair Market LiteSVM", () => {
 
       await expectRejects(() =>
         program.methods
-          .initializeMarket({
+          .initialize({
             operator: payer.publicKey,
             manager: payer.publicKey,
             config: marketConfig(),
@@ -722,7 +722,7 @@ describe("Omnipair Market LiteSVM", () => {
             tokenProgram: TOKEN_PROGRAM_ID,
             token2022Program: TOKEN_2022_PROGRAM_ID,
             eventAuthority,
-            program: OMNIPAIR_PROGRAM_ID,
+            program: OMNIPAIR_V2_PROGRAM_ID,
           })
           .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
           .signers([payer])
@@ -744,11 +744,11 @@ describe("Omnipair Market LiteSVM", () => {
       const paramsHash = Buffer.alloc(32, paramsSeed);
       const [market] = PublicKey.findProgramAddressSync(
         [Buffer.from("market_v2"), asset0Mint.toBuffer(), asset1Mint.toBuffer(), paramsHash],
-        OMNIPAIR_PROGRAM_ID
+        OMNIPAIR_V2_PROGRAM_ID
       );
       const [eventAuthority] = PublicKey.findProgramAddressSync(
         [Buffer.from("__event_authority")],
-        OMNIPAIR_PROGRAM_ID
+        OMNIPAIR_V2_PROGRAM_ID
       );
       const claim0Mint = await createMint(connection as any, payer, market, null, 6);
       const claim1Mint = await createMint(connection as any, payer, market, null, 6);
@@ -769,7 +769,7 @@ describe("Omnipair Market LiteSVM", () => {
 
       await expectRejects(() =>
         program.methods
-          .initializeMarket({
+          .initialize({
             operator,
             manager,
             config: marketConfig(),
@@ -800,7 +800,7 @@ describe("Omnipair Market LiteSVM", () => {
             tokenProgram: TOKEN_PROGRAM_ID,
             token2022Program: TOKEN_2022_PROGRAM_ID,
             eventAuthority,
-            program: OMNIPAIR_PROGRAM_ID,
+            program: OMNIPAIR_V2_PROGRAM_ID,
           })
           .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
           .signers([payer])
@@ -815,7 +815,7 @@ describe("Omnipair Market LiteSVM", () => {
   });
 
   it("initializes a market account", async () => {
-    trackInstruction("initializeMarket", "initializes a market account");
+    trackInstruction("initialize", "initializes a market account");
 
     const {
       market,
@@ -829,7 +829,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     const marketAccount = await connection.getAccountInfo(market);
     expect(marketAccount).to.not.equal(null);
-    expect(marketAccount.owner.toString()).to.equal(OMNIPAIR_PROGRAM_ID.toString());
+    expect(marketAccount.owner.toString()).to.equal(OMNIPAIR_V2_PROGRAM_ID.toString());
 
     for (const vault of [reserve0Vault, reserve1Vault, hedge0Vault, hedge1Vault, claim0StakeVault, claim1StakeVault]) {
       const vaultAccount = await connection.getAccountInfo(vault);
@@ -839,8 +839,8 @@ describe("Omnipair Market LiteSVM", () => {
   });
 
   it("updates market config and enforces reduce-only mode", async () => {
-    trackInstruction("updateMarketConfig", "updates market buffer ratio");
-    trackInstruction("setMarketReduceOnly", "blocks risk-increasing reserve deposits");
+    trackInstruction("updateConfig", "updates market buffer ratio");
+    trackInstruction("setReduceOnly", "blocks risk-increasing reserve deposits");
 
     const fixture = await initializeMarketFixture();
     const ownerAsset0Account = await createAccount(
@@ -868,17 +868,17 @@ describe("Omnipair Market LiteSVM", () => {
     const config = marketConfig();
     config.bufferRatioBps = 1_000;
     await program.methods
-      .updateMarketConfig({ config })
+      .updateConfig({ config })
       .accounts({
         market: fixture.market,
         operator: payer.publicKey,
         eventAuthority: fixture.eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
-    const stake0Position = await depositReserveSide(
+    const stake0Position = await addLiquiditySide(
       fixture,
       0,
       fixture.asset0Mint,
@@ -896,19 +896,19 @@ describe("Omnipair Market LiteSVM", () => {
     );
 
     await program.methods
-      .setMarketReduceOnly({ reduceOnly: true })
+      .setReduceOnly({ reduceOnly: true })
       .accounts({
         market: fixture.market,
         operator: payer.publicKey,
         eventAuthority: fixture.eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await expectRejects(() =>
       program.methods
-        .depositReserve({
+        .addLiquidity({
           marketSideIndex: 0,
           depositAmount: new BN(1_000),
           minClaimAmount: new BN(900),
@@ -927,7 +927,7 @@ describe("Omnipair Market LiteSVM", () => {
           token2022Program: TOKEN_2022_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
           eventAuthority: fixture.eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .rpc()
@@ -941,12 +941,12 @@ describe("Omnipair Market LiteSVM", () => {
     softBorrowConfig.softBorrowEnabled = true;
     await expectRejects(() =>
       program.methods
-        .updateMarketConfig({ config: softBorrowConfig })
+        .updateConfig({ config: softBorrowConfig })
         .accounts({
           market,
           operator: payer.publicKey,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .rpc()
@@ -957,12 +957,12 @@ describe("Omnipair Market LiteSVM", () => {
     unsafeHealthConfig.marketHealthMinBps = 11_000;
     await expectRejects(() =>
       program.methods
-        .updateMarketConfig({ config: unsafeHealthConfig })
+        .updateConfig({ config: unsafeHealthConfig })
         .accounts({
           market,
           operator: payer.publicKey,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .rpc()
@@ -971,12 +971,12 @@ describe("Omnipair Market LiteSVM", () => {
     const validConfig = marketConfig();
     validConfig.swapFeeBps = 42;
     await program.methods
-      .updateMarketConfig({ config: validConfig })
+      .updateConfig({ config: validConfig })
       .accounts({
         market,
         operator: payer.publicKey,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -991,12 +991,12 @@ describe("Omnipair Market LiteSVM", () => {
     config.swapFeeBps = 42;
     await expectRejects(() =>
       program.methods
-        .updateMarketConfig({ config })
+        .updateConfig({ config })
         .accounts({
           market,
           operator: impostor.publicKey,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([impostor])
         .rpc()
@@ -1004,12 +1004,12 @@ describe("Omnipair Market LiteSVM", () => {
 
     await expectRejects(() =>
       program.methods
-        .setMarketReduceOnly({ reduceOnly: true })
+        .setReduceOnly({ reduceOnly: true })
         .accounts({
           market,
           operator: impostor.publicKey,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([impostor])
         .rpc()
@@ -1045,7 +1045,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -1054,12 +1054,12 @@ describe("Omnipair Market LiteSVM", () => {
     lockedConfig.bufferRatioBps = 1_500;
     await expectRejects(() =>
       program.methods
-        .updateMarketConfig({ config: lockedConfig })
+        .updateConfig({ config: lockedConfig })
         .accounts({
           market,
           operator: payer.publicKey,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .rpc()
@@ -1093,12 +1093,12 @@ describe("Omnipair Market LiteSVM", () => {
     const config = marketConfig();
     config.swapFeeBps = 8_000;
     await program.methods
-      .updateMarketConfig({ config })
+      .updateConfig({ config })
       .accounts({
         market,
         operator: payer.publicKey,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -1121,13 +1121,13 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await program.methods
-      .marketSwap({
+      .swap({
         assetInIsAsset0: true,
         exactAssetIn: new BN(12),
         minAssetOut: new BN(1),
@@ -1145,7 +1145,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -1167,7 +1167,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -1177,12 +1177,12 @@ describe("Omnipair Market LiteSVM", () => {
     lockedConfig.bufferRatioBps = 1_500;
     await expectRejects(() =>
       program.methods
-        .updateMarketConfig({ config: lockedConfig })
+        .updateConfig({ config: lockedConfig })
         .accounts({
           market,
           operator: payer.publicKey,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .rpc()
@@ -1212,18 +1212,18 @@ describe("Omnipair Market LiteSVM", () => {
     uncoveredConfig.bufferRatioBps = 2_500;
     await expectRejects(() =>
       program.methods
-        .updateMarketConfig({ config: uncoveredConfig })
+        .updateConfig({ config: uncoveredConfig })
         .accounts({
           market,
           operator: payer.publicKey,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .rpc()
     );
 
-    await depositReserveSide(
+    await addLiquiditySide(
       { market, eventAuthority },
       0,
       asset0Mint,
@@ -1241,9 +1241,9 @@ describe("Omnipair Market LiteSVM", () => {
     );
   });
 
-  it("deposits reserve inventory and redeems fixed principal", async () => {
-    trackInstruction("depositReserve", "deposits reserve inventory");
-    trackInstruction("redeemClaim", "redeems fixed principal");
+  it("adds liquidity inventory and redeems fixed principal", async () => {
+    trackInstruction("addLiquidity", "adds liquidity inventory");
+    trackInstruction("removeLiquidity", "redeems fixed principal");
 
     const {
       asset0Mint,
@@ -1266,7 +1266,7 @@ describe("Omnipair Market LiteSVM", () => {
     );
 
     await program.methods
-      .redeemClaim({
+      .removeLiquidity({
         marketSideIndex: 0,
         claimAmount: new BN(80_000),
         minAssetAmountOut: new BN(80_000),
@@ -1282,7 +1282,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -1414,7 +1414,7 @@ describe("Omnipair Market LiteSVM", () => {
           ownerClaimAccount: ownerClaim0Account,
         };
 
-    await depositReserveSide(
+    await addLiquiditySide(
       fixture,
       transferFeeMarketSideIndex,
       transferFeeSide.assetMint,
@@ -1455,7 +1455,7 @@ describe("Omnipair Market LiteSVM", () => {
         undefined,
         TOKEN_2022_PROGRAM_ID
       );
-      await depositReserveSide(
+      await addLiquiditySide(
         fixture,
         transferFeeMarketSideIndex,
         transferFeeSide.assetMint,
@@ -1469,7 +1469,7 @@ describe("Omnipair Market LiteSVM", () => {
         lender
       );
     }
-    await depositReserveSide(
+    await addLiquiditySide(
       fixture,
       vanillaSide.marketSideIndex,
       vanillaSide.assetMint,
@@ -1496,7 +1496,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await expectRejects(() =>
       program.methods
-        .redeemClaim({
+        .removeLiquidity({
           marketSideIndex: transferFeeMarketSideIndex,
           claimAmount: new BN(5),
           minAssetAmountOut: new BN(5),
@@ -1512,7 +1512,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .rpc()
@@ -1525,7 +1525,7 @@ describe("Omnipair Market LiteSVM", () => {
       TOKEN_2022_PROGRAM_ID
     )).amount;
     await program.methods
-      .redeemClaim({
+      .removeLiquidity({
         marketSideIndex: transferFeeMarketSideIndex,
         claimAmount: new BN(5),
         minAssetAmountOut: new BN(4),
@@ -1541,7 +1541,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -1555,7 +1555,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await expectRejects(() =>
       program.methods
-        .marketSwap({
+        .swap({
           assetInIsAsset0: !transferFeeSide.borrowAssetIsAsset0,
           exactAssetIn: new BN(5),
           minAssetOut: new BN(4),
@@ -1573,7 +1573,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .rpc()
@@ -1586,7 +1586,7 @@ describe("Omnipair Market LiteSVM", () => {
       TOKEN_2022_PROGRAM_ID
     )).amount;
     await program.methods
-      .marketSwap({
+      .swap({
         assetInIsAsset0: !transferFeeSide.borrowAssetIsAsset0,
         exactAssetIn: new BN(5),
         minAssetOut: new BN(3),
@@ -1604,7 +1604,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -1637,14 +1637,14 @@ describe("Omnipair Market LiteSVM", () => {
         token2022Program: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await expectRejects(() =>
       program.methods
-        .marketBorrow({
+        .borrow({
           borrowAssetIsAsset0: transferFeeSide.borrowAssetIsAsset0,
           borrowAmount: new BN(5),
           minDebtAmountOut: new BN(5),
@@ -1661,7 +1661,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
@@ -1675,7 +1675,7 @@ describe("Omnipair Market LiteSVM", () => {
       TOKEN_2022_PROGRAM_ID
     )).amount;
     await program.methods
-      .marketBorrow({
+      .borrow({
         borrowAssetIsAsset0: transferFeeSide.borrowAssetIsAsset0,
         borrowAmount: new BN(5),
         minDebtAmountOut: new BN(4),
@@ -1692,7 +1692,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
@@ -1711,12 +1711,12 @@ describe("Omnipair Market LiteSVM", () => {
     const borrowLimitConfig = marketConfig();
     borrowLimitConfig.maxDailyBorrowBps = 300;
     await program.methods
-      .updateMarketConfig({ config: borrowLimitConfig })
+      .updateConfig({ config: borrowLimitConfig })
       .accounts({
         market: borrowFixture.market,
         operator: payer.publicKey,
         eventAuthority: borrowFixture.eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -1742,13 +1742,13 @@ describe("Omnipair Market LiteSVM", () => {
         token2022Program: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         eventAuthority: borrowFixture.eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await program.methods
-      .marketBorrow({
+      .borrow({
         borrowAssetIsAsset0: true,
         borrowAmount: new BN(9),
         minDebtAmountOut: new BN(9),
@@ -1765,7 +1765,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority: borrowFixture.eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
@@ -1773,7 +1773,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await expectRejects(() =>
       program.methods
-        .marketBorrow({
+        .borrow({
           borrowAssetIsAsset0: true,
           borrowAmount: new BN(1),
           minDebtAmountOut: new BN(1),
@@ -1790,7 +1790,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority: borrowFixture.eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
@@ -1801,18 +1801,18 @@ describe("Omnipair Market LiteSVM", () => {
     const redeemLimitConfig = marketConfig();
     redeemLimitConfig.maxDailyWithdrawBps = 1;
     await program.methods
-      .updateMarketConfig({ config: redeemLimitConfig })
+      .updateConfig({ config: redeemLimitConfig })
       .accounts({
         market: redeemFixture.market,
         operator: payer.publicKey,
         eventAuthority: redeemFixture.eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await program.methods
-      .redeemClaim({
+      .removeLiquidity({
         marketSideIndex: 0,
         claimAmount: new BN(100),
         minAssetAmountOut: new BN(100),
@@ -1828,14 +1828,14 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority: redeemFixture.eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await expectRejects(() =>
       program.methods
-        .redeemClaim({
+        .removeLiquidity({
           marketSideIndex: 0,
           claimAmount: new BN(1),
           minAssetAmountOut: new BN(1),
@@ -1851,7 +1851,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority: redeemFixture.eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .rpc()
@@ -1861,12 +1861,12 @@ describe("Omnipair Market LiteSVM", () => {
     const collateralWithdrawLimitConfig = marketConfig();
     collateralWithdrawLimitConfig.maxDailyWithdrawBps = 300;
     await program.methods
-      .updateMarketConfig({ config: collateralWithdrawLimitConfig })
+      .updateConfig({ config: collateralWithdrawLimitConfig })
       .accounts({
         market: collateralWithdrawFixture.market,
         operator: payer.publicKey,
         eventAuthority: collateralWithdrawFixture.eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -1892,7 +1892,7 @@ describe("Omnipair Market LiteSVM", () => {
         token2022Program: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         eventAuthority: collateralWithdrawFixture.eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -1913,7 +1913,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority: collateralWithdrawFixture.eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
@@ -1936,7 +1936,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority: collateralWithdrawFixture.eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
@@ -1945,7 +1945,7 @@ describe("Omnipair Market LiteSVM", () => {
   });
 
   it("swaps against market reserve floor excess", async () => {
-    trackInstruction("marketSwap", "swaps against rounded market reserve excess");
+    trackInstruction("swap", "swaps against rounded market reserve excess");
 
     const {
       asset0Mint,
@@ -1960,7 +1960,7 @@ describe("Omnipair Market LiteSVM", () => {
     } = await fundTinyRoundingMarket();
 
     await program.methods
-      .marketSwap({
+      .swap({
         assetInIsAsset0: true,
         exactAssetIn: new BN(3),
         minAssetOut: new BN(1),
@@ -1978,7 +1978,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -2002,19 +2002,19 @@ describe("Omnipair Market LiteSVM", () => {
     const swapFixture = await fundTinyRoundingMarket();
 
     await program.methods
-      .setMarketReduceOnly({ reduceOnly: true })
+      .setReduceOnly({ reduceOnly: true })
       .accounts({
         market: swapFixture.market,
         operator: payer.publicKey,
         eventAuthority: swapFixture.eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await expectRejects(() =>
       program.methods
-        .marketSwap({
+        .swap({
           assetInIsAsset0: true,
           exactAssetIn: new BN(3),
           minAssetOut: new BN(1),
@@ -2032,7 +2032,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority: swapFixture.eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .rpc()
@@ -2061,25 +2061,25 @@ describe("Omnipair Market LiteSVM", () => {
         token2022Program: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         eventAuthority: borrowFixture.eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await program.methods
-      .setMarketReduceOnly({ reduceOnly: true })
+      .setReduceOnly({ reduceOnly: true })
       .accounts({
         market: borrowFixture.market,
         operator: payer.publicKey,
         eventAuthority: borrowFixture.eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await expectRejects(() =>
       program.methods
-        .marketBorrow({
+        .borrow({
           borrowAssetIsAsset0: true,
           borrowAmount: new BN(5),
           minDebtAmountOut: new BN(5),
@@ -2096,7 +2096,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority: borrowFixture.eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
@@ -2127,12 +2127,12 @@ describe("Omnipair Market LiteSVM", () => {
     const config = marketConfig();
     config.swapFeeBps = 8_000;
     await program.methods
-      .updateMarketConfig({ config })
+      .updateConfig({ config })
       .accounts({
         market,
         operator: payer.publicKey,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -2155,13 +2155,13 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await program.methods
-      .marketSwap({
+      .swap({
         assetInIsAsset0: true,
         exactAssetIn: new BN(12),
         minAssetOut: new BN(1),
@@ -2179,7 +2179,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -2201,7 +2201,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -2235,7 +2235,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([impostor])
         .rpc()
@@ -2261,7 +2261,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -2292,18 +2292,18 @@ describe("Omnipair Market LiteSVM", () => {
     const config = marketConfig();
     config.swapFeeBps = 8_000;
     await program.methods
-      .updateMarketConfig({ config })
+      .updateConfig({ config })
       .accounts({
         market,
         operator: payer.publicKey,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await program.methods
-      .marketSwap({
+      .swap({
         assetInIsAsset0: true,
         exactAssetIn: new BN(12),
         minAssetOut: new BN(1),
@@ -2321,7 +2321,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -2346,7 +2346,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -2366,7 +2366,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -2397,12 +2397,12 @@ describe("Omnipair Market LiteSVM", () => {
     const config = marketConfig();
     config.swapFeeBps = 8_000;
     await program.methods
-      .updateMarketConfig({ config })
+      .updateConfig({ config })
       .accounts({
         market,
         operator: payer.publicKey,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -2425,13 +2425,13 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await program.methods
-      .marketSwap({
+      .swap({
         assetInIsAsset0: true,
         exactAssetIn: new BN(12),
         minAssetOut: new BN(1),
@@ -2449,12 +2449,12 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
-    await depositReserveSide(
+    await addLiquiditySide(
       { market, eventAuthority },
       0,
       asset0Mint,
@@ -2483,7 +2483,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .rpc()
@@ -2505,7 +2505,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .rpc()
@@ -2544,7 +2544,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -2573,7 +2573,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -2610,12 +2610,12 @@ describe("Omnipair Market LiteSVM", () => {
     hedgeFeeConfig.spotEmaDivergenceBps = 10_000;
     hedgeFeeConfig.kEmaDrawdownBps = 10_000;
     await program.methods
-      .updateMarketConfig({ config: hedgeFeeConfig })
+      .updateConfig({ config: hedgeFeeConfig })
       .accounts({
         market,
         operator: payer.publicKey,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -2653,7 +2653,7 @@ describe("Omnipair Market LiteSVM", () => {
         token2022Program: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -2669,7 +2669,7 @@ describe("Omnipair Market LiteSVM", () => {
     );
 
     await program.methods
-      .marketSwap({
+      .swap({
         assetInIsAsset0: true,
         exactAssetIn: new BN(3),
         minAssetOut: new BN(1),
@@ -2687,7 +2687,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -2711,7 +2711,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -2721,12 +2721,12 @@ describe("Omnipair Market LiteSVM", () => {
     ).to.equal(true);
 
     await program.methods
-      .setMarketReduceOnly({ reduceOnly: true })
+      .setReduceOnly({ reduceOnly: true })
       .accounts({
         market,
         operator: payer.publicKey,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -2752,7 +2752,7 @@ describe("Omnipair Market LiteSVM", () => {
           token2022Program: TOKEN_2022_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .rpc()
@@ -2777,7 +2777,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -2819,12 +2819,12 @@ describe("Omnipair Market LiteSVM", () => {
     const config = marketConfig();
     config.hedgedLpEnabled = false;
     await program.methods
-      .updateMarketConfig({ config })
+      .updateConfig({ config })
       .accounts({
         market,
         operator: payer.publicKey,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -2850,7 +2850,7 @@ describe("Omnipair Market LiteSVM", () => {
           token2022Program: TOKEN_2022_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .rpc()
@@ -2912,12 +2912,12 @@ describe("Omnipair Market LiteSVM", () => {
         token2022Program: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
-    await depositReserveSide(
+    await addLiquiditySide(
       { market, eventAuthority },
       0,
       asset0Mint,
@@ -2950,7 +2950,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .rpc()
@@ -2992,7 +2992,7 @@ describe("Omnipair Market LiteSVM", () => {
         token2022Program: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -3018,7 +3018,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -3032,8 +3032,8 @@ describe("Omnipair Market LiteSVM", () => {
   });
 
   it("borrows and repays fixed market debt against recognized collateral", async () => {
-    trackInstruction("marketBorrow", "borrows fixed market debt");
-    trackInstruction("marketRepay", "repays fixed market debt");
+    trackInstruction("borrow", "borrows fixed market debt");
+    trackInstruction("repay", "repays fixed market debt");
     trackInstruction("withdrawCollateral", "withdraws idle borrower collateral");
 
     const {
@@ -3068,14 +3068,14 @@ describe("Omnipair Market LiteSVM", () => {
         token2022Program: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await expectRejects(() =>
       program.methods
-        .marketBorrow({
+        .borrow({
           borrowAssetIsAsset0: true,
           borrowAmount: new BN(5),
           minDebtAmountOut: new BN(6),
@@ -3092,7 +3092,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
@@ -3100,7 +3100,7 @@ describe("Omnipair Market LiteSVM", () => {
     );
 
     await program.methods
-      .marketBorrow({
+      .borrow({
         borrowAssetIsAsset0: true,
         borrowAmount: new BN(5),
         minDebtAmountOut: new BN(5),
@@ -3117,7 +3117,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
@@ -3147,14 +3147,14 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .rpc()
     );
 
     await program.methods
-      .marketRepay({
+      .repay({
         repayAssetIsAsset0: true,
         repayAmount: new BN(5),
       })
@@ -3168,7 +3168,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
@@ -3203,7 +3203,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
@@ -3250,14 +3250,14 @@ describe("Omnipair Market LiteSVM", () => {
         token2022Program: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await expectRejects(() =>
       program.methods
-        .marketBorrow({
+        .borrow({
           borrowAssetIsAsset0: true,
           borrowAmount: new BN(12),
           minDebtAmountOut: new BN(12),
@@ -3274,7 +3274,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
@@ -3321,14 +3321,14 @@ describe("Omnipair Market LiteSVM", () => {
         token2022Program: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await expectRejects(() =>
       program.methods
-        .marketBorrow({
+        .borrow({
           borrowAssetIsAsset0: true,
           borrowAmount: new BN(5),
           minDebtAmountOut: new BN(5),
@@ -3345,7 +3345,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
@@ -3398,13 +3398,13 @@ describe("Omnipair Market LiteSVM", () => {
         token2022Program: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await program.methods
-      .marketBorrow({
+      .borrow({
         borrowAssetIsAsset0: true,
         borrowAmount: new BN(5),
         minDebtAmountOut: new BN(5),
@@ -3421,13 +3421,13 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
       .rpc();
 
-    await depositReserveSide(
+    await addLiquiditySide(
       { market, eventAuthority },
       0,
       asset0Mint,
@@ -3442,7 +3442,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await expectRejects(() =>
       program.methods
-        .marketRepay({
+        .repay({
           repayAssetIsAsset0: true,
           repayAmount: new BN(5),
         })
@@ -3456,7 +3456,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
@@ -3502,13 +3502,13 @@ describe("Omnipair Market LiteSVM", () => {
         token2022Program: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await program.methods
-      .marketBorrow({
+      .borrow({
         borrowAssetIsAsset0: true,
         borrowAmount: new BN(5),
         minDebtAmountOut: new BN(5),
@@ -3525,7 +3525,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
@@ -3537,12 +3537,12 @@ describe("Omnipair Market LiteSVM", () => {
     config.spotEmaDivergenceBps = 10_000;
     config.kEmaDrawdownBps = 10_000;
     await program.methods
-      .updateMarketConfig({ config })
+      .updateConfig({ config })
       .accounts({
         market,
         operator: payer.publicKey,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -3555,7 +3555,7 @@ describe("Omnipair Market LiteSVM", () => {
       payer,
       300
     );
-    await depositReserveSide(
+    await addLiquiditySide(
       { market, eventAuthority },
       1,
       asset1Mint,
@@ -3583,7 +3583,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([payer])
         .rpc();
@@ -3658,13 +3658,13 @@ describe("Omnipair Market LiteSVM", () => {
         token2022Program: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await program.methods
-      .marketBorrow({
+      .borrow({
         borrowAssetIsAsset0: true,
         borrowAmount: new BN(5),
         minDebtAmountOut: new BN(5),
@@ -3681,7 +3681,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
@@ -3712,7 +3712,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await expectRejects(() =>
       program.methods
-        .marketLiquidate({
+        .liquidate({
           debtAssetIsAsset0: true,
           repayAmount: new BN(5),
           minCollateralOut: new BN(1),
@@ -3733,7 +3733,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([liquidator])
         .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 })])
@@ -3755,7 +3755,7 @@ describe("Omnipair Market LiteSVM", () => {
   });
 
   it("liquidates unhealthy fixed market debt", async () => {
-    trackInstruction("marketLiquidate", "liquidates fixed market debt");
+    trackInstruction("liquidate", "liquidates fixed market debt");
 
     const {
       asset0Mint,
@@ -3790,13 +3790,13 @@ describe("Omnipair Market LiteSVM", () => {
         token2022Program: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await program.methods
-      .marketBorrow({
+      .borrow({
         borrowAssetIsAsset0: true,
         borrowAmount: new BN(5),
         minDebtAmountOut: new BN(5),
@@ -3813,7 +3813,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
@@ -3823,12 +3823,12 @@ describe("Omnipair Market LiteSVM", () => {
     config.recognizedCollateralCapBps = 20_000;
     config.marketHealthMinBps = 20_000;
     await program.methods
-      .updateMarketConfig({ config })
+      .updateConfig({ config })
       .accounts({
         market,
         operator: payer.publicKey,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
@@ -3857,7 +3857,7 @@ describe("Omnipair Market LiteSVM", () => {
     );
 
     await program.methods
-      .marketLiquidate({
+      .liquidate({
         debtAssetIsAsset0: true,
         repayAmount: new BN(5),
         minCollateralOut: new BN(1),
@@ -3878,7 +3878,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([liquidator])
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 })])
@@ -3919,7 +3919,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await expectRejects(() =>
       program.methods
-        .marketLiquidate({
+        .liquidate({
           debtAssetIsAsset0: true,
           repayAmount: new BN(4),
           minCollateralOut: new BN(6),
@@ -3940,7 +3940,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([liquidator])
         .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 })])
@@ -3948,7 +3948,7 @@ describe("Omnipair Market LiteSVM", () => {
     );
 
     await program.methods
-      .marketLiquidate({
+      .liquidate({
         debtAssetIsAsset0: true,
         repayAmount: new BN(4),
         minCollateralOut: new BN(6),
@@ -3969,7 +3969,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([liquidator])
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 })])
@@ -4009,7 +4009,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await expectRejects(() =>
       program.methods
-        .marketLiquidate({
+        .liquidate({
           debtAssetIsAsset0: true,
           repayAmount: new BN(4),
           minCollateralOut: new BN(6),
@@ -4030,7 +4030,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([liquidator])
         .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 })])
@@ -4038,7 +4038,7 @@ describe("Omnipair Market LiteSVM", () => {
     );
 
     await program.methods
-      .marketLiquidate({
+      .liquidate({
         debtAssetIsAsset0: true,
         repayAmount: new BN(4),
         minCollateralOut: new BN(6),
@@ -4059,7 +4059,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([liquidator])
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 })])
@@ -4119,13 +4119,13 @@ describe("Omnipair Market LiteSVM", () => {
         token2022Program: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
     await program.methods
-      .marketBorrow({
+      .borrow({
         borrowAssetIsAsset0: true,
         borrowAmount: new BN(5),
         minDebtAmountOut: new BN(5),
@@ -4142,7 +4142,7 @@ describe("Omnipair Market LiteSVM", () => {
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
@@ -4152,17 +4152,17 @@ describe("Omnipair Market LiteSVM", () => {
     config.recognizedCollateralCapBps = 20_000;
     config.marketHealthMinBps = 20_000;
     await program.methods
-      .updateMarketConfig({ config })
+      .updateConfig({ config })
       .accounts({
         market,
         operator: payer.publicKey,
         eventAuthority,
-        program: OMNIPAIR_PROGRAM_ID,
+        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .signers([payer])
       .rpc();
 
-    await depositReserveSide(
+    await addLiquiditySide(
       { market, eventAuthority },
       1,
       asset1Mint,
@@ -4200,7 +4200,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     await expectRejects(() =>
       program.methods
-        .marketLiquidate({
+        .liquidate({
           debtAssetIsAsset0: true,
           repayAmount: new BN(5),
           minCollateralOut: new BN(1),
@@ -4221,7 +4221,7 @@ describe("Omnipair Market LiteSVM", () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           token2022Program: TOKEN_2022_PROGRAM_ID,
           eventAuthority,
-          program: OMNIPAIR_PROGRAM_ID,
+          program: OMNIPAIR_V2_PROGRAM_ID,
         })
         .signers([liquidator])
         .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 })])

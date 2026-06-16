@@ -3,8 +3,11 @@
  * Tracks which program instructions are tested
  */
 
-const testedInstructions = new Set<string>();
-const instructionDetails = new Map<string, { count: number; tests: string[] }>();
+type ProgramGeneration = "v1" | "v2";
+type InstructionId = `${ProgramGeneration}:${string}`;
+
+const testedInstructions = new Set<InstructionId>();
+const instructionDetails = new Map<InstructionId, { count: number; tests: string[] }>();
 
 const V1_INSTRUCTIONS = [
   "viewPairData",
@@ -31,27 +34,54 @@ const V1_INSTRUCTIONS = [
 ];
 
 const V2_INSTRUCTIONS = [
-  "initializeMarket",
-  "updateMarketConfig",
-  "setMarketReduceOnly",
-  "depositReserve",
-  "redeemClaim",
+  "initialize",
+  "updateConfig",
+  "setReduceOnly",
+  "addLiquidity",
+  "removeLiquidity",
   "stake",
   "unstake",
   "claimFees",
   "claimMarketFees",
-  "marketSwap",
+  "swap",
   "depositCollateral",
-  "marketBorrow",
-  "marketRepay",
+  "withdrawCollateral",
+  "borrow",
+  "repay",
   "depositInsurance",
-  "marketLiquidate",
+  "liquidate",
   "openHedge",
-  "closeHedge"
+  "closeHedge",
+  "claimHedgeFees"
 ];
 
-// All Omnipair program instructions exposed from programs/omnipair/src/lib.rs.
-const ALL_INSTRUCTIONS = [...V1_INSTRUCTIONS, ...V2_INSTRUCTIONS];
+const ALL_INSTRUCTIONS = [
+  ...V1_INSTRUCTIONS.map((name) => instructionId("v1", name)),
+  ...V2_INSTRUCTIONS.map((name) => instructionId("v2", name)),
+];
+
+function instructionId(generation: ProgramGeneration, instructionName: string): InstructionId {
+  return `${generation}:${instructionName}`;
+}
+
+function instructionLabel(id: InstructionId): string {
+  const [generation, instructionName] = id.split(":");
+  return `${generation}.${instructionName}`;
+}
+
+function track(generation: ProgramGeneration, instructionName: string, testName?: string) {
+  const id = instructionId(generation, instructionName);
+  testedInstructions.add(id);
+
+  const detail = instructionDetails.get(id) || { count: 0, tests: [] };
+  detail.count++;
+  if (testName && !detail.tests.includes(testName)) {
+    detail.tests.push(testName);
+  }
+  instructionDetails.set(id, detail);
+
+  console.log(`  ✓ Tested: ${instructionLabel(id)}`);
+}
 
 /**
  * Track that an instruction was tested
@@ -59,16 +89,15 @@ const ALL_INSTRUCTIONS = [...V1_INSTRUCTIONS, ...V2_INSTRUCTIONS];
  * @param testName Name of the test that used it
  */
 export function trackInstruction(instructionName: string, testName?: string) {
-  testedInstructions.add(instructionName);
-  
-  const detail = instructionDetails.get(instructionName) || { count: 0, tests: [] };
-  detail.count++;
-  if (testName && !detail.tests.includes(testName)) {
-    detail.tests.push(testName);
-  }
-  instructionDetails.set(instructionName, detail);
-  
-  console.log(`  ✓ Tested: ${instructionName}`);
+  track("v1", instructionName, testName);
+}
+
+/**
+ * Track that a standalone v2 instruction was tested.
+ * Keeps clean v2 names like swap/borrow separate from legacy v1 names.
+ */
+export function trackV2Instruction(instructionName: string, testName?: string) {
+  track("v2", instructionName, testName);
 }
 
 /**
@@ -88,7 +117,7 @@ export function getCoverageReport() {
   testedInstructions.forEach(ix => {
     const detail = instructionDetails.get(ix);
     const testCount = detail?.tests.length || 0;
-    console.log(`  ✓ ${ix.padEnd(25)} [${testCount} test(s)]`);
+    console.log(`  ✓ ${instructionLabel(ix).padEnd(28)} [${testCount} test(s)]`);
     if (detail?.tests.length) {
       detail.tests.forEach(test => {
         console.log(`    └─ ${test}`);
@@ -101,7 +130,7 @@ export function getCoverageReport() {
   if (untested.length > 0) {
     console.log(`\n❌ Untested Instructions: ${untested.length}/${total}\n`);
     untested.forEach(ix => {
-      console.log(`  ✗ ${ix}`);
+      console.log(`  ✗ ${instructionLabel(ix)}`);
     });
   }
   
@@ -113,8 +142,8 @@ export function getCoverageReport() {
     covered,
     total,
     percentage: parseFloat(percentage),
-    testedInstructions: Array.from(testedInstructions),
-    untestedInstructions: untested
+    testedInstructions: Array.from(testedInstructions).map(instructionLabel),
+    untestedInstructions: untested.map(instructionLabel)
   };
 }
 
@@ -134,7 +163,9 @@ export function getCoverageData() {
     covered: testedInstructions.size,
     total: ALL_INSTRUCTIONS.length,
     percentage: ((testedInstructions.size / ALL_INSTRUCTIONS.length) * 100).toFixed(2),
-    testedInstructions: Array.from(testedInstructions),
-    untestedInstructions: ALL_INSTRUCTIONS.filter(ix => !testedInstructions.has(ix))
+    testedInstructions: Array.from(testedInstructions).map(instructionLabel),
+    untestedInstructions: ALL_INSTRUCTIONS
+      .filter(ix => !testedInstructions.has(ix))
+      .map(instructionLabel)
   };
 }
