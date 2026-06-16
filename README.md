@@ -10,6 +10,15 @@ Lending is **isolated** per pair (each pool’s risk is contained), and **bad de
 
 Beyond the AMM invariant *xy* = *k*, Omnipair enforces a **lending solvency invariant**: virtual reserves = cash + debt (`R_virtual = R_cash + R_debt`) with `R_cash ≥ 0`, and every state change obeys `ΔR_virtual = ΔR_cash + ΔR_debt`. See the [Docs](https://docs.omnipair.fi/technical-breakdown/overview) for reserve types, Impact-aware collateral factor and how liquidation works.
 
+## Program Generations
+
+This repository now contains two Omnipair program generations:
+
+- `programs/omnipair`: legacy V1 GAMM pair program. Existing pair accounts, instruction names, and integrations remain compatible.
+- `programs/omnipair-v2`: standalone V2 market architecture program with market accounts, claim-token (`omLP`) liquidity, hedge-token (`h-omLP`) wrappers, fixed debt, market health, insurance, and V2-specific events/IDL.
+
+Use [programs/omnipair-v2/README.md](programs/omnipair-v2/README.md) for V2 architecture, invariants, and review gates.
+
 ### Key Features
 
 - **Unified Liquidity** - LP deposits serve as both AMM reserves and lending supply, maximizing capital efficiency
@@ -78,10 +87,12 @@ See [security policy](https://omnipair.fi/security) for details.
 
 ## Program Addresses
 
-| Network | Program ID |
-|---------|------------|
-| Mainnet | `omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE` |
-| Devnet | `omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE` |
+| Program | Network | Program ID |
+|---------|---------|------------|
+| Omnipair V1 | Mainnet | `omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE` |
+| Omnipair V1 | Devnet | `omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE` |
+| Omnipair V2 | Mainnet | `358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv` |
+| Omnipair V2 | Devnet | `358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv` |
 
 ## Quick Start
 
