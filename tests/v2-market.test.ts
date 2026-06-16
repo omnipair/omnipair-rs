@@ -4,8 +4,12 @@ import { fileURLToPath } from "url";
 import anchor from "@coral-xyz/anchor";
 import {
   createAccount,
+  createInitializeMintInstruction,
+  createInitializeTransferFeeConfigInstruction,
   createMint,
+  ExtensionType,
   getAccount,
+  getMintLen,
   mintTo,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
@@ -16,6 +20,7 @@ import {
   LAMPORTS_PER_SOL,
   PublicKey,
   SystemProgram,
+  Transaction,
 } from "@solana/web3.js";
 import { expect } from "chai";
 import { LiteSVM } from "litesvm";
@@ -188,6 +193,129 @@ describe("Omnipair Market LiteSVM", () => {
       claim0StakeVault,
       claim1StakeVault,
       eventAuthority,
+    };
+  }
+
+  async function createTransferFeeMint(
+    decimals = 6,
+    transferFeeBasisPoints = 1_000,
+    maximumFee = 1_000_000
+  ) {
+    const mint = Keypair.generate();
+    const mintLen = getMintLen([ExtensionType.TransferFeeConfig]);
+    const lamports = await connection.getMinimumBalanceForRentExemption(mintLen);
+
+    const tx = new Transaction().add(
+      SystemProgram.createAccount({
+        fromPubkey: payer.publicKey,
+        newAccountPubkey: mint.publicKey,
+        space: mintLen,
+        lamports,
+        programId: TOKEN_2022_PROGRAM_ID,
+      }),
+      createInitializeTransferFeeConfigInstruction(
+        mint.publicKey,
+        payer.publicKey,
+        payer.publicKey,
+        transferFeeBasisPoints,
+        BigInt(maximumFee),
+        TOKEN_2022_PROGRAM_ID
+      ),
+      createInitializeMintInstruction(
+        mint.publicKey,
+        decimals,
+        payer.publicKey,
+        null,
+        TOKEN_2022_PROGRAM_ID
+      )
+    );
+    await connection.sendTransaction(tx, [payer, mint]);
+
+    return mint.publicKey;
+  }
+
+  async function initializeTransferFeeMarketFixture() {
+    const transferFeeMint = await createTransferFeeMint();
+    const vanillaMint = await createMint(connection as any, payer, payer.publicKey, null, 6);
+    const [asset0Mint, asset1Mint] = orderedMints(transferFeeMint, vanillaMint);
+    const transferFeeMarketSideIndex = asset0Mint.equals(transferFeeMint) ? 0 : 1;
+    const paramsHash = Buffer.alloc(32, 8);
+    const [market] = PublicKey.findProgramAddressSync(
+      [Buffer.from("market_v2"), asset0Mint.toBuffer(), asset1Mint.toBuffer(), paramsHash],
+      OMNIPAIR_PROGRAM_ID
+    );
+    const [eventAuthority] = PublicKey.findProgramAddressSync(
+      [Buffer.from("__event_authority")],
+      OMNIPAIR_PROGRAM_ID
+    );
+    const claim0Mint = await createMint(connection as any, payer, market, null, 6);
+    const claim1Mint = await createMint(connection as any, payer, market, null, 6);
+    const hedge0Mint = await createMint(connection as any, payer, market, null, 6);
+    const hedge1Mint = await createMint(connection as any, payer, market, null, 6);
+    const hedge0Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim0Mint.toBuffer());
+    const hedge1Vault = deriveAddress(Buffer.from("hedged"), market.toBuffer(), claim1Mint.toBuffer());
+    const reserve0Vault = deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset0Mint.toBuffer());
+    const reserve1Vault = deriveAddress(Buffer.from("market_reserve"), market.toBuffer(), asset1Mint.toBuffer());
+    const collateral0Vault = deriveAddress(Buffer.from("market_collateral"), market.toBuffer(), asset0Mint.toBuffer());
+    const collateral1Vault = deriveAddress(Buffer.from("market_collateral"), market.toBuffer(), asset1Mint.toBuffer());
+    const insurance0Vault = deriveAddress(Buffer.from("insurance"), market.toBuffer(), asset0Mint.toBuffer());
+    const insurance1Vault = deriveAddress(Buffer.from("insurance"), market.toBuffer(), asset1Mint.toBuffer());
+    const fee0Vault = deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset0Mint.toBuffer());
+    const fee1Vault = deriveAddress(Buffer.from("market_fee"), market.toBuffer(), asset1Mint.toBuffer());
+    const claim0StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim0Mint.toBuffer());
+    const claim1StakeVault = deriveAddress(Buffer.from("market_stake"), market.toBuffer(), claim1Mint.toBuffer());
+
+    await program.methods
+      .initializeMarket({
+        operator: payer.publicKey,
+        manager: payer.publicKey,
+        config: marketConfig(),
+        paramsHash: [...paramsHash],
+      })
+      .accounts({
+        payer: payer.publicKey,
+        asset0Mint,
+        asset1Mint,
+        market,
+        claim0Mint,
+        claim1Mint,
+        hedge0Mint,
+        hedge1Mint,
+        hedge0Vault,
+        hedge1Vault,
+        reserve0Vault,
+        reserve1Vault,
+        collateral0Vault,
+        collateral1Vault,
+        insurance0Vault,
+        insurance1Vault,
+        fee0Vault,
+        fee1Vault,
+        claim0StakeVault,
+        claim1StakeVault,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
+      .signers([payer])
+      .rpc();
+
+    return {
+      asset0Mint,
+      asset1Mint,
+      claim0Mint,
+      claim1Mint,
+      market,
+      reserve0Vault,
+      reserve1Vault,
+      collateral0Vault,
+      collateral1Vault,
+      eventAuthority,
+      transferFeeMint,
+      transferFeeMarketSideIndex,
     };
   }
 
@@ -694,6 +822,288 @@ describe("Omnipair Market LiteSVM", () => {
     expect((await getAccount(connection as any, reserve0Vault)).amount).to.equal(
       BigInt(920_000)
     );
+  });
+
+  it("accounts for Token-2022 transfer fees with market inventory credits", async () => {
+    const fixture = await initializeTransferFeeMarketFixture();
+    const tokenProgramForMint = (mint: PublicKey) =>
+      mint.equals(fixture.transferFeeMint) ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
+    const {
+      asset0Mint,
+      asset1Mint,
+      claim0Mint,
+      claim1Mint,
+      market,
+      reserve0Vault,
+      reserve1Vault,
+      collateral0Vault,
+      collateral1Vault,
+      eventAuthority,
+      transferFeeMarketSideIndex,
+    } = fixture;
+    const ownerAsset0Account = await createAccount(
+      connection as any,
+      payer,
+      asset0Mint,
+      payer.publicKey,
+      undefined,
+      undefined,
+      tokenProgramForMint(asset0Mint)
+    );
+    const ownerAsset1Account = await createAccount(
+      connection as any,
+      payer,
+      asset1Mint,
+      payer.publicKey,
+      undefined,
+      undefined,
+      tokenProgramForMint(asset1Mint)
+    );
+    const ownerClaim0Account = await createAccount(
+      connection as any,
+      payer,
+      claim0Mint,
+      payer.publicKey
+    );
+    const ownerClaim1Account = await createAccount(
+      connection as any,
+      payer,
+      claim1Mint,
+      payer.publicKey
+    );
+
+    await mintTo(
+      connection as any,
+      payer,
+      asset0Mint,
+      ownerAsset0Account,
+      payer,
+      2_000,
+      [],
+      undefined,
+      tokenProgramForMint(asset0Mint)
+    );
+    await mintTo(
+      connection as any,
+      payer,
+      asset1Mint,
+      ownerAsset1Account,
+      payer,
+      2_000,
+      [],
+      undefined,
+      tokenProgramForMint(asset1Mint)
+    );
+
+    const transferFeeSide = transferFeeMarketSideIndex === 0
+      ? {
+          assetMint: asset0Mint,
+          claimMint: claim0Mint,
+          reserveVault: reserve0Vault,
+          ownerAssetAccount: ownerAsset0Account,
+          ownerClaimAccount: ownerClaim0Account,
+          collateralVault: collateral1Vault,
+          collateralAssetMint: asset1Mint,
+          collateralOwnerAccount: ownerAsset1Account,
+          borrowAssetIsAsset0: true,
+        }
+      : {
+          assetMint: asset1Mint,
+          claimMint: claim1Mint,
+          reserveVault: reserve1Vault,
+          ownerAssetAccount: ownerAsset1Account,
+          ownerClaimAccount: ownerClaim1Account,
+          collateralVault: collateral0Vault,
+          collateralAssetMint: asset0Mint,
+          collateralOwnerAccount: ownerAsset0Account,
+          borrowAssetIsAsset0: false,
+        };
+    const vanillaSide = transferFeeMarketSideIndex === 0
+      ? {
+          marketSideIndex: 1,
+          assetMint: asset1Mint,
+          claimMint: claim1Mint,
+          reserveVault: reserve1Vault,
+          ownerAssetAccount: ownerAsset1Account,
+          ownerClaimAccount: ownerClaim1Account,
+        }
+      : {
+          marketSideIndex: 0,
+          assetMint: asset0Mint,
+          claimMint: claim0Mint,
+          reserveVault: reserve0Vault,
+          ownerAssetAccount: ownerAsset0Account,
+          ownerClaimAccount: ownerClaim0Account,
+        };
+
+    await depositReserveSide(
+      fixture,
+      transferFeeMarketSideIndex,
+      transferFeeSide.assetMint,
+      transferFeeSide.claimMint,
+      transferFeeSide.reserveVault,
+      transferFeeSide.ownerAssetAccount,
+      transferFeeSide.ownerClaimAccount,
+      1_000,
+      720,
+      180
+    );
+    for (let i = 0; i < 6; i++) {
+      const lender = Keypair.generate();
+      await connection.requestAirdrop(lender.publicKey, LAMPORTS_PER_SOL);
+      const lenderAssetAccount = await createAccount(
+        connection as any,
+        payer,
+        transferFeeSide.assetMint,
+        lender.publicKey,
+        undefined,
+        undefined,
+        TOKEN_2022_PROGRAM_ID
+      );
+      const lenderClaimAccount = await createAccount(
+        connection as any,
+        payer,
+        transferFeeSide.claimMint,
+        lender.publicKey
+      );
+      await mintTo(
+        connection as any,
+        payer,
+        transferFeeSide.assetMint,
+        lenderAssetAccount,
+        payer,
+        29,
+        [],
+        undefined,
+        TOKEN_2022_PROGRAM_ID
+      );
+      await depositReserveSide(
+        fixture,
+        transferFeeMarketSideIndex,
+        transferFeeSide.assetMint,
+        transferFeeSide.claimMint,
+        transferFeeSide.reserveVault,
+        lenderAssetAccount,
+        lenderClaimAccount,
+        29,
+        20,
+        6,
+        lender
+      );
+    }
+    await depositReserveSide(
+      fixture,
+      vanillaSide.marketSideIndex,
+      vanillaSide.assetMint,
+      vanillaSide.claimMint,
+      vanillaSide.reserveVault,
+      vanillaSide.ownerAssetAccount,
+      vanillaSide.ownerClaimAccount,
+      1_000,
+      800,
+      200
+    );
+
+    expect(
+      (await getAccount(
+        connection as any,
+        transferFeeSide.reserveVault,
+        undefined,
+        TOKEN_2022_PROGRAM_ID
+      )).amount
+    ).to.equal(BigInt(1_056));
+    expect(
+      (await getAccount(connection as any, transferFeeSide.ownerClaimAccount)).amount
+    ).to.equal(BigInt(720));
+
+    const marginPosition = deriveAddress(
+      Buffer.from("margin"),
+      market.toBuffer(),
+      payer.publicKey.toBuffer()
+    );
+    await program.methods
+      .depositCollateral({
+        marketSideIndex: transferFeeMarketSideIndex === 0 ? 1 : 0,
+        depositAmount: new BN(300),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        assetMint: transferFeeSide.collateralAssetMint,
+        collateralVault: transferFeeSide.collateralVault,
+        ownerAssetAccount: transferFeeSide.collateralOwnerAccount,
+        marginPosition,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await expectRejects(() =>
+      program.methods
+        .marketBorrow({
+          borrowAssetIsAsset0: transferFeeSide.borrowAssetIsAsset0,
+          borrowAmount: new BN(5),
+          minDebtAmountOut: new BN(5),
+          minHealthBps: new BN(11_000),
+        })
+        .accounts({
+          market,
+          owner: payer.publicKey,
+          debtAssetMint: transferFeeSide.assetMint,
+          collateralAssetMint: transferFeeSide.collateralAssetMint,
+          reserveVault: transferFeeSide.reserveVault,
+          ownerDebtAccount: transferFeeSide.ownerAssetAccount,
+          marginPosition,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
+        .rpc()
+    );
+
+    const ownerDebtBalanceBefore = (await getAccount(
+      connection as any,
+      transferFeeSide.ownerAssetAccount,
+      undefined,
+      TOKEN_2022_PROGRAM_ID
+    )).amount;
+    await program.methods
+      .marketBorrow({
+        borrowAssetIsAsset0: transferFeeSide.borrowAssetIsAsset0,
+        borrowAmount: new BN(5),
+        minDebtAmountOut: new BN(4),
+        minHealthBps: new BN(11_000),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        debtAssetMint: transferFeeSide.assetMint,
+        collateralAssetMint: transferFeeSide.collateralAssetMint,
+        reserveVault: transferFeeSide.reserveVault,
+        ownerDebtAccount: transferFeeSide.ownerAssetAccount,
+        marginPosition,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
+      .rpc();
+    const ownerDebtBalanceAfter = (await getAccount(
+      connection as any,
+      transferFeeSide.ownerAssetAccount,
+      undefined,
+      TOKEN_2022_PROGRAM_ID
+    )).amount;
+    expect(ownerDebtBalanceAfter - ownerDebtBalanceBefore).to.equal(BigInt(4));
   });
 
   it("swaps against market reserve floor excess", async () => {
