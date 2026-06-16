@@ -301,7 +301,7 @@ pub fn get_transfer_inverse_fee(mint_info: &AccountInfo, post_fee_amount: u64) -
         } else {
             transfer_fee_config
                 .calculate_inverse_epoch_fee(epoch, post_fee_amount)
-                .unwrap()
+                .ok_or(ErrorCode::MarketMathOverflow)?
         }
     } else {
         0
@@ -320,7 +320,7 @@ pub fn get_transfer_fee(mint_info: &AccountInfo, pre_fee_amount: u64) -> Result<
     let fee = if let Ok(transfer_fee_config) = mint.get_extension::<TransferFeeConfig>() {
         transfer_fee_config
             .calculate_epoch_fee(Clock::get()?.epoch, pre_fee_amount)
-            .unwrap()
+            .ok_or(ErrorCode::MarketMathOverflow)?
     } else {
         0
     };
@@ -431,7 +431,7 @@ pub fn create_or_allocate_account<'a>(
         system_program::create_account(
             cpi_context.with_signer(&[siger_seed]),
             lamports,
-            u64::try_from(space).unwrap(),
+            u64::try_from(space).map_err(|_| ErrorCode::MarketMathOverflow)?,
             program_id,
         )?;
     } else {
@@ -453,7 +453,7 @@ pub fn create_or_allocate_account<'a>(
         let cpi_context = CpiContext::new(system_program.clone(), cpi_accounts);
         system_program::allocate(
             cpi_context.with_signer(&[siger_seed]),
-            u64::try_from(space).unwrap(),
+            u64::try_from(space).map_err(|_| ErrorCode::MarketMathOverflow)?,
         )?;
 
         let cpi_accounts = system_program::Assign {
