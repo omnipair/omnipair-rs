@@ -251,3 +251,97 @@ impl HedgePosition {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{constants::NAD, state::MarketSide};
+
+    fn stake_position() -> StakePosition {
+        StakePosition {
+            owner: Pubkey::new_unique(),
+            market: Pubkey::new_unique(),
+            asset_mint: Pubkey::new_unique(),
+            available_buffer_share_amount: 0,
+            staked_claim_token_amount: 0,
+            staked_buffer_share_amount: 0,
+            fee_growth_checkpoint_nad: 0,
+            accrued_fee_amount: 0,
+            bump: 1,
+        }
+    }
+
+    fn hedge_position() -> HedgePosition {
+        HedgePosition {
+            owner: Pubkey::new_unique(),
+            market: Pubkey::new_unique(),
+            asset_mint: Pubkey::new_unique(),
+            hedged_claim_token_amount: 0,
+            fee_growth_checkpoint_nad: 0,
+            accrued_fee_amount: 0,
+            bump: 1,
+        }
+    }
+
+    #[test]
+    fn stake_position_accrues_checkpointed_non_compounding_fees() {
+        let mut position = stake_position();
+        position.credit_buffer_share_amount(200_000).unwrap();
+        position.stake(800_000, 200_000).unwrap();
+        position.fee_growth_checkpoint_nad = NAD as u128;
+
+        position.accrue_fees(3 * NAD as u128, 2_000).unwrap();
+        assert_eq!(position.accrued_fee_amount, 2_000_000);
+        assert_eq!(position.fee_growth_checkpoint_nad, 3 * NAD as u128);
+
+        position.accrue_fees(3 * NAD as u128, 2_000).unwrap();
+        assert_eq!(position.accrued_fee_amount, 2_000_000);
+    }
+
+    #[test]
+    fn hedge_position_tracks_one_to_one_nav_without_stake_rights() {
+        let mut market_side = MarketSide::default();
+        let mut position = hedge_position();
+
+        market_side.claim_token_ledger.hedged_claim_token_supply = market_side
+            .claim_token_ledger
+            .hedged_claim_token_supply
+            .checked_add(500_000)
+            .unwrap();
+        position.increase(500_000).unwrap();
+
+        assert_eq!(position.hedged_claim_token_amount, 500_000);
+        assert_eq!(
+            market_side.claim_token_ledger.hedged_claim_token_supply,
+            500_000
+        );
+        assert_eq!(market_side.claim_token_ledger.staked_claim_token_supply, 0);
+        assert_eq!(market_side.buffer_ledger.staked_buffer_share_amount, 0);
+
+        position.decrease(125_000).unwrap();
+        market_side.claim_token_ledger.hedged_claim_token_supply = market_side
+            .claim_token_ledger
+            .hedged_claim_token_supply
+            .checked_sub(125_000)
+            .unwrap();
+        assert_eq!(position.hedged_claim_token_amount, 375_000);
+        assert_eq!(
+            market_side.claim_token_ledger.hedged_claim_token_supply,
+            375_000
+        );
+    }
+
+    #[test]
+    fn hedge_position_accrues_checkpointed_routed_fees() {
+        let mut position = hedge_position();
+        position.increase(200_000).unwrap();
+        position.fee_growth_checkpoint_nad = NAD as u128;
+
+        position.accrue_fees(4 * NAD as u128).unwrap();
+        assert_eq!(position.accrued_fee_amount, 600_000);
+        assert_eq!(position.fee_growth_checkpoint_nad, 4 * NAD as u128);
+
+        position.accrue_fees(4 * NAD as u128).unwrap();
+        assert_eq!(position.accrued_fee_amount, 600_000);
+    }
+}
