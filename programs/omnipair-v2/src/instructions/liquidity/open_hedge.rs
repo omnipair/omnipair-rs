@@ -14,7 +14,7 @@ use crate::{
         token::{token_mint_to, transfer_from_user_to_vault},
     },
     state::{HedgePosition, Market},
-    transitions::fee::CarryForwardHedgedFees,
+    transitions::hedge::OpenHedge as OpenHedgeTransition,
 };
 
 use super::hedge_common::validate_hedge_accounts;
@@ -123,12 +123,6 @@ impl<'info> OpenHedge<'info> {
         ctx.accounts.market.refresh_risk_book()?;
         ctx.accounts.market.assert_risk_circuit_breakers()?;
 
-        let hedged_fee_growth_index_nad = {
-            let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
-            CarryForwardHedgedFees.apply(market_side)?;
-            market_side.fee_ledger.hedged_fee_growth_index_nad
-        };
-
         if !ctx.accounts.hedge_position.is_initialized() {
             ctx.accounts.hedge_position.initialize(
                 owner_key,
@@ -140,9 +134,6 @@ impl<'info> OpenHedge<'info> {
         ctx.accounts
             .hedge_position
             .assert_position(owner_key, market_key, asset_mint_key)?;
-        ctx.accounts
-            .hedge_position
-            .accrue_fees(hedged_fee_growth_index_nad)?;
 
         let hedge_vault_before = ctx.accounts.hedge_vault.amount;
         let claim_token_program = token_program_for_mint(
@@ -173,17 +164,8 @@ impl<'info> OpenHedge<'info> {
         );
         require!(claim_credit > 0, ErrorCode::AmountZero);
 
-        let hedged_claim_token_supply = {
-            let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
-            market_side.claim_token_ledger.hedged_claim_token_supply = market_side
-                .claim_token_ledger
-                .hedged_claim_token_supply
-                .checked_add(claim_credit)
-                .ok_or(ErrorCode::MarketMathOverflow)?;
-            market_side.claim_token_ledger.hedged_claim_token_supply
-        };
-        ctx.accounts.hedge_position.increase(claim_credit)?;
-        ctx.accounts.market.refresh_market_health()?;
+        let receipt = OpenHedgeTransition::new(args.market_side_index, claim_credit)
+            .apply(&mut ctx.accounts.market, &mut ctx.accounts.hedge_position)?;
 
         let hedge_token_program = token_program_for_mint(
             &ctx.accounts.hedge_token_mint,
@@ -195,7 +177,7 @@ impl<'info> OpenHedge<'info> {
             hedge_token_program,
             ctx.accounts.hedge_token_mint.to_account_info(),
             ctx.accounts.owner_hedge_account.to_account_info(),
-            claim_credit,
+            receipt.hedge_amount,
             &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
 
@@ -203,9 +185,9 @@ impl<'info> OpenHedge<'info> {
             market: market_key,
             owner: owner_key,
             asset_mint: asset_mint_key,
-            claim_amount: claim_credit,
-            hedge_amount: claim_credit,
-            hedged_claim_token_supply,
+            claim_amount: receipt.claim_amount,
+            hedge_amount: receipt.hedge_amount,
+            hedged_claim_token_supply: receipt.hedged_claim_token_supply,
             metadata: MarketEventMetadata::new(owner_key, market_key),
         });
 

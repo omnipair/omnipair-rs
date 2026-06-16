@@ -11,7 +11,7 @@ use crate::{
     generate_market_seeds,
     shared::token::{token_burn, transfer_from_vault_to_user},
     state::{HedgePosition, Market},
-    transitions::fee::CarryForwardHedgedFees,
+    transitions::hedge::CloseHedge as CloseHedgeTransition,
 };
 
 use super::hedge_common::validate_hedge_accounts;
@@ -116,15 +116,6 @@ impl<'info> CloseHedge<'info> {
         ctx.accounts.market.refresh_risk_book()?;
         ctx.accounts.market.assert_risk_circuit_breakers()?;
 
-        let hedged_fee_growth_index_nad = {
-            let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
-            CarryForwardHedgedFees.apply(market_side)?;
-            market_side.fee_ledger.hedged_fee_growth_index_nad
-        };
-        ctx.accounts
-            .hedge_position
-            .accrue_fees(hedged_fee_growth_index_nad)?;
-
         let hedge_token_program = token_program_for_mint(
             &ctx.accounts.hedge_token_mint,
             &ctx.accounts.token_program,
@@ -139,17 +130,8 @@ impl<'info> CloseHedge<'info> {
             &[],
         )?;
 
-        let hedged_claim_token_supply = {
-            let market_side = ctx.accounts.market.side_mut(args.market_side_index)?;
-            market_side.claim_token_ledger.hedged_claim_token_supply = market_side
-                .claim_token_ledger
-                .hedged_claim_token_supply
-                .checked_sub(args.hedge_amount)
-                .ok_or(ErrorCode::MarketMathOverflow)?;
-            market_side.claim_token_ledger.hedged_claim_token_supply
-        };
-        ctx.accounts.hedge_position.decrease(args.hedge_amount)?;
-        ctx.accounts.market.refresh_market_health()?;
+        let receipt = CloseHedgeTransition::new(args.market_side_index, args.hedge_amount)
+            .apply(&mut ctx.accounts.market, &mut ctx.accounts.hedge_position)?;
 
         let claim_token_program = token_program_for_mint(
             &ctx.accounts.claim_token_mint,
@@ -163,7 +145,7 @@ impl<'info> CloseHedge<'info> {
             ctx.accounts.owner_claim_account.to_account_info(),
             ctx.accounts.claim_token_mint.to_account_info(),
             claim_token_program,
-            args.hedge_amount,
+            receipt.claim_amount,
             ctx.accounts.claim_token_mint.decimals,
             &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
@@ -182,9 +164,9 @@ impl<'info> CloseHedge<'info> {
             market: market_key,
             owner: owner_key,
             asset_mint: asset_mint_key,
-            hedge_amount: args.hedge_amount,
-            claim_amount: args.hedge_amount,
-            hedged_claim_token_supply,
+            hedge_amount: receipt.hedge_amount,
+            claim_amount: receipt.claim_amount,
+            hedged_claim_token_supply: receipt.hedged_claim_token_supply,
             metadata: MarketEventMetadata::new(owner_key, market_key),
         });
 
