@@ -11,6 +11,10 @@ use crate::{
 impl Market {
     pub fn refresh_market_health(&mut self) -> Result<()> {
         self.refresh_risk_book()?;
+        self.recompute_market_health_from_risk_book()
+    }
+
+    pub fn recompute_market_health_from_risk_book(&mut self) -> Result<()> {
         let effective_base_debt_nad = self.effective_base_debt_nad()?;
         let effective_quote_debt_nad = self.effective_quote_debt_nad()?;
         let quote_collateral_value_for_base_debt_nad = self

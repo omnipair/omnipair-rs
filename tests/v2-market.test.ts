@@ -905,7 +905,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     const config = marketConfig();
     config.bufferRatioBps = 1_000;
-    await program.methods
+    const updateConfigSignature = await program.methods
       .updateConfig({ config })
       .accounts({
         market: fixture.market,
@@ -915,6 +915,16 @@ describe("Omnipair Market LiteSVM", () => {
       })
       .signers([payer])
       .rpc();
+
+    const updateConfigEvents = decodeCpiEvents(svm, updateConfigSignature);
+    const updateConfigEventNames = updateConfigEvents.map((event) => event.name);
+    expect(updateConfigEventNames).to.include("MarketUpdated");
+    expect(updateConfigEventNames).to.include("MarketHealthUpdated");
+    const configHealthEvent = updateConfigEvents.find(
+      (event) => event.name === "MarketHealthUpdated"
+    );
+    expect(configHealthEvent.data.market.toString()).to.equal(fixture.market.toString());
+    expect(configHealthEvent.data.effective_base_debt_nad.toString()).to.equal("0");
 
     const stake0Position = await addLiquiditySide(
       fixture,

@@ -3,7 +3,7 @@ use anchor_lang::prelude::*;
 use crate::{
     constants::*,
     errors::ErrorCode,
-    events::{MarketEventMetadata, MarketUpdated},
+    events::{MarketEventMetadata, MarketHealthUpdated, MarketUpdated},
     state::{Market, MarketConfig},
 };
 
@@ -37,6 +37,7 @@ impl<'info> UpdateMarketConfig<'info> {
         let market = &mut ctx.accounts.market;
         market.apply_buffer_ratio_update(args.config.buffer_ratio_bps)?;
         market.config = args.config;
+        market.recompute_market_health_from_risk_book()?;
 
         emit_cpi!(MarketUpdated {
             market: market.key(),
@@ -45,6 +46,20 @@ impl<'info> UpdateMarketConfig<'info> {
             swap_fee_bps: market.config.swap_fee_bps,
             operator_fee_bps: market.config.operator_fee_bps,
             protocol_fee_bps: market.config.protocol_fee_bps,
+            metadata: MarketEventMetadata::new(ctx.accounts.operator.key(), market.key())?,
+        });
+        emit_cpi!(MarketHealthUpdated {
+            market: market.key(),
+            recognized_base_collateral_for_quote_debt: market
+                .health
+                .recognized_base_collateral_for_quote_debt,
+            recognized_quote_collateral_for_base_debt: market
+                .health
+                .recognized_quote_collateral_for_base_debt,
+            effective_base_debt_nad: market.health.effective_base_debt_nad,
+            effective_quote_debt_nad: market.health.effective_quote_debt_nad,
+            base_debt_health_bps: market.health.base_debt_health_bps,
+            quote_debt_health_bps: market.health.quote_debt_health_bps,
             metadata: MarketEventMetadata::new(ctx.accounts.operator.key(), market.key())?,
         });
 
