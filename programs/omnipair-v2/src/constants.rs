@@ -7,8 +7,6 @@ pub const NAD: u64 = 1_000_000_000;
 pub const NAD_DECIMALS: u8 = 9;
 #[constant]
 pub const BPS_DENOMINATOR: u16 = 10_000;
-pub(crate) const MAX_COLLATERAL_FACTOR_BPS: u16 = 8_500; // 85% cap for dynamic collateral factor
-pub(crate) const LTV_BUFFER_BPS: u16 = 500; // 5% buffer between borrow limit and liquidation threshold
 #[constant]
 pub const LIQUIDATION_INCENTIVE_BPS: u16 = 50;
 #[constant]
