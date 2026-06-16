@@ -173,8 +173,8 @@ All TypeScript types generated from the IDL:
 - `deriveFutarchyAuthorityAddress()` - Derive FutarchyAuthority PDA
 - `deriveReserveVaultAddress(pair, reserveMint)` - Derive a reserve vault PDA
 - `deriveCollateralVaultAddress(pair, collateralMint)` - Derive a collateral vault PDA
-- `deriveMarketAddress(asset0Mint, asset1Mint, paramsHash)` - Derive a V2 Market PDA
-- `deriveMarketV2Address(asset0Mint, asset1Mint, paramsHash)` - Backward-compatible alias for `deriveMarketAddress`
+- `deriveMarketAddress(baseMint, quoteMint, paramsHash)` - Derive a V2 Market PDA
+- `deriveMarketV2Address(baseMint, quoteMint, paramsHash)` - Backward-compatible alias for `deriveMarketAddress`
 - `deriveMarketReserveVaultAddress(market, reserveMint)` - Derive a V2 market reserve vault PDA
 - `deriveMarketCollateralVaultAddress(market, collateralMint)` - Derive a V2 market collateral vault PDA
 - `deriveMarketFeeVaultAddress(market, feeMint)` - Derive a V2 market fee vault PDA
