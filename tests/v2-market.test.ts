@@ -2772,6 +2772,78 @@ describe("Omnipair Market LiteSVM", () => {
     );
   });
 
+  it("rejects fixed market borrows below required position health", async () => {
+    const {
+      asset0Mint,
+      asset1Mint,
+      market,
+      reserve0Vault,
+      collateral1Vault,
+      ownerAsset0Account,
+      ownerAsset1Account,
+      eventAuthority,
+    } = await fundRoundedBorrowMarket();
+    const marginPosition = deriveAddress(
+      Buffer.from("margin"),
+      market.toBuffer(),
+      payer.publicKey.toBuffer()
+    );
+
+    await program.methods
+      .depositCollateral({
+        marketSideIndex: 1,
+        depositAmount: new BN(60),
+      })
+      .accounts({
+        market,
+        owner: payer.publicKey,
+        assetMint: asset1Mint,
+        collateralVault: collateral1Vault,
+        ownerAssetAccount: ownerAsset1Account,
+        marginPosition,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        eventAuthority,
+        program: OMNIPAIR_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await expectRejects(() =>
+      program.methods
+        .marketBorrow({
+          borrowAssetIsAsset0: true,
+          borrowAmount: new BN(12),
+          minDebtAmountOut: new BN(12),
+          minHealthBps: new BN(20_000),
+        })
+        .accounts({
+          market,
+          owner: payer.publicKey,
+          debtAssetMint: asset0Mint,
+          collateralAssetMint: asset1Mint,
+          reserveVault: reserve0Vault,
+          ownerDebtAccount: ownerAsset0Account,
+          marginPosition,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          eventAuthority,
+          program: OMNIPAIR_PROGRAM_ID,
+        })
+        .signers([payer])
+        .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
+        .rpc()
+    );
+
+    expect((await getAccount(connection as any, ownerAsset0Account)).amount).to.equal(
+      BigInt(300)
+    );
+    expect((await getAccount(connection as any, reserve0Vault)).amount).to.equal(
+      BigInt(312)
+    );
+  });
+
   it("blocks market repays when spot diverges from cached EMA", async () => {
     const {
       asset0Mint,
