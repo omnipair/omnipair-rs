@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "programs/omnipair",
+    "programs/omnipair-v2",
     "programs/faucet",
     "examples/flashloan_receiver",
     "decoders/omnipair-decoder",

@@ -10,11 +10,13 @@ skip-lint = false
 faucet = "3Ckfn1LMByoDfVpcDPf7nouk5nQAUm51Zkdf1oprQTAK"
 flashloan_receiver_example = "GmtswKBDrFZ9DfUfP7jbPFvbtuG7AJcX73SvoKWGxJbu"
 omnipair = "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE"
+omnipair_v2 = "358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv"
 
 [programs.localnet]
 faucet = "3Ckfn1LMByoDfVpcDPf7nouk5nQAUm51Zkdf1oprQTAK"
 flashloan_receiver_example = "GmtswKBDrFZ9DfUfP7jbPFvbtuG7AJcX73SvoKWGxJbu"
 omnipair = "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE"
+omnipair_v2 = "358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv"
 
 [programs.mainnet]
 omnipair = "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE"
@@ -27,7 +29,7 @@ cluster = "mainnet"
 wallet = "deployer-keypair.json"
 
 [workspace]
-members = ["programs/omnipair", "programs/faucet"]
+members = ["programs/omnipair", "programs/omnipair-v2", "programs/faucet"]
 
 [scripts]
 build-devnet = "anchor build -- --features \"development\""
