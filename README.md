@@ -331,38 +331,51 @@ The program upgrade authority is a Squads multisig. Upgrades require team approv
 If you need to upgrade manually:
 
 ```bash
-# 1. Build verifiable binary
+# 1. Pick program generation
+# V1:
+PROGRAM_CRATE=omnipair
+PROGRAM_LIBRARY=omnipair
+PROGRAM_SO=omnipair.so
+PROGRAM_ID=omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE
+
+# V2:
+# PROGRAM_CRATE=omnipair-v2
+# PROGRAM_LIBRARY=omnipair_v2
+# PROGRAM_SO=omnipair_v2.so
+# PROGRAM_ID=358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv
+
+# 2. Build verifiable binary
 export GIT_REV=$(git rev-parse HEAD)
 export GIT_RELEASE=$(git describe --tags)
-anchor build --verifiable -p omnipair \
+anchor build --verifiable -p $PROGRAM_CRATE \
   -e GIT_REV=$GIT_REV \
   -e GIT_RELEASE=$GIT_RELEASE \
   -- --features "production"
 
-# 2. Deploy buffer
+# 3. Deploy buffer
 solana program write-buffer \
   --keypair deployer-keypair.json \
-  target/verifiable/omnipair.so \
+  target/verifiable/$PROGRAM_SO \
   -u mainnet-beta
 
-# 3. Transfer authority to Squads vault
+# 4. Transfer authority to Squads vault
 solana program set-buffer-authority <BUFFER_ADDRESS> \
   --new-buffer-authority <SQUADS_VAULT_ADDRESS> \
   --keypair deployer-keypair.json \
   -u mainnet-beta
 
-# 4. Create upgrade proposal on Squads UI
+# 5. Create upgrade proposal on Squads UI
 # https://app.squads.so/squads/<MULTISIG_ADDRESS>/developer/programs/<PROGRAM_ID>
 
-# 5. Team signs and executes
+# 6. Team signs and executes
 
-# 6. Verify
+# 7. Verify
 solana-verify verify-from-repo \
   --remote \
   -um \
-  --program-id <PROGRAM_ID> \
+  --program-id $PROGRAM_ID \
   https://github.com/omnipair/omnipair-rs \
-  --library-name omnipair \
+  --library-name $PROGRAM_LIBRARY \
   --bpf-flag "features=production"
 ```
 
@@ -372,10 +385,10 @@ If the new binary is larger than allocated space:
 
 ```bash
 # Check current size
-solana program show omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE
+solana program show <PROGRAM_ID>
 
 # Extend (requires upgrade authority - do via Squads)
-solana program extend omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE <ADDITIONAL_BYTES>
+solana program extend <PROGRAM_ID> <ADDITIONAL_BYTES>
 ```
 
 ---
@@ -399,7 +412,7 @@ solana program extend omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE <ADDITIONAL_BY
 | `SQUADS_VAULT_ADDRESS` | Squads vault PDA (buffer authority recipient) |
 | `MAINNET_RPC_URL` | (Optional) Custom RPC URL |
 
-> **Note:** `PROGRAM_ID` is automatically extracted from `programs/omnipair/src/lib.rs` (`declare_id!` macro).
+> **Note:** CI extracts the selected program ID from the matching `declare_id!` macro: `programs/omnipair/src/lib.rs` for V1 and `programs/omnipair-v2/src/lib.rs` for V2.
 
 ### Finding Squads Vault Address
 
@@ -420,12 +433,15 @@ console.log("Vault:", vault.toBase58());
 ```
 omnipair-rs/
 ├── programs/
-│   └── omnipair/           # Main program
+│   ├── omnipair/           # Legacy V1 pair program
+│   │   ├── src/
+│   │   │   ├── lib.rs
+│   │   │   ├── instructions/
+│   │   │   ├── state/
+│   │   │   └── utils/
+│   │   └── Cargo.toml
+│   └── omnipair-v2/        # Standalone V2 market program
 │       ├── src/
-│       │   ├── lib.rs
-│       │   ├── instructions/
-│       │   ├── state/
-│       │   └── utils/
 │       └── Cargo.toml
 ├── scripts/                # TypeScript helper scripts
 ├── tests/                  # Integration tests
