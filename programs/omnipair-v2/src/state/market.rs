@@ -1,14 +1,14 @@
 use anchor_lang::prelude::*;
 
 use super::{
-    DailyLimitBook, DebtBook, FeeLedger, HedgePosition, InsuranceReserve, MarginPosition,
-    MarketFeeClaimKind, MarketHealth, MarketSide, RecognitionLedger, RiskBook, StakePosition,
+    DailyLimitBook, DebtBook, InsuranceReserve, MarginPosition, MarketHealth, MarketSide,
+    RecognitionLedger, RiskBook,
 };
 use crate::constants::*;
 use crate::errors::ErrorCode;
 use crate::shared::math::{ceil_div, slots_to_ms, taylor_exp, SqrtU128};
 use crate::utils::market_math::{
-    accrue_fee_liability, active_stake_units, required_buffer_for_claims, split_claim_minus_buffer,
+    active_stake_units, required_buffer_for_claims, split_claim_minus_buffer,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
@@ -77,53 +77,6 @@ impl MarketConfig {
 
 fn half_life_in_bounds(half_life_ms: u64) -> bool {
     (MIN_HALF_LIFE_MS..=MAX_HALF_LIFE_MS).contains(&half_life_ms)
-}
-
-impl MarketFeeClaimKind {
-    pub fn event_code(self) -> u8 {
-        match self {
-            Self::Operator => 0,
-            Self::Protocol => 1,
-        }
-    }
-}
-
-impl FeeLedger {
-    pub fn total_liability(&self) -> Result<u64> {
-        self.fee_liability
-            .checked_add(self.hedged_fee_liability)
-            .and_then(|value| value.checked_add(self.unallocated_hedged_fee_liability))
-            .and_then(|value| value.checked_add(self.protocol_fee_liability))
-            .and_then(|value| value.checked_add(self.operator_fee_liability))
-            .and_then(|value| value.checked_add(self.unallocated_fee_liability))
-            .ok_or(ErrorCode::MarketMathOverflow.into())
-    }
-
-    pub fn assert_backed(&self) -> Result<()> {
-        require_gte!(
-            self.fee_vault_balance,
-            self.total_liability()?,
-            ErrorCode::UnbackedFeeLiability
-        );
-        Ok(())
-    }
-
-    pub fn market_fee_liability(&self, claim_kind: MarketFeeClaimKind) -> u64 {
-        match claim_kind {
-            MarketFeeClaimKind::Operator => self.operator_fee_liability,
-            MarketFeeClaimKind::Protocol => self.protocol_fee_liability,
-        }
-    }
-
-    pub fn claim_market_fee_liability(&mut self, claim_kind: MarketFeeClaimKind) -> Result<u64> {
-        let fee_amount = self.market_fee_liability(claim_kind);
-        require!(fee_amount > 0, ErrorCode::AmountZero);
-        match claim_kind {
-            MarketFeeClaimKind::Operator => self.operator_fee_liability = 0,
-            MarketFeeClaimKind::Protocol => self.protocol_fee_liability = 0,
-        }
-        Ok(fee_amount)
-    }
 }
 
 impl DailyLimitBook {
@@ -485,60 +438,6 @@ impl MarketSide {
     }
 }
 
-impl DebtBook {
-    pub fn debt_to_shares(amount: u64, borrow_index_nad: u128) -> Result<u128> {
-        require!(amount > 0, ErrorCode::AmountZero);
-        ceil_div(
-            (amount as u128)
-                .checked_mul(NAD as u128)
-                .ok_or(ErrorCode::MarketMathOverflow)?,
-            borrow_index_nad,
-        )
-        .ok_or(ErrorCode::MarketMathOverflow.into())
-    }
-
-    pub fn shares_to_debt(shares: u128, borrow_index_nad: u128) -> Result<u128> {
-        shares
-            .checked_mul(borrow_index_nad)
-            .and_then(|value| value.checked_div(NAD as u128))
-            .ok_or(ErrorCode::MarketMathOverflow.into())
-    }
-
-    pub fn fixed_debt0(&self) -> Result<u128> {
-        Self::shares_to_debt(self.fixed_debt0_shares, self.borrow_index0_nad)
-    }
-
-    pub fn fixed_debt1(&self) -> Result<u128> {
-        Self::shares_to_debt(self.fixed_debt1_shares, self.borrow_index1_nad)
-    }
-
-    pub fn soft_debt0(&self) -> Result<u128> {
-        self.soft_debt0_shares
-            .checked_mul(self.borrow_index0_nad)
-            .and_then(|value| value.checked_div(NAD as u128))
-            .ok_or(ErrorCode::MarketMathOverflow.into())
-    }
-
-    pub fn soft_debt1(&self) -> Result<u128> {
-        self.soft_debt1_shares
-            .checked_mul(self.borrow_index1_nad)
-            .and_then(|value| value.checked_div(NAD as u128))
-            .ok_or(ErrorCode::MarketMathOverflow.into())
-    }
-
-    pub fn total_debt0(&self) -> Result<u128> {
-        self.fixed_debt0()?
-            .checked_add(self.soft_debt0()?)
-            .ok_or(ErrorCode::MarketMathOverflow.into())
-    }
-
-    pub fn total_debt1(&self) -> Result<u128> {
-        self.fixed_debt1()?
-            .checked_add(self.soft_debt1()?)
-            .ok_or(ErrorCode::MarketMathOverflow.into())
-    }
-}
-
 impl RiskBook {
     pub fn refreshed(
         &self,
@@ -646,203 +545,6 @@ impl RiskBook {
             liquidity1_ema,
             last_snapshot_slot: current_slot,
         })
-    }
-}
-
-impl MarginPosition {
-    pub fn initialize(&mut self, owner: Pubkey, market: Pubkey, bump: u8) {
-        self.owner = owner;
-        self.market = market;
-        self.bump = bump;
-    }
-
-    pub fn is_initialized(&self) -> bool {
-        self.owner != Pubkey::default() && self.market != Pubkey::default()
-    }
-
-    pub fn assert_position(&self, owner: Pubkey, market: Pubkey) -> Result<()> {
-        require_keys_eq!(self.owner, owner, ErrorCode::InvalidMarginPosition);
-        require_keys_eq!(self.market, market, ErrorCode::InvalidMarginPosition);
-        Ok(())
-    }
-
-    pub fn idle_collateral0(&self) -> Result<u64> {
-        self.collateral0
-            .checked_sub(self.recognized_collateral0_for_debt1)
-            .ok_or(ErrorCode::InsufficientRecognizedCollateral.into())
-    }
-
-    pub fn idle_collateral1(&self) -> Result<u64> {
-        self.collateral1
-            .checked_sub(self.recognized_collateral1_for_debt0)
-            .ok_or(ErrorCode::InsufficientRecognizedCollateral.into())
-    }
-
-    pub fn fixed_debt0(&self, debt_book: &DebtBook) -> Result<u128> {
-        DebtBook::shares_to_debt(self.fixed_debt0_shares, debt_book.borrow_index0_nad)
-    }
-
-    pub fn fixed_debt1(&self, debt_book: &DebtBook) -> Result<u128> {
-        DebtBook::shares_to_debt(self.fixed_debt1_shares, debt_book.borrow_index1_nad)
-    }
-}
-
-impl StakePosition {
-    pub fn initialize(&mut self, owner: Pubkey, market: Pubkey, asset_mint: Pubkey, bump: u8) {
-        self.owner = owner;
-        self.market = market;
-        self.asset_mint = asset_mint;
-        self.bump = bump;
-    }
-
-    pub fn is_initialized(&self) -> bool {
-        self.owner != Pubkey::default()
-            && self.market != Pubkey::default()
-            && self.asset_mint != Pubkey::default()
-    }
-
-    pub fn assert_position(&self, owner: Pubkey, market: Pubkey, asset_mint: Pubkey) -> Result<()> {
-        require_keys_eq!(self.owner, owner, ErrorCode::InvalidStakePosition);
-        require_keys_eq!(self.market, market, ErrorCode::InvalidStakePosition);
-        require_keys_eq!(self.asset_mint, asset_mint, ErrorCode::InvalidStakePosition);
-        Ok(())
-    }
-
-    pub fn credit_buffer_shares(&mut self, amount: u64) -> Result<()> {
-        self.available_buffer_shares = self
-            .available_buffer_shares
-            .checked_add(amount)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        Ok(())
-    }
-
-    pub fn active_stake_units(&self, buffer_ratio_bps: u16) -> Result<u64> {
-        active_stake_units(
-            self.staked_claim_amount,
-            self.staked_buffer_shares,
-            buffer_ratio_bps,
-        )
-    }
-
-    pub fn accrue_fees(&mut self, fee_growth_index_nad: u128, buffer_ratio_bps: u16) -> Result<()> {
-        let active_units = self.active_stake_units(buffer_ratio_bps)?;
-        let accrued_amount = accrue_fee_liability(
-            active_units,
-            fee_growth_index_nad,
-            self.fee_growth_checkpoint_nad,
-        )?;
-        self.accrued_fee_amount = self
-            .accrued_fee_amount
-            .checked_add(accrued_amount)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        self.fee_growth_checkpoint_nad = fee_growth_index_nad;
-        Ok(())
-    }
-
-    pub fn stake(&mut self, claim_amount: u64, buffer_shares: u64) -> Result<()> {
-        require!(claim_amount > 0 && buffer_shares > 0, ErrorCode::AmountZero);
-        require_gte!(
-            self.available_buffer_shares,
-            buffer_shares,
-            ErrorCode::InsufficientBufferShares
-        );
-        self.available_buffer_shares = self
-            .available_buffer_shares
-            .checked_sub(buffer_shares)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        self.staked_claim_amount = self
-            .staked_claim_amount
-            .checked_add(claim_amount)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        self.staked_buffer_shares = self
-            .staked_buffer_shares
-            .checked_add(buffer_shares)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        Ok(())
-    }
-
-    pub fn unstake(&mut self, claim_amount: u64, buffer_shares: u64) -> Result<()> {
-        require!(claim_amount > 0 && buffer_shares > 0, ErrorCode::AmountZero);
-        require_gte!(
-            self.staked_claim_amount,
-            claim_amount,
-            ErrorCode::InsufficientBalance
-        );
-        require_gte!(
-            self.staked_buffer_shares,
-            buffer_shares,
-            ErrorCode::InsufficientBufferShares
-        );
-        self.staked_claim_amount = self
-            .staked_claim_amount
-            .checked_sub(claim_amount)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        self.staked_buffer_shares = self
-            .staked_buffer_shares
-            .checked_sub(buffer_shares)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        self.available_buffer_shares = self
-            .available_buffer_shares
-            .checked_add(buffer_shares)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        Ok(())
-    }
-}
-
-impl HedgePosition {
-    pub fn initialize(&mut self, owner: Pubkey, market: Pubkey, asset_mint: Pubkey, bump: u8) {
-        self.owner = owner;
-        self.market = market;
-        self.asset_mint = asset_mint;
-        self.bump = bump;
-    }
-
-    pub fn is_initialized(&self) -> bool {
-        self.owner != Pubkey::default()
-            && self.market != Pubkey::default()
-            && self.asset_mint != Pubkey::default()
-    }
-
-    pub fn assert_position(&self, owner: Pubkey, market: Pubkey, asset_mint: Pubkey) -> Result<()> {
-        require_keys_eq!(self.owner, owner, ErrorCode::InvalidHedgePosition);
-        require_keys_eq!(self.market, market, ErrorCode::InvalidHedgePosition);
-        require_keys_eq!(self.asset_mint, asset_mint, ErrorCode::InvalidHedgePosition);
-        Ok(())
-    }
-
-    pub fn accrue_fees(&mut self, hedged_fee_growth_index_nad: u128) -> Result<()> {
-        let accrued_amount = accrue_fee_liability(
-            self.hedged_claim_amount,
-            hedged_fee_growth_index_nad,
-            self.fee_growth_checkpoint_nad,
-        )?;
-        self.accrued_fee_amount = self
-            .accrued_fee_amount
-            .checked_add(accrued_amount)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        self.fee_growth_checkpoint_nad = hedged_fee_growth_index_nad;
-        Ok(())
-    }
-
-    pub fn increase(&mut self, amount: u64) -> Result<()> {
-        self.hedged_claim_amount = self
-            .hedged_claim_amount
-            .checked_add(amount)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        Ok(())
-    }
-
-    pub fn decrease(&mut self, amount: u64) -> Result<()> {
-        require_gte!(
-            self.hedged_claim_amount,
-            amount,
-            ErrorCode::InvalidHedgePosition
-        );
-        self.hedged_claim_amount = self
-            .hedged_claim_amount
-            .checked_sub(amount)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        Ok(())
     }
 }
 
@@ -1860,7 +1562,9 @@ macro_rules! generate_market_seeds {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::BufferBook;
+    use crate::state::{
+        BufferBook, FeeLedger, HedgePosition, MarginPosition, MarketFeeClaimKind, StakePosition,
+    };
 
     fn test_market_side(asset_mint: Pubkey, buffer_ratio_bps: u16) -> MarketSide {
         MarketSide {
