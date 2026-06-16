@@ -767,13 +767,13 @@ impl Market {
         let collateral_amount =
             normalize_to_nad(collateral_amount as u128, collateral_side.asset_decimals)?;
         let (collateral_virtual_reserve, debt_virtual_reserve) =
-            virtual_reserves_at_pessimistic_price(
+            construct_normalized_virtual_reserves_at_pessimistic_price(
                 collateral_reserve,
                 debt_reserve,
                 price_ema_nad,
                 directional_price_ema_nad,
             )?;
-        constant_product_amount_out(
+        calculate_normalized_amount_out(
             collateral_virtual_reserve,
             debt_virtual_reserve,
             collateral_amount,
@@ -819,13 +819,13 @@ impl Market {
         )?;
         let debt_amount_nad = normalize_to_nad(debt_with_incentive, debt_side.asset_decimals)?;
         let (collateral_virtual_reserve, debt_virtual_reserve) =
-            virtual_reserves_at_pessimistic_price(
+            construct_normalized_virtual_reserves_at_pessimistic_price(
                 collateral_reserve,
                 debt_reserve,
                 price_ema_nad,
                 directional_price_ema_nad,
             )?;
-        let collateral_amount_nad = constant_product_amount_in(
+        let collateral_amount_nad = calculate_normalized_amount_in(
             collateral_virtual_reserve,
             debt_virtual_reserve,
             debt_amount_nad,
@@ -867,13 +867,13 @@ impl Market {
             debt_side.asset_decimals,
         )?;
         let (collateral_virtual_reserve, debt_virtual_reserve) =
-            virtual_reserves_at_pessimistic_price(
+            construct_normalized_virtual_reserves_at_pessimistic_price(
                 collateral_reserve,
                 debt_reserve,
                 price_ema_nad,
                 directional_price_ema_nad,
             )?;
-        let collateral_amount_nad = constant_product_amount_in_floor(
+        let collateral_amount_nad = calculate_normalized_amount_in_floor(
             collateral_virtual_reserve,
             debt_virtual_reserve,
             debt_value_nad,
