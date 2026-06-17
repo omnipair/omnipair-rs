@@ -125,6 +125,8 @@ Preferred public names:
 
 ```text
 initialize
+update_config
+set_reduce_only
 swap
 add_liquidity
 remove_liquidity
@@ -133,10 +135,13 @@ withdraw_collateral
 borrow
 repay
 liquidate
+deposit_insurance
 stake
 unstake
 claim_fees
+claim_market_fees
 open_hedge
+claim_hedge_fees
 close_hedge
 ```
 
@@ -216,7 +221,7 @@ pub fn borrow(ctx: Context<Borrow>, args: BorrowArgs) -> Result<()> {
 }
 
 pub fn liquidate(ctx: Context<Liquidate>, args: LiquidateArgs) -> Result<()> {
-    lending::Liquidate::handle(ctx, args)
+    liquidation::Liquidate::handle(ctx, args)
 }
 ```
 
@@ -544,8 +549,8 @@ Prefer a typed side selector:
 
 ```rust
 pub enum MarketAsset {
-    Asset0,
-    Asset1,
+    Base,
+    Quote,
 }
 ```
 
@@ -619,65 +624,85 @@ omnipair.fi       -> v2 canonical app
 v1.omnipair.fi    -> legacy v1 app
 ```
 
-## Implementation Phases
+## Implementation Status By Phase
 
 ### Phase 1: Split Program Architecture
 
-- Create a new v2 program crate.
-- Move current v2 code into it.
-- Restore the existing `omnipair` program to a clean v1-only surface.
-- Keep v1 public instruction names and integrations stable.
+Status: implemented.
+
+- Created the standalone `programs/omnipair-v2` program crate.
+- Moved V2 code into the standalone program.
+- Restored the existing `omnipair` program to a clean V1-only surface.
+- Kept V1 public instruction names and integrations stable.
 
 ### Phase 2: Reclaim Public Names
 
-- Rename `market_swap` to `swap`.
-- Rename `market_borrow` to `borrow`.
-- Rename `market_repay` to `repay`.
-- Rename `market_liquidate` to `liquidate`.
-- Use domain clarity in account/state names instead of instruction prefixes.
+Status: implemented.
+
+- Public V2 instructions use clean names such as `swap`, `borrow`, `repay`,
+  and `liquidate`.
+- Domain clarity lives in account, state, event, and folder names instead of
+  workaround instruction prefixes.
 
 ### Phase 3: Preserve Grouped Instruction Layout
 
-- Keep v1-style domain grouping.
-- Use auditable instruction groups like `instructions/reserve`, `instructions/staking`, `instructions/hedge`, `instructions/lending`, `instructions/liquidation`, `instructions/spot`, and `instructions/market`.
-- Keep staking, market fee claiming, and hedge fee claiming in their own folders when their account sets and invariants differ from add/remove liquidity.
-- Keep liquidation in its own folder when the insurance and bad-debt waterfall deserves a separate review surface.
-- Do not flatten all instructions into one folder.
+Status: implemented.
+
+- V2 keeps V1-style domain grouping.
+- Instructions are split across `instructions/reserve`, `instructions/staking`,
+  `instructions/hedge`, `instructions/lending`, `instructions/liquidation`,
+  `instructions/spot`, and `instructions/market`.
+- Staking, market fee claiming, hedge fee claiming, and liquidation have
+  narrow review surfaces.
 
 ### Phase 4: Clean Token Vocabulary
 
-- Make claim and hedge token concepts explicit.
-- Rename ambiguous mint, supply, and share fields where needed.
-- Add token modules for claim and hedge tokens.
-- Clearly separate SPL token concepts from internal accounting units.
+Status: implemented, with one open product-language decision.
+
+- Claim and hedge token concepts are explicit.
+- Ambiguous mint, supply, and share fields were renamed where needed.
+- `tokens/claim_token.rs` and `tokens/hedge_token.rs` define token constraints.
+- SPL token concepts are separated from internal accounting units.
+- Open decision: whether retained junior buffer shares need a public product
+  term beyond the current internal accounting language.
 
 ### Phase 5: Introduce Atomic Transitions
 
-- Extract coupled state mutation logic from handlers into `transitions/`.
-- Add receipt structs for events and tests.
-- Restrict scattered direct state mutation outside transition modules.
-- Assert invariants at transition boundaries.
+Status: implemented.
+
+- Coupled state mutation logic lives under `transitions/`.
+- Receipt structs drive event emission and tests.
+- Instruction handlers are thin account/token adapters around transition calls.
+- Transition boundaries assert the relevant local invariants.
 
 ### Phase 6: Improve Modularity
 
-- Split the current large v2 market state file into smaller modules.
-- Move math helpers out of state files.
-- Keep ledgers small and invariant-focused.
-- Keep risk math in a dedicated risk/math module.
+Status: implemented.
+
+- State is split into market, side, ledgers, positions, config, health, and risk
+  modules.
+- Math helpers live under `math/` and `utils/`.
+- Ledgers remain small and invariant-focused.
+- Risk math has dedicated modules for risk-book and fixed-point behavior.
 
 ### Phase 7: Rebuild Tests
 
-- Unit test transitions directly.
-- Keep LiteSVM tests for real program behavior.
-- Update coverage tracking to distinguish behavioral coverage from checklist coverage.
+Status: implemented for local review coverage.
+
+- Transition, state, math, and helper modules have direct unit/property tests.
+- LiteSVM covers real program behavior and all 19 standalone V2 instructions.
+- Coverage tracking reports V2 instruction smoke coverage separately from the
+  legacy V1 surface.
 
 ### Phase 8: Integration and Product Surface
 
-- Publish a separate v2 IDL.
-- Update SDK bindings.
-- Update frontend routing.
-- Prepare aggregator and analytics integration notes.
-- Keep v1 documentation and app available for legacy users.
+Status: partially implemented.
+
+- Separate V2 IDL and TypeScript bindings exist.
+- SDK constants expose V2 program ID and PDA helpers.
+- V1 documentation and the V1 program remain available for legacy users.
+- Remaining production work: finish app/front-end routing, aggregator notes,
+  analytics/indexer handoff, deployment review, and external security signoff.
 
 ## Success Criteria
 
