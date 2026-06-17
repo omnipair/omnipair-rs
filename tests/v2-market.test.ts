@@ -1242,6 +1242,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     const config = marketConfig();
     config.swapFeeBps = 8_000;
+    config.spotEmaDivergenceBps = 10_000;
     await program.methods
       .updateConfig({ config })
       .accounts({
@@ -2116,6 +2117,19 @@ describe("Omnipair Market LiteSVM", () => {
       eventAuthority,
     } = await fundTinyRoundingMarket();
 
+    const relaxedRiskConfig = marketConfig();
+    relaxedRiskConfig.spotEmaDivergenceBps = 10_000;
+    await program.methods
+      .updateConfig({ config: relaxedRiskConfig })
+      .accounts({
+        market,
+        operator: payer.publicKey,
+        eventAuthority,
+        program: OMNIPAIR_V2_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
     await program.methods
       .swap({
         assetIn: { base: {} },
@@ -2284,6 +2298,7 @@ describe("Omnipair Market LiteSVM", () => {
     const config = marketConfig();
     config.swapFeeBps = 8_000;
     config.protocolFeeBps = 2_000;
+    config.spotEmaDivergenceBps = 10_000;
     await program.methods
       .updateConfig({ config })
       .accounts({
@@ -2474,6 +2489,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     const config = marketConfig();
     config.swapFeeBps = 8_000;
+    config.spotEmaDivergenceBps = 10_000;
     await program.methods
       .updateConfig({ config })
       .accounts({
@@ -2579,6 +2595,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     const config = marketConfig();
     config.swapFeeBps = 8_000;
+    config.spotEmaDivergenceBps = 10_000;
     await program.methods
       .updateConfig({ config })
       .accounts({
@@ -2631,6 +2648,19 @@ describe("Omnipair Market LiteSVM", () => {
         traderAssetOutAccount: ownerQuoteAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_V2_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    const strictRiskConfig = marketConfig();
+    strictRiskConfig.swapFeeBps = 8_000;
+    await program.methods
+      .updateConfig({ config: strictRiskConfig })
+      .accounts({
+        market,
+        operator: payer.publicKey,
         eventAuthority,
         program: OMNIPAIR_V2_PROGRAM_ID,
       })

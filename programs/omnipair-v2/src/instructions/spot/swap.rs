@@ -109,6 +109,9 @@ impl<'info> Swap<'info> {
         let protocol_fee_bps = ctx.accounts.market.config.protocol_fee_bps;
         let fee_routing_k_nad = ctx.accounts.market.config.fee_routing_k_nad;
 
+        ctx.accounts.market.refresh_risk_book()?;
+        ctx.accounts.market.assert_risk_circuit_breakers()?;
+
         let reserve_credit = receive_swap_inventory(&mut ctx, args.exact_asset_in)?;
         let total_fee = ceil_div(
             (reserve_credit as u128)
@@ -247,4 +250,110 @@ fn move_swap_fee<'info>(ctx: &mut Context<Swap<'info>>, total_fee: u64) -> Resul
         .amount
         .checked_sub(fee_balance_before)
         .ok_or(ErrorCode::MarketMathOverflow.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        constants::{BPS_DENOMINATOR, NAD},
+        state::{BufferLedger, MarketConfig, MarketSide, ReserveLedger},
+    };
+
+    const TEST_RESERVE: u64 = 1_000_000;
+
+    fn market_side(asset_mint: Pubkey) -> MarketSide {
+        MarketSide {
+            asset_mint,
+            asset_decimals: 6,
+            claim_token_mint: Pubkey::new_unique(),
+            hedge_token_mint: Pubkey::new_unique(),
+            hedge_vault: Pubkey::new_unique(),
+            reserve_vault: Pubkey::new_unique(),
+            collateral_vault: Pubkey::new_unique(),
+            fee_vault: Pubkey::new_unique(),
+            stake_vault: Pubkey::new_unique(),
+            reserve_ledger: ReserveLedger {
+                live_reserve: TEST_RESERVE,
+                cash_reserve: TEST_RESERVE,
+                reserved_liability: 0,
+            },
+            buffer_ledger: BufferLedger {
+                buffer_ratio_bps: 2_000,
+                ..BufferLedger::default()
+            },
+            ..MarketSide::default()
+        }
+    }
+
+    fn market_config() -> MarketConfig {
+        MarketConfig {
+            swap_fee_bps: 0,
+            operator_fee_bps: 0,
+            protocol_fee_bps: 0,
+            buffer_ratio_bps: 2_000,
+            fee_routing_k_nad: NAD,
+            ema_half_life_ms: 60_000,
+            directional_ema_half_life_ms: 60_000,
+            k_ema_half_life_ms: 60_000,
+            max_daily_borrow_bps: BPS_DENOMINATOR,
+            max_daily_withdraw_bps: BPS_DENOMINATOR,
+            spot_ema_divergence_bps: 1_000,
+            k_ema_drawdown_bps: BPS_DENOMINATOR,
+            recognized_collateral_cap_bps: 15_000,
+            market_health_min_bps: 11_000,
+            effective_debt_weight_min_bps: BPS_DENOMINATOR,
+            effective_debt_gamma_nad: NAD,
+            soft_borrow_enabled: false,
+            hedged_lp_enabled: true,
+            start_time: 0,
+        }
+    }
+
+    fn test_market() -> Market {
+        let base_mint = Pubkey::new_unique();
+        let quote_mint = Pubkey::new_unique();
+        Market::initialize(
+            base_mint,
+            quote_mint,
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            market_side(base_mint),
+            market_side(quote_mint),
+            market_config(),
+            [23_u8; 32],
+            42,
+            252,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn pre_swap_risk_snapshot_blocks_bootstrap_from_post_swap_spot() {
+        let mut market = test_market();
+        market.refresh_risk_book().unwrap();
+        assert_eq!(market.risk_book.base_price_ema_nad, NAD);
+        assert_eq!(market.risk_book.quote_price_ema_nad, NAD);
+
+        let amount_in_after_fee = 900_000;
+        let amount_out = calculate_raw_amount_out(
+            market.base_side.reserve_ledger.live_reserve,
+            market.quote_side.reserve_ledger.live_reserve,
+            amount_in_after_fee,
+        )
+        .unwrap();
+        {
+            let (market_side_in, market_side_out) = market.swap_sides_mut(MarketAsset::Base);
+            SwapTransition::new(amount_in_after_fee, amount_out, 0, 0, 0, NAD)
+                .apply(market_side_in, market_side_out)
+                .unwrap();
+        }
+        market.refresh_risk_book().unwrap();
+
+        let err = market.assert_risk_circuit_breakers().unwrap_err();
+        assert_eq!(
+            err,
+            anchor_lang::prelude::error!(ErrorCode::MarketRiskCircuitBreaker)
+        );
+    }
 }
