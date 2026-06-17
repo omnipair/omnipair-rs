@@ -277,11 +277,24 @@ jobs:
 
       - name: Verify security.txt
         run: |
-          echo "Checking security.txt in binary..."
-          SO_FILE=$(find target -name "omnipair.so" | head -1)
-          SO_FILE_V2=$(find target -name "omnipair_v2.so" | head -1)
-          strings "$SO_FILE" | grep -E "(source_release|source_revision)" || true
-          strings "$SO_FILE_V2" | grep -E "(source_release|source_revision)" || true
+          echo "Checking security.txt metadata in verifiable binaries..."
+          for binary in \
+            target/verifiable/omnipair.so \
+            target/verifiable/omnipair_v2.so
+          do
+            if [ ! -f "$binary" ]; then
+              echo "Missing verifiable binary: $binary"
+              exit 1
+            fi
+            for field in source_release source_revision
+            do
+              if ! strings "$binary" | grep -q "$field"; then
+                echo "Missing security.txt field '$field' in $binary"
+                exit 1
+              fi
+              echo "Found security.txt field '$field' in $binary"
+            done
+          done
 
       - name: Create and push tag
         run: |
