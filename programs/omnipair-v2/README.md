@@ -155,7 +155,7 @@ Every V2 event carries `MarketEventMetadata` with the signer, market, and slot.
 - Market health uses recognized debt-bearing collateral only. Idle collateral contributes zero to borrow health.
 - Fixed debt is valued in normalized debt units. Hedged overlay debt is gamma-weighted against liquidity EMA, while fixed and soft debt remain fully effective.
 - Risk books roll EMA values from cached spot and liquidity observations, then store the current observation for the next refresh.
-- Borrow, redeem, repay, liquidation, fee claim, and hedge close paths check risk circuit breakers where they increase or settle risk against market prices.
+- Liquidity add/remove, swap, borrow, repay, liquidation, fee claim, and hedge close paths check risk circuit breakers where they increase or settle risk against market prices.
 - Liquidation reduces only insolvent debt and follows the waterfall: borrower collateral, liquidator repayment and incentive, insurance reserve, then LP socialization.
 - Hedge tokens are `h-omLP` wrappers that escrow claim tokens one-to-one and unwrap back into claim tokens. They do not create staking rights.
 - Inventory-native settlement is used for reserves, collateral, fees, insurance, claims, and hedge vaults.

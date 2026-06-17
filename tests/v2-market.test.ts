@@ -169,7 +169,10 @@ describe("Omnipair Market LiteSVM", () => {
     program = new Program(omnipairV2Idl as any, provider as any);
   });
 
-  async function initializeMarketFixture(mintOrder: "canonical" | "reversed" = "canonical") {
+  async function initializeMarketFixture(
+    mintOrder: "canonical" | "reversed" = "canonical",
+    config = marketConfig()
+  ) {
     const mintA = await createMint(connection as any, payer, payer.publicKey, null, 6);
     const mintB = await createMint(connection as any, payer, payer.publicKey, null, 6);
     const [lowerMint, higherMint] = orderedMints(mintA, mintB);
@@ -206,7 +209,7 @@ describe("Omnipair Market LiteSVM", () => {
       .initialize({
         operator: payer.publicKey,
         manager: payer.publicKey,
-        config: marketConfig(),
+        config,
         paramsHash: [...paramsHash],
       })
       .accounts({
@@ -600,7 +603,7 @@ describe("Omnipair Market LiteSVM", () => {
   }
 
   async function fundRoundedBorrowMarket(rounds = 12) {
-    const fixture = await initializeMarketFixture();
+    const fixture = await initializeMarketFixture("canonical", syntheticLiquidityRiskConfig());
     const ownerBaseAccount = await createAccount(
       connection as any,
       payer,
@@ -1431,6 +1434,39 @@ describe("Omnipair Market LiteSVM", () => {
     const stakePositionBefore = await fetchStakePosition(stake0Position);
     expect(stakePositionBefore.available_buffer_share_amount.toString()).to.equal("200000");
     expect(stakePositionBefore.staked_buffer_share_amount.toString()).to.equal("0");
+
+    await expectRejects(() =>
+      program.methods
+        .addLiquidity({
+          marketAsset: { base: {} },
+          depositAmount: new BN(900_000),
+          minClaimAmount: new BN(720_000),
+          maxBufferAmount: new BN(180_000),
+        })
+        .accounts({
+          market,
+          owner: payer.publicKey,
+          assetMint: baseMint,
+          claimTokenMint: baseClaimTokenMint,
+          reserveVault: baseReserveVault,
+          ownerAssetAccount: ownerBaseAccount,
+          ownerClaimAccount: ownerBaseClaimAccount,
+          stakePosition: stake0Position,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          eventAuthority,
+          program: OMNIPAIR_V2_PROGRAM_ID,
+        })
+        .signers([payer])
+        .rpc()
+    );
+    expect((await getAccount(connection as any, ownerBaseAccount)).amount).to.equal(
+      BigInt(1_000_000)
+    );
+    expect((await getAccount(connection as any, baseReserveVault)).amount).to.equal(
+      BigInt(1_000_000)
+    );
 
     const removeLiquiditySignature = await program.methods
       .removeLiquidity({
@@ -2698,6 +2734,19 @@ describe("Omnipair Market LiteSVM", () => {
       .signers([payer])
       .rpc();
 
+    await addLiquiditySide(
+      { market, eventAuthority },
+      0,
+      baseMint,
+      baseClaimTokenMint,
+      baseReserveVault,
+      ownerBaseAccount,
+      ownerBaseClaimAccount,
+      2,
+      1,
+      1
+    );
+
     const strictRiskConfig = marketConfig();
     strictRiskConfig.swapFeeBps = 8_000;
     await program.methods
@@ -2710,19 +2759,6 @@ describe("Omnipair Market LiteSVM", () => {
       })
       .signers([payer])
       .rpc();
-
-    await addLiquiditySide(
-      { market, eventAuthority },
-      0,
-      baseMint,
-      baseClaimTokenMint,
-      baseReserveVault,
-      ownerBaseAccount,
-      ownerBaseClaimAccount,
-      50,
-      40,
-      10
-    );
 
     await expectRejects(() =>
       program.methods
@@ -3198,6 +3234,17 @@ describe("Omnipair Market LiteSVM", () => {
       .signers([payer])
       .rpc();
 
+    await program.methods
+      .updateConfig({ config: syntheticLiquidityRiskConfig() })
+      .accounts({
+        market,
+        operator: payer.publicKey,
+        eventAuthority,
+        program: OMNIPAIR_V2_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
     await addLiquiditySide(
       { market, eventAuthority },
       0,
@@ -3210,6 +3257,17 @@ describe("Omnipair Market LiteSVM", () => {
       400_000,
       100_000
     );
+
+    await program.methods
+      .updateConfig({ config: marketConfig() })
+      .accounts({
+        market,
+        operator: payer.publicKey,
+        eventAuthority,
+        program: OMNIPAIR_V2_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
 
     await expectRejects(() =>
       program.methods
@@ -3742,6 +3800,17 @@ describe("Omnipair Market LiteSVM", () => {
       208,
       52
     );
+
+    await program.methods
+      .updateConfig({ config: marketConfig() })
+      .accounts({
+        market,
+        operator: payer.publicKey,
+        eventAuthority,
+        program: OMNIPAIR_V2_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
 
     await expectRejects(() =>
       program.methods
@@ -4459,7 +4528,7 @@ describe("Omnipair Market LiteSVM", () => {
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
       .rpc();
 
-    const config = marketConfig();
+    const config = syntheticLiquidityRiskConfig();
     config.recognizedCollateralCapBps = 20_000;
     config.marketHealthMinBps = 20_000;
     await program.methods
@@ -4485,6 +4554,20 @@ describe("Omnipair Market LiteSVM", () => {
       160,
       40
     );
+
+    const strictRiskConfig = marketConfig();
+    strictRiskConfig.recognizedCollateralCapBps = config.recognizedCollateralCapBps;
+    strictRiskConfig.marketHealthMinBps = config.marketHealthMinBps;
+    await program.methods
+      .updateConfig({ config: strictRiskConfig })
+      .accounts({
+        market,
+        operator: payer.publicKey,
+        eventAuthority,
+        program: OMNIPAIR_V2_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
 
     const liquidator = Keypair.generate();
     await connection.requestAirdrop(liquidator.publicKey, LAMPORTS_PER_SOL);

@@ -162,6 +162,11 @@ impl<'info> AddLiquidity<'info> {
             let market_side = ctx.accounts.market.side_mut(args.market_asset)?;
             AddLiquidityTransition::new(reserve_credit).apply(market_side)?
         };
+        if ctx.accounts.market.risk_book.base_price_ema_nad > 0
+            && ctx.accounts.market.risk_book.quote_price_ema_nad > 0
+        {
+            ctx.accounts.market.assert_risk_circuit_breakers()?;
+        }
         require_gte!(
             receipt.claim_amount,
             args.min_claim_amount,
@@ -296,6 +301,11 @@ mod tests {
                 .apply(market_side)
                 .unwrap();
         }
+        let err = market.assert_risk_circuit_breakers().unwrap_err();
+        assert_eq!(
+            err,
+            anchor_lang::prelude::error!(ErrorCode::MarketRiskCircuitBreaker)
+        );
         market.refresh_risk_book().unwrap();
 
         let err = market.assert_risk_circuit_breakers().unwrap_err();
