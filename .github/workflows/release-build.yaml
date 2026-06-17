@@ -354,7 +354,9 @@ jobs:
               https://github.com/${{ github.repository }} \
               --commit-hash ${{ steps.bump-version.outputs.sha }} \
               --library-name omnipair \
-              -- --features production
+              -- --features production \
+                 --config "env.GIT_REV=\"${{ steps.bump-version.outputs.sha }}\"" \
+                 --config "env.GIT_RELEASE=\"${{ needs.prepare-release.outputs.tag }}\""
 
             solana-verify verify-from-repo \
               --remote \
@@ -362,7 +364,9 @@ jobs:
               https://github.com/${{ github.repository }} \
               --commit-hash ${{ steps.bump-version.outputs.sha }} \
               --library-name omnipair_v2 \
-              -- --features production
+              -- --features production \
+                 --config "env.GIT_REV=\"${{ steps.bump-version.outputs.sha }}\"" \
+                 --config "env.GIT_RELEASE=\"${{ needs.prepare-release.outputs.tag }}\""
             ```
           files: |
             target/verifiable/omnipair.so

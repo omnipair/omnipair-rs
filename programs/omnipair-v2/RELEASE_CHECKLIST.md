@@ -39,7 +39,10 @@ Run these gates from the repository root:
 cargo fmt -p omnipair-v2 -- --check
 cargo check -p omnipair-v2 --lib
 cargo test -p omnipair-v2 --lib -- --nocapture
+cargo check -p omnipair-v2 --lib --features production
+cargo test -p omnipair-v2 --lib --features production -- --nocapture
 anchor build -p omnipair-v2
+anchor build -p omnipair-v2 -- --features production
 npm run build --prefix packages/program-interface
 yarn test-litesvm
 ```
@@ -107,6 +110,8 @@ target/types/omnipair_v2.ts
 ## 7. Post-Deploy Verification
 
 - Verify the deployed V2 binary with `solana-verify`.
+- Use trailing cargo args for production verification:
+  `-- --features production --config "env.GIT_REV=\"...\"" --config "env.GIT_RELEASE=\"...\""`.
 - Submit the verified V2 build to the OtterSec registry.
 - Publish `@omnipair/program-interface` only after the verified IDL and types
   match the deployed binary.

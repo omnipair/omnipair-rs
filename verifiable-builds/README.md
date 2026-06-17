@@ -24,19 +24,34 @@ To verify a deployed program matches this build:
 # Install solana-verify
 cargo install solana-verify
 
+COMMIT_SHA=<COMMIT_SHA>
+RELEASE_TAG=<RELEASE_TAG>
+
 # Verify V1 against mainnet
 solana-verify verify-from-repo \
-  --remote -um \
+  --skip-prompt \
+  --base-image solanafoundation/anchor:v0.31.1 \
   --program-id omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE \
   https://github.com/omnipair/omnipair-rs \
-  --library-name omnipair
+  --commit-hash "$COMMIT_SHA" \
+  --library-name omnipair \
+  -u mainnet-beta \
+  -- --features production \
+     --config "env.GIT_REV=\"$COMMIT_SHA\"" \
+     --config "env.GIT_RELEASE=\"$RELEASE_TAG\""
 
 # Verify V2 against mainnet
 solana-verify verify-from-repo \
-  --remote -um \
+  --skip-prompt \
+  --base-image solanafoundation/anchor:v0.31.1 \
   --program-id 358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv \
   https://github.com/omnipair/omnipair-rs \
-  --library-name omnipair_v2
+  --commit-hash "$COMMIT_SHA" \
+  --library-name omnipair_v2 \
+  -u mainnet-beta \
+  -- --features production \
+     --config "env.GIT_REV=\"$COMMIT_SHA\"" \
+     --config "env.GIT_RELEASE=\"$RELEASE_TAG\""
 ```
 
 Or use **Actions -> release-build -> Run workflow** with `verify_only` enabled.

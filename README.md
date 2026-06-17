@@ -177,7 +177,7 @@ This project uses automated CI/CD with GitHub Actions for releases and program u
 │                        AUTOMATIC (PR Merge)                         │
 ├─────────────────────────────────────────────────────────────────────┤
 │  1. Version Bump      →  Based on conventional commits              │
-│  2. Verifiable Build  →  anchor build --verifiable --features prod  │
+│  2. Verifiable Build  →  production-feature Anchor build             │
 │  3. Create Release    →  GitHub release with .so and IDL artifacts  │
 └─────────────────────────────────────────────────────────────────────┘
                                    │
@@ -289,42 +289,50 @@ anchor build --verifiable -p omnipair-v2 \
 # Install solana-verify
 cargo install solana-verify
 
+COMMIT_SHA=<COMMIT_SHA>
+RELEASE_TAG=<RELEASE_TAG>
+
 # Verify from repository
 solana-verify verify-from-repo \
-  --remote \
+  --skip-prompt \
+  --base-image solanafoundation/anchor:v0.31.1 \
   --program-id omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE \
   https://github.com/omnipair/omnipair-rs \
-  --commit-hash <COMMIT_SHA> \
+  --commit-hash "$COMMIT_SHA" \
   --library-name omnipair \
-  --bpf-flag "features=production"
+  -u mainnet-beta \
+  -- --features production \
+     --config "env.GIT_REV=\"$COMMIT_SHA\"" \
+     --config "env.GIT_RELEASE=\"$RELEASE_TAG\""
 
 # Verify V2 from repository
 solana-verify verify-from-repo \
-  --remote \
+  --skip-prompt \
+  --base-image solanafoundation/anchor:v0.31.1 \
   --program-id 358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv \
   https://github.com/omnipair/omnipair-rs \
-  --commit-hash <COMMIT_SHA> \
+  --commit-hash "$COMMIT_SHA" \
   --library-name omnipair_v2 \
-  --bpf-flag "features=production"
+  -u mainnet-beta \
+  -- --features production \
+     --config "env.GIT_REV=\"$COMMIT_SHA\"" \
+     --config "env.GIT_RELEASE=\"$RELEASE_TAG\""
 ```
 
 ### Submit to OtterSec Registry
 
 ```bash
+SQUADS_VAULT=<SQUADS_VAULT_ADDRESS>
+
+# Export the verification PDA transaction, submit it through Squads, then:
 solana-verify remote submit-job \
   --program-id omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE \
-  https://github.com/omnipair/omnipair-rs \
-  --commit-hash <COMMIT_SHA> \
-  --library-name omnipair \
-  --bpf-flag "features=production"
+  --uploader "$SQUADS_VAULT"
 
 # Submit V2 to OtterSec Registry
 solana-verify remote submit-job \
   --program-id 358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv \
-  https://github.com/omnipair/omnipair-rs \
-  --commit-hash <COMMIT_SHA> \
-  --library-name omnipair_v2 \
-  --bpf-flag "features=production"
+  --uploader "$SQUADS_VAULT"
 ```
 
 ---
@@ -361,7 +369,7 @@ PROGRAM_ID=omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE
 
 # 2. Build verifiable binary
 export GIT_REV=$(git rev-parse HEAD)
-export GIT_RELEASE=$(git describe --tags)
+export GIT_RELEASE=$(git describe --tags --abbrev=0 2>/dev/null || echo "dev")
 anchor build --verifiable -p $PROGRAM_CRATE \
   -e GIT_REV=$GIT_REV \
   -e GIT_RELEASE=$GIT_RELEASE \
@@ -385,13 +393,19 @@ solana program set-buffer-authority <BUFFER_ADDRESS> \
 # 6. Team signs and executes
 
 # 7. Verify
+COMMIT_SHA=$(git rev-parse HEAD)
+RELEASE_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "dev")
 solana-verify verify-from-repo \
-  --remote \
-  -um \
+  --skip-prompt \
+  --base-image solanafoundation/anchor:v0.31.1 \
   --program-id $PROGRAM_ID \
   https://github.com/omnipair/omnipair-rs \
+  --commit-hash "$COMMIT_SHA" \
   --library-name $PROGRAM_LIBRARY \
-  --bpf-flag "features=production"
+  -u mainnet-beta \
+  -- --features production \
+     --config "env.GIT_REV=\"$COMMIT_SHA\"" \
+     --config "env.GIT_RELEASE=\"$RELEASE_TAG\""
 ```
 
 ### Extend Program Size (if needed)

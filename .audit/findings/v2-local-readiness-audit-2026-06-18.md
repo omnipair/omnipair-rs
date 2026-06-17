@@ -74,6 +74,9 @@ Recent local verification covered:
 | V2 program builds and type-checks | `cargo check -p omnipair-v2 --lib` passed. |
 | V2 unit/property coverage passes | `cargo test -p omnipair-v2 --lib -- --nocapture` passed with 94 tests. |
 | V2 Anchor artifact builds | `anchor build -p omnipair-v2` passed, with known SBF/linkage warnings. |
+| V2 production feature type-checks | `cargo check -p omnipair-v2 --lib --features production` passed. |
+| V2 production feature tests pass | `cargo test -p omnipair-v2 --lib --features production -- --nocapture` passed with 94 tests. |
+| V2 production Anchor artifact builds | `anchor build -p omnipair-v2 -- --features production` passed, with known SBF/linkage warnings. |
 | V2 LiteSVM flows cover all public instructions | `yarn test-litesvm` passed with 42 tests and V2 instruction smoke coverage `19/19`. |
 | Package interface builds | `npm run build --prefix packages/program-interface` passed. |
 | V2 decoder compiles | `cargo test -p omnipair-decoder --lib` passed with 1 decoder test. |
