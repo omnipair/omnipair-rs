@@ -155,6 +155,7 @@ Every V2 event carries `MarketEventMetadata` with the signer, market, and slot.
 - Deposits split into protected claim amount and buffer share amount; only the claim amount is minted as transferable claim tokens.
 - Fee rights require matched staked claim tokens plus buffer shares. Unstaked claim tokens remain principal-only redemption claims.
 - Fees are non-compounding liabilities. They are routed through fee ledgers, fee growth indexes, and explicit claim paths.
+- Buffer-ratio changes are locked while active stake or staker LP fee liabilities exist, including carried-forward no-stake fees.
 - Market health uses recognized debt-bearing collateral only. Idle collateral contributes zero to borrow health.
 - Fixed debt is valued in normalized debt units. Hedged overlay debt is gamma-weighted against liquidity EMA, while fixed and soft debt remain fully effective.
 - Hedge opens must preserve the market-health floor after gamma-weighted overlay debt is refreshed.

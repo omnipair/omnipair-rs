@@ -1363,6 +1363,76 @@ describe("Omnipair Market LiteSVM", () => {
     expect((await getAccount(connection as any, baseFeeVault)).amount).to.equal(BigInt(10));
   });
 
+  it("locks buffer-ratio updates while no-stake LP fees are carried forward", async () => {
+    const {
+      baseMint,
+      quoteMint,
+      market,
+      baseReserveVault,
+      quoteReserveVault,
+      baseFeeVault,
+      ownerBaseAccount,
+      ownerQuoteAccount,
+      eventAuthority,
+    } = await fundTinyRoundingMarket();
+
+    const config = marketConfig();
+    config.swapFeeBps = 8_000;
+    config.spotEmaDivergenceBps = 10_000;
+    await program.methods
+      .updateConfig({ config })
+      .accounts({
+        market,
+        operator: payer.publicKey,
+        eventAuthority,
+        program: OMNIPAIR_V2_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await program.methods
+      .swap({
+        assetIn: { base: {} },
+        exactAssetIn: new BN(12),
+        minAssetOut: new BN(1),
+      })
+      .accounts({
+        market,
+        trader: payer.publicKey,
+        assetInMint: baseMint,
+        assetOutMint: quoteMint,
+        reserveInVault: baseReserveVault,
+        reserveOutVault: quoteReserveVault,
+        feeInVault: baseFeeVault,
+        traderAssetInAccount: ownerBaseAccount,
+        traderAssetOutAccount: ownerQuoteAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        eventAuthority,
+        program: OMNIPAIR_V2_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    const lockedConfig = marketConfig();
+    lockedConfig.swapFeeBps = config.swapFeeBps;
+    lockedConfig.bufferRatioBps = 1_500;
+    await expectRejects(() =>
+      program.methods
+        .updateConfig({ config: lockedConfig })
+        .accounts({
+          market,
+          operator: payer.publicKey,
+          eventAuthority,
+          program: OMNIPAIR_V2_PROGRAM_ID,
+        })
+        .signers([payer])
+        .rpc()
+    );
+
+    expect((await getAccount(connection as any, baseFeeVault)).amount).to.equal(BigInt(10));
+  });
+
   it("rejects buffer-ratio updates when the recomputed floor is uncovered", async () => {
     const {
       baseMint,

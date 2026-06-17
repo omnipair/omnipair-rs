@@ -156,7 +156,9 @@ impl Market {
                 && self.base_side.buffer_ledger.staked_buffer_share_amount == 0
                 && self.quote_side.buffer_ledger.staked_buffer_share_amount == 0
                 && self.base_side.fee_ledger.fee_liability == 0
-                && self.quote_side.fee_ledger.fee_liability == 0,
+                && self.quote_side.fee_ledger.fee_liability == 0
+                && self.base_side.fee_ledger.unallocated_fee_liability == 0
+                && self.quote_side.fee_ledger.unallocated_fee_liability == 0,
             ErrorCode::InvalidMarketConfig
         );
         Ok(())
@@ -377,5 +379,22 @@ mod tests {
 
         assert_eq!(err, error!(ErrorCode::InvalidMarketConfig));
         assert_eq!(market.quote_side.buffer_ledger.buffer_ratio_bps, 2_000);
+    }
+
+    #[test]
+    fn buffer_ratio_update_rejects_unallocated_staker_fee_liability() {
+        let mut market = test_market();
+        AddLiquidity::new(1_000_000)
+            .apply(&mut market.base_side)
+            .unwrap();
+        AddLiquidity::new(1_000_000)
+            .apply(&mut market.quote_side)
+            .unwrap();
+        market.base_side.fee_ledger.unallocated_fee_liability = 1;
+
+        let err = market.apply_buffer_ratio_update(1_500).unwrap_err();
+
+        assert_eq!(err, error!(ErrorCode::InvalidMarketConfig));
+        assert_eq!(market.base_side.buffer_ledger.buffer_ratio_bps, 2_000);
     }
 }
