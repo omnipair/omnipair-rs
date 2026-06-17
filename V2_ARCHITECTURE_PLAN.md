@@ -46,7 +46,8 @@ Implemented V2 architecture pieces:
 Remaining work before treating V2 as production-ready:
 
 - run a fresh end-to-end security review against the final standalone program;
-- finish deployment/release checklist review for mainnet and SDK consumers;
+- finish deployment/release checklist review for mainnet, app, SDK, indexer,
+  analytics, and aggregator owners;
 - keep soft borrow / soft liquidation disabled until a separate spec is ready.
 
 ## Purpose
@@ -700,9 +701,12 @@ Status: partially implemented.
 
 - Separate V2 IDL and TypeScript bindings exist.
 - SDK constants expose V2 program ID and PDA helpers.
+- The V2 README includes app, SDK, indexer, analytics, and aggregator handoff
+  notes.
 - V1 documentation and the V1 program remain available for legacy users.
-- Remaining production work: finish app/front-end routing, aggregator notes,
-  analytics/indexer handoff, deployment review, and external security signoff.
+- Remaining production work: collect owner signoff for app/front-end routing,
+  aggregator/indexer/analytics integration, deployment review, and external
+  security review.
 
 ## Success Criteria
 
