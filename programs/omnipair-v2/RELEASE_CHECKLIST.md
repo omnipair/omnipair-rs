@@ -14,9 +14,8 @@ mainnet launch or upgrade.
   reach `set_reduce_only` for incident response.
 - Confirm soft borrow and soft liquidation remain disabled unless a separate
   reviewed spec has been merged.
-- Confirm the product/governance decision for config updates is documented:
-  whether governance may intentionally move existing debt into an unhealthy or
-  liquidatable state.
+- Confirm config updates cannot move existing effective debt below the configured
+  market-health floor.
 
 ## 2. Security Review
 

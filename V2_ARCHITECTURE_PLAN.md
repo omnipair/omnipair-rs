@@ -39,14 +39,14 @@ Implemented V2 architecture pieces:
 - liquidation with collateral seizure, insurance draw, and LP socialization;
 - h-claim hedge wrappers as 1:1 claim-token overlays;
 - hedge opens bounded by post-open market health after gamma-weighted overlay
-  debt refresh.
+  debt refresh;
+- config updates are conservative: after a config change, refreshed market
+  health must still satisfy the configured health floor for existing debt.
 
 Remaining work before treating V2 as production-ready:
 
 - run a fresh end-to-end security review against the final standalone program;
 - finish deployment/release checklist review for mainnet and SDK consumers;
-- make an explicit governance/product decision on whether config updates may
-  intentionally move existing debt into an unhealthy or liquidatable state;
 - keep soft borrow / soft liquidation disabled until a separate spec is ready.
 
 ## Purpose

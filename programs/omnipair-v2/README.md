@@ -159,6 +159,7 @@ Every V2 event carries `MarketEventMetadata` with the signer, market, and slot.
 - Fee rights require matched staked claim tokens plus buffer shares. Unstaked claim tokens remain principal-only redemption claims.
 - Fees are non-compounding liabilities. They are routed through fee ledgers, fee growth indexes, and explicit claim paths.
 - Buffer-ratio changes are locked while active stake or staker LP fee liabilities exist, including carried-forward no-stake fees.
+- Config updates must preserve the market-health floor for existing effective debt after risk and health are refreshed.
 - Market health uses recognized debt-bearing collateral only. Idle collateral contributes zero to borrow health.
 - Fixed debt is valued in normalized debt units. Hedged overlay debt is gamma-weighted against liquidity EMA, while fixed and soft debt remain fully effective.
 - Hedge opens must preserve the market-health floor after gamma-weighted overlay debt is refreshed.
@@ -175,7 +176,6 @@ Before V2 should be treated as production-ready:
 - run a fresh end-to-end security review against the final standalone V2 program;
 - finish the V2 deployment and release checklist in
   `programs/omnipair-v2/RELEASE_CHECKLIST.md`;
-- make an explicit governance/product decision on whether config updates may intentionally move existing debt into an unhealthy or liquidatable state;
 - keep soft borrow and soft liquidation disabled until a separate spec is ready.
 
 ## Verification
