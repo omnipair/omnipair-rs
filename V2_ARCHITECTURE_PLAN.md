@@ -37,7 +37,7 @@ Implemented V2 architecture pieces:
 - buffer-ratio updates locked while active stake, allocated staker fee
   liabilities, or carried-forward no-stake LP fee liabilities exist;
 - liquidation with collateral seizure, insurance draw, and LP socialization;
-- h-claim hedge wrappers as 1:1 claim-token overlays;
+- h-omLP hedge wrappers as 1:1 claim-token overlays;
 - hedge opens bounded by post-open market health after gamma-weighted overlay
   debt refresh;
 - config updates are conservative: after a config change, refreshed market
