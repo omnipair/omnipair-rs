@@ -120,6 +120,8 @@ impl<'info> AddLiquidity<'info> {
         let owner_key = ctx.accounts.owner.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
 
+        ctx.accounts.market.refresh_risk_book()?;
+
         if !ctx.accounts.stake_position.is_initialized() {
             ctx.accounts.stake_position.initialize(
                 owner_key,
@@ -202,5 +204,104 @@ impl<'info> AddLiquidity<'info> {
         });
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        constants::{BPS_DENOMINATOR, NAD},
+        state::{BufferLedger, MarketConfig, MarketSide, ReserveLedger},
+    };
+
+    const TEST_RESERVE: u64 = 1_000_000;
+
+    fn market_side(asset_mint: Pubkey) -> MarketSide {
+        MarketSide {
+            asset_mint,
+            asset_decimals: 6,
+            claim_token_mint: Pubkey::new_unique(),
+            hedge_token_mint: Pubkey::new_unique(),
+            hedge_vault: Pubkey::new_unique(),
+            reserve_vault: Pubkey::new_unique(),
+            collateral_vault: Pubkey::new_unique(),
+            fee_vault: Pubkey::new_unique(),
+            stake_vault: Pubkey::new_unique(),
+            reserve_ledger: ReserveLedger {
+                live_reserve: TEST_RESERVE,
+                cash_reserve: TEST_RESERVE,
+                reserved_liability: 0,
+            },
+            buffer_ledger: BufferLedger {
+                buffer_ratio_bps: 2_000,
+                ..BufferLedger::default()
+            },
+            ..MarketSide::default()
+        }
+    }
+
+    fn market_config() -> MarketConfig {
+        MarketConfig {
+            swap_fee_bps: 30,
+            operator_fee_bps: 1_000,
+            protocol_fee_bps: 0,
+            buffer_ratio_bps: 2_000,
+            fee_routing_k_nad: NAD,
+            ema_half_life_ms: 60_000,
+            directional_ema_half_life_ms: 60_000,
+            k_ema_half_life_ms: 60_000,
+            max_daily_borrow_bps: BPS_DENOMINATOR,
+            max_daily_withdraw_bps: BPS_DENOMINATOR,
+            spot_ema_divergence_bps: 1_000,
+            k_ema_drawdown_bps: BPS_DENOMINATOR,
+            recognized_collateral_cap_bps: 15_000,
+            market_health_min_bps: 11_000,
+            effective_debt_weight_min_bps: BPS_DENOMINATOR,
+            effective_debt_gamma_nad: NAD,
+            soft_borrow_enabled: false,
+            hedged_lp_enabled: true,
+            start_time: 0,
+        }
+    }
+
+    fn test_market() -> Market {
+        let base_mint = Pubkey::new_unique();
+        let quote_mint = Pubkey::new_unique();
+        Market::initialize(
+            base_mint,
+            quote_mint,
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            market_side(base_mint),
+            market_side(quote_mint),
+            market_config(),
+            [29_u8; 32],
+            42,
+            250,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn pre_add_liquidity_risk_snapshot_blocks_bootstrap_from_post_add_spot() {
+        let mut market = test_market();
+        market.refresh_risk_book().unwrap();
+        assert_eq!(market.risk_book.base_price_ema_nad, NAD);
+        assert_eq!(market.risk_book.quote_price_ema_nad, NAD);
+
+        {
+            let market_side = market.side_mut(MarketAsset::Base).unwrap();
+            AddLiquidityTransition::new(900_000)
+                .apply(market_side)
+                .unwrap();
+        }
+        market.refresh_risk_book().unwrap();
+
+        let err = market.assert_risk_circuit_breakers().unwrap_err();
+        assert_eq!(
+            err,
+            anchor_lang::prelude::error!(ErrorCode::MarketRiskCircuitBreaker)
+        );
     }
 }

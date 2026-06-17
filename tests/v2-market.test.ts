@@ -133,12 +133,24 @@ function marketConfig() {
   };
 }
 
+function syntheticLiquidityRiskConfig() {
+  const config = marketConfig();
+  config.spotEmaDivergenceBps = 10_000;
+  config.kEmaDrawdownBps = 10_000;
+  return config;
+}
+
 describe("Omnipair Market LiteSVM", () => {
   let connection: LiteSVMConnection;
   let provider: any;
   let program: any;
   let payer: Keypair;
   let svm: LiteSVM;
+
+  function advanceRiskEmaWindow() {
+    const currentSlot = svm.getClock().slot;
+    svm.warpToSlot(currentSlot + 1_500n);
+  }
 
   before(async () => {
     svm = new LiteSVM();
@@ -1866,7 +1878,8 @@ describe("Omnipair Market LiteSVM", () => {
 
   it("enforces daily borrow, redeem, and collateral withdraw limits from liquidity EMA", async () => {
     const borrowFixture = await fundRoundedBorrowMarket();
-    const borrowLimitConfig = marketConfig();
+    advanceRiskEmaWindow();
+    const borrowLimitConfig = syntheticLiquidityRiskConfig();
     borrowLimitConfig.maxDailyBorrowBps = 300;
     await program.methods
       .updateConfig({ config: borrowLimitConfig })
@@ -2016,8 +2029,9 @@ describe("Omnipair Market LiteSVM", () => {
     );
 
     const collateralWithdrawFixture = await fundRoundedBorrowMarket();
-    const collateralWithdrawLimitConfig = marketConfig();
-    collateralWithdrawLimitConfig.maxDailyWithdrawBps = 300;
+    advanceRiskEmaWindow();
+    const collateralWithdrawLimitConfig = syntheticLiquidityRiskConfig();
+    collateralWithdrawLimitConfig.maxDailyWithdrawBps = 320;
     await program.methods
       .updateConfig({ config: collateralWithdrawLimitConfig })
       .accounts({
@@ -3259,6 +3273,20 @@ describe("Omnipair Market LiteSVM", () => {
       ownerQuoteAccount,
       eventAuthority,
     } = await fundRoundedBorrowMarket();
+    advanceRiskEmaWindow();
+    const config = syntheticLiquidityRiskConfig();
+    config.maxDailyWithdrawBps = 10_000;
+    await program.methods
+      .updateConfig({ config })
+      .accounts({
+        market,
+        operator: payer.publicKey,
+        eventAuthority,
+        program: OMNIPAIR_V2_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
     const marginPosition = deriveAddress(
       Buffer.from("margin"),
       market.toBuffer(),
