@@ -14,7 +14,7 @@ pub struct SetReduceOnly {
 #[derive(Debug, PartialEq, Eq, Clone, Hash, serde::Serialize, serde::Deserialize)]
 pub struct SetReduceOnlyInstructionAccounts {
     pub market: solana_pubkey::Pubkey,
-    pub operator: solana_pubkey::Pubkey,
+    pub authority: solana_pubkey::Pubkey,
     pub event_authority: solana_pubkey::Pubkey,
     pub program: solana_pubkey::Pubkey,
 }
@@ -27,13 +27,13 @@ impl carbon_core::deserialize::ArrangeAccounts for SetReduceOnly {
     ) -> Option<Self::ArrangedAccounts> {
         let mut iter = accounts.iter();
         let market = next_account(&mut iter)?;
-        let operator = next_account(&mut iter)?;
+        let authority = next_account(&mut iter)?;
         let event_authority = next_account(&mut iter)?;
         let program = next_account(&mut iter)?;
 
         Some(SetReduceOnlyInstructionAccounts {
             market,
-            operator,
+            authority,
             event_authority,
             program,
         })

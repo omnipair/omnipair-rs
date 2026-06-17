@@ -3391,17 +3391,6 @@ describe("Omnipair Market LiteSVM", () => {
       .signers([payer])
       .rpc();
 
-    await program.methods
-      .updateConfig({ config: syntheticLiquidityRiskConfig() })
-      .accounts({
-        market,
-        operator: payer.publicKey,
-        eventAuthority,
-        program: OMNIPAIR_V2_PROGRAM_ID,
-      })
-      .signers([payer])
-      .rpc();
-
     await addLiquiditySide(
       { market, eventAuthority },
       0,
@@ -3415,8 +3404,11 @@ describe("Omnipair Market LiteSVM", () => {
       100_000
     );
 
+    const closeRiskConfig = marketConfig();
+    closeRiskConfig.effectiveDebtWeightMinBps = 0;
+    closeRiskConfig.effectiveDebtGammaNad = new BN(0);
     await program.methods
-      .updateConfig({ config: marketConfig() })
+      .updateConfig({ config: closeRiskConfig })
       .accounts({
         market,
         operator: payer.publicKey,
@@ -4060,22 +4052,6 @@ describe("Omnipair Market LiteSVM", () => {
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
       .rpc();
 
-    const config = marketConfig();
-    config.recognizedCollateralCapBps = 20_000;
-    config.marketHealthMinBps = 20_000;
-    config.spotEmaDivergenceBps = 10_000;
-    config.kEmaDrawdownBps = 10_000;
-    await program.methods
-      .updateConfig({ config })
-      .accounts({
-        market,
-        operator: payer.publicKey,
-        eventAuthority,
-        program: OMNIPAIR_V2_PROGRAM_ID,
-      })
-      .signers([payer])
-      .rpc();
-
     await mintTo(
       connection as any,
       payer,
@@ -4092,10 +4068,20 @@ describe("Omnipair Market LiteSVM", () => {
       quoteReserveVault,
       ownerQuoteAccount,
       ownerQuoteClaimAccount,
-      300,
       240,
-      60
+      1,
+      240
     );
+    await program.methods
+      .updateConfig({ config: syntheticLiquidityRiskConfig() })
+      .accounts({
+        market,
+        operator: payer.publicKey,
+        eventAuthority,
+        program: OMNIPAIR_V2_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
 
     if (insuranceAmount > 0) {
       await program.methods
@@ -4293,104 +4279,19 @@ describe("Omnipair Market LiteSVM", () => {
       baseReserveVault,
       quoteCollateralVault,
       baseInsuranceVault,
-      ownerBaseAccount,
-      ownerQuoteAccount,
-      eventAuthority,
-    } = await fundRoundedBorrowMarket();
-    const marginPosition = deriveAddress(
-      Buffer.from("margin"),
-      market.toBuffer(),
-      payer.publicKey.toBuffer()
-    );
-
-    await program.methods
-      .depositCollateral({
-        marketAsset: { quote: {} },
-        depositAmount: new BN(60),
-      })
-      .accounts({
-        market,
-        owner: payer.publicKey,
-        assetMint: quoteMint,
-        collateralVault: quoteCollateralVault,
-        ownerAssetAccount: ownerQuoteAccount,
-        marginPosition,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        token2022Program: TOKEN_2022_PROGRAM_ID,
-        systemProgram: SystemProgram.programId,
-        eventAuthority,
-        program: OMNIPAIR_V2_PROGRAM_ID,
-      })
-      .signers([payer])
-      .rpc();
-
-    await program.methods
-      .borrow({
-        borrowAsset: { base: {} },
-        borrowAmount: new BN(5),
-        minDebtAmountOut: new BN(5),
-        minHealthBps: new BN(11_000),
-      })
-      .accounts({
-        market,
-        owner: payer.publicKey,
-        debtAssetMint: baseMint,
-        collateralAssetMint: quoteMint,
-        reserveVault: baseReserveVault,
-        ownerDebtAccount: ownerBaseAccount,
-        marginPosition,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        token2022Program: TOKEN_2022_PROGRAM_ID,
-        eventAuthority,
-        program: OMNIPAIR_V2_PROGRAM_ID,
-      })
-      .signers([payer])
-      .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
-      .rpc();
-
-    const config = marketConfig();
-    config.recognizedCollateralCapBps = 20_000;
-    config.marketHealthMinBps = 20_000;
-    await program.methods
-      .updateConfig({ config })
-      .accounts({
-        market,
-        operator: payer.publicKey,
-        eventAuthority,
-        program: OMNIPAIR_V2_PROGRAM_ID,
-      })
-      .signers([payer])
-      .rpc();
-
-    const liquidator = Keypair.generate();
-    await connection.requestAirdrop(liquidator.publicKey, LAMPORTS_PER_SOL);
-    const liquidatorDebtAccount = await createAccount(
-      connection as any,
-      payer,
-      baseMint,
-      liquidator.publicKey
-    );
-    const liquidatorCollateralAccount = await createAccount(
-      connection as any,
-      payer,
-      quoteMint,
-      liquidator.publicKey
-    );
-    await mintTo(
-      connection as any,
-      payer,
-      baseMint,
+      liquidator,
       liquidatorDebtAccount,
-      payer,
-      10
-    );
+      liquidatorCollateralAccount,
+      marginPosition,
+      eventAuthority,
+    } = await fundExhaustibleLiquidationMarket(1);
 
     const liquidationSignature = await program.methods
       .liquidate({
         debtAsset: { base: {} },
-        repayAmount: new BN(5),
-        minCollateralOut: new BN(1),
-        maxInsuranceDraw: new BN(0),
+        repayAmount: new BN(4),
+        minCollateralOut: new BN(6),
+        maxInsuranceDraw: new BN(1),
         maxSocializedLoss: new BN(0),
       })
       .accounts({
@@ -4425,18 +4326,13 @@ describe("Omnipair Market LiteSVM", () => {
       BigInt(312)
     );
     expect((await getAccount(connection as any, liquidatorDebtAccount)).amount).to.equal(
-      BigInt(5)
+      BigInt(0)
     );
-    const liquidatorCollateralBalance = (await getAccount(
-      connection as any,
-      liquidatorCollateralAccount
-    )).amount;
-    const collateralVaultBalance = (await getAccount(
-      connection as any,
-      quoteCollateralVault
-    )).amount;
-    expect(liquidatorCollateralBalance > BigInt(0)).to.equal(true);
-    expect(collateralVaultBalance < BigInt(60)).to.equal(true);
+    expect((await getAccount(connection as any, liquidatorCollateralAccount)).amount).to.equal(
+      BigInt(6)
+    );
+    expect((await getAccount(connection as any, quoteCollateralVault)).amount).to.equal(BigInt(0));
+    expect((await getAccount(connection as any, baseInsuranceVault)).amount).to.equal(BigInt(0));
   });
 
   it("uses insurance when liquidation exhausts collateral", async () => {
@@ -4686,8 +4582,6 @@ describe("Omnipair Market LiteSVM", () => {
       .rpc();
 
     const config = syntheticLiquidityRiskConfig();
-    config.recognizedCollateralCapBps = 20_000;
-    config.marketHealthMinBps = 20_000;
     await program.methods
       .updateConfig({ config })
       .accounts({
@@ -4713,8 +4607,6 @@ describe("Omnipair Market LiteSVM", () => {
     );
 
     const strictRiskConfig = marketConfig();
-    strictRiskConfig.recognizedCollateralCapBps = config.recognizedCollateralCapBps;
-    strictRiskConfig.marketHealthMinBps = config.marketHealthMinBps;
     await program.methods
       .updateConfig({ config: strictRiskConfig })
       .accounts({

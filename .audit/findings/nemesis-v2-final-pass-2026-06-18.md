@@ -71,13 +71,12 @@ configured emergency signer could not activate reduce-only mode.
 | Transfer-fee assets desync reserve/collateral/fee accounting | Incoming Token-2022 paths use measured vault credits; claim and hedge mints are required fee-free. |
 | Cached EMA can bootstrap from same-instruction manipulated spot | Swap and liquidity-add paths refresh the risk book before mutation and tests cover the cached-spot behavior. |
 | Buffer ratio changes can reprice active stake or carried fees | Config update rejects buffer-ratio changes while active stake, staker fee liability, or carried no-stake LP fees exist. |
+| Config updates can make existing debt unhealthy | Fixed in `950c7c9 fix(v2): preserve health across config updates`; config updates now refresh risk/health under the new parameters and reject if existing effective debt falls below the configured health floor. |
 | Liquidation leaves debt and recognition ledgers stale | Liquidation burns debt shares, decreases position and aggregate recognition, refreshes market health, and tests cover insurance and socialization. |
 | h-omLP wrappers create staking rights | Hedge wrappers escrow claim tokens 1:1 and track hedged fee exposure without changing staked claim or buffer supply. |
 
 ## Remaining Non-Code Decisions
 
-- Decide whether governance may intentionally move existing debt into an
-  unhealthy or liquidatable state through config changes.
 - Keep soft borrow and soft liquidation disabled until a separate reviewed spec
   is merged.
 - Run external/security-team signoff against the final release candidate before
