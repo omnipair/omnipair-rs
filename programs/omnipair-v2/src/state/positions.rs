@@ -28,7 +28,7 @@ pub struct StakePosition {
     pub asset_mint: Pubkey,
     /// Non-transferable junior buffer accounting credited by add_liquidity.
     /// Removing claim-token principal does not release these units; they remain
-    /// available to pair with claim tokens for future fee eligibility.
+    /// available to match with claim tokens for future fee eligibility.
     pub available_buffer_share_amount: u64,
     pub staked_claim_token_amount: u64,
     pub staked_buffer_share_amount: u64,

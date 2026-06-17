@@ -1,3 +1,3 @@
-pub mod swap;
+mod swap;
 
 pub use swap::*;

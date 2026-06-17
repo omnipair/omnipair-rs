@@ -1,13 +1,13 @@
 mod add_liquidity;
-pub mod claim_fees;
-pub mod claim_hedge_fees;
-pub mod claim_market_fees;
-pub mod close_hedge;
+mod claim_fees;
+mod claim_hedge_fees;
+mod claim_market_fees;
+mod close_hedge;
 mod common;
-pub mod open_hedge;
+mod open_hedge;
 mod remove_liquidity;
-pub mod stake;
-pub mod unstake;
+mod stake;
+mod unstake;
 
 pub use add_liquidity::*;
 pub use claim_fees::*;
