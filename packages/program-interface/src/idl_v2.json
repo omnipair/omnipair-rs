@@ -5691,6 +5691,11 @@
           },
           {
             "name": "available_buffer_share_amount",
+            "docs": [
+              "Non-transferable junior buffer accounting credited by add_liquidity.",
+              "Removing claim-token principal does not release these units; they remain",
+              "available to match with claim tokens for future fee eligibility."
+            ],
             "type": "u64"
           },
           {

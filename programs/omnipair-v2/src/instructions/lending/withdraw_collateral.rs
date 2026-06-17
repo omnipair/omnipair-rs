@@ -7,7 +7,7 @@ use anchor_spl::{
 use crate::{
     constants::*,
     errors::ErrorCode,
-    events::{MarketCollateralWithdrawn, MarketEventMetadata},
+    events::{MarketCollateralWithdrawn, MarketEventMetadata, MarketHealthUpdated},
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
     state::{MarginPosition, Market, MarketAsset},
@@ -154,6 +154,24 @@ impl<'info> WithdrawCollateral<'info> {
             asset_credit,
             base_collateral: collateral_receipt.base_collateral,
             quote_collateral: collateral_receipt.quote_collateral,
+            metadata: MarketEventMetadata::new(owner_key, market_key)?,
+        });
+        emit_cpi!(MarketHealthUpdated {
+            market: market_key,
+            recognized_base_collateral_for_quote_debt: ctx
+                .accounts
+                .market
+                .health
+                .recognized_base_collateral_for_quote_debt,
+            recognized_quote_collateral_for_base_debt: ctx
+                .accounts
+                .market
+                .health
+                .recognized_quote_collateral_for_base_debt,
+            effective_base_debt_nad: ctx.accounts.market.health.effective_base_debt_nad,
+            effective_quote_debt_nad: ctx.accounts.market.health.effective_quote_debt_nad,
+            base_debt_health_bps: ctx.accounts.market.health.base_debt_health_bps,
+            quote_debt_health_bps: ctx.accounts.market.health.quote_debt_health_bps,
             metadata: MarketEventMetadata::new(owner_key, market_key)?,
         });
 

@@ -3458,7 +3458,7 @@ describe("Omnipair Market LiteSVM", () => {
       BigInt(60)
     );
 
-    await program.methods
+    const withdrawCollateralSignature = await program.methods
       .withdrawCollateral({
         marketAsset: { quote: {} },
         withdrawAmount: new BN(60),
@@ -3479,6 +3479,14 @@ describe("Omnipair Market LiteSVM", () => {
       .signers([payer])
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
       .rpc();
+    const withdrawCollateralEvents = decodeCpiEvents(svm, withdrawCollateralSignature);
+    const withdrawCollateralEventNames = withdrawCollateralEvents.map((event) => event.name);
+    expect(withdrawCollateralEventNames).to.include("MarketCollateralWithdrawn");
+    expect(withdrawCollateralEventNames).to.include("MarketHealthUpdated");
+    const withdrawCollateralHealthEvent = withdrawCollateralEvents.find(
+      (event) => event.name === "MarketHealthUpdated"
+    );
+    expect(withdrawCollateralHealthEvent.data.market.toString()).to.equal(market.toString());
 
     expect((await getAccount(connection as any, ownerQuoteAccount)).amount).to.equal(
       BigInt(300)

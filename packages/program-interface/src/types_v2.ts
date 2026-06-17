@@ -5697,6 +5697,11 @@ export type OmnipairV2 = {
           },
           {
             "name": "availableBufferShareAmount",
+            "docs": [
+              "Non-transferable junior buffer accounting credited by add_liquidity.",
+              "Removing claim-token principal does not release these units; they remain",
+              "available to match with claim tokens for future fee eligibility."
+            ],
             "type": "u64"
           },
           {

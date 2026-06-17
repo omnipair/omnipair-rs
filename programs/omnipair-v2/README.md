@@ -127,7 +127,7 @@ Indexers should consume V2 events from the standalone V2 IDL:
 | --- | --- |
 | `MarketCreated` | `initialize` |
 | `MarketUpdated` | `update_config`, `set_reduce_only` |
-| `MarketHealthUpdated` | config, swap, remove_liquidity, borrow, repay, hedge open/close, liquidation health refreshes |
+| `MarketHealthUpdated` | config, swap, remove_liquidity, withdraw_collateral, borrow, repay, hedge open/close, liquidation health refreshes |
 | `LiquidityAdded` | `add_liquidity` |
 | `LiquidityRemoved` | `remove_liquidity` |
 | `MarketStakeUpdated` | `stake`, `unstake` |
