@@ -33,11 +33,8 @@ pub struct UpdateMarketConfig<'info> {
 
 impl<'info> UpdateMarketConfig<'info> {
     pub fn handle_update(ctx: Context<Self>, args: UpdateMarketConfigArgs) -> Result<()> {
-        args.config.validate()?;
         let market = &mut ctx.accounts.market;
-        market.apply_buffer_ratio_update(args.config.buffer_ratio_bps)?;
-        market.config = args.config;
-        market.recompute_market_health_from_risk_book()?;
+        apply_config_update(market, args.config)?;
 
         emit_cpi!(MarketUpdated {
             market: market.key(),
@@ -64,5 +61,98 @@ impl<'info> UpdateMarketConfig<'info> {
         });
 
         Ok(())
+    }
+}
+
+fn apply_config_update(market: &mut Market, config: MarketConfig) -> Result<()> {
+    config.validate()?;
+    market.apply_buffer_ratio_update(config.buffer_ratio_bps)?;
+    market.config = config;
+    market.refresh_risk_book()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        constants::{BPS_DENOMINATOR, NAD},
+        state::{BufferLedger, MarketSide, ReserveLedger},
+    };
+
+    fn market_side(asset_mint: Pubkey, live_reserve: u64) -> MarketSide {
+        MarketSide {
+            asset_mint,
+            asset_decimals: 6,
+            claim_token_mint: Pubkey::new_unique(),
+            hedge_token_mint: Pubkey::new_unique(),
+            hedge_vault: Pubkey::new_unique(),
+            reserve_vault: Pubkey::new_unique(),
+            collateral_vault: Pubkey::new_unique(),
+            fee_vault: Pubkey::new_unique(),
+            stake_vault: Pubkey::new_unique(),
+            reserve_ledger: ReserveLedger {
+                live_reserve,
+                cash_reserve: live_reserve,
+                reserved_liability: 0,
+            },
+            buffer_ledger: BufferLedger {
+                buffer_ratio_bps: 2_000,
+                ..BufferLedger::default()
+            },
+            ..MarketSide::default()
+        }
+    }
+
+    fn market_config() -> MarketConfig {
+        MarketConfig {
+            swap_fee_bps: 30,
+            operator_fee_bps: 1_000,
+            protocol_fee_bps: 0,
+            buffer_ratio_bps: 2_000,
+            fee_routing_k_nad: NAD,
+            ema_half_life_ms: 60_000,
+            directional_ema_half_life_ms: 60_000,
+            k_ema_half_life_ms: 60_000,
+            max_daily_borrow_bps: BPS_DENOMINATOR,
+            max_daily_withdraw_bps: BPS_DENOMINATOR,
+            spot_ema_divergence_bps: BPS_DENOMINATOR,
+            k_ema_drawdown_bps: BPS_DENOMINATOR,
+            recognized_collateral_cap_bps: 15_000,
+            market_health_min_bps: 11_000,
+            effective_debt_weight_min_bps: BPS_DENOMINATOR,
+            effective_debt_gamma_nad: NAD,
+            soft_borrow_enabled: false,
+            hedged_lp_enabled: true,
+            start_time: 0,
+        }
+    }
+
+    #[test]
+    fn config_update_refreshes_risk_book_for_health_events() {
+        let base_mint = Pubkey::new_unique();
+        let quote_mint = Pubkey::new_unique();
+        let mut market = Market::initialize(
+            base_mint,
+            quote_mint,
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+            market_side(base_mint, 1_000_000),
+            market_side(quote_mint, 2_000_000),
+            market_config(),
+            [31_u8; 32],
+            42,
+            250,
+        )
+        .unwrap();
+
+        let mut config = market_config();
+        config.operator_fee_bps = 500;
+        apply_config_update(&mut market, config).unwrap();
+
+        assert_eq!(market.config.operator_fee_bps, 500);
+        assert_eq!(market.risk_book.base_price_ema_nad, 2 * NAD);
+        assert_eq!(market.risk_book.quote_price_ema_nad, NAD / 2);
+        assert_eq!(market.risk_book.cached_spot_base_price_nad, 2 * NAD);
+        assert_eq!(market.risk_book.cached_spot_quote_price_nad, NAD / 2);
     }
 }
