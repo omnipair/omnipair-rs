@@ -24,6 +24,18 @@ import {
 } from "@solana/web3.js";
 import { expect } from "chai";
 import { LiteSVM } from "litesvm";
+import {
+  deriveHedgePositionAddress,
+  deriveHedgeVaultAddress,
+  deriveInsuranceReserveAddress,
+  deriveMarginPositionAddress,
+  deriveMarketAddress,
+  deriveMarketCollateralVaultAddress,
+  deriveMarketFeeVaultAddress,
+  deriveMarketReserveVaultAddress,
+  deriveMarketStakeVaultAddress,
+  deriveStakePositionAddress,
+} from "../packages/program-interface/src/constants.js";
 import { LiteSVMConnection } from "./utils/litesvm-connection.js";
 import { trackV2Instruction as trackInstruction, getCoverageReport } from "./utils/instruction-coverage.js";
 
@@ -878,6 +890,71 @@ describe("Omnipair Market LiteSVM", () => {
       expect(vaultAccount).to.not.equal(null);
       expect(vaultAccount.owner.toString()).to.equal(TOKEN_PROGRAM_ID.toString());
     }
+  });
+
+  it("derives V2 market addresses through public SDK helpers", async () => {
+    const fixture = await initializeMarketFixture();
+    const paramsHash = Buffer.alloc(32, 7);
+    const owner = payer.publicKey;
+
+    expect(deriveMarketAddress(fixture.baseMint, fixture.quoteMint, paramsHash)[0].toString()).to.equal(
+      fixture.market.toString()
+    );
+    expect(deriveMarketReserveVaultAddress(fixture.market, fixture.baseMint)[0].toString()).to.equal(
+      fixture.baseReserveVault.toString()
+    );
+    expect(deriveMarketReserveVaultAddress(fixture.market, fixture.quoteMint)[0].toString()).to.equal(
+      fixture.quoteReserveVault.toString()
+    );
+    expect(deriveMarketCollateralVaultAddress(fixture.market, fixture.baseMint)[0].toString()).to.equal(
+      fixture.baseCollateralVault.toString()
+    );
+    expect(deriveMarketCollateralVaultAddress(fixture.market, fixture.quoteMint)[0].toString()).to.equal(
+      fixture.quoteCollateralVault.toString()
+    );
+    expect(deriveMarketFeeVaultAddress(fixture.market, fixture.baseMint)[0].toString()).to.equal(
+      fixture.baseFeeVault.toString()
+    );
+    expect(deriveMarketFeeVaultAddress(fixture.market, fixture.quoteMint)[0].toString()).to.equal(
+      fixture.quoteFeeVault.toString()
+    );
+    expect(deriveMarketStakeVaultAddress(fixture.market, fixture.baseClaimTokenMint)[0].toString()).to.equal(
+      fixture.baseStakeVault.toString()
+    );
+    expect(deriveMarketStakeVaultAddress(fixture.market, fixture.quoteClaimTokenMint)[0].toString()).to.equal(
+      fixture.quoteStakeVault.toString()
+    );
+    expect(deriveHedgeVaultAddress(fixture.market, fixture.baseClaimTokenMint)[0].toString()).to.equal(
+      fixture.baseHedgeVault.toString()
+    );
+    expect(deriveHedgeVaultAddress(fixture.market, fixture.quoteClaimTokenMint)[0].toString()).to.equal(
+      fixture.quoteHedgeVault.toString()
+    );
+    expect(deriveInsuranceReserveAddress(fixture.market, fixture.baseMint)[0].toString()).to.equal(
+      fixture.baseInsuranceVault.toString()
+    );
+    expect(deriveInsuranceReserveAddress(fixture.market, fixture.quoteMint)[0].toString()).to.equal(
+      fixture.quoteInsuranceVault.toString()
+    );
+    expect(deriveStakePositionAddress(fixture.market, owner, fixture.baseMint)[0].toString()).to.equal(
+      deriveAddress(
+        Buffer.from("stake"),
+        fixture.market.toBuffer(),
+        owner.toBuffer(),
+        fixture.baseMint.toBuffer()
+      ).toString()
+    );
+    expect(deriveMarginPositionAddress(fixture.market, owner)[0].toString()).to.equal(
+      deriveAddress(Buffer.from("margin"), fixture.market.toBuffer(), owner.toBuffer()).toString()
+    );
+    expect(deriveHedgePositionAddress(fixture.market, owner, fixture.baseMint)[0].toString()).to.equal(
+      deriveAddress(
+        Buffer.from("hedge_position"),
+        fixture.market.toBuffer(),
+        owner.toBuffer(),
+        fixture.baseMint.toBuffer()
+      ).toString()
+    );
   });
 
   it("preserves creator-chosen non-canonical base and quote order", async () => {
