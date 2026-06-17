@@ -1432,7 +1432,7 @@ describe("Omnipair Market LiteSVM", () => {
     expect(stakePositionBefore.available_buffer_share_amount.toString()).to.equal("200000");
     expect(stakePositionBefore.staked_buffer_share_amount.toString()).to.equal("0");
 
-    await program.methods
+    const removeLiquiditySignature = await program.methods
       .removeLiquidity({
         marketAsset: { base: {} },
         claimAmount: new BN(80_000),
@@ -1453,6 +1453,14 @@ describe("Omnipair Market LiteSVM", () => {
       })
       .signers([payer])
       .rpc();
+    const removeLiquidityEvents = decodeCpiEvents(svm, removeLiquiditySignature);
+    const removeLiquidityEventNames = removeLiquidityEvents.map((event) => event.name);
+    expect(removeLiquidityEventNames).to.include("LiquidityRemoved");
+    expect(removeLiquidityEventNames).to.include("MarketHealthUpdated");
+    const removeLiquidityHealthEvent = removeLiquidityEvents.find(
+      (event) => event.name === "MarketHealthUpdated"
+    );
+    expect(removeLiquidityHealthEvent.data.market.toString()).to.equal(market.toString());
 
     expect((await getAccount(connection as any, ownerBaseAccount)).amount).to.equal(
       BigInt(1_080_000)
@@ -2144,7 +2152,7 @@ describe("Omnipair Market LiteSVM", () => {
       .signers([payer])
       .rpc();
 
-    await program.methods
+    const swapSignature = await program.methods
       .swap({
         assetIn: { base: {} },
         exactAssetIn: new BN(3),
@@ -2167,6 +2175,12 @@ describe("Omnipair Market LiteSVM", () => {
       })
       .signers([payer])
       .rpc();
+    const swapEvents = decodeCpiEvents(svm, swapSignature);
+    const swapEventNames = swapEvents.map((event) => event.name);
+    expect(swapEventNames).to.include("SwapExecuted");
+    expect(swapEventNames).to.include("MarketHealthUpdated");
+    const swapHealthEvent = swapEvents.find((event) => event.name === "MarketHealthUpdated");
+    expect(swapHealthEvent.data.market.toString()).to.equal(market.toString());
 
     expect((await getAccount(connection as any, ownerBaseAccount)).amount).to.equal(
       BigInt(91)

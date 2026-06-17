@@ -7,7 +7,7 @@ use anchor_spl::{
 use crate::{
     constants::*,
     errors::ErrorCode,
-    events::{MarketEventMetadata, SwapExecuted},
+    events::{MarketEventMetadata, MarketHealthUpdated, SwapExecuted},
     generate_market_seeds,
     math::calculate_raw_amount_out,
     shared::{
@@ -189,6 +189,24 @@ impl<'info> Swap<'info> {
             amount_in_after_fee: swap_receipt.amount_in_after_fee,
             amount_out: swap_receipt.amount_out,
             fee_credit: swap_receipt.fee_credit,
+            metadata: MarketEventMetadata::new(trader_key, market_key)?,
+        });
+        emit_cpi!(MarketHealthUpdated {
+            market: market_key,
+            recognized_base_collateral_for_quote_debt: ctx
+                .accounts
+                .market
+                .health
+                .recognized_base_collateral_for_quote_debt,
+            recognized_quote_collateral_for_base_debt: ctx
+                .accounts
+                .market
+                .health
+                .recognized_quote_collateral_for_base_debt,
+            effective_base_debt_nad: ctx.accounts.market.health.effective_base_debt_nad,
+            effective_quote_debt_nad: ctx.accounts.market.health.effective_quote_debt_nad,
+            base_debt_health_bps: ctx.accounts.market.health.base_debt_health_bps,
+            quote_debt_health_bps: ctx.accounts.market.health.quote_debt_health_bps,
             metadata: MarketEventMetadata::new(trader_key, market_key)?,
         });
 
