@@ -165,6 +165,15 @@ Every V2 event carries `MarketEventMetadata` with the signer, market, and slot.
 - Hedge tokens are `h-omLP` wrappers that escrow claim tokens one-to-one and unwrap back into claim tokens. They do not create staking rights.
 - Inventory-native settlement is used for reserves, collateral, fees, insurance, claims, and hedge vaults.
 
+## Production Caveats
+
+Before V2 should be treated as production-ready:
+
+- run a fresh end-to-end security review against the final standalone V2 program;
+- finish the deployment and release checklist for mainnet, SDK consumers, indexers, and app routing;
+- make an explicit governance/product decision on whether config updates may intentionally move existing debt into an unhealthy or liquidatable state;
+- keep soft borrow and soft liquidation disabled until a separate spec is ready.
+
 ## Verification
 
 Useful focused checks while changing V2:
