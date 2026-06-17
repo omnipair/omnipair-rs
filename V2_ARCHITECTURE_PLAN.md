@@ -37,8 +37,6 @@ Implemented V2 architecture pieces:
 Remaining work before treating V2 as production-ready:
 
 - run a fresh end-to-end security review against the final standalone program;
-- write integrator-facing docs for the new account model, PDA derivations,
-  events, and liquidity/borrow/hedge flows;
 - finish deployment/release checklist review for mainnet and SDK consumers;
 - keep soft borrow / soft liquidation disabled until a separate spec is ready.
 

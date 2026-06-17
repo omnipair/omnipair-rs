@@ -13,6 +13,138 @@ Omnipair V2 is a separate market architecture program. V1 remains the legacy GAM
 
 Instruction names are clean in the V2 namespace: `initialize`, `update_config`, `set_reduce_only`, `swap`, `add_liquidity`, `remove_liquidity`, `stake`, `unstake`, `claim_fees`, `claim_market_fees`, `open_hedge`, `claim_hedge_fees`, `close_hedge`, `deposit_collateral`, `withdraw_collateral`, `borrow`, `repay`, `deposit_insurance`, and `liquidate`.
 
+## Integration Surface
+
+V2 is integrated as its own program, not as a versioned instruction set inside
+the legacy V1 program.
+
+- Program crate: `programs/omnipair-v2`
+- Program name: `omnipair_v2`
+- Mainnet/devnet/localnet ID: `358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv`
+- IDL: `target/idl/omnipair_v2.json`
+- TypeScript bindings: `packages/program-interface/src/types_v2.ts`
+- SDK PDA helpers: `packages/program-interface/src/constants.ts`
+
+The SDK exports both generations. Use `OMNIPAIR_PROGRAM_ID` for V1 pair flows
+and `OMNIPAIR_V2_PROGRAM_ID` for V2 market flows.
+
+## PDA Map
+
+The public SDK helper names are the preferred integration entry points:
+
+| Account | Seeds | SDK helper |
+| --- | --- | --- |
+| `Market` | `market_v2`, `base_mint`, `quote_mint`, `params_hash` | `deriveMarketAddress` / `deriveMarketV2Address` |
+| Reserve vault | `market_reserve`, `market`, `asset_mint` | `deriveMarketReserveVaultAddress` |
+| Collateral vault | `market_collateral`, `market`, `asset_mint` | `deriveMarketCollateralVaultAddress` |
+| Fee vault | `market_fee`, `market`, `asset_mint` | `deriveMarketFeeVaultAddress` |
+| Stake vault | `market_stake`, `market`, `claim_token_mint` | `deriveMarketStakeVaultAddress` |
+| Stake position | `stake`, `market`, `owner`, `asset_mint` | `deriveStakePositionAddress` |
+| Margin position | `margin`, `market`, `owner` | `deriveMarginPositionAddress` |
+| Hedge vault | `hedged`, `market`, `claim_token_mint` | `deriveHedgeVaultAddress` |
+| Hedge position | `hedge_position`, `market`, `owner`, `asset_mint` | `deriveHedgePositionAddress` |
+| Insurance reserve vault | `insurance`, `market`, `asset_mint` | `deriveInsuranceReserveAddress` |
+
+Market creators choose `base_mint` and `quote_mint`; V2 does not sort or
+canonicalize mint order. Price displays should read as quote per base.
+
+## Integration Flows
+
+### Market Creation
+
+`initialize` creates a fresh isolated market. The caller supplies base/quote
+asset mints, base/quote claim-token mints, base/quote hedge-token mints, and all
+market vault PDAs. Claim and hedge mints must be fee-free mints controlled by
+the market authority and use the same decimals as their asset side.
+
+### Liquidity
+
+`add_liquidity` transfers asset inventory into a side's reserve vault. The
+deposit is split into:
+
+- transferable claim tokens minted to the LP;
+- non-transferable junior buffer shares credited on the LP's `StakePosition`.
+
+`remove_liquidity` burns claim tokens and returns fixed 1:1 principal only.
+It does not return fees, does not rebase, and does not release buffer shares.
+Buffer shares remain on the stake position as junior risk-capital accounting
+that can be matched with claim tokens for fee eligibility.
+
+`stake` moves claim tokens into the market stake vault and pairs them with
+buffer shares. `unstake` returns claim tokens and moves the paired buffer shares
+back to `available_buffer_share_amount` on the stake position.
+
+### Fees
+
+Swap fees are held in fee vaults and recorded as liabilities:
+
+- staker fees use `fee_growth_index_nad` and are claimed with `claim_fees`;
+- hedge-wrapper fees use `hedged_fee_growth_index_nad` and are claimed with
+  `claim_hedge_fees`;
+- operator/protocol buckets are claimed with `claim_market_fees`.
+
+Unallocated LP fees are carried forward into the next active stake index.
+Claim-token principal never compounds fee income.
+
+### Spot Swaps
+
+`swap` transfers `asset_in` into the reserve vault, moves the configured fee to
+the fee vault, pays `asset_out` from the opposite reserve vault, then enforces
+the post-swap reserve floor. Integrators should provide slippage protection via
+`min_asset_out`.
+
+### Lending
+
+`deposit_collateral` and `withdraw_collateral` manage idle margin inventory.
+`borrow` recognizes only debt-bearing collateral on the opposite side and
+transfers the borrowed asset from the borrowed side's reserve while recording
+fixed debt shares. Idle same-side collateral does not improve market health.
+`repay` reduces fixed debt shares and releases recognized collateral
+proportionally.
+
+`soft_borrow_enabled` is currently rejected by config validation. Soft
+liquidation is intentionally not live.
+
+### Liquidation And Insurance
+
+`deposit_insurance` funds the junior insurance reserve for a side. `liquidate`
+repays insolvent debt, seizes borrower collateral, draws insurance if needed,
+and only then socializes remaining bad debt to LP reserves subject to the
+liquidator's `max_socialized_loss` bound.
+
+### Hedged Claim Wrappers
+
+`open_hedge` escrows the selected side's claim tokens one-to-one and mints hedge tokens.
+`close_hedge` burns hedge tokens and returns the escrowed claim tokens. Hedge
+tokens can receive routed hedge fees, but they do not grant staking rights and
+do not include buffer shares.
+
+## Event Surface
+
+Indexers should consume V2 events from the standalone V2 IDL:
+
+| Event | Emitted by |
+| --- | --- |
+| `MarketCreated` | `initialize` |
+| `MarketUpdated` | `update_config`, `set_reduce_only` |
+| `MarketHealthUpdated` | config, borrow, repay, liquidation health refreshes |
+| `LiquidityAdded` | `add_liquidity` |
+| `LiquidityRemoved` | `remove_liquidity` |
+| `MarketStakeUpdated` | `stake`, `unstake` |
+| `MarketFeesClaimed` | `claim_fees` |
+| `MarketFeeLiabilityClaimed` | `claim_market_fees` |
+| `SwapExecuted` | `swap` |
+| `MarketCollateralDeposited` | `deposit_collateral` |
+| `MarketCollateralWithdrawn` | `withdraw_collateral` |
+| `MarketDebtUpdated` | `borrow`, `repay` |
+| `MarketInsuranceFunded` | `deposit_insurance` |
+| `PositionLiquidated` | `liquidate` |
+| `MarketHedgeOpened` | `open_hedge` |
+| `MarketHedgeClosed` | `close_hedge` |
+| `MarketHedgeFeesClaimed` | `claim_hedge_fees` |
+
+Every V2 event carries `MarketEventMetadata` with the signer, market, and slot.
+
 ## Core Invariants
 
 - Claim tokens are fixed-principal `omLP` assets. They do not rebase, compound fees, or use a dynamic exchange rate.
