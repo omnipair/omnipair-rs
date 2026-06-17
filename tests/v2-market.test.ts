@@ -2860,7 +2860,7 @@ describe("Omnipair Market LiteSVM", () => {
       baseMint.toBuffer()
     );
 
-    await program.methods
+    const openHedgeSignature = await program.methods
       .openHedge({
         marketAsset: { base: {} },
         claimAmount: new BN(1),
@@ -2884,6 +2884,14 @@ describe("Omnipair Market LiteSVM", () => {
       })
       .signers([payer])
       .rpc();
+    const openHedgeEvents = decodeCpiEvents(svm, openHedgeSignature);
+    const openHedgeEventNames = openHedgeEvents.map((event) => event.name);
+    expect(openHedgeEventNames).to.include("MarketHedgeOpened");
+    expect(openHedgeEventNames).to.include("MarketHealthUpdated");
+    const openHedgeHealthEvent = openHedgeEvents.find(
+      (event) => event.name === "MarketHealthUpdated"
+    );
+    expect(openHedgeHealthEvent.data.market.toString()).to.equal(market.toString());
 
     expect((await getAccount(connection as any, ownerBaseClaimAccount)).amount).to.equal(
       BigInt(3)
@@ -2985,7 +2993,7 @@ describe("Omnipair Market LiteSVM", () => {
         .rpc()
     );
 
-    await program.methods
+    const closeHedgeSignature = await program.methods
       .closeHedge({
         marketAsset: { base: {} },
         hedgeAmount: new BN(1),
@@ -3008,6 +3016,14 @@ describe("Omnipair Market LiteSVM", () => {
       })
       .signers([payer])
       .rpc();
+    const closeHedgeEvents = decodeCpiEvents(svm, closeHedgeSignature);
+    const closeHedgeEventNames = closeHedgeEvents.map((event) => event.name);
+    expect(closeHedgeEventNames).to.include("MarketHedgeClosed");
+    expect(closeHedgeEventNames).to.include("MarketHealthUpdated");
+    const closeHedgeHealthEvent = closeHedgeEvents.find(
+      (event) => event.name === "MarketHealthUpdated"
+    );
+    expect(closeHedgeHealthEvent.data.market.toString()).to.equal(market.toString());
 
     expect((await getAccount(connection as any, ownerBaseClaimAccount)).amount).to.equal(
       BigInt(4)
