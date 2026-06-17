@@ -30,14 +30,23 @@ Implemented V2 architecture pieces:
 - market reserve floors on swaps and withdrawals;
 - fixed-token debt with recognized-collateral market health;
 - cached spot observations for EMA updates;
+- pre-action risk snapshots for swaps and liquidity adds, so EMA bootstraps from
+  the previous observed market state rather than same-instruction post-state
+  spot;
 - liquidity-EMA daily limits and circuit breakers;
+- buffer-ratio updates locked while active stake, allocated staker fee
+  liabilities, or carried-forward no-stake LP fee liabilities exist;
 - liquidation with collateral seizure, insurance draw, and LP socialization;
-- h-claim hedge wrappers as 1:1 claim-token overlays.
+- h-claim hedge wrappers as 1:1 claim-token overlays;
+- hedge opens bounded by post-open market health after gamma-weighted overlay
+  debt refresh.
 
 Remaining work before treating V2 as production-ready:
 
 - run a fresh end-to-end security review against the final standalone program;
 - finish deployment/release checklist review for mainnet and SDK consumers;
+- make an explicit governance/product decision on whether config updates may
+  intentionally move existing debt into an unhealthy or liquidatable state;
 - keep soft borrow / soft liquidation disabled until a separate spec is ready.
 
 ## Purpose
@@ -148,9 +157,9 @@ market_liquidate
 
 Keep the v1 style of grouping related instructions together. That was a good ergonomic choice.
 
-The instruction tree should use user-facing protocol language, not internal accounting language. Prefer groups like `liquidity`, `lending`, and `spot` over more technical buckets like `reserve` or `claim`.
+The instruction tree should use user-facing protocol language where it maps cleanly to the product surface, and should split larger domains when that makes review easier. The current implementation keeps `reserve`, `staking`, `hedge`, `lending`, `liquidation`, `spot`, and `market` as separate audit-sized folders.
 
-Recommended v2 instruction layout:
+Current v2 instruction layout:
 
 ```text
 instructions/
@@ -159,13 +168,19 @@ instructions/
     update_config.rs
     set_reduce_only.rs
 
-  liquidity/
+  reserve/
     add_liquidity.rs
     remove_liquidity.rs
+
+  staking/
     stake.rs
     unstake.rs
     claim_fees.rs
+    claim_market_fees.rs
+
+  hedge/
     open_hedge.rs
+    claim_hedge_fees.rs
     close_hedge.rs
 
   spot/
@@ -176,11 +191,13 @@ instructions/
     withdraw_collateral.rs
     borrow.rs
     repay.rs
+
+  liquidation/
     liquidate.rs
     deposit_insurance.rs
 ```
 
-Hedging can live under `liquidity` if it is best understood as a tokenized liquidity/claim wrapper rather than a standalone product area. The source tree should optimize for how users and integrators think about the protocol.
+Hedging, staking, reserve liquidity, and liquidation now live in separate folders because their account sets and risk checks are different enough that reviewers benefit from narrower modules. The source tree should optimize for how users and auditors follow the protocol state machine.
 
 This gives both:
 
@@ -205,21 +222,21 @@ pub fn liquidate(ctx: Context<Liquidate>, args: LiquidateArgs) -> Result<()> {
 
 ## Liquidity vs Reserve Naming
 
-Use `liquidity` for user-facing actions and instruction grouping.
+Use `liquidity` for user-facing actions.
 
-Use `reserve` for internal custody/accounting.
+Use `reserve` for internal custody/accounting and for the current add/remove liquidity instruction folder.
 
 Rationale:
 
 - `liquidity` is what users, LPs, aggregators, dashboards, and integrations understand.
 - `reserve` is more precise for internal state like vaults, backing, claim coverage, and accounting floors.
 
-Recommended split:
+Current split:
 
 ```text
-instructions/liquidity/add_liquidity.rs
-instructions/liquidity/remove_liquidity.rs
-state/reserve_ledger.rs
+instructions/reserve/add_liquidity.rs
+instructions/reserve/remove_liquidity.rs
+state/ledgers.rs
 transitions/reserve.rs
 ```
 
@@ -324,7 +341,6 @@ Suggested layout:
 tokens/
   claim_token.rs
   hedge_token.rs
-  lp_token.rs
 ```
 
 These files should define protocol meaning, mint constraints, supply accounting, vault relationships, and mint/burn/escrow helpers. They are not separate SPL token programs. They are documentation and implementation boundaries for tokenized protocol assets.
@@ -423,13 +439,17 @@ programs/omnipair-v2/src/
       initialize.rs
       update_config.rs
       set_reduce_only.rs
-    liquidity/
+    reserve/
       add_liquidity.rs
       remove_liquidity.rs
+    staking/
       stake.rs
       unstake.rs
       claim_fees.rs
+      claim_market_fees.rs
+    hedge/
       open_hedge.rs
+      claim_hedge_fees.rs
       close_hedge.rs
     spot/
       swap.rs
@@ -438,27 +458,27 @@ programs/omnipair-v2/src/
       withdraw_collateral.rs
       borrow.rs
       repay.rs
+    liquidation/
       liquidate.rs
       deposit_insurance.rs
 
   transitions/
     reserve.rs
-    claim_token.rs
-    buffer.rs
+    staking.rs
     fee.rs
     debt.rs
     collateral.rs
     swap.rs
     liquidation.rs
     hedge.rs
-    risk.rs
+    insurance.rs
 
   tokens/
     claim_token.rs
     hedge_token.rs
 
   math/
-    amm.rs
+    gamm.rs
     fixed_point.rs
     risk.rs
 
@@ -490,7 +510,7 @@ HedgePosition
 
 Transition modules should coordinate coupled mutations across those structs.
 
-Unlike `instructions/`, the global `transitions/` folder can use more technical accounting terminology. This is where names like `reserve`, `claim_token`, `buffer`, `debt`, and `risk` are useful. The public instruction layer should stay simple; the transition layer should be precise.
+Unlike `instructions/`, the global `transitions/` folder can use more technical accounting terminology. This is where names like `reserve`, `staking`, `fee`, `debt`, `collateral`, `swap`, `liquidation`, `hedge`, and `insurance` are useful. The public instruction layer should stay simple; the transition layer should be precise.
 
 Examples:
 
@@ -499,7 +519,8 @@ transitions/debt.rs
 transitions/collateral.rs
 transitions/liquidation.rs
 transitions/reserve.rs
-transitions/claim_token.rs
+transitions/staking.rs
+transitions/fee.rs
 transitions/swap.rs
 ```
 
@@ -618,9 +639,9 @@ v1.omnipair.fi    -> legacy v1 app
 ### Phase 3: Preserve Grouped Instruction Layout
 
 - Keep v1-style domain grouping.
-- Use user-facing instruction groups like `instructions/liquidity`, `instructions/lending`, `instructions/spot`, and `instructions/market`.
-- Keep staking, fee claiming, and hedging under `instructions/liquidity` if they are best understood as liquidity/claim-token flows.
-- Keep liquidation under `instructions/lending` if it is best understood as part of the borrow/repay/collateral lifecycle.
+- Use auditable instruction groups like `instructions/reserve`, `instructions/staking`, `instructions/hedge`, `instructions/lending`, `instructions/liquidation`, `instructions/spot`, and `instructions/market`.
+- Keep staking, market fee claiming, and hedge fee claiming in their own folders when their account sets and invariants differ from add/remove liquidity.
+- Keep liquidation in its own folder when the insurance and bad-debt waterfall deserves a separate review surface.
 - Do not flatten all instructions into one folder.
 
 ### Phase 4: Clean Token Vocabulary
