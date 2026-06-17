@@ -157,6 +157,7 @@ Every V2 event carries `MarketEventMetadata` with the signer, market, and slot.
 - Fees are non-compounding liabilities. They are routed through fee ledgers, fee growth indexes, and explicit claim paths.
 - Market health uses recognized debt-bearing collateral only. Idle collateral contributes zero to borrow health.
 - Fixed debt is valued in normalized debt units. Hedged overlay debt is gamma-weighted against liquidity EMA, while fixed and soft debt remain fully effective.
+- Hedge opens must preserve the market-health floor after gamma-weighted overlay debt is refreshed.
 - Risk books roll EMA values from cached spot and liquidity observations, then store the current observation for the next refresh.
 - Liquidity add/remove, swap, borrow, repay, liquidation, fee claim, and hedge close paths check risk circuit breakers where they increase or settle risk against market prices.
 - Liquidation reduces only insolvent debt and follows the waterfall: borrower collateral, liquidator repayment and incentive, insurance reserve, then LP socialization.

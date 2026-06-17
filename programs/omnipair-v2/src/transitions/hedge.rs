@@ -54,6 +54,7 @@ impl OpenHedge {
             )
         };
         market.refresh_market_health()?;
+        market.assert_market_health()?;
 
         Ok(HedgeReceipt {
             claim_amount: self.claim_credit,
@@ -108,7 +109,7 @@ impl CloseHedge {
 mod tests {
     use super::*;
     use crate::{
-        constants::{MARKET_VERSION, NAD},
+        constants::{BPS_DENOMINATOR, MARKET_VERSION, NAD},
         state::{ClaimTokenLedger, MarketAsset, MarketConfig, MarketSide, ReserveLedger},
     };
     use proptest::prelude::*;
@@ -134,6 +135,13 @@ mod tests {
     }
 
     fn test_market() -> Market {
+        test_market_with_hedged_weight(0, 0)
+    }
+
+    fn test_market_with_hedged_weight(
+        effective_debt_weight_min_bps: u16,
+        effective_debt_gamma_nad: u64,
+    ) -> Market {
         let base_mint = Pubkey::new_unique();
         let quote_mint = Pubkey::new_unique();
         let market = Market::initialize(
@@ -158,8 +166,8 @@ mod tests {
                 k_ema_drawdown_bps: 1_000,
                 recognized_collateral_cap_bps: 15_000,
                 market_health_min_bps: 11_000,
-                effective_debt_weight_min_bps: 10_000,
-                effective_debt_gamma_nad: NAD,
+                effective_debt_weight_min_bps,
+                effective_debt_gamma_nad,
                 soft_borrow_enabled: false,
                 hedged_lp_enabled: true,
                 start_time: 0,
@@ -205,6 +213,18 @@ mod tests {
                 .hedged_claim_token_supply,
             500
         );
+    }
+
+    #[test]
+    fn open_hedge_rejects_market_health_floor() {
+        let mut market = test_market_with_hedged_weight(BPS_DENOMINATOR, NAD);
+        let mut hedge_position = hedge_position();
+
+        let err = OpenHedge::new(MarketAsset::Base, 1)
+            .apply(&mut market, &mut hedge_position)
+            .unwrap_err();
+
+        assert_eq!(err, error!(ErrorCode::InsufficientMarketHealth));
     }
 
     #[test]

@@ -2902,6 +2902,8 @@ describe("Omnipair Market LiteSVM", () => {
     const hedgeFeeConfig = marketConfig();
     hedgeFeeConfig.spotEmaDivergenceBps = 10_000;
     hedgeFeeConfig.kEmaDrawdownBps = 10_000;
+    hedgeFeeConfig.effectiveDebtWeightMinBps = 0;
+    hedgeFeeConfig.effectiveDebtGammaNad = new BN(0);
     await program.methods
       .updateConfig({ config: hedgeFeeConfig })
       .accounts({
@@ -3110,6 +3112,78 @@ describe("Omnipair Market LiteSVM", () => {
     );
   });
 
+  it("blocks hedge opens that breach market health", async () => {
+    const {
+      baseMint,
+      baseClaimTokenMint,
+      baseHedgeTokenMint,
+      market,
+      baseHedgeVault,
+      ownerBaseClaimAccount,
+      eventAuthority,
+    } = await fundTinyRoundingMarket();
+    const ownerHedge0Account = await createAccount(
+      connection as any,
+      payer,
+      baseHedgeTokenMint,
+      payer.publicKey
+    );
+    const hedge0Position = deriveAddress(
+      Buffer.from("hedge_position"),
+      market.toBuffer(),
+      payer.publicKey.toBuffer(),
+      baseMint.toBuffer()
+    );
+    const strictHedgeConfig = syntheticLiquidityRiskConfig();
+    await program.methods
+      .updateConfig({ config: strictHedgeConfig })
+      .accounts({
+        market,
+        operator: payer.publicKey,
+        eventAuthority,
+        program: OMNIPAIR_V2_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
+
+    await expectRejects(() =>
+      program.methods
+        .openHedge({
+          marketAsset: { base: {} },
+          claimAmount: new BN(1),
+          minHedgeAmount: new BN(1),
+        })
+        .accounts({
+          market,
+          owner: payer.publicKey,
+          assetMint: baseMint,
+          claimTokenMint: baseClaimTokenMint,
+          hedgeTokenMint: baseHedgeTokenMint,
+          hedgeVault: baseHedgeVault,
+          ownerClaimAccount: ownerBaseClaimAccount,
+          ownerHedgeAccount: ownerHedge0Account,
+          hedgePosition: hedge0Position,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          token2022Program: TOKEN_2022_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          eventAuthority,
+          program: OMNIPAIR_V2_PROGRAM_ID,
+        })
+        .signers([payer])
+        .rpc()
+    );
+
+    expect((await getAccount(connection as any, ownerBaseClaimAccount)).amount).to.equal(
+      BigInt(4)
+    );
+    expect((await getAccount(connection as any, ownerHedge0Account)).amount).to.equal(
+      BigInt(0)
+    );
+    expect((await getAccount(connection as any, baseHedgeVault)).amount).to.equal(
+      BigInt(0)
+    );
+  });
+
   it("blocks hedged market claim wrappers when disabled by config", async () => {
     const {
       baseMint,
@@ -3208,6 +3282,19 @@ describe("Omnipair Market LiteSVM", () => {
       payer.publicKey.toBuffer(),
       baseMint.toBuffer()
     );
+    const openSetupConfig = syntheticLiquidityRiskConfig();
+    openSetupConfig.effectiveDebtWeightMinBps = 0;
+    openSetupConfig.effectiveDebtGammaNad = new BN(0);
+    await program.methods
+      .updateConfig({ config: openSetupConfig })
+      .accounts({
+        market,
+        operator: payer.publicKey,
+        eventAuthority,
+        program: OMNIPAIR_V2_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
 
     await program.methods
       .openHedge({
