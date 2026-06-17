@@ -66,6 +66,8 @@ cargo test -p omnipair --lib
 
 ## 5. Integration Readiness
 
+- Review the integrator handoff in `programs/omnipair-v2/README.md` with app,
+  SDK, indexer, analytics, and aggregator owners.
 - SDK consumers use `IDL_V2`, `OmnipairV2`, and `OMNIPAIR_V2_PROGRAM_ID`.
 - Market PDA derivation uses `deriveMarketAddress` or `deriveMarketV2Address`.
 - Indexers consume V2 events from the standalone V2 IDL and do not reuse V1

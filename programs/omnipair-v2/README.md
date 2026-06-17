@@ -34,6 +34,45 @@ the legacy V1 program.
 The SDK exports both generations. Use `OMNIPAIR_PROGRAM_ID` for V1 pair flows
 and `OMNIPAIR_V2_PROGRAM_ID` for V2 market flows.
 
+## Integrator Handoff
+
+Treat V2 as a new venue/source under the Omnipair brand. It is not a V1 pair
+account with renamed fields.
+
+SDK consumers:
+
+- instantiate V2 with `IDL_V2`, `OmnipairV2`, and
+  `OMNIPAIR_V2_PROGRAM_ID`;
+- derive markets and vaults through the V2 PDA helpers in
+  `packages/program-interface/src/constants.ts`;
+- keep V1 calls on `IDL`, `OMNIPAIR_PROGRAM_ID`, and V1 pair PDA helpers.
+
+Apps:
+
+- route new market creation, liquidity, swap, borrow, repay, liquidation, fee,
+  and hedge flows to the V2 program ID;
+- keep legacy V1 routes available for existing pair positions;
+- never sort V2 market mints client-side, because creator-chosen base/quote
+  order defines the market and price direction.
+
+Indexers:
+
+- subscribe to the standalone V2 program ID and V2 IDL events;
+- use `MarketEventMetadata.market` as the primary market key for V2 events;
+- read `Market`, `StakePosition`, `MarginPosition`, and `HedgePosition`
+  accounts from the V2 IDL rather than V1 pair decoders;
+- keep claim-token principal, hedge-token supply, debt, insurance, fee
+  liabilities, and buffer shares as separate V2 metrics.
+
+Aggregators and routers:
+
+- treat V2 `swap` as a separate source from V1 `swap`;
+- quote with the V2 market reserve floor in mind and always pass
+  `min_asset_out`;
+- do not assume claim tokens represent an LP exchange rate. Claim tokens are
+  fixed-principal assets; fee rights require staking matched claim tokens and
+  buffer shares.
+
 ## PDA Map
 
 The public SDK helper names are the preferred integration entry points:
