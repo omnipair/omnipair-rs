@@ -17,9 +17,14 @@ This repository now contains two Omnipair program generations:
 - `programs/omnipair`: legacy V1 GAMM pair program. Existing pair accounts, instruction names, and integrations remain compatible.
 - `programs/omnipair-v2`: standalone V2 market architecture program with market accounts, claim-token (`omLP`) liquidity, hedge-token (`h-omLP`) wrappers, fixed debt, market health, insurance, and V2-specific events/IDL.
 
-Use [programs/omnipair-v2/README.md](programs/omnipair-v2/README.md) for V2 architecture, invariants, and review gates.
+V2 review and integration entry points:
 
-### Key Features
+- [programs/omnipair-v2/README.md](programs/omnipair-v2/README.md): architecture, invariants, integrator handoff, and verification gates.
+- [programs/omnipair-v2/RELEASE_CHECKLIST.md](programs/omnipair-v2/RELEASE_CHECKLIST.md): security, artifact, deployment, and post-deploy checklist.
+- [packages/program-interface/README.md](packages/program-interface/README.md): V1/V2 TypeScript IDL, type, and PDA helper usage.
+- [tests/README.md](tests/README.md): LiteSVM smoke coverage and V2 test flow notes.
+
+### Legacy V1 Key Features
 
 - **Unified Liquidity** - LP deposits serve as both AMM reserves and lending supply, maximizing capital efficiency
 - **Isolated Lending** - Risk is isolated per pair; each pool’s borrows and collateral are independent of other pairs
@@ -29,6 +34,15 @@ Use [programs/omnipair-v2/README.md](programs/omnipair-v2/README.md) for V2 arch
 - **Flash Loans** - Uncollateralized loans within a single transaction (0.05% fee)
 - **Interest Rate Model** - Adaptive rates based on utilization with configurable target ranges
 - **Liquidation Engine** - Partial liquidations with 3% penalty (0.5% to liquidator, 2.5% to LPs)
+
+### V2 Key Changes
+
+- **Standalone market program** - V2 has its own program ID, IDL, accounts, events, and SDK helpers.
+- **Fixed-principal claim tokens** - LP principal is represented by 1:1 `omLP` claim tokens; fees do not rebase or compound into claim-token exchange rates.
+- **Matched staking for fees** - Fee rights require staking claim tokens with matched junior buffer shares.
+- **Recognized-collateral health** - Borrow health uses debt-bearing recognized collateral, not idle collateral balances.
+- **Cached EMA risk books** - Risk checks roll EMA values from cached observations to avoid same-instruction spot manipulation.
+- **Insurance and hedge overlays** - V2 adds insurance reserves and `h-omLP` claim-token wrappers without giving hedge tokens staking rights.
 
 ### How It Works
 
