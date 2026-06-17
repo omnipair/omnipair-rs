@@ -22,6 +22,9 @@ Implemented V2 architecture pieces:
 - V1-style one-instruction-per-file layout;
 - market-based state, vaults, seeds, events, and SDK helpers;
 - claim-minus-buffer liquidity accounting;
+- buffer shares as non-transferable junior risk-capital accounting units that
+  stay with the stake position after protected claim-token principal is
+  redeemed;
 - fixed 1:1 claim-token principal;
 - staking-gated non-compounding fee indexes;
 - market reserve floors on swaps and withdrawals;
@@ -34,9 +37,6 @@ Implemented V2 architecture pieces:
 Remaining work before treating V2 as production-ready:
 
 - run a fresh end-to-end security review against the final standalone program;
-- decide and document whether buffer shares are permanently junior capital,
-  separately withdrawable in a future instruction, or intentionally claim-only
-  fee eligibility units;
 - write integrator-facing docs for the new account model, PDA derivations,
   events, and liquidity/borrow/hedge flows;
 - finish deployment/release checklist review for mainnet and SDK consumers;

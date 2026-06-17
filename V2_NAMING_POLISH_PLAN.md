@@ -24,8 +24,8 @@ The main naming pass is implemented in the standalone `omnipair-v2` program:
 
 Remaining naming/doc work:
 
-- decide whether buffer-share economics need a public product term beyond the
-  current internal accounting language;
+- decide whether retained junior buffer shares need a public product term
+  beyond the current internal accounting language;
 - update integrator docs and examples to describe V2 as the canonical
   standalone market program;
 - preserve any additional useful V1 explanatory comments only where the copied

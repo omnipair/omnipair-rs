@@ -53,6 +53,7 @@ const omnipairV2Idl = {
   ...omnipairV2IdlData,
   accounts: [],
 } as any;
+const accountCoder = new anchor.BorshAccountsCoder(omnipairV2IdlData as any);
 
 function orderedMints(mintA: PublicKey, mintB: PublicKey): [PublicKey, PublicKey] {
   return Buffer.compare(mintA.toBuffer(), mintB.toBuffer()) < 0
@@ -424,6 +425,12 @@ describe("Omnipair Market LiteSVM", () => {
       .rpc();
 
     return stakePosition;
+  }
+
+  async function fetchStakePosition(stakePosition: PublicKey) {
+    const account = await connection.getAccountInfo(stakePosition);
+    expect(account).to.not.equal(null);
+    return accountCoder.decode("StakePosition", account!.data) as any;
   }
 
   async function fundTwoSidedMarket() {
@@ -1395,6 +1402,7 @@ describe("Omnipair Market LiteSVM", () => {
       baseReserveVault,
       ownerBaseAccount,
       ownerBaseClaimAccount,
+      stake0Position,
       eventAuthority,
     } = await fundTwoSidedMarket();
 
@@ -1407,6 +1415,9 @@ describe("Omnipair Market LiteSVM", () => {
     expect((await getAccount(connection as any, baseReserveVault)).amount).to.equal(
       BigInt(1_000_000)
     );
+    const stakePositionBefore = await fetchStakePosition(stake0Position);
+    expect(stakePositionBefore.available_buffer_share_amount.toString()).to.equal("200000");
+    expect(stakePositionBefore.staked_buffer_share_amount.toString()).to.equal("0");
 
     await program.methods
       .removeLiquidity({
@@ -1439,6 +1450,9 @@ describe("Omnipair Market LiteSVM", () => {
     expect((await getAccount(connection as any, baseReserveVault)).amount).to.equal(
       BigInt(920_000)
     );
+    const stakePositionAfter = await fetchStakePosition(stake0Position);
+    expect(stakePositionAfter.available_buffer_share_amount.toString()).to.equal("200000");
+    expect(stakePositionAfter.staked_buffer_share_amount.toString()).to.equal("0");
   });
 
   it("accounts for Token-2022 transfer fees with market inventory credits", async () => {
