@@ -275,17 +275,29 @@ jobs:
           ls -la target/verifiable/ || echo "target/verifiable does not exist"
           ls -la target/idl/ || echo "target/idl does not exist"
 
-      - name: Verify security.txt
+      - name: Verify release artifacts
         run: |
+          echo "Checking required release artifacts..."
+          for artifact in \
+            target/verifiable/omnipair.so \
+            target/verifiable/omnipair_v2.so \
+            target/idl/omnipair.json \
+            target/idl/omnipair_v2.json \
+            target/types/omnipair.ts \
+            target/types/omnipair_v2.ts
+          do
+            if [ ! -f "$artifact" ]; then
+              echo "Missing required release artifact: $artifact"
+              exit 1
+            fi
+            echo "Found required release artifact: $artifact"
+          done
+
           echo "Checking security.txt metadata in verifiable binaries..."
           for binary in \
             target/verifiable/omnipair.so \
             target/verifiable/omnipair_v2.so
           do
-            if [ ! -f "$binary" ]; then
-              echo "Missing verifiable binary: $binary"
-              exit 1
-            fi
             for field in source_release source_revision
             do
               if ! strings "$binary" | grep -q "$field"; then
@@ -314,6 +326,7 @@ jobs:
             target/idl/omnipair_v2.json
             target/types/omnipair.ts
             target/types/omnipair_v2.ts
+          if-no-files-found: error
           retention-days: 90
 
       - name: Create GitHub Release
