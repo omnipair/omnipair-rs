@@ -2348,7 +2348,7 @@ export type OmnipairV2 = {
           }
         },
         {
-          "name": "operator",
+          "name": "authority",
           "signer": true
         },
         {

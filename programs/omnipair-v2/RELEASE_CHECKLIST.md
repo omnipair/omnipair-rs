@@ -10,6 +10,8 @@ mainnet launch or upgrade.
 - Confirm V2 remains a standalone program: `programs/omnipair-v2`.
 - Confirm V1 program behavior, instruction names, events, and account layouts
   are unchanged by the V2 release.
+- Confirm the emergency reduce-only authority is the intended signer and can
+  reach `set_reduce_only` for incident response.
 - Confirm soft borrow and soft liquidation remain disabled unless a separate
   reviewed spec has been merged.
 - Confirm the product/governance decision for config updates is documented:

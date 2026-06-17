@@ -1064,7 +1064,7 @@ describe("Omnipair Market LiteSVM", () => {
       .setReduceOnly({ reduceOnly: true })
       .accounts({
         market: fixture.market,
-        operator: payer.publicKey,
+        authority: payer.publicKey,
         eventAuthority: fixture.eventAuthority,
         program: OMNIPAIR_V2_PROGRAM_ID,
       })
@@ -1172,7 +1172,7 @@ describe("Omnipair Market LiteSVM", () => {
         .setReduceOnly({ reduceOnly: true })
         .accounts({
           market,
-          operator: impostor.publicKey,
+          authority: impostor.publicKey,
           eventAuthority,
           program: OMNIPAIR_V2_PROGRAM_ID,
         })
@@ -2310,7 +2310,7 @@ describe("Omnipair Market LiteSVM", () => {
       .setReduceOnly({ reduceOnly: true })
       .accounts({
         market: swapFixture.market,
-        operator: payer.publicKey,
+        authority: payer.publicKey,
         eventAuthority: swapFixture.eventAuthority,
         program: OMNIPAIR_V2_PROGRAM_ID,
       })
@@ -2375,7 +2375,7 @@ describe("Omnipair Market LiteSVM", () => {
       .setReduceOnly({ reduceOnly: true })
       .accounts({
         market: borrowFixture.market,
-        operator: payer.publicKey,
+        authority: payer.publicKey,
         eventAuthority: borrowFixture.eventAuthority,
         program: OMNIPAIR_V2_PROGRAM_ID,
       })
@@ -3105,7 +3105,7 @@ describe("Omnipair Market LiteSVM", () => {
       .setReduceOnly({ reduceOnly: true })
       .accounts({
         market,
-        operator: payer.publicKey,
+        authority: payer.publicKey,
         eventAuthority,
         program: OMNIPAIR_V2_PROGRAM_ID,
       })

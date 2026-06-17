@@ -47,6 +47,7 @@ pub mod omnipair_v2 {
         UpdateMarketConfig::handle_update(ctx, args)
     }
 
+    #[access_control(ctx.accounts.validate())]
     pub fn set_reduce_only(
         ctx: Context<SetMarketReduceOnly>,
         args: SetMarketReduceOnlyArgs,

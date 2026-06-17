@@ -16,6 +16,9 @@ Instruction modules are split by market domain: `market`, `reserve`, `staking`,
 
 Instruction names are clean in the V2 namespace: `initialize`, `update_config`, `set_reduce_only`, `swap`, `add_liquidity`, `remove_liquidity`, `stake`, `unstake`, `claim_fees`, `claim_market_fees`, `open_hedge`, `claim_hedge_fees`, `close_hedge`, `deposit_collateral`, `withdraw_collateral`, `borrow`, `repay`, `deposit_insurance`, and `liquidate`.
 
+`set_reduce_only` may be signed by the market operator or by the configured
+emergency reduce-only authority.
+
 ## Integration Surface
 
 V2 is integrated as its own program, not as a versioned instruction set inside
