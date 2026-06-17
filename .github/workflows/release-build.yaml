@@ -778,7 +778,6 @@ jobs:
       github.event_name == 'workflow_dispatch' && 
       github.event.inputs.publish_packages == 'true'
     runs-on: ubuntu-22.04
-    continue-on-error: true
     permissions:
       id-token: write
       contents: read
@@ -882,7 +881,6 @@ jobs:
       github.event_name == 'workflow_dispatch' && 
       github.event.inputs.publish_packages == 'true'
     runs-on: ubuntu-22.04
-    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
