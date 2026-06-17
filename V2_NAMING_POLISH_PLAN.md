@@ -22,12 +22,15 @@ The main naming pass is implemented in the standalone `omnipair-v2` program:
   `unwrap()`;
 - creator-chosen base/quote order is covered by tests.
 
-Remaining naming/doc work:
+Remaining naming/product decision:
 
 - decide whether retained junior buffer shares need a public product term
-  beyond the current internal accounting language;
-- preserve any additional useful V1 explanatory comments only where the copied
-  math or accounting still shares the same assumptions.
+  beyond the current internal accounting language.
+
+Ongoing hygiene:
+
+- preserve additional useful V1 explanatory comments only where copied math or
+  accounting still shares the same assumptions.
 
 ## Principle
 
