@@ -7,7 +7,7 @@ use anchor_spl::{
 use crate::{
     constants::*,
     errors::ErrorCode,
-    events::{MarketEventMetadata, MarketFeesClaimed},
+    events::{MarketEventMetadata, MarketFeesClaimed, MarketHealthUpdated},
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
     state::{Market, MarketAsset, StakePosition},
@@ -136,6 +136,24 @@ impl<'info> ClaimFees<'info> {
             asset_mint: asset_mint_key,
             fee_amount: settled_claim.fee_amount,
             remaining_fee_liability: settled_claim.remaining_fee_liability,
+            metadata: MarketEventMetadata::new(owner_key, market_key)?,
+        });
+        emit_cpi!(MarketHealthUpdated {
+            market: market_key,
+            recognized_base_collateral_for_quote_debt: ctx
+                .accounts
+                .market
+                .health
+                .recognized_base_collateral_for_quote_debt,
+            recognized_quote_collateral_for_base_debt: ctx
+                .accounts
+                .market
+                .health
+                .recognized_quote_collateral_for_base_debt,
+            effective_base_debt_nad: ctx.accounts.market.health.effective_base_debt_nad,
+            effective_quote_debt_nad: ctx.accounts.market.health.effective_quote_debt_nad,
+            base_debt_health_bps: ctx.accounts.market.health.base_debt_health_bps,
+            quote_debt_health_bps: ctx.accounts.market.health.quote_debt_health_bps,
             metadata: MarketEventMetadata::new(owner_key, market_key)?,
         });
 

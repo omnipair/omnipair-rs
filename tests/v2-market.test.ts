@@ -2387,7 +2387,7 @@ describe("Omnipair Market LiteSVM", () => {
 
     expect((await getAccount(connection as any, baseFeeVault)).amount).to.equal(BigInt(10));
 
-    await program.methods
+    const claimFeesSignature = await program.methods
       .claimFees({
         marketAsset: { base: {} },
         minFeeAmount: new BN(7),
@@ -2406,6 +2406,14 @@ describe("Omnipair Market LiteSVM", () => {
       })
       .signers([payer])
       .rpc();
+    const claimFeesEvents = decodeCpiEvents(svm, claimFeesSignature);
+    const claimFeesEventNames = claimFeesEvents.map((event) => event.name);
+    expect(claimFeesEventNames).to.include("MarketFeesClaimed");
+    expect(claimFeesEventNames).to.include("MarketHealthUpdated");
+    const claimFeesHealthEvent = claimFeesEvents.find(
+      (event) => event.name === "MarketHealthUpdated"
+    );
+    expect(claimFeesHealthEvent.data.market.toString()).to.equal(market.toString());
 
     expect((await getAccount(connection as any, ownerBaseAccount)).amount).to.equal(
       BigInt(89)
@@ -2447,7 +2455,7 @@ describe("Omnipair Market LiteSVM", () => {
     );
     expect((await getAccount(connection as any, baseFeeVault)).amount).to.equal(BigInt(3));
 
-    await program.methods
+    const operatorFeeSignature = await program.methods
       .claimMarketFees({
         marketAsset: { base: {} },
         claimKind: { operator: {} },
@@ -2466,6 +2474,14 @@ describe("Omnipair Market LiteSVM", () => {
       })
       .signers([payer])
       .rpc();
+    const operatorFeeEvents = decodeCpiEvents(svm, operatorFeeSignature);
+    const operatorFeeEventNames = operatorFeeEvents.map((event) => event.name);
+    expect(operatorFeeEventNames).to.include("MarketFeeLiabilityClaimed");
+    expect(operatorFeeEventNames).to.include("MarketHealthUpdated");
+    const operatorFeeHealthEvent = operatorFeeEvents.find(
+      (event) => event.name === "MarketHealthUpdated"
+    );
+    expect(operatorFeeHealthEvent.data.market.toString()).to.equal(market.toString());
 
     expect((await getAccount(connection as any, ownerBaseAccount)).amount).to.equal(
       BigInt(90)
@@ -2945,7 +2961,7 @@ describe("Omnipair Market LiteSVM", () => {
       connection as any,
       ownerBaseAccount
     )).amount;
-    await program.methods
+    const claimHedgeFeesSignature = await program.methods
       .claimHedgeFees({
         marketAsset: { base: {} },
         minFeeAmount: new BN(1),
@@ -2964,6 +2980,14 @@ describe("Omnipair Market LiteSVM", () => {
       })
       .signers([payer])
       .rpc();
+    const claimHedgeFeesEvents = decodeCpiEvents(svm, claimHedgeFeesSignature);
+    const claimHedgeFeesEventNames = claimHedgeFeesEvents.map((event) => event.name);
+    expect(claimHedgeFeesEventNames).to.include("MarketHedgeFeesClaimed");
+    expect(claimHedgeFeesEventNames).to.include("MarketHealthUpdated");
+    const claimHedgeFeesHealthEvent = claimHedgeFeesEvents.find(
+      (event) => event.name === "MarketHealthUpdated"
+    );
+    expect(claimHedgeFeesHealthEvent.data.market.toString()).to.equal(market.toString());
     expect(
       (await getAccount(connection as any, ownerBaseAccount)).amount >
         ownerAsset0BeforeHedgeFeeClaim
