@@ -225,11 +225,10 @@ Version bumps are automatic based on commit messages:
 |----------|---------|---------|
 | `release-build.yaml` | PR merge / Manual | Build, release, deploy, verify, publish |
 | `anchor-buffer.yaml` | Manual | Standalone buffer deployment (edge cases) |
-| `verify-build.yaml` | Manual | Verify on-chain program against source |
 
 ### Manual Workflow Triggers
 
-All manual triggers: **Actions → release-build → Run workflow**
+Release, deploy, verify, and publish triggers: **Actions → release-build → Run workflow**
 
 | Input | Purpose |
 |-------|---------|
@@ -239,6 +238,8 @@ All manual triggers: **Actions → release-build → Run workflow**
 | `verify_only` ✅ | Only verify on-chain program |
 | `publish_packages` ✅ | Verify + publish npm/crates.io |
 | `program` | Select V1 or V2 for manual deploy/verify jobs |
+
+Standalone buffer redeploys use **Actions → Manual Buffer Deploy → Run workflow**.
 
 **Typical Upgrade Flow:**
 ```
