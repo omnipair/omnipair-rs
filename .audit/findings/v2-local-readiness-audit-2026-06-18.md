@@ -164,6 +164,17 @@ Follow-up V2 production artifact check at `afe1e16`:
 | Built V2 `security_txt` string check | `strings target/deploy/omnipair_v2.so` contains `Pending final V2 security review`, confirming the V2 auditor metadata made it into the built artifact. |
 | Generated V2 IDL/types after build | No tracked generated V2 IDL or TypeScript artifacts changed after the production Anchor build. |
 
+Follow-up V2 artifact/package/decoder parity at `c56facf`:
+
+| Gate | Result |
+| --- | --- |
+| V2 IDL package parity | `target/idl/omnipair_v2.json` matches `packages/program-interface/src/idl_v2.json` byte-for-byte. |
+| V2 TypeScript package parity | `target/types/omnipair_v2.ts` matches `packages/program-interface/src/types_v2.ts` byte-for-byte. |
+| V2 IDL surface count | The current V2 IDL has 19 instructions, 4 account types, and 17 event types. |
+| V2 decoder regeneration | `node decoders/omnipair-decoder/scripts/generate-v2-decoder.mjs` completed from `packages/program-interface/src/idl_v2.json` and produced no tracked decoder changes. |
+| Package interface build | `npm run build --prefix packages/program-interface` passed. |
+| V2 decoder test | `cargo test -p omnipair-decoder --lib` passed with 1 decoder test. |
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.
