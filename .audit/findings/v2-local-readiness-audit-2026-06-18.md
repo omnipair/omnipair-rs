@@ -111,7 +111,7 @@ generated artifacts. They rechecked and documented:
 - product-facing V2 event naming as the current completed choice;
 - the V2 PR review guide in `V2_PR_REVIEW_GUIDE.md`.
 
-Current-head verification at `6cffae5` re-ran the local review gates:
+Verification refresh at `6cffae5` re-ran the local review gates:
 
 | Gate | Result |
 | --- | --- |
@@ -132,7 +132,7 @@ The V1 baseline run generated a transient
 `programs/omnipair/proptest-regressions/` artifact; it was removed after
 confirming the failure set matched the documented baseline.
 
-Follow-up current-head evidence at `95d347c`:
+Follow-up evidence at `95d347c`:
 
 | Gate | Result |
 | --- | --- |
@@ -175,7 +175,7 @@ Follow-up V2 artifact/package/decoder parity at `c56facf`:
 | Package interface build | `npm run build --prefix packages/program-interface` passed. |
 | V2 decoder test | `cargo test -p omnipair-decoder --lib` passed with 1 decoder test. |
 
-Current-head behavior refresh at `beec854`:
+Behavior refresh at `beec854`:
 
 | Gate | Result |
 | --- | --- |
@@ -183,21 +183,21 @@ Current-head behavior refresh at `beec854`:
 | `yarn test-litesvm` | Passed with 42 tests, V2 instruction smoke coverage `19/19`, and legacy V1 smoke coverage unchanged at `2/21`. |
 | Transient proptest artifacts | No `programs/omnipair-v2/proptest-regressions/` or `programs/omnipair/proptest-regressions/` directories were created by this refresh. |
 
-Current-head production feature refresh at `7b1ac8b`:
+Production feature refresh at `7b1ac8b`:
 
 | Gate | Result |
 | --- | --- |
 | `cargo test -p omnipair-v2 --lib --features production -- --nocapture` | Passed with 94 tests and only the known Anchor macro `unexpected cfg solana` warnings. The test build embedded `GIT_REV=7b1ac8b65598111c9585dfd402a552396755ad76` and `GIT_RELEASE=v0.10.2`. |
 | Transient proptest artifacts | No `programs/omnipair-v2/proptest-regressions/` or `programs/omnipair/proptest-regressions/` directories were created by this refresh. |
 
-Current-head V1 baseline refresh at `4b8e599`:
+V1 baseline refresh at `4b8e599`:
 
 | Gate | Result |
 | --- | --- |
 | `cargo test -p omnipair --lib` | Failed only on the documented five legacy V1 failures: `v1::state::rate_model::tests::test_default_matches_original_high_util`, `v1::state::rate_model::tests::test_default_matches_original_low_util`, `v1::state::rate_model::tests::test_faster_half_life_adjusts_quicker`, `v1::state::rate_model::tests::test_uncapped_rate_grows_exponentially`, and `shared::gamm_math::tests::manipulation_bounded_by_ema`. The run passed 50 tests and failed 5. |
 | Transient proptest artifacts | The run generated `programs/omnipair/proptest-regressions/shared/gamm_math.txt`; it was removed after confirming the failure set matched the documented baseline. |
 
-Current-head production artifact rebuild at `cf4a8ee`:
+Production artifact rebuild at `cf4a8ee`:
 
 | Gate | Result |
 | --- | --- |
@@ -213,12 +213,12 @@ Local gap audit at `9e17c7a`:
 | V2 source/docs TODO scan | No V2 source `TODO`/`FIXME`/placeholder items were found. The remaining pending/TBD hits are the owner signoff register, external deployment/verification gates, and intentionally deferred feature scope. |
 | Remaining locally actionable implementation gaps | None found in this pass. Production readiness still depends on the external gates listed below. |
 
-Docs-only handoff refresh at `0dc8afa`:
+Post-gap docs-only handoff refresh:
 
 | Gate | Result |
 | --- | --- |
-| Post-gap changed-file scope | Changes after `9e17c7a` are limited to V2 handoff, README, release/signoff, and audit documentation. No `programs/omnipair-v2/src`, generated IDL/type, decoder, or test files changed in this refresh. |
-| Deferred-scope visibility | `V2_PR_BODY.md`, `V2_PR_REVIEW_GUIDE.md`, `programs/omnipair-v2/RELEASE_CHECKLIST.md`, and `programs/omnipair-v2/SIGNOFF_CHECKLIST.md` now explicitly gate soft borrow/liquidation, LLAMMA-style liquidation, Jupiter or external aggregator conversion routing, explicit hedge premium pricing, user-selectable settlement side, and stale locked collateral-factor machinery as separate-spec work. |
+| Post-gap changed-file scope | Changes after `9e17c7a` are limited to V2 handoff, README, release/signoff, and audit documentation. No `programs/omnipair-v2/src`, generated IDL/type, decoder, or test files changed in this docs-only refresh range. |
+| Deferred-scope visibility | `V2_ARCHITECTURE_PLAN.md`, `V2_PR_BODY.md`, `V2_PR_REVIEW_GUIDE.md`, `programs/omnipair-v2/README.md`, `programs/omnipair-v2/RELEASE_CHECKLIST.md`, and `programs/omnipair-v2/SIGNOFF_CHECKLIST.md` now explicitly gate soft borrow/liquidation, LLAMMA-style liquidation, Jupiter or external aggregator conversion routing, explicit hedge premium pricing, user-selectable settlement side, and stale locked collateral-factor machinery as separate-spec work. |
 
 ## Local Completion Notes
 
