@@ -220,6 +220,16 @@ Post-gap docs-only handoff refresh:
 | Post-gap changed-file scope | Changes after `9e17c7a` are limited to V2 handoff, README, release/signoff, and audit documentation. No `programs/omnipair-v2/src`, generated IDL/type, decoder, or test files changed in this docs-only refresh range. |
 | Deferred-scope visibility | `V2_ARCHITECTURE_PLAN.md`, `V2_PR_BODY.md`, `V2_PR_REVIEW_GUIDE.md`, `programs/omnipair-v2/README.md`, `programs/omnipair-v2/RELEASE_CHECKLIST.md`, and `programs/omnipair-v2/SIGNOFF_CHECKLIST.md` now explicitly gate soft borrow/liquidation, LLAMMA-style liquidation, Jupiter or external aggregator conversion routing, explicit hedge premium pricing, user-selectable settlement side, and stale locked collateral-factor machinery as separate-spec work. |
 
+Lightweight source/interface verification snapshot at `159e8d1`:
+
+| Gate | Result |
+| --- | --- |
+| V2 source and generated artifact tracked diff | No tracked diffs under `programs/omnipair-v2/src`, package V2 IDL/types, or target V2 IDL/types. |
+| V2 IDL/type package parity | `target/idl/omnipair_v2.json` matches `packages/program-interface/src/idl_v2.json`; `target/types/omnipair_v2.ts` matches `packages/program-interface/src/types_v2.ts`. |
+| `cargo fmt -p omnipair-v2 -- --check` | Passed. |
+| `cargo check -p omnipair-v2 --lib` | Passed with the known Anchor macro `unexpected cfg solana` warnings. |
+| `npm run build --prefix packages/program-interface` | Passed and produced no tracked package-interface diffs. |
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.
