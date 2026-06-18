@@ -118,6 +118,8 @@ Recent local evidence is recorded in
 - production-feature `cargo check`, `cargo test`, and `anchor build`;
 - `yarn test-litesvm` with V2 instruction smoke coverage `19/19`;
 - `npm run build --prefix packages/program-interface`;
+- `cargo test -p omnipair-decoder --lib`;
+- V2 decoder regeneration from `packages/program-interface/src/idl_v2.json`;
 - V2 IDL/type artifact equality checks;
 - V1 baseline check with only the documented five legacy failures.
 
@@ -128,6 +130,7 @@ Current traceability refresh also rechecked:
 - V2 instruction file layout under `programs/omnipair-v2/src/instructions`;
 - V2 source and generated V2 artifacts have no legacy V1 product-terminology
   leftovers in the V2 public surface;
+- decoder regeneration produces no tracked V2 decoder or artifact changes;
 - `buffer shares` is the recorded protocol term for retained junior
   risk-capital accounting;
 - absence of non-test `.unwrap()`, `panic!`, and `unimplemented!` in
