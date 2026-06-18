@@ -210,8 +210,15 @@ Local gap audit at `9e17c7a`:
 | Gate | Result |
 | --- | --- |
 | V2 production placeholder scan | A cfg-test-aware scan found no production `unwrap()`, `expect()`, `panic!`, `todo!`, or `unimplemented!` hits under `programs/omnipair-v2/src`. |
-| V2 source/docs TODO scan | No V2 source `TODO`/`FIXME`/placeholder items were found. The remaining pending/TBD hits are the owner signoff register, external deployment/verification gates, and intentionally disabled soft borrow / soft liquidation scope. |
+| V2 source/docs TODO scan | No V2 source `TODO`/`FIXME`/placeholder items were found. The remaining pending/TBD hits are the owner signoff register, external deployment/verification gates, and intentionally deferred feature scope. |
 | Remaining locally actionable implementation gaps | None found in this pass. Production readiness still depends on the external gates listed below. |
+
+Docs-only handoff refresh at `0dc8afa`:
+
+| Gate | Result |
+| --- | --- |
+| Post-gap changed-file scope | Changes after `9e17c7a` are limited to V2 handoff, README, release/signoff, and audit documentation. No `programs/omnipair-v2/src`, generated IDL/type, decoder, or test files changed in this refresh. |
+| Deferred-scope visibility | `V2_PR_BODY.md`, `V2_PR_REVIEW_GUIDE.md`, `programs/omnipair-v2/RELEASE_CHECKLIST.md`, and `programs/omnipair-v2/SIGNOFF_CHECKLIST.md` now explicitly gate soft borrow/liquidation, LLAMMA-style liquidation, Jupiter or external aggregator conversion routing, explicit hedge premium pricing, user-selectable settlement side, and stale locked collateral-factor machinery as separate-spec work. |
 
 ## Local Completion Notes
 
@@ -224,8 +231,10 @@ Local gap audit at `9e17c7a`:
   terminology in the V2 public surface.
 - `buffer shares` remains the explicit V2 term for retained junior
   risk-capital accounting.
-- Soft borrow and soft liquidation remain intentionally disabled until a
-  separate reviewed spec is merged.
+- Soft borrow/liquidation, LLAMMA-style liquidation, Jupiter or external
+  aggregator conversion routing, explicit hedge premium pricing,
+  user-selectable settlement side, and stale locked collateral-factor machinery
+  remain intentionally out of scope until separate reviewed specs are merged.
 - App, SDK, indexer, analytics, and aggregator handoff notes are documented in
   `programs/omnipair-v2/README.md`.
 - External owner signoffs are tracked in
