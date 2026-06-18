@@ -216,7 +216,11 @@ Before V2 should be treated as production-ready:
 - complete owner signoffs in `programs/omnipair-v2/SIGNOFF_CHECKLIST.md`;
 - finish the V2 deployment and release checklist in
   `programs/omnipair-v2/RELEASE_CHECKLIST.md`;
-- keep soft borrow and soft liquidation disabled until a separate spec is ready.
+- keep the deferred feature scope disabled until separate reviewed specs are
+  ready: soft borrow/liquidation, LLAMMA-style liquidation, Jupiter or external
+  aggregator conversion routing, explicit hedge premium pricing,
+  user-selectable settlement side, and stale locked collateral-factor
+  machinery.
 
 ## Verification
 

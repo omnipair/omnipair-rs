@@ -120,8 +120,8 @@ feature above should land behind a separate reviewed spec.
 - Start with `V2_PR_REVIEW_GUIDE.md`, then use
   `V2_ARCHITECTURE_PLAN.md`, `programs/omnipair-v2/README.md`, and the audit
   files for deeper review.
-- Soft borrow and soft liquidation remain intentionally disabled until a
-  separate reviewed spec is merged.
+- The deferred feature scope above remains intentionally disabled until
+  separate reviewed specs are merged.
 
 ## Remaining Production Gates
 

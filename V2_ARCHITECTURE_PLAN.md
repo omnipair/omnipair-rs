@@ -48,7 +48,11 @@ Remaining work before treating V2 as production-ready:
 - run a fresh end-to-end security review against the final standalone program;
 - finish deployment/release checklist review for mainnet, app, SDK, indexer,
   analytics, and aggregator owners;
-- keep soft borrow / soft liquidation disabled until a separate spec is ready.
+- keep the deferred feature scope disabled until separate reviewed specs are
+  ready: soft borrow/liquidation, LLAMMA-style liquidation, Jupiter or external
+  aggregator conversion routing, explicit hedge premium pricing,
+  user-selectable settlement side, and stale locked collateral-factor
+  machinery.
 
 ## Purpose
 
@@ -698,14 +702,16 @@ Status: implemented for local review coverage.
 
 ### Phase 8: Integration and Product Surface
 
-Status: partially implemented.
+Status: implemented locally; production owner signoffs and deployment gates
+remain pending.
 
 - Separate V2 IDL and TypeScript bindings exist.
 - SDK constants expose V2 program ID and PDA helpers.
 - The V2 README includes app, SDK, indexer, analytics, and aggregator handoff
   notes.
 - V1 documentation and the V1 program remain available for legacy users.
-- Remaining production work: collect owner signoff for app/front-end routing,
+- Remaining production work is gate-based rather than local implementation
+  work: collect owner signoff for app/front-end routing,
   aggregator/indexer/analytics integration, deployment review, and external
   security review.
 
