@@ -1,4 +1,4 @@
-import * as anchor from "@coral-xyz/anchor";
+import anchor from "@coral-xyz/anchor";
 import {
   Connection,
   Keypair,
@@ -59,6 +59,8 @@ export type StoredMarket = {
   baseHedgeVault: string;
   quoteHedgeVault: string;
   eventAuthority: string;
+  seededBaseLiquidity?: boolean;
+  seededQuoteLiquidity?: boolean;
   seededLiquidity?: boolean;
 };
 
@@ -196,17 +198,29 @@ export async function getOrCreateAta(params: {
 }) {
   const tokenProgram =
     params.tokenProgram ?? (await tokenProgramForMint(params.connection, params.mint));
-  return getOrCreateAssociatedTokenAccount(
-    params.connection,
-    params.payer,
-    params.mint,
-    params.owner,
-    params.allowOwnerOffCurve ?? false,
-    "confirmed",
-    undefined,
-    tokenProgram,
-    ASSOCIATED_TOKEN_PROGRAM_ID
-  );
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      return await getOrCreateAssociatedTokenAccount(
+        params.connection,
+        params.payer,
+        params.mint,
+        params.owner,
+        params.allowOwnerOffCurve ?? false,
+        "confirmed",
+        undefined,
+        tokenProgram,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+      );
+    } catch (error) {
+      lastError = error;
+      if (!isTokenAccountConfirmationLag(error) || attempt === 4) {
+        throw error;
+      }
+      await sleep(500 * (attempt + 1));
+    }
+  }
+  throw lastError;
 }
 
 export async function mintMockTokens(params: {
@@ -226,6 +240,11 @@ export async function mintMockTokens(params: {
     owner: params.recipient,
     tokenProgram,
   });
+  const balanceBefore = await tokenAccountAmount(
+    params.connection,
+    recipientAccount.address,
+    tokenProgram
+  );
 
   const signature = await mintTo(
     params.connection,
@@ -238,8 +257,57 @@ export async function mintMockTokens(params: {
     undefined,
     tokenProgram
   );
+  await waitForTokenBalanceAtLeast(
+    params.connection,
+    recipientAccount.address,
+    balanceBefore + params.amount,
+    tokenProgram
+  );
 
   return { associatedTokenAccount: recipientAccount.address, signature };
+}
+
+function isTokenAccountConfirmationLag(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.name === "TokenAccountNotFoundError" ||
+    error.constructor.name === "TokenAccountNotFoundError"
+  );
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function tokenAccountAmount(
+  connection: Connection,
+  tokenAccount: PublicKey,
+  tokenProgram: PublicKey
+): Promise<bigint> {
+  try {
+    return (await getAccount(connection, tokenAccount, "confirmed", tokenProgram)).amount;
+  } catch (error) {
+    if (!isTokenAccountConfirmationLag(error)) throw error;
+    return 0n;
+  }
+}
+
+async function waitForTokenBalanceAtLeast(
+  connection: Connection,
+  tokenAccount: PublicKey,
+  expectedAmount: bigint,
+  tokenProgram: PublicKey
+): Promise<void> {
+  let lastAmount = 0n;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    lastAmount = await tokenAccountAmount(connection, tokenAccount, tokenProgram);
+    if (lastAmount >= expectedAmount) return;
+    await sleep(500 * (attempt + 1));
+  }
+  throw new Error(
+    `Token balance confirmation timed out for ${tokenAccount.toBase58()}: ` +
+      `${lastAmount.toString()} < ${expectedAmount.toString()}`
+  );
 }
 
 export function parseUnits(value: string, decimals: number): bigint {

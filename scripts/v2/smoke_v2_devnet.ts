@@ -1,4 +1,4 @@
-import * as anchor from "@coral-xyz/anchor";
+import anchor from "@coral-xyz/anchor";
 import {
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,

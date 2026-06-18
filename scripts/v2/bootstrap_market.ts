@@ -1,4 +1,4 @@
-import * as anchor from "@coral-xyz/anchor";
+import anchor from "@coral-xyz/anchor";
 import {
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
@@ -169,6 +169,14 @@ async function main() {
     baseHedgeVault: addresses.baseHedgeVault.toBase58(),
     quoteHedgeVault: addresses.quoteHedgeVault.toBase58(),
     eventAuthority: addresses.eventAuthority.toBase58(),
+    seededBaseLiquidity:
+      state.markets[marketLabel]?.seededBaseLiquidity ??
+      state.markets[marketLabel]?.seededLiquidity ??
+      false,
+    seededQuoteLiquidity:
+      state.markets[marketLabel]?.seededQuoteLiquidity ??
+      state.markets[marketLabel]?.seededLiquidity ??
+      false,
     seededLiquidity: state.markets[marketLabel]?.seededLiquidity ?? false,
   };
   state.markets[marketLabel] = storedMarket;
@@ -179,41 +187,106 @@ async function main() {
     (!storedMarket.seededLiquidity || process.env.OMNIPAIR_V2_FORCE_SEED === "1");
   if (!shouldSeed) {
     console.log("Skipping reserve seeding");
+    await maybeApplyPostSeedConfig({
+      program,
+      market: addresses.market,
+      operator: payer.publicKey,
+      eventAuthority: addresses.eventAuthority,
+    });
     console.log(JSON.stringify(storedMarket, null, 2));
     return;
   }
 
   const baseAmount = parseUnits(process.env.OMNIPAIR_V2_BASE_LIQUIDITY ?? "100000", baseDecimals);
   const quoteAmount = parseUnits(process.env.OMNIPAIR_V2_QUOTE_LIQUIDITY ?? "100000", quoteDecimals);
-  await seedLiquiditySide({
-    provider,
-    payer,
+  if (!storedMarket.seededBaseLiquidity || process.env.OMNIPAIR_V2_FORCE_SEED === "1") {
+    await seedLiquiditySide({
+      provider,
+      payer,
+      program,
+      market: addresses.market,
+      eventAuthority: addresses.eventAuthority,
+      marketAsset: { base: {} },
+      assetMint: baseMint,
+      claimTokenMint: new PublicKey(baseClaimTokenMint.mint),
+      reserveVault: addresses.baseReserveVault,
+      amount: baseAmount,
+    });
+    state.markets[marketLabel] = {
+      ...state.markets[marketLabel],
+      seededBaseLiquidity: true,
+    };
+    writeState(state);
+  } else {
+    console.log("Skipping base reserve seeding");
+  }
+  if (!storedMarket.seededQuoteLiquidity || process.env.OMNIPAIR_V2_FORCE_SEED === "1") {
+    await seedLiquiditySide({
+      provider,
+      payer,
+      program,
+      market: addresses.market,
+      eventAuthority: addresses.eventAuthority,
+      marketAsset: { quote: {} },
+      assetMint: quoteMint,
+      claimTokenMint: new PublicKey(quoteClaimTokenMint.mint),
+      reserveVault: addresses.quoteReserveVault,
+      amount: quoteAmount,
+    });
+    state.markets[marketLabel] = {
+      ...state.markets[marketLabel],
+      seededQuoteLiquidity: true,
+    };
+    writeState(state);
+  } else {
+    console.log("Skipping quote reserve seeding");
+  }
+
+  await maybeApplyPostSeedConfig({
     program,
     market: addresses.market,
+    operator: payer.publicKey,
     eventAuthority: addresses.eventAuthority,
-    marketAsset: { base: {} },
-    assetMint: baseMint,
-    claimTokenMint: new PublicKey(baseClaimTokenMint.mint),
-    reserveVault: addresses.baseReserveVault,
-    amount: baseAmount,
-  });
-  await seedLiquiditySide({
-    provider,
-    payer,
-    program,
-    market: addresses.market,
-    eventAuthority: addresses.eventAuthority,
-    marketAsset: { quote: {} },
-    assetMint: quoteMint,
-    claimTokenMint: new PublicKey(quoteClaimTokenMint.mint),
-    reserveVault: addresses.quoteReserveVault,
-    amount: quoteAmount,
   });
 
-  state.markets[marketLabel] = { ...storedMarket, seededLiquidity: true };
+  state.markets[marketLabel] = {
+    ...state.markets[marketLabel],
+    seededLiquidity: true,
+  };
   writeState(state);
   console.log("V2 market bootstrap complete");
   console.log(JSON.stringify(state.markets[marketLabel], null, 2));
+}
+
+async function maybeApplyPostSeedConfig(params: {
+  program: any;
+  market: PublicKey;
+  operator: PublicKey;
+  eventAuthority: PublicKey;
+}) {
+  const postSeedBufferRatioBps = Number(
+    process.env.OMNIPAIR_V2_POST_SEED_BUFFER_RATIO_BPS ?? "1000"
+  );
+  if (!Number.isFinite(postSeedBufferRatioBps) || postSeedBufferRatioBps <= 0) return;
+
+  const marketAccount = await params.program.account.market.fetch(params.market);
+  if (marketAccount.config.bufferRatioBps === postSeedBufferRatioBps) return;
+
+  const config = {
+    ...marketAccount.config,
+    bufferRatioBps: postSeedBufferRatioBps,
+  };
+  const signature = await params.program.methods
+    .updateConfig({ config })
+    .accounts({
+      market: params.market,
+      operator: params.operator,
+      eventAuthority: params.eventAuthority,
+      program: params.program.programId,
+    })
+    .rpc();
+  console.log(`Post-seed buffer ratio: ${postSeedBufferRatioBps}`);
+  console.log(explorerTx(signature));
 }
 
 async function seedLiquiditySide(params: {

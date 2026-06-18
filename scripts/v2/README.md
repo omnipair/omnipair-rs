@@ -10,12 +10,17 @@ export ANCHOR_WALLET=~/.config/solana/id.json
 export OMNIPAIR_V2_PROGRAM_ID=oMNi2XGwWxDbEvhS2pWRQ6dtw8GkNBV42hfLZD6WmMF
 export OMNIPAIR_V2_PROGRAM_KEYPAIR=~/.config/omnipair/v2-devnet/omni2-v2-program-keypair.json
 
+yarn v2:build-devnet
 yarn v2:deploy-devnet
 yarn v2:create-mock-tokens
 yarn v2:mint-mock-tokens <tester-wallet>
 yarn v2:bootstrap-market
 yarn v2:smoke-devnet
 ```
+
+Devnet currently has SBPFv3 deployment active and rejects SBPF v0/v1/v2
+program deployments. Use `yarn v2:build-devnet` before deploying so the
+artifact is built with `--arch v3`.
 
 `yarn v2:deploy-devnet` needs the deployer wallet to hold enough devnet SOL for
 program rent. The generated vanity program keypair stays outside git at
@@ -29,4 +34,5 @@ Useful knobs:
 - `OMNIPAIR_V2_MINT_AMOUNT=1000000` controls tester faucet size in human units.
 - `OMNIPAIR_V2_BASE_LIQUIDITY=100000` and `OMNIPAIR_V2_QUOTE_LIQUIDITY=100000` control bootstrap reserves.
 - `OMNIPAIR_V2_FORCE_SEED=1` adds more bootstrap liquidity to an existing market.
+- `OMNIPAIR_V2_POST_SEED_BUFFER_RATIO_BPS=1000` lowers the post-bootstrap buffer ratio to create swap-ready ledger surplus. Set it to `0` to skip this config update.
 - `OMNIPAIR_V2_SMOKE_SWAP=0` fetches state without sending the smoke swap.
