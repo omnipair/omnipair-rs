@@ -19,6 +19,8 @@ This repository now contains two Omnipair program generations:
 
 V2 review and integration entry points:
 
+- [V2_PR_REVIEW_GUIDE.md](V2_PR_REVIEW_GUIDE.md): recommended review order,
+  commit grouping, verification gates, and production gates for the V2 branch.
 - [programs/omnipair-v2/README.md](programs/omnipair-v2/README.md): architecture, invariants, integrator handoff, and verification gates.
 - [programs/omnipair-v2/RELEASE_CHECKLIST.md](programs/omnipair-v2/RELEASE_CHECKLIST.md): security, artifact, deployment, and post-deploy checklist.
 - [programs/omnipair-v2/SIGNOFF_CHECKLIST.md](programs/omnipair-v2/SIGNOFF_CHECKLIST.md): owner signoff register for security, app, SDK, indexing, analytics, aggregators, and deployment.
