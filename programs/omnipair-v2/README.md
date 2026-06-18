@@ -236,6 +236,7 @@ anchor build -p omnipair-v2
 anchor build -p omnipair-v2 -- --features production
 npm run build --prefix packages/program-interface
 cargo test -p omnipair-decoder --lib
+node decoders/omnipair-decoder/scripts/generate-v2-decoder.mjs
 yarn test-litesvm
 ```
 
@@ -252,6 +253,7 @@ The current V2 review gates are:
 - `anchor build -p omnipair-v2 -- --features production`
 - `npm run build --prefix packages/program-interface`
 - `cargo test -p omnipair-decoder --lib`
+- `node decoders/omnipair-decoder/scripts/generate-v2-decoder.mjs`
 - `yarn test-litesvm`
 
 `yarn test-litesvm` reports V2 instruction coverage separately from legacy V1 coverage. V2 is expected to cover all standalone V2 instructions in that report.

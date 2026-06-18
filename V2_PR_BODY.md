@@ -76,6 +76,7 @@ anchor build -p omnipair-v2
 anchor build -p omnipair-v2 -- --features production
 npm run build --prefix packages/program-interface
 cargo test -p omnipair-decoder --lib
+node decoders/omnipair-decoder/scripts/generate-v2-decoder.mjs
 yarn test-litesvm
 cargo test -p omnipair --lib
 ```
