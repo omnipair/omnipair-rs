@@ -190,6 +190,13 @@ Current-head production feature refresh at `7b1ac8b`:
 | `cargo test -p omnipair-v2 --lib --features production -- --nocapture` | Passed with 94 tests and only the known Anchor macro `unexpected cfg solana` warnings. The test build embedded `GIT_REV=7b1ac8b65598111c9585dfd402a552396755ad76` and `GIT_RELEASE=v0.10.2`. |
 | Transient proptest artifacts | No `programs/omnipair-v2/proptest-regressions/` or `programs/omnipair/proptest-regressions/` directories were created by this refresh. |
 
+Current-head V1 baseline refresh at `4b8e599`:
+
+| Gate | Result |
+| --- | --- |
+| `cargo test -p omnipair --lib` | Failed only on the documented five legacy V1 failures: `v1::state::rate_model::tests::test_default_matches_original_high_util`, `v1::state::rate_model::tests::test_default_matches_original_low_util`, `v1::state::rate_model::tests::test_faster_half_life_adjusts_quicker`, `v1::state::rate_model::tests::test_uncapped_rate_grows_exponentially`, and `shared::gamm_math::tests::manipulation_bounded_by_ema`. The run passed 50 tests and failed 5. |
+| Transient proptest artifacts | The run generated `programs/omnipair/proptest-regressions/shared/gamm_math.txt`; it was removed after confirming the failure set matched the documented baseline. |
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.
