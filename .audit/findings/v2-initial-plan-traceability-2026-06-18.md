@@ -58,6 +58,7 @@ The current standalone V2 IDL exposes product-facing market events such as
 | Use clean V2 instruction names rather than `v2_*` or `market_*` prefixes. | Implemented locally after the separate-program decision. | V2 IDL exposes `swap`, `borrow`, `repay`, `liquidate`, `add_liquidity`, and related action names. |
 | Keep V1-style modular instruction layout. | Implemented locally. | `programs/omnipair-v2/src/instructions` is split by domain with one instruction per file, plus small domain `common.rs` files. |
 | Add market state, vaults, seeds, events, errors, and SDK helpers. | Implemented locally. | `programs/omnipair-v2/src/state`, `events.rs`, `errors.rs`, `constants.rs`, and `packages/program-interface/src/constants.ts`. |
+| Use precise financial/accounting vocabulary for retained junior risk capital. | Implemented locally. | `buffer shares` is the explicit V2 term in state, events, IDL/types, README, and naming plan; no separate branded label is introduced at the protocol boundary. |
 | Implement claim-minus-buffer deposits. | Implemented locally. | `transitions/reserve.rs` uses `split_claim_minus_buffer`; tests cover `add_liquidity_mints_claim_minus_buffer`. |
 | Keep base `omLP` fixed 1:1 principal, no rebase or dynamic exchange rate. | Implemented locally. | `remove_liquidity` burns claim tokens for fixed principal; V2 README lists fixed-principal claim tokens as a core invariant. |
 | Require matched staking for fee rights. | Implemented locally. | `StakePosition` tracks staked claim and buffer amounts; `active_stake_units` gates fee allocation. |
@@ -103,6 +104,9 @@ blockers before production readiness:
   submission;
 - target-cluster smoke tests after deployment.
 
+The owner signoff register for these gates is
+`programs/omnipair-v2/SIGNOFF_CHECKLIST.md`.
+
 ## Local Verification Evidence
 
 Recent local evidence is recorded in
@@ -122,5 +126,9 @@ Current traceability refresh also rechecked:
 - standalone V2 IDL instruction/account/event names from
   `packages/program-interface/src/idl_v2.json`;
 - V2 instruction file layout under `programs/omnipair-v2/src/instructions`;
+- V2 source and generated V2 artifacts have no legacy V1 product-terminology
+  leftovers in the V2 public surface;
+- `buffer shares` is the recorded protocol term for retained junior
+  risk-capital accounting;
 - absence of non-test `.unwrap()`, `panic!`, and `unimplemented!` in
   `programs/omnipair-v2/src`.

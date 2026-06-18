@@ -100,6 +100,16 @@ Current-head refresh at `3f23e7d` re-ran the documented local gates:
 | V2 IDL and TypeScript artifact equality | `target/idl/omnipair_v2.json` and `target/types/omnipair_v2.ts` match the package copies. |
 | `cargo test -p omnipair --lib` | Failed only on the documented five legacy V1 failures. |
 
+Latest docs-only readiness refresh at `d73c61b` did not change V2 code or
+generated artifacts. It rechecked and documented:
+
+- owner signoff tracking in `programs/omnipair-v2/SIGNOFF_CHECKLIST.md`;
+- absence of legacy V1 product-terminology leftovers in V2 source and generated
+  V2 artifacts;
+- `buffer shares` as the explicit term for retained junior risk-capital
+  accounting;
+- product-facing V2 event naming as the current completed choice.
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.
@@ -107,10 +117,16 @@ Current-head refresh at `3f23e7d` re-ran the documented local gates:
 - V2 public instruction names are clean action names, not `v2_*` or
   `market_*` workaround names.
 - V2 code keeps V1-style one-instruction-per-file domain folders.
+- V2 source and generated V2 artifacts do not expose legacy V1 product
+  terminology in the V2 public surface.
+- `buffer shares` remains the explicit V2 term for retained junior
+  risk-capital accounting.
 - Soft borrow and soft liquidation remain intentionally disabled until a
   separate reviewed spec is merged.
 - App, SDK, indexer, analytics, and aggregator handoff notes are documented in
   `programs/omnipair-v2/README.md`.
+- External owner signoffs are tracked in
+  `programs/omnipair-v2/SIGNOFF_CHECKLIST.md`.
 
 ## Remaining External Gates
 
