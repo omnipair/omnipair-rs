@@ -95,9 +95,13 @@ V2 review and integration entry points:
 
 ### Audits
 
-Omnipair has been audited by:
+Legacy Omnipair V1 code and shared protocol components have been audited by:
 - **Offside Labs**
 - **Ackee**
+
+V2 is a standalone market program and needs a fresh final security review before
+it is treated as production-ready. Track that release gate in
+[programs/omnipair-v2/SIGNOFF_CHECKLIST.md](programs/omnipair-v2/SIGNOFF_CHECKLIST.md).
 
 See [security policy](https://omnipair.fi/security) for details.
 

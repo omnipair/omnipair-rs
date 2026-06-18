@@ -146,6 +146,16 @@ Follow-up release workflow sanity check at `c278095`:
 | `.github/workflows/release-build.yaml` YAML parse | Passed with Ruby/Psych `YAML.load_file`. |
 | V2 release workflow path inspection | The workflow includes V2 verifiable build, required V2 release artifacts, manual `program=v2` buffer deployment, V2 `solana-verify` library selection, V2 package artifact download, and decoder publish regeneration from `omnipair_v2.json`. This is local workflow inspection, not a live GitHub Actions run. |
 
+Follow-up V2 security metadata alignment:
+
+| Gate | Result |
+| --- | --- |
+| V2 `security_txt` auditor metadata | V2 no longer self-reports legacy V1 auditors. The V2 auditor field now records that the final V2 security review is pending, matching the release/signoff docs. |
+| Root audit wording | The root README now scopes Offside Labs and Ackee audit wording to legacy V1 code and shared protocol components, while pointing V2 to the pending signoff checklist. |
+| `cargo fmt -p omnipair-v2 -- --check` | Passed. |
+| `cargo check -p omnipair-v2 --lib` | Passed with the known Anchor macro `unexpected cfg solana` warnings. |
+| `cargo check -p omnipair-v2 --lib --features production` | Passed with the known Anchor macro `unexpected cfg solana` warnings. |
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.

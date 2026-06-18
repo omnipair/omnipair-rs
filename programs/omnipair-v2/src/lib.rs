@@ -25,7 +25,7 @@ security_txt! {
     source_code: "https://github.com/omnipair/omnipair-rs",
     source_release: env!("GIT_RELEASE"),
     source_revision: env!("GIT_REV"),
-    auditors: "Offside Labs, Ackee",
+    auditors: "Pending final V2 security review",
     policy: "https://omnipair.fi/security"
 }
 
