@@ -20,7 +20,9 @@ The main naming pass is implemented in the standalone `omnipair-v2` program:
   `LiquidityRemoved`, `SwapExecuted`, and `PositionLiquidated`;
 - `MarketEventMetadata::new` returns `Result` and does not use production
   `unwrap()`;
-- creator-chosen base/quote order is covered by tests.
+- creator-chosen base/quote order is covered by tests;
+- V2 source and generated V2 artifacts have no legacy V1 product-terminology
+  leftovers.
 
 Remaining naming/product decision:
 
@@ -172,13 +174,14 @@ If a transition is mostly orchestrating state movement, prefer semantic names. I
 
 Remove the canonical ordering check from market initialization.
 
-The initializer should not sort mints or reject a pair because the chosen `base_mint` / `quote_mint` order is not canonical. The creator's chosen order defines the market's price direction.
+The initializer should not sort mints or reject a market because the chosen `base_mint` / `quote_mint` order is not canonical. The creator's chosen order defines the market's price direction.
 
 Still keep basic validation:
 
 - `base_mint` and `quote_mint` must be different.
 - all vaults and ledgers must match the chosen base/quote direction.
-- tests should cover initializing the same pair in the non-canonical direction.
+- tests should cover initializing the same market assets in the non-canonical
+  direction.
 
 If reversed markets should be disallowed later, handle that with an explicit registry policy. Do not use a hidden token-ordering rule that changes the meaning of base and quote.
 
