@@ -83,6 +83,26 @@ into logical commit families:
 - Tests, generated interfaces, decoder support, and LiteSVM coverage.
 - Release, deployment, signoff, and audit documentation.
 
+To review the branch in order, start from the branch base:
+
+```bash
+git log --oneline --reverse --no-merges $(git merge-base HEAD main)..HEAD
+```
+
+The current history has a few pre-V2 maintenance commits before the V2 work.
+For V2-specific review, useful anchors are:
+
+- `a4b8ef6` starts the V1 instruction-module split and compatibility work.
+- `5bd547e` starts the original V2 market architecture implementation.
+- `028db1e` starts the Nemesis remediation series.
+- `92a24ad` starts the move toward the top-level V1/V2 module layout.
+- `e09bba0` starts the one-instruction-per-file V2 modularization series.
+- `5b9a70c` starts the standalone `programs/omnipair-v2` program shape.
+- `bc8e4de` starts the later state/transition/token modularization pass.
+- `5b32e1c` starts the V2 decoder support.
+- `48f995d` starts the release workflow support for the V2 program.
+- `1c0f7e1` starts the readiness/audit/handoff documentation series.
+
 ## Local Verification Gates
 
 Run the current V2 gate set before merging or cutting a release candidate:
