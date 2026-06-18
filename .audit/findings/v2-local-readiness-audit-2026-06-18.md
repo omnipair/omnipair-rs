@@ -175,6 +175,14 @@ Follow-up V2 artifact/package/decoder parity at `c56facf`:
 | Package interface build | `npm run build --prefix packages/program-interface` passed. |
 | V2 decoder test | `cargo test -p omnipair-decoder --lib` passed with 1 decoder test. |
 
+Current-head behavior refresh at `beec854`:
+
+| Gate | Result |
+| --- | --- |
+| `cargo test -p omnipair-v2 --lib -- --nocapture` | Passed with 94 tests and only the known Anchor macro `unexpected cfg solana` warnings. |
+| `yarn test-litesvm` | Passed with 42 tests, V2 instruction smoke coverage `19/19`, and legacy V1 smoke coverage unchanged at `2/21`. |
+| Transient proptest artifacts | No `programs/omnipair-v2/proptest-regressions/` or `programs/omnipair/proptest-regressions/` directories were created by this refresh. |
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.
