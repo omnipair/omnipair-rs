@@ -230,6 +230,14 @@ Lightweight source/interface verification snapshot at `159e8d1`:
 | `cargo check -p omnipair-v2 --lib` | Passed with the known Anchor macro `unexpected cfg solana` warnings. |
 | `npm run build --prefix packages/program-interface` | Passed and produced no tracked package-interface diffs. |
 
+V2 behavior verification snapshot at `9adeb95`:
+
+| Gate | Result |
+| --- | --- |
+| `cargo test -p omnipair-v2 --lib -- --nocapture` | Passed with 94 tests and only the known Anchor macro `unexpected cfg solana` warnings. The test build embedded `GIT_REV=9adeb950f7fc20f5355875a91c86c103dc143b3f` and `GIT_RELEASE=v0.10.2`. |
+| Transient proptest artifacts | No `programs/omnipair-v2/proptest-regressions/` or `programs/omnipair/proptest-regressions/` files were created by this refresh. |
+| V2 source and generated artifact tracked diff | No tracked diffs under `programs/omnipair-v2/src`, package V2 IDL/types, or target V2 IDL/types after the test run. |
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.
