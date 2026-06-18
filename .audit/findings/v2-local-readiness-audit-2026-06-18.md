@@ -263,6 +263,15 @@ Anchor build verification snapshot at `c740fdb`:
 | V2 IDL/type package parity after build | `target/idl/omnipair_v2.json` matches `packages/program-interface/src/idl_v2.json`; `target/types/omnipair_v2.ts` matches `packages/program-interface/src/types_v2.ts`. |
 | V2 source and generated artifact tracked diff | No tracked diffs under `programs/omnipair-v2/src`, package V2 IDL/types, or target V2 IDL/types after the Anchor build. |
 
+Production Anchor build verification snapshot at `dd0d17d`:
+
+| Gate | Result |
+| --- | --- |
+| `anchor build -p omnipair-v2 -- --features production` | Passed with known SBF/LTO/linkage warnings. The build embedded `GIT_REV=dd0d17d279702819a1dbb857b9293b28d76b0ed3` and `GIT_RELEASE=v0.10.2`. |
+| Built V2 `security_txt` and release metadata string check | `strings target/deploy/omnipair_v2.so` contains `Pending final V2 security review`, `dd0d17d279702819a1dbb857b9293b28d76b0ed3`, and `v0.10.2`. The checked output did not show legacy V1 auditor names. |
+| V2 IDL/type package parity after production build | `target/idl/omnipair_v2.json` matches `packages/program-interface/src/idl_v2.json`; `target/types/omnipair_v2.ts` matches `packages/program-interface/src/types_v2.ts`. |
+| V2 source and generated artifact tracked diff | No tracked diffs under `programs/omnipair-v2/src`, package V2 IDL/types, or target V2 IDL/types after the production Anchor build. |
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.
