@@ -139,6 +139,13 @@ Follow-up current-head evidence at `95d347c`:
 | `cargo test -p omnipair-decoder --lib` | Passed with 1 decoder test. |
 | V2 production panic/placeholder scan | A cfg-test-aware scan found no production `unwrap()`, `expect()`, `panic!`, `todo!`, or `unimplemented!` hits under `programs/omnipair-v2/src`. |
 
+Follow-up release workflow sanity check at `c278095`:
+
+| Gate | Result |
+| --- | --- |
+| `.github/workflows/release-build.yaml` YAML parse | Passed with Ruby/Psych `YAML.load_file`. |
+| V2 release workflow path inspection | The workflow includes V2 verifiable build, required V2 release artifacts, manual `program=v2` buffer deployment, V2 `solana-verify` library selection, V2 package artifact download, and decoder publish regeneration from `omnipair_v2.json`. This is local workflow inspection, not a live GitHub Actions run. |
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.
