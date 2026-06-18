@@ -197,6 +197,14 @@ Current-head V1 baseline refresh at `4b8e599`:
 | `cargo test -p omnipair --lib` | Failed only on the documented five legacy V1 failures: `v1::state::rate_model::tests::test_default_matches_original_high_util`, `v1::state::rate_model::tests::test_default_matches_original_low_util`, `v1::state::rate_model::tests::test_faster_half_life_adjusts_quicker`, `v1::state::rate_model::tests::test_uncapped_rate_grows_exponentially`, and `shared::gamm_math::tests::manipulation_bounded_by_ema`. The run passed 50 tests and failed 5. |
 | Transient proptest artifacts | The run generated `programs/omnipair/proptest-regressions/shared/gamm_math.txt`; it was removed after confirming the failure set matched the documented baseline. |
 
+Current-head production artifact rebuild at `cf4a8ee`:
+
+| Gate | Result |
+| --- | --- |
+| `anchor build -p omnipair-v2 -- --features production` | Passed with known SBF/LTO/linkage warnings. The build output embedded `GIT_REV=cf4a8eeaa5766368bfa0b5e793e62176cfc04f2a` and `GIT_RELEASE=v0.10.2`. |
+| Built V2 `security_txt` string check | `strings target/deploy/omnipair_v2.so` contains `Pending final V2 security review` and does not show legacy V1 auditor names. |
+| V2 IDL/type package parity after rebuild | `target/idl/omnipair_v2.json` matches `packages/program-interface/src/idl_v2.json`; `target/types/omnipair_v2.ts` matches `packages/program-interface/src/types_v2.ts`. |
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.
