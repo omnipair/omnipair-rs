@@ -272,6 +272,14 @@ Production Anchor build verification snapshot at `dd0d17d`:
 | V2 IDL/type package parity after production build | `target/idl/omnipair_v2.json` matches `packages/program-interface/src/idl_v2.json`; `target/types/omnipair_v2.ts` matches `packages/program-interface/src/types_v2.ts`. |
 | V2 source and generated artifact tracked diff | No tracked diffs under `programs/omnipair-v2/src`, package V2 IDL/types, or target V2 IDL/types after the production Anchor build. |
 
+Decoder verification snapshot at `ad033b6`:
+
+| Gate | Result |
+| --- | --- |
+| `cargo test -p omnipair-decoder --lib` | Passed with 1 decoder test. |
+| V2 decoder regeneration | `node decoders/omnipair-decoder/scripts/generate-v2-decoder.mjs` completed from `packages/program-interface/src/idl_v2.json` and produced no tracked decoder or V2 artifact changes. |
+| Transient proptest artifacts | No `programs/omnipair-v2/proptest-regressions/`, `programs/omnipair/proptest-regressions/`, or decoder proptest-regression files were present after the decoder refresh. |
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.
