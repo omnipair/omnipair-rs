@@ -84,6 +84,22 @@ Recent local verification covered:
 | V2 TypeScript package copy matches build artifact | `target/types/omnipair_v2.ts` equals `packages/program-interface/src/types_v2.ts`. |
 | V1 baseline is unchanged | `cargo test -p omnipair --lib` fails only on the documented 5 legacy failures. |
 
+Current-head refresh at `3f23e7d` re-ran the documented local gates:
+
+| Gate | Result |
+| --- | --- |
+| `cargo fmt -p omnipair-v2 -- --check` | Passed. |
+| `cargo check -p omnipair-v2 --lib` | Passed with the known Anchor macro `unexpected cfg solana` warnings. |
+| `cargo test -p omnipair-v2 --lib -- --nocapture` | Passed with 94 tests. |
+| `anchor build -p omnipair-v2` | Passed with known SBF/linkage warnings. |
+| `cargo check -p omnipair-v2 --lib --features production` | Passed with the known Anchor macro `unexpected cfg solana` warnings. |
+| `cargo test -p omnipair-v2 --lib --features production -- --nocapture` | Passed with 94 tests. |
+| `anchor build -p omnipair-v2 -- --features production` | Passed with known SBF/linkage warnings. |
+| `npm run build --prefix packages/program-interface` | Passed. |
+| `yarn test-litesvm` | Passed with 42 tests and V2 instruction smoke coverage `19/19`. |
+| V2 IDL and TypeScript artifact equality | `target/idl/omnipair_v2.json` and `target/types/omnipair_v2.ts` match the package copies. |
+| `cargo test -p omnipair --lib` | Failed only on the documented five legacy V1 failures. |
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.
