@@ -84,7 +84,7 @@ Recent local verification covered:
 | V2 TypeScript package copy matches build artifact | `target/types/omnipair_v2.ts` equals `packages/program-interface/src/types_v2.ts`. |
 | V1 baseline is unchanged | `cargo test -p omnipair --lib` fails only on the documented 5 legacy failures. |
 
-Current-head refresh at `3f23e7d` re-ran the documented local gates:
+Earlier code-gate refresh at `3f23e7d` re-ran the documented local gates:
 
 | Gate | Result |
 | --- | --- |
@@ -100,15 +100,37 @@ Current-head refresh at `3f23e7d` re-ran the documented local gates:
 | V2 IDL and TypeScript artifact equality | `target/idl/omnipair_v2.json` and `target/types/omnipair_v2.ts` match the package copies. |
 | `cargo test -p omnipair --lib` | Failed only on the documented five legacy V1 failures. |
 
-Latest docs-only readiness refresh at `d73c61b` did not change V2 code or
-generated artifacts. It rechecked and documented:
+Docs-only readiness refreshes through `6cffae5` did not change V2 code or
+generated artifacts. They rechecked and documented:
 
 - owner signoff tracking in `programs/omnipair-v2/SIGNOFF_CHECKLIST.md`;
 - absence of legacy V1 product-terminology leftovers in V2 source and generated
   V2 artifacts;
 - `buffer shares` as the explicit term for retained junior risk-capital
   accounting;
-- product-facing V2 event naming as the current completed choice.
+- product-facing V2 event naming as the current completed choice;
+- the V2 PR review guide in `V2_PR_REVIEW_GUIDE.md`.
+
+Current-head verification at `6cffae5` re-ran the local review gates:
+
+| Gate | Result |
+| --- | --- |
+| `git diff --check` | Passed. |
+| V2 IDL and TypeScript artifact equality | `target/idl/omnipair_v2.json` and `target/types/omnipair_v2.ts` match the package copies. |
+| `cargo fmt -p omnipair-v2 -- --check` | Passed. |
+| `cargo check -p omnipair-v2 --lib` | Passed with the known Anchor macro `unexpected cfg solana` warnings. |
+| `cargo test -p omnipair-v2 --lib -- --nocapture` | Passed with 94 tests. |
+| `cargo check -p omnipair-v2 --lib --features production` | Passed with the known Anchor macro `unexpected cfg solana` warnings. |
+| `cargo test -p omnipair-v2 --lib --features production -- --nocapture` | Passed with 94 tests. |
+| `anchor build -p omnipair-v2` | Passed with known SBF/linkage warnings. |
+| `anchor build -p omnipair-v2 -- --features production` | Passed with known SBF/linkage warnings. |
+| `npm run build --prefix packages/program-interface` | Passed. |
+| `yarn test-litesvm` | Passed with 42 tests and V2 instruction smoke coverage `19/19`. |
+| `cargo test -p omnipair --lib` | Failed only on the documented five legacy V1 failures. |
+
+The V1 baseline run generated a transient
+`programs/omnipair/proptest-regressions/` artifact; it was removed after
+confirming the failure set matched the documented baseline.
 
 ## Local Completion Notes
 
