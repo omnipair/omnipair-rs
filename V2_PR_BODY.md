@@ -1,5 +1,7 @@
 # Omnipair V2 Market Architecture
 
+Suggested PR title: `feat(v2): add standalone market architecture`
+
 ## Summary
 
 This PR adds Omnipair V2 as a standalone market architecture program while
@@ -94,6 +96,21 @@ Known V1 baseline failures:
 - `v1::state::rate_model::tests::test_faster_half_life_adjusts_quicker`
 - `v1::state::rate_model::tests::test_uncapped_rate_grows_exponentially`
 - `shared::gamm_math::tests::manipulation_bounded_by_ema`
+
+## Deferred Feature Scope
+
+These original V2 ideas are intentionally not enabled in this PR:
+
+- soft borrow and soft liquidation;
+- LLAMMA-style soft liquidation;
+- Jupiter or external aggregator conversion routing;
+- explicit hedge premium pricing;
+- user-selectable settlement side;
+- stale locked collateral-factor machinery.
+
+Current V2 uses fixed-token debt, inventory-native settlement, recognized
+collateral valuation, and h-omLP wrappers with routed hedge fees. Any deferred
+feature above should land behind a separate reviewed spec.
 
 ## Review Notes
 
