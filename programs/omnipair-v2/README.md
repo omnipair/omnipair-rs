@@ -223,9 +223,13 @@ Before V2 should be treated as production-ready:
 Useful focused checks while changing V2:
 
 ```bash
+cargo fmt -p omnipair-v2 -- --check
+cargo check -p omnipair-v2 --lib
 cargo test -p omnipair-v2 --lib -- --nocapture
-cargo check -p omnipair-v2
+cargo check -p omnipair-v2 --lib --features production
+cargo test -p omnipair-v2 --lib --features production -- --nocapture
 anchor build -p omnipair-v2
+anchor build -p omnipair-v2 -- --features production
 npm run build --prefix packages/program-interface
 cargo test -p omnipair-decoder --lib
 yarn test-litesvm
@@ -238,7 +242,10 @@ The current V2 review gates are:
 - `cargo fmt -p omnipair-v2 -- --check`
 - `cargo check -p omnipair-v2 --lib`
 - `cargo test -p omnipair-v2 --lib -- --nocapture`
+- `cargo check -p omnipair-v2 --lib --features production`
+- `cargo test -p omnipair-v2 --lib --features production -- --nocapture`
 - `anchor build -p omnipair-v2`
+- `anchor build -p omnipair-v2 -- --features production`
 - `npm run build --prefix packages/program-interface`
 - `cargo test -p omnipair-decoder --lib`
 - `yarn test-litesvm`
