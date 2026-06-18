@@ -24,10 +24,11 @@ The main naming pass is implemented in the standalone `omnipair-v2` program:
 - V2 source and generated V2 artifacts have no legacy V1 product-terminology
   leftovers.
 
-Remaining naming/product decision:
+Resolved naming/product decision:
 
-- decide whether retained junior buffer shares need a public product term
-  beyond the current internal accounting language.
+- keep `buffer shares` as the explicit V2 term for retained junior
+  risk-capital accounting. Do not introduce a separate branded product label
+  before integrator docs and app copy have a concrete need for one.
 
 Ongoing hygiene:
 
@@ -266,7 +267,8 @@ Do not include this in the first naming polish pass unless it is extremely local
 6. Update imports, handlers, tests, and IDL-facing references.
 7. Run `cargo check -p omnipair-v2 --lib`.
 8. Run `cargo test -p omnipair-v2 --lib`.
-9. Review event naming separately and decide whether to rename now or leave as an analytics-compatible follow-up.
+9. Review event naming separately. Current result: V2 uses product-facing event
+   names such as `LiquidityAdded`, `SwapExecuted`, and `PositionLiquidated`.
 
 ## Success Criteria
 

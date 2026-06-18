@@ -658,14 +658,15 @@ Status: implemented.
 
 ### Phase 4: Clean Token Vocabulary
 
-Status: implemented, with one open product-language decision.
+Status: implemented.
 
 - Claim and hedge token concepts are explicit.
 - Ambiguous mint, supply, and share fields were renamed where needed.
 - `tokens/claim_token.rs` and `tokens/hedge_token.rs` define token constraints.
 - SPL token concepts are separated from internal accounting units.
-- Open decision: whether retained junior buffer shares need a public product
-  term beyond the current internal accounting language.
+- `buffer shares` remains the explicit V2 term for retained junior
+  risk-capital accounting. No separate branded product label is introduced at
+  the protocol boundary.
 
 ### Phase 5: Introduce Atomic Transitions
 
