@@ -8,6 +8,8 @@ separate review tracks.
 ## Review Entry Points
 
 - `V2_ARCHITECTURE_PLAN.md`: current architecture status and design rationale.
+- `V2_PR_BODY.md`: pasteable PR summary, verification summary, review notes,
+  and remaining production gates.
 - `programs/omnipair-v2/README.md`: V2 source boundaries, integration surface,
   flows, events, invariants, and verification commands.
 - `.audit/findings/v2-initial-plan-traceability-2026-06-18.md`: requirement
