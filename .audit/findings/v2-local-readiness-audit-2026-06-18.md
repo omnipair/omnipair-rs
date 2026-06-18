@@ -132,6 +132,13 @@ The V1 baseline run generated a transient
 `programs/omnipair/proptest-regressions/` artifact; it was removed after
 confirming the failure set matched the documented baseline.
 
+Follow-up current-head evidence at `95d347c`:
+
+| Gate | Result |
+| --- | --- |
+| `cargo test -p omnipair-decoder --lib` | Passed with 1 decoder test. |
+| V2 production panic/placeholder scan | A cfg-test-aware scan found no production `unwrap()`, `expect()`, `panic!`, `todo!`, or `unimplemented!` hits under `programs/omnipair-v2/src`. |
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.
