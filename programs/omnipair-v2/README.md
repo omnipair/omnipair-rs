@@ -116,7 +116,7 @@ Buffer shares remain on the stake position as junior risk-capital accounting
 that can be matched with claim tokens for fee eligibility.
 
 `stake` moves claim tokens into the market stake vault and matches them with
-buffer shares. `unstake` returns claim tokens and moves the paired buffer shares
+buffer shares. `unstake` returns claim tokens and moves the matched buffer shares
 back to `available_buffer_share_amount` on the stake position.
 
 ### Fees
