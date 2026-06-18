@@ -213,6 +213,7 @@ Every V2 event carries `MarketEventMetadata` with the signer, market, and slot.
 Before V2 should be treated as production-ready:
 
 - run a fresh end-to-end security review against the final standalone V2 program;
+- complete owner signoffs in `programs/omnipair-v2/SIGNOFF_CHECKLIST.md`;
 - finish the V2 deployment and release checklist in
   `programs/omnipair-v2/RELEASE_CHECKLIST.md`;
 - keep soft borrow and soft liquidation disabled until a separate spec is ready.

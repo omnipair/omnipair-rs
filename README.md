@@ -21,6 +21,7 @@ V2 review and integration entry points:
 
 - [programs/omnipair-v2/README.md](programs/omnipair-v2/README.md): architecture, invariants, integrator handoff, and verification gates.
 - [programs/omnipair-v2/RELEASE_CHECKLIST.md](programs/omnipair-v2/RELEASE_CHECKLIST.md): security, artifact, deployment, and post-deploy checklist.
+- [programs/omnipair-v2/SIGNOFF_CHECKLIST.md](programs/omnipair-v2/SIGNOFF_CHECKLIST.md): owner signoff register for security, app, SDK, indexing, analytics, aggregators, and deployment.
 - [packages/program-interface/README.md](packages/program-interface/README.md): V1/V2 TypeScript IDL, type, and PDA helper usage.
 - [tests/README.md](tests/README.md): LiteSVM smoke coverage and V2 test flow notes.
 

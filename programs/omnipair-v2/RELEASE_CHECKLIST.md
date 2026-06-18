@@ -69,6 +69,8 @@ cargo test -p omnipair --lib
 
 ## 5. Integration Readiness
 
+- Complete the owner signoff register in
+  `programs/omnipair-v2/SIGNOFF_CHECKLIST.md`.
 - Review the integrator handoff in `programs/omnipair-v2/README.md` with app,
   SDK, indexer, analytics, and aggregator owners.
 - SDK consumers use `IDL_V2`, `OmnipairV2`, and `OMNIPAIR_V2_PROGRAM_ID`.
