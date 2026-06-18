@@ -246,6 +246,14 @@ V2 production-feature behavior verification snapshot at `d3d6aa4`:
 | Transient proptest artifacts | No `programs/omnipair-v2/proptest-regressions/` or `programs/omnipair/proptest-regressions/` files were created by this refresh. |
 | V2 source and generated artifact tracked diff | No tracked diffs under `programs/omnipair-v2/src`, package V2 IDL/types, or target V2 IDL/types after the production-feature test run. |
 
+LiteSVM flow verification snapshot at `57553e6`:
+
+| Gate | Result |
+| --- | --- |
+| `yarn test-litesvm` | Passed with 42 tests. V2 instruction smoke coverage was `19/19` (`100.00%`), legacy V1 smoke coverage remained `2/21` (`9.52%`), and aggregate smoke coverage was `21/40` (`52.50%`). |
+| Tracked test and generated artifact diff | No tracked diffs under `tests`, package V2 IDL/types, or target V2 IDL/types after the LiteSVM run. |
+| Transient proptest artifacts | No `programs/omnipair-v2/proptest-regressions/` or `programs/omnipair/proptest-regressions/` files were present after the LiteSVM run. |
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.
