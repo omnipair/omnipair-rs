@@ -6,8 +6,12 @@ Carbon decoder for [Omnipair](https://omnipair.fi) - a Solana oracleless spot an
 
 ```toml
 [dependencies]
-omnipair-decoder = "0.1"
+omnipair-decoder = "<released-version>"
 ```
+
+The release workflow publishes `omnipair-decoder` after the selected program
+upgrade is verified. The local manifest may use a staging version before
+publish; use the crates.io version that matches the release tag you index.
 
 ## Usage
 
