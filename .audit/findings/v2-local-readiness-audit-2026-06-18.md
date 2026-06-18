@@ -287,6 +287,14 @@ Legacy V1 baseline snapshot at `db83f5b`:
 | `cargo test -p omnipair --lib` | Failed only on the documented five legacy V1 failures: `v1::state::rate_model::tests::test_default_matches_original_high_util`, `v1::state::rate_model::tests::test_default_matches_original_low_util`, `v1::state::rate_model::tests::test_faster_half_life_adjusts_quicker`, `v1::state::rate_model::tests::test_uncapped_rate_grows_exponentially`, and `shared::gamm_math::tests::manipulation_bounded_by_ema`. The run passed 50 tests and failed 5, with only the known Anchor macro `unexpected cfg solana` warnings. |
 | Transient proptest artifacts | The run generated `programs/omnipair/proptest-regressions/shared/gamm_math.txt`; it was removed after confirming the failure set matched the documented baseline. |
 
+Current local-gap scan snapshot at `828a1f8`:
+
+| Gate | Result |
+| --- | --- |
+| V2 cfg-test-aware production placeholder scan | No production-path `unwrap()`, `expect()`, `panic!`, `todo!`, or `unimplemented!` hits were found under `programs/omnipair-v2/src`. Inline Rust test modules were excluded from this scan. |
+| V2 TODO/FIXME/TBD scan | Hits are limited to the explicit pending owner signoff rows in `programs/omnipair-v2/SIGNOFF_CHECKLIST.md` and one V1 non-goal sentence in `V2_ARCHITECTURE_PLAN.md`. No new V2 source TODO/FIXME items were found. |
+| V2 public terminology scan | No `pair`/`pool` terminology hits were found in `programs/omnipair-v2/src`, package V2 IDL/types, or target V2 IDL/types. |
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.
