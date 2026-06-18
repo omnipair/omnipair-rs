@@ -85,8 +85,12 @@ Expected current local results:
 - V2 unit/property tests pass with 94 tests.
 - V2 production-feature tests pass with 94 tests.
 - LiteSVM passes with 42 tests and V2 instruction smoke coverage `19/19`.
+- V2 normal and production Anchor builds pass with known SBF/LTO/linkage
+  warnings.
+- `@omnipair/program-interface` builds successfully.
 - V2 IDL/types match package-interface copies byte-for-byte.
-- V2 decoder regeneration produces no tracked changes.
+- V2 Carbon decoder tests pass and V2 decoder regeneration produces no tracked
+  changes.
 - V1 baseline remains the documented five legacy failures only.
 
 Known V1 baseline failures:

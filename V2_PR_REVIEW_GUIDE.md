@@ -108,6 +108,9 @@ cargo test -p omnipair --lib
 
 The current expected V1 baseline is only the documented five legacy failures in
 the V2 readiness audit. Any new V1 failure should be treated as a regression.
+The readiness audit also records the latest local snapshots for V2 unit tests,
+production-feature tests, LiteSVM, normal and production Anchor builds, package
+interface build, decoder test/regeneration, and artifact parity.
 
 ## Production Gates
 
