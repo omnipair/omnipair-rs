@@ -107,7 +107,8 @@ The benefit of staying in the same program is mostly program-ID continuity, not 
 - Do not perform a forced stateful migration.
 - Do not break existing v1 integrations.
 - Do not leave temporary migration logic inside v1.
-- Do not preserve awkward `market_*` instruction names if v2 has its own program namespace.
+- Do not preserve awkward `market_*` instruction names; V2 has its own program
+  namespace.
 - Do not copy MakerDAO's cryptic names directly.
 
 ## Migration Strategy
@@ -426,9 +427,9 @@ impl Borrow {
 }
 ```
 
-## Suggested Program Layout
+## Current Program Layout
 
-If v2 is split into a separate program, aim for this shape:
+The standalone V2 program follows this review shape:
 
 ```text
 programs/omnipair-v2/src/
