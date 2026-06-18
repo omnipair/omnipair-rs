@@ -227,6 +227,7 @@ cargo test -p omnipair-v2 --lib -- --nocapture
 cargo check -p omnipair-v2
 anchor build -p omnipair-v2
 npm run build --prefix packages/program-interface
+cargo test -p omnipair-decoder --lib
 yarn test-litesvm
 ```
 
@@ -239,6 +240,7 @@ The current V2 review gates are:
 - `cargo test -p omnipair-v2 --lib -- --nocapture`
 - `anchor build -p omnipair-v2`
 - `npm run build --prefix packages/program-interface`
+- `cargo test -p omnipair-decoder --lib`
 - `yarn test-litesvm`
 
 `yarn test-litesvm` reports V2 instruction coverage separately from legacy V1 coverage. V2 is expected to cover all standalone V2 instructions in that report.
