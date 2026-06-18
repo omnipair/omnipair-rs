@@ -205,6 +205,14 @@ Current-head production artifact rebuild at `cf4a8ee`:
 | Built V2 `security_txt` string check | `strings target/deploy/omnipair_v2.so` contains `Pending final V2 security review` and does not show legacy V1 auditor names. |
 | V2 IDL/type package parity after rebuild | `target/idl/omnipair_v2.json` matches `packages/program-interface/src/idl_v2.json`; `target/types/omnipair_v2.ts` matches `packages/program-interface/src/types_v2.ts`. |
 
+Local gap audit at `9e17c7a`:
+
+| Gate | Result |
+| --- | --- |
+| V2 production placeholder scan | A cfg-test-aware scan found no production `unwrap()`, `expect()`, `panic!`, `todo!`, or `unimplemented!` hits under `programs/omnipair-v2/src`. |
+| V2 source/docs TODO scan | No V2 source `TODO`/`FIXME`/placeholder items were found. The remaining pending/TBD hits are the owner signoff register, external deployment/verification gates, and intentionally disabled soft borrow / soft liquidation scope. |
+| Remaining locally actionable implementation gaps | None found in this pass. Production readiness still depends on the external gates listed below. |
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.
