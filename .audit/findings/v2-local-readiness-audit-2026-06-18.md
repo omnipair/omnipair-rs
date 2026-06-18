@@ -254,6 +254,15 @@ LiteSVM flow verification snapshot at `57553e6`:
 | Tracked test and generated artifact diff | No tracked diffs under `tests`, package V2 IDL/types, or target V2 IDL/types after the LiteSVM run. |
 | Transient proptest artifacts | No `programs/omnipair-v2/proptest-regressions/` or `programs/omnipair/proptest-regressions/` files were present after the LiteSVM run. |
 
+Anchor build verification snapshot at `c740fdb`:
+
+| Gate | Result |
+| --- | --- |
+| `anchor build -p omnipair-v2` | Passed with known SBF/LTO/linkage warnings. The build embedded `GIT_REV=c740fdb1340365e1834e8518ee97bdf49045d2e8` and `GIT_RELEASE=v0.10.2`. |
+| Built V2 `security_txt` string check | `strings target/deploy/omnipair_v2.so` contains `Pending final V2 security review` and did not show legacy V1 auditor names in the checked output. |
+| V2 IDL/type package parity after build | `target/idl/omnipair_v2.json` matches `packages/program-interface/src/idl_v2.json`; `target/types/omnipair_v2.ts` matches `packages/program-interface/src/types_v2.ts`. |
+| V2 source and generated artifact tracked diff | No tracked diffs under `programs/omnipair-v2/src`, package V2 IDL/types, or target V2 IDL/types after the Anchor build. |
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.
