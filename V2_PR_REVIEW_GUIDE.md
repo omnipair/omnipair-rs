@@ -20,6 +20,8 @@ separate review tracks.
   post-deploy gates.
 - `programs/omnipair-v2/SIGNOFF_CHECKLIST.md`: external owner signoffs that are
   still required before production readiness.
+- `decoders/omnipair-decoder/README.md`: Carbon decoder usage for legacy V1
+  and standalone V2 decoding.
 
 ## Suggested Review Order
 

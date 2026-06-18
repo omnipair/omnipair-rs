@@ -25,6 +25,7 @@ V2 review and integration entry points:
 - [programs/omnipair-v2/RELEASE_CHECKLIST.md](programs/omnipair-v2/RELEASE_CHECKLIST.md): security, artifact, deployment, and post-deploy checklist.
 - [programs/omnipair-v2/SIGNOFF_CHECKLIST.md](programs/omnipair-v2/SIGNOFF_CHECKLIST.md): owner signoff register for security, app, SDK, indexing, analytics, aggregators, and deployment.
 - [packages/program-interface/README.md](packages/program-interface/README.md): V1/V2 TypeScript IDL, type, and PDA helper usage.
+- [decoders/omnipair-decoder/README.md](decoders/omnipair-decoder/README.md): Carbon decoder usage for legacy V1 and standalone V2.
 - [tests/README.md](tests/README.md): LiteSVM smoke coverage and V2 test flow notes.
 
 ### Legacy V1 Key Features
