@@ -238,6 +238,14 @@ V2 behavior verification snapshot at `9adeb95`:
 | Transient proptest artifacts | No `programs/omnipair-v2/proptest-regressions/` or `programs/omnipair/proptest-regressions/` files were created by this refresh. |
 | V2 source and generated artifact tracked diff | No tracked diffs under `programs/omnipair-v2/src`, package V2 IDL/types, or target V2 IDL/types after the test run. |
 
+V2 production-feature behavior verification snapshot at `d3d6aa4`:
+
+| Gate | Result |
+| --- | --- |
+| `cargo test -p omnipair-v2 --lib --features production -- --nocapture` | Passed with 94 tests and only the known Anchor macro `unexpected cfg solana` warnings. The test build embedded `GIT_REV=d3d6aa457e912bbcb3cc54959366edccee8d70a1` and `GIT_RELEASE=v0.10.2`. |
+| Transient proptest artifacts | No `programs/omnipair-v2/proptest-regressions/` or `programs/omnipair/proptest-regressions/` files were created by this refresh. |
+| V2 source and generated artifact tracked diff | No tracked diffs under `programs/omnipair-v2/src`, package V2 IDL/types, or target V2 IDL/types after the production-feature test run. |
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.
