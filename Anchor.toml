@@ -10,17 +10,17 @@ skip-lint = false
 faucet = "3Ckfn1LMByoDfVpcDPf7nouk5nQAUm51Zkdf1oprQTAK"
 flashloan_receiver_example = "GmtswKBDrFZ9DfUfP7jbPFvbtuG7AJcX73SvoKWGxJbu"
 omnipair = "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE"
-omnipair_v2 = "358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv"
+omnipair_v2 = "oMNi2XGwWxDbEvhS2pWRQ6dtw8GkNBV42hfLZD6WmMF"
 
 [programs.localnet]
 faucet = "3Ckfn1LMByoDfVpcDPf7nouk5nQAUm51Zkdf1oprQTAK"
 flashloan_receiver_example = "GmtswKBDrFZ9DfUfP7jbPFvbtuG7AJcX73SvoKWGxJbu"
 omnipair = "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE"
-omnipair_v2 = "358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv"
+omnipair_v2 = "oMNi2XGwWxDbEvhS2pWRQ6dtw8GkNBV42hfLZD6WmMF"
 
 [programs.mainnet]
 omnipair = "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE"
-omnipair_v2 = "358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv"
+omnipair_v2 = "oMNi2XGwWxDbEvhS2pWRQ6dtw8GkNBV42hfLZD6WmMF"
 
 [registry]
 url = "https://mainnet.helius-rpc.com/?api-key=30168341-6376-4364-98bd-e7bb7da3d5e1"

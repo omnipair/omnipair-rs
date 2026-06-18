@@ -232,7 +232,7 @@ function writeInstructions() {
 function writeRoot() {
   writeFile(
     path.join(root, "mod.rs"),
-    `${generatedHeader}pub const PROGRAM_ID: solana_pubkey::Pubkey =\n    solana_pubkey::Pubkey::from_str_const(\"358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv\");\n\npub struct OmnipairV2Decoder;\n\npub mod accounts;\npub mod instructions;\npub mod types;\n`
+    `${generatedHeader}pub const PROGRAM_ID: solana_pubkey::Pubkey =\n    solana_pubkey::Pubkey::from_str_const(\"oMNi2XGwWxDbEvhS2pWRQ6dtw8GkNBV42hfLZD6WmMF\");\n\npub struct OmnipairV2Decoder;\n\npub mod accounts;\npub mod instructions;\npub mod types;\n`
   );
 }
 

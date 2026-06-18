@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/omnipair_v2.json`.
  */
 export type OmnipairV2 = {
-  "address": "358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv",
+  "address": "oMNi2XGwWxDbEvhS2pWRQ6dtw8GkNBV42hfLZD6WmMF",
   "metadata": {
     "name": "omnipairV2",
     "version": "0.10.2",

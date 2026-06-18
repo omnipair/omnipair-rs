@@ -40,7 +40,7 @@ import { LiteSVMConnection } from "./utils/litesvm-connection.js";
 import { trackV2Instruction as trackInstruction, getCoverageReport } from "./utils/instruction-coverage.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const OMNIPAIR_V2_PROGRAM_ID = new PublicKey("358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv");
+const OMNIPAIR_V2_PROGRAM_ID = new PublicKey("oMNi2XGwWxDbEvhS2pWRQ6dtw8GkNBV42hfLZD6WmMF");
 const { AnchorProvider, BN, Program, Wallet } = anchor;
 const NAD = new BN(1_000_000_000);
 const BASE_MARKET_ASSET = { base: {} };

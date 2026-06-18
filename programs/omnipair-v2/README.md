@@ -26,7 +26,7 @@ the legacy V1 program.
 
 - Program crate: `programs/omnipair-v2`
 - Program name: `omnipair_v2`
-- Mainnet/devnet/localnet ID: `358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv`
+- Mainnet/devnet/localnet ID: `oMNi2XGwWxDbEvhS2pWRQ6dtw8GkNBV42hfLZD6WmMF`
 - IDL: `target/idl/omnipair_v2.json`
 - TypeScript bindings: `packages/program-interface/src/types_v2.ts`
 - SDK PDA helpers: `packages/program-interface/src/constants.ts`
