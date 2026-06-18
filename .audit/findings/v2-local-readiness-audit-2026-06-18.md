@@ -156,6 +156,14 @@ Follow-up V2 security metadata alignment:
 | `cargo check -p omnipair-v2 --lib` | Passed with the known Anchor macro `unexpected cfg solana` warnings. |
 | `cargo check -p omnipair-v2 --lib --features production` | Passed with the known Anchor macro `unexpected cfg solana` warnings. |
 
+Follow-up V2 production artifact check at `afe1e16`:
+
+| Gate | Result |
+| --- | --- |
+| `anchor build -p omnipair-v2 -- --features production` | Passed with known SBF/LTO/linkage warnings. The build embedded `GIT_REV=afe1e16d40922703a96992a8ef14fb0b96415b35` and `GIT_RELEASE=v0.10.2`. |
+| Built V2 `security_txt` string check | `strings target/deploy/omnipair_v2.so` contains `Pending final V2 security review`, confirming the V2 auditor metadata made it into the built artifact. |
+| Generated V2 IDL/types after build | No tracked generated V2 IDL or TypeScript artifacts changed after the production Anchor build. |
+
 ## Local Completion Notes
 
 - V2 is a standalone program, not a versioned instruction set inside V1.
