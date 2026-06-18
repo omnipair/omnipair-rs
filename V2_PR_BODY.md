@@ -87,6 +87,14 @@ Expected current local results:
 - V2 decoder regeneration produces no tracked changes.
 - V1 baseline remains the documented five legacy failures only.
 
+Known V1 baseline failures:
+
+- `v1::state::rate_model::tests::test_default_matches_original_high_util`
+- `v1::state::rate_model::tests::test_default_matches_original_low_util`
+- `v1::state::rate_model::tests::test_faster_half_life_adjusts_quicker`
+- `v1::state::rate_model::tests::test_uncapped_rate_grows_exponentially`
+- `shared::gamm_math::tests::manipulation_bounded_by_ema`
+
 ## Review Notes
 
 - Do not squash before review; the branch is intentionally split into logical
