@@ -37,6 +37,10 @@ Allowed status values: `Pending`, `Approved`, `Blocked`, `N/A`.
 - Review Token-2022 constraints and measured inventory-credit settlement.
 - Confirm soft borrow and soft liquidation remain disabled unless a separate
   reviewed spec has been merged.
+- Confirm LLAMMA-style liquidation, Jupiter/external aggregator conversion
+  routing, explicit hedge premium pricing, user-selectable settlement side, and
+  stale locked collateral-factor machinery remain out of scope unless separate
+  reviewed specs have been merged.
 
 ## App / Front-End
 

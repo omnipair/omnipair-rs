@@ -56,7 +56,15 @@ separate review tracks.
      daily limits, circuit breakers, normalized debt valuation, health floors,
      config-update safety, liquidation waterfall, and fee-liability settlement.
 
-6. **Tests and generated interfaces**
+6. **Deferred scope**
+   - Confirm this PR does not enable soft borrow, soft liquidation,
+     LLAMMA-style liquidation, Jupiter or external aggregator conversion
+     routing, explicit hedge premium pricing, user-selectable settlement side,
+     or stale locked collateral-factor machinery.
+   - Treat any of those features as requiring a separate reviewed spec rather
+     than as follow-on cleanup inside this PR.
+
+7. **Tests and generated interfaces**
    - Review V2 unit/property tests near the state, math, and transition modules.
    - Review LiteSVM flow coverage in `tests/v2-market.test.ts`.
    - Confirm `target/idl/omnipair_v2.json` and `target/types/omnipair_v2.ts`
