@@ -24,6 +24,8 @@
     "liquidate": "ts-node --esm scripts/liquidate.ts",
     "address-vanity": "ts-node --esm scripts/address_vanity.ts",
     "faucet-mint": "ts-node --esm scripts/mint_pair_tokens.ts",
+    "v2:create-mock-tokens": "ts-node --esm scripts/v2/create_mock_tokens.ts",
+    "v2:mint-mock-tokens": "ts-node --esm scripts/v2/mint_mock_tokens.ts",
     "get-pair-stats": "ts-node --esm scripts/get_pair_stats.ts",
     "get-user-stats": "ts-node --esm scripts/get_user_stats.ts",
     "deploy-receiver": "anchor deploy -p flashloan_receiver_example",
