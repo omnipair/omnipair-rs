@@ -23,7 +23,7 @@ pub const LIQUIDATION_PENALTY_BPS: u16 = 300; // 3% total liquidation penalty (0
 #[constant]
 pub const LIQUIDITY_WITHDRAWAL_FEE_BPS: u16 = 100; // 1% fee on liquidity withdrawal (goes to remaining LPs)
 #[constant]
-pub const POST_WITHDRAW_DEBT_COVERAGE_BPS: u16 = 11_500; // 115% debt coverage required after liquidity withdrawal
+pub const POST_WITHDRAW_DEBT_COVERAGE_BPS: u16 = 10_000; // 100% debt coverage required after liquidity withdrawal
 #[constant]
 pub const PAIR_CREATION_FEE_LAMPORTS: u64 = 200_000_000; // 0.2 SOL
 // 3log2(100) = 19.93 secs (with 400ms slot time, this is ~50 slots)
