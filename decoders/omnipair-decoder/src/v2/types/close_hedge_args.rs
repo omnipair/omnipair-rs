@@ -7,7 +7,7 @@ use carbon_core::{borsh, CarbonDeserialize};
     CarbonDeserialize, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Hash,
 )]
 pub struct CloseHedgeArgs {
-    pub market_asset: MarketAsset,
-    pub hedge_amount: u64,
-    pub min_claim_amount_out: u64,
+    pub target_asset: MarketAsset,
+    pub hlp_amount: u64,
+    pub min_target_amount_out: u64,
 }

@@ -4,17 +4,17 @@ use carbon_core::deserialize::CarbonDeserialize;
 
 use super::OmnipairV2Decoder;
 
-pub mod hedge_position;
+pub mod futarchy_authority;
 pub mod margin_position;
 pub mod market;
-pub mod stake_position;
+pub mod yield_account;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Hash)]
 pub enum OmnipairV2Account {
-    HedgePosition(hedge_position::HedgePosition),
+    FutarchyAuthority(futarchy_authority::FutarchyAuthority),
     MarginPosition(margin_position::MarginPosition),
     Market(market::Market),
-    StakePosition(stake_position::StakePosition),
+    YieldAccount(yield_account::YieldAccount),
 }
 
 impl<'a> AccountDecoder<'a> for OmnipairV2Decoder {
@@ -25,11 +25,11 @@ impl<'a> AccountDecoder<'a> for OmnipairV2Decoder {
         account: &solana_account::Account,
     ) -> Option<carbon_core::account::DecodedAccount<Self::AccountType>> {
         if let Some(decoded_account) =
-            hedge_position::HedgePosition::deserialize(account.data.as_slice())
+            futarchy_authority::FutarchyAuthority::deserialize(account.data.as_slice())
         {
             return Some(carbon_core::account::DecodedAccount {
                 lamports: account.lamports,
-                data: OmnipairV2Account::HedgePosition(decoded_account),
+                data: OmnipairV2Account::FutarchyAuthority(decoded_account),
                 owner: account.owner,
                 executable: account.executable,
                 rent_epoch: account.rent_epoch,
@@ -59,11 +59,11 @@ impl<'a> AccountDecoder<'a> for OmnipairV2Decoder {
         }
 
         if let Some(decoded_account) =
-            stake_position::StakePosition::deserialize(account.data.as_slice())
+            yield_account::YieldAccount::deserialize(account.data.as_slice())
         {
             return Some(carbon_core::account::DecodedAccount {
                 lamports: account.lamports,
-                data: OmnipairV2Account::StakePosition(decoded_account),
+                data: OmnipairV2Account::YieldAccount(decoded_account),
                 owner: account.owner,
                 executable: account.executable,
                 rent_epoch: account.rent_epoch,

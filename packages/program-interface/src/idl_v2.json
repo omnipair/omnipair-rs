@@ -1,5 +1,5 @@
 {
-  "address": "oMNi2XGwWxDbEvhS2pWRQ6dtw8GkNBV42hfLZD6WmMF",
+  "address": "358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv",
   "metadata": {
     "name": "omnipair_v2",
     "version": "0.10.2",
@@ -58,58 +58,85 @@
           }
         },
         {
-          "name": "owner",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "asset_mint"
-        },
-        {
-          "name": "claim_token_mint",
-          "writable": true
-        },
-        {
-          "name": "reserve_vault",
-          "writable": true
-        },
-        {
-          "name": "owner_asset_account",
-          "writable": true
-        },
-        {
-          "name": "owner_claim_account",
-          "writable": true
-        },
-        {
-          "name": "stake_position",
-          "writable": true,
+          "name": "futarchy_authority",
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
+                  102,
+                  117,
                   116,
                   97,
-                  107,
-                  101
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
                 ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "account",
-                "path": "asset_mint"
               }
             ]
           }
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "base_mint"
+        },
+        {
+          "name": "quote_mint"
+        },
+        {
+          "name": "base_ylp_mint",
+          "writable": true
+        },
+        {
+          "name": "quote_ylp_mint",
+          "writable": true
+        },
+        {
+          "name": "base_reserve_vault",
+          "writable": true
+        },
+        {
+          "name": "quote_reserve_vault",
+          "writable": true
+        },
+        {
+          "name": "owner_base_account",
+          "writable": true
+        },
+        {
+          "name": "owner_quote_account",
+          "writable": true
+        },
+        {
+          "name": "owner_base_ylp_account",
+          "writable": true
+        },
+        {
+          "name": "owner_quote_ylp_account",
+          "writable": true
+        },
+        {
+          "name": "base_yield_account",
+          "writable": true
+        },
+        {
+          "name": "quote_yield_account",
+          "writable": true
         },
         {
           "name": "token_program",
@@ -218,6 +245,36 @@
           }
         },
         {
+          "name": "futarchy_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "owner",
           "writable": true,
           "signer": true
@@ -316,16 +373,191 @@
       ]
     },
     {
-      "name": "claim_fees",
+      "name": "claim_protocol_fees",
       "discriminator": [
-        82,
-        251,
-        233,
-        156,
-        12,
-        52,
-        184,
-        202
+        34,
+        142,
+        219,
+        112,
+        109,
+        54,
+        133,
+        23
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.base_mint",
+                "account": "Market"
+              },
+              {
+                "kind": "account",
+                "path": "market.quote_mint",
+                "account": "Market"
+              },
+              {
+                "kind": "account",
+                "path": "market.params_hash",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "futarchy_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "base_mint"
+        },
+        {
+          "name": "quote_mint"
+        },
+        {
+          "name": "base_fee_vault",
+          "writable": true
+        },
+        {
+          "name": "quote_fee_vault",
+          "writable": true
+        },
+        {
+          "name": "futarchy_treasury"
+        },
+        {
+          "name": "buybacks_vault"
+        },
+        {
+          "name": "team_treasury"
+        },
+        {
+          "name": "futarchy_treasury_base_account",
+          "writable": true
+        },
+        {
+          "name": "futarchy_treasury_quote_account",
+          "writable": true
+        },
+        {
+          "name": "buybacks_vault_base_account",
+          "writable": true
+        },
+        {
+          "name": "buybacks_vault_quote_account",
+          "writable": true
+        },
+        {
+          "name": "team_treasury_base_account",
+          "writable": true
+        },
+        {
+          "name": "team_treasury_quote_account",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_yield",
+      "discriminator": [
+        49,
+        74,
+        111,
+        7,
+        186,
+        22,
+        61,
+        165
       ],
       "accounts": [
         {
@@ -374,316 +606,26 @@
           "name": "asset_mint"
         },
         {
-          "name": "fee_vault",
+          "name": "lp_mint"
+        },
+        {
+          "name": "owner_lp_account",
           "writable": true
-        },
-        {
-          "name": "owner_fee_account",
-          "writable": true
-        },
-        {
-          "name": "stake_position",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  116,
-                  97,
-                  107,
-                  101
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "account",
-                "path": "asset_mint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "token_2022_program",
-          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
-        },
-        {
-          "name": "event_authority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  95,
-                  95,
-                  101,
-                  118,
-                  101,
-                  110,
-                  116,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "program"
-        }
-      ],
-      "args": [
-        {
-          "name": "args",
-          "type": {
-            "defined": {
-              "name": "ClaimFeesArgs"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "claim_hedge_fees",
-      "discriminator": [
-        169,
-        148,
-        87,
-        149,
-        188,
-        246,
-        204,
-        210
-      ],
-      "accounts": [
-        {
-          "name": "market",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  97,
-                  114,
-                  107,
-                  101,
-                  116,
-                  95,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market.base_mint",
-                "account": "Market"
-              },
-              {
-                "kind": "account",
-                "path": "market.quote_mint",
-                "account": "Market"
-              },
-              {
-                "kind": "account",
-                "path": "market.params_hash",
-                "account": "Market"
-              }
-            ]
-          }
-        },
-        {
-          "name": "owner",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "asset_mint"
         },
         {
           "name": "fee_vault",
           "writable": true
         },
         {
-          "name": "owner_fee_account",
+          "name": "interest_vault",
           "writable": true
         },
         {
-          "name": "hedge_position",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  104,
-                  101,
-                  100,
-                  103,
-                  101,
-                  95,
-                  112,
-                  111,
-                  115,
-                  105,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "account",
-                "path": "asset_mint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "token_2022_program",
-          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
-        },
-        {
-          "name": "event_authority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  95,
-                  95,
-                  101,
-                  118,
-                  101,
-                  110,
-                  116,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "program"
-        }
-      ],
-      "args": [
-        {
-          "name": "args",
-          "type": {
-            "defined": {
-              "name": "ClaimHedgeFeesArgs"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "claim_market_fees",
-      "discriminator": [
-        181,
-        120,
-        254,
-        224,
-        232,
-        113,
-        48,
-        221
-      ],
-      "accounts": [
-        {
-          "name": "market",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  97,
-                  114,
-                  107,
-                  101,
-                  116,
-                  95,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market.base_mint",
-                "account": "Market"
-              },
-              {
-                "kind": "account",
-                "path": "market.quote_mint",
-                "account": "Market"
-              },
-              {
-                "kind": "account",
-                "path": "market.params_hash",
-                "account": "Market"
-              }
-            ]
-          }
-        },
-        {
-          "name": "fee_authority",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "asset_mint"
-        },
-        {
-          "name": "fee_vault",
+          "name": "recipient_asset_account",
           "writable": true
         },
         {
-          "name": "recipient_fee_account",
+          "name": "yield_account",
           "writable": true
         },
         {
@@ -732,7 +674,7 @@
           "name": "args",
           "type": {
             "defined": {
-              "name": "ClaimMarketFeesArgs"
+              "name": "ClaimYieldArgs"
             }
           }
         }
@@ -794,65 +736,50 @@
           "signer": true
         },
         {
-          "name": "asset_mint"
+          "name": "base_mint"
         },
         {
-          "name": "claim_token_mint"
+          "name": "quote_mint"
         },
         {
-          "name": "hedge_token_mint",
+          "name": "base_ylp_mint",
           "writable": true
         },
         {
-          "name": "hedge_vault",
+          "name": "quote_ylp_mint",
           "writable": true
         },
         {
-          "name": "owner_claim_account",
+          "name": "target_hlp_mint",
           "writable": true
         },
         {
-          "name": "owner_hedge_account",
+          "name": "base_reserve_vault",
           "writable": true
         },
         {
-          "name": "hedge_position",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  104,
-                  101,
-                  100,
-                  103,
-                  101,
-                  95,
-                  112,
-                  111,
-                  115,
-                  105,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "account",
-                "path": "asset_mint"
-              }
-            ]
-          }
+          "name": "quote_reserve_vault",
+          "writable": true
+        },
+        {
+          "name": "owner_target_account",
+          "writable": true
+        },
+        {
+          "name": "owner_hlp_account",
+          "writable": true
+        },
+        {
+          "name": "hlp_base_ylp_account",
+          "writable": true
+        },
+        {
+          "name": "hlp_quote_ylp_account",
+          "writable": true
+        },
+        {
+          "name": "target_yield_account",
+          "writable": true
         },
         {
           "name": "token_program",
@@ -861,6 +788,10 @@
         {
           "name": "token_2022_program",
           "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         },
         {
           "name": "event_authority",
@@ -1056,93 +987,39 @@
       ]
     },
     {
-      "name": "deposit_insurance",
+      "name": "init_futarchy_authority",
       "discriminator": [
-        34,
-        221,
-        238,
-        103,
-        190,
-        136,
-        23,
-        194
+        133,
+        110,
+        154,
+        29,
+        240,
+        206,
+        71,
+        100
       ],
       "accounts": [
         {
-          "name": "market",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  97,
-                  114,
-                  107,
-                  101,
-                  116,
-                  95,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market.base_mint",
-                "account": "Market"
-              },
-              {
-                "kind": "account",
-                "path": "market.quote_mint",
-                "account": "Market"
-              },
-              {
-                "kind": "account",
-                "path": "market.params_hash",
-                "account": "Market"
-              }
-            ]
-          }
-        },
-        {
-          "name": "sponsor",
+          "name": "deployer",
           "writable": true,
           "signer": true
         },
         {
-          "name": "asset_mint"
-        },
-        {
-          "name": "insurance_vault",
-          "writable": true
-        },
-        {
-          "name": "sponsor_asset_account",
-          "writable": true
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "token_2022_program",
-          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
-        },
-        {
-          "name": "event_authority",
+          "name": "futarchy_authority",
+          "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  95,
-                  95,
-                  101,
-                  118,
-                  101,
-                  110,
+                  102,
+                  117,
                   116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
                   95,
                   97,
                   117,
@@ -1159,7 +1036,89 @@
           }
         },
         {
-          "name": "program"
+          "name": "program_data",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  30,
+                  198,
+                  73,
+                  255,
+                  177,
+                  239,
+                  53,
+                  26,
+                  189,
+                  245,
+                  158,
+                  226,
+                  167,
+                  183,
+                  246,
+                  221,
+                  30,
+                  28,
+                  81,
+                  246,
+                  125,
+                  59,
+                  35,
+                  168,
+                  135,
+                  79,
+                  228,
+                  164,
+                  248,
+                  149,
+                  245,
+                  53
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                2,
+                168,
+                246,
+                145,
+                78,
+                136,
+                161,
+                176,
+                226,
+                16,
+                21,
+                62,
+                247,
+                99,
+                174,
+                43,
+                0,
+                194,
+                185,
+                61,
+                22,
+                193,
+                36,
+                210,
+                192,
+                83,
+                122,
+                16,
+                4,
+                128,
+                0,
+                0
+              ]
+            }
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -1167,7 +1126,7 @@
           "name": "args",
           "type": {
             "defined": {
-              "name": "DepositInsuranceArgs"
+              "name": "InitFutarchyAuthorityArgs"
             }
           }
         }
@@ -1232,70 +1191,46 @@
           }
         },
         {
-          "name": "base_claim_token_mint"
-        },
-        {
-          "name": "quote_claim_token_mint"
-        },
-        {
-          "name": "base_hedge_token_mint"
-        },
-        {
-          "name": "quote_hedge_token_mint"
-        },
-        {
-          "name": "base_hedge_vault",
-          "writable": true,
+          "name": "futarchy_authority",
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
                   104,
-                  101,
-                  100,
-                  103,
-                  101,
-                  100
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
                 ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "base_claim_token_mint"
               }
             ]
           }
         },
         {
-          "name": "quote_hedge_vault",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  104,
-                  101,
-                  100,
-                  103,
-                  101,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "quote_claim_token_mint"
-              }
-            ]
-          }
+          "name": "base_ylp_mint"
+        },
+        {
+          "name": "quote_ylp_mint"
+        },
+        {
+          "name": "base_hlp_mint"
+        },
+        {
+          "name": "quote_hlp_mint"
         },
         {
           "name": "base_reserve_vault",
@@ -1566,7 +1501,7 @@
           }
         },
         {
-          "name": "base_stake_vault",
+          "name": "base_interest_vault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1580,11 +1515,14 @@
                   101,
                   116,
                   95,
-                  115,
+                  105,
+                  110,
                   116,
-                  97,
-                  107,
-                  101
+                  101,
+                  114,
+                  101,
+                  115,
+                  116
                 ]
               },
               {
@@ -1593,13 +1531,13 @@
               },
               {
                 "kind": "account",
-                "path": "base_claim_token_mint"
+                "path": "base_mint"
               }
             ]
           }
         },
         {
-          "name": "quote_stake_vault",
+          "name": "quote_interest_vault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1613,11 +1551,14 @@
                   101,
                   116,
                   95,
-                  115,
+                  105,
+                  110,
                   116,
-                  97,
-                  107,
-                  101
+                  101,
+                  114,
+                  101,
+                  115,
+                  116
                 ]
               },
               {
@@ -1626,10 +1567,17 @@
               },
               {
                 "kind": "account",
-                "path": "quote_claim_token_mint"
+                "path": "quote_mint"
               }
             ]
           }
+        },
+        {
+          "name": "team_treasury"
+        },
+        {
+          "name": "team_treasury_wsol_account",
+          "writable": true
         },
         {
           "name": "system_program",
@@ -1758,6 +1706,10 @@
         },
         {
           "name": "insurance_vault",
+          "writable": true
+        },
+        {
+          "name": "collateral_insurance_vault",
           "writable": true
         },
         {
@@ -1899,70 +1851,85 @@
           }
         },
         {
-          "name": "owner",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "asset_mint"
-        },
-        {
-          "name": "claim_token_mint"
-        },
-        {
-          "name": "hedge_token_mint",
-          "writable": true
-        },
-        {
-          "name": "hedge_vault",
-          "writable": true
-        },
-        {
-          "name": "owner_claim_account",
-          "writable": true
-        },
-        {
-          "name": "owner_hedge_account",
-          "writable": true
-        },
-        {
-          "name": "hedge_position",
-          "writable": true,
+          "name": "futarchy_authority",
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
                   104,
-                  101,
-                  100,
-                  103,
-                  101,
+                  121,
                   95,
-                  112,
+                  97,
+                  117,
+                  116,
+                  104,
                   111,
-                  115,
+                  114,
                   105,
                   116,
-                  105,
-                  111,
-                  110
+                  121
                 ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "account",
-                "path": "asset_mint"
               }
             ]
           }
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "base_mint"
+        },
+        {
+          "name": "quote_mint"
+        },
+        {
+          "name": "base_ylp_mint",
+          "writable": true
+        },
+        {
+          "name": "quote_ylp_mint",
+          "writable": true
+        },
+        {
+          "name": "target_hlp_mint",
+          "writable": true
+        },
+        {
+          "name": "base_reserve_vault",
+          "writable": true
+        },
+        {
+          "name": "quote_reserve_vault",
+          "writable": true
+        },
+        {
+          "name": "owner_target_account",
+          "writable": true
+        },
+        {
+          "name": "owner_hlp_account",
+          "writable": true
+        },
+        {
+          "name": "hlp_base_ylp_account",
+          "writable": true
+        },
+        {
+          "name": "hlp_quote_ylp_account",
+          "writable": true
+        },
+        {
+          "name": "target_yield_account",
+          "writable": true
         },
         {
           "name": "token_program",
@@ -2076,22 +2043,49 @@
           "signer": true
         },
         {
-          "name": "asset_mint"
+          "name": "base_mint"
         },
         {
-          "name": "claim_token_mint",
+          "name": "quote_mint"
+        },
+        {
+          "name": "base_ylp_mint",
           "writable": true
         },
         {
-          "name": "reserve_vault",
+          "name": "quote_ylp_mint",
           "writable": true
         },
         {
-          "name": "owner_asset_account",
+          "name": "base_reserve_vault",
           "writable": true
         },
         {
-          "name": "owner_claim_account",
+          "name": "quote_reserve_vault",
+          "writable": true
+        },
+        {
+          "name": "owner_base_account",
+          "writable": true
+        },
+        {
+          "name": "owner_quote_account",
+          "writable": true
+        },
+        {
+          "name": "owner_base_ylp_account",
+          "writable": true
+        },
+        {
+          "name": "owner_quote_ylp_account",
+          "writable": true
+        },
+        {
+          "name": "base_yield_account",
+          "writable": true
+        },
+        {
+          "name": "quote_yield_account",
           "writable": true
         },
         {
@@ -2292,6 +2286,68 @@
       ]
     },
     {
+      "name": "set_global_reduce_only",
+      "discriminator": [
+        242,
+        151,
+        123,
+        139,
+        239,
+        87,
+        249,
+        98
+      ],
+      "accounts": [
+        {
+          "name": "authority_signer",
+          "writable": true,
+          "signer": true,
+          "address": "3YL87sTCrHMB6DYKorE9CCN4dL45kZPahoREcMLDY6QV"
+        },
+        {
+          "name": "futarchy_authority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SetGlobalReduceOnlyArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "set_reduce_only",
       "discriminator": [
         187,
@@ -2342,8 +2398,9 @@
           }
         },
         {
-          "name": "authority",
-          "signer": true
+          "name": "authority_signer",
+          "signer": true,
+          "address": "3YL87sTCrHMB6DYKorE9CCN4dL45kZPahoREcMLDY6QV"
         },
         {
           "name": "event_authority",
@@ -2390,21 +2447,20 @@
       ]
     },
     {
-      "name": "stake",
+      "name": "set_yield_recipient",
       "discriminator": [
-        206,
-        176,
-        202,
-        18,
-        200,
-        209,
-        179,
-        108
+        178,
+        211,
+        80,
+        10,
+        138,
+        52,
+        188,
+        22
       ],
       "accounts": [
         {
           "name": "market",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -2448,53 +2504,8 @@
           "name": "asset_mint"
         },
         {
-          "name": "claim_token_mint"
-        },
-        {
-          "name": "stake_vault",
+          "name": "yield_account",
           "writable": true
-        },
-        {
-          "name": "owner_claim_account",
-          "writable": true
-        },
-        {
-          "name": "stake_position",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  116,
-                  97,
-                  107,
-                  101
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "account",
-                "path": "asset_mint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "token_2022_program",
-          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
         },
         {
           "name": "event_authority",
@@ -2534,7 +2545,7 @@
           "name": "args",
           "type": {
             "defined": {
-              "name": "StakeArgs"
+              "name": "SetYieldRecipientArgs"
             }
           }
         }
@@ -2586,6 +2597,36 @@
                 "kind": "account",
                 "path": "market.params_hash",
                 "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "futarchy_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
               }
             ]
           }
@@ -2674,157 +2715,6 @@
       ]
     },
     {
-      "name": "unstake",
-      "discriminator": [
-        90,
-        95,
-        107,
-        42,
-        205,
-        124,
-        50,
-        225
-      ],
-      "accounts": [
-        {
-          "name": "market",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  97,
-                  114,
-                  107,
-                  101,
-                  116,
-                  95,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market.base_mint",
-                "account": "Market"
-              },
-              {
-                "kind": "account",
-                "path": "market.quote_mint",
-                "account": "Market"
-              },
-              {
-                "kind": "account",
-                "path": "market.params_hash",
-                "account": "Market"
-              }
-            ]
-          }
-        },
-        {
-          "name": "owner",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "asset_mint"
-        },
-        {
-          "name": "claim_token_mint"
-        },
-        {
-          "name": "stake_vault",
-          "writable": true
-        },
-        {
-          "name": "owner_claim_account",
-          "writable": true
-        },
-        {
-          "name": "stake_position",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  116,
-                  97,
-                  107,
-                  101
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "account",
-                "path": "asset_mint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "token_2022_program",
-          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
-        },
-        {
-          "name": "event_authority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  95,
-                  95,
-                  101,
-                  118,
-                  101,
-                  110,
-                  116,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "program"
-        }
-      ],
-      "args": [
-        {
-          "name": "args",
-          "type": {
-            "defined": {
-              "name": "UnstakeArgs"
-            }
-          }
-        }
-      ]
-    },
-    {
       "name": "update_config",
       "discriminator": [
         29,
@@ -2875,7 +2765,37 @@
           }
         },
         {
-          "name": "operator",
+          "name": "futarchy_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority_signer",
           "signer": true
         },
         {
@@ -2917,6 +2837,201 @@
           "type": {
             "defined": {
               "name": "UpdateMarketConfigArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_futarchy_authority",
+      "discriminator": [
+        15,
+        196,
+        157,
+        217,
+        113,
+        226,
+        89,
+        25
+      ],
+      "accounts": [
+        {
+          "name": "authority_signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "futarchy_authority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "UpdateFutarchyAuthorityArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_protocol_revenue",
+      "discriminator": [
+        176,
+        139,
+        131,
+        197,
+        40,
+        225,
+        125,
+        200
+      ],
+      "accounts": [
+        {
+          "name": "authority_signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "futarchy_authority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "UpdateProtocolRevenueArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_revenue_recipients",
+      "discriminator": [
+        116,
+        179,
+        137,
+        47,
+        118,
+        167,
+        65,
+        217
+      ],
+      "accounts": [
+        {
+          "name": "authority_signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "futarchy_authority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "UpdateRevenueRecipientsArgs"
             }
           }
         }
@@ -2968,6 +3083,36 @@
                 "kind": "account",
                 "path": "market.params_hash",
                 "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "futarchy_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
               }
             ]
           }
@@ -3070,16 +3215,16 @@
   ],
   "accounts": [
     {
-      "name": "HedgePosition",
+      "name": "FutarchyAuthority",
       "discriminator": [
-        88,
-        83,
-        42,
-        238,
-        125,
-        99,
-        252,
-        52
+        175,
+        247,
+        160,
+        182,
+        140,
+        128,
+        211,
+        226
       ]
     },
     {
@@ -3109,20 +3254,59 @@
       ]
     },
     {
-      "name": "StakePosition",
+      "name": "YieldAccount",
       "discriminator": [
-        78,
-        165,
-        30,
-        111,
-        171,
-        125,
-        11,
-        220
+        233,
+        241,
+        119,
+        6,
+        2,
+        14,
+        106,
+        156
       ]
     }
   ],
   "events": [
+    {
+      "name": "HlpClosed",
+      "discriminator": [
+        87,
+        126,
+        152,
+        164,
+        162,
+        203,
+        111,
+        235
+      ]
+    },
+    {
+      "name": "HlpOpened",
+      "discriminator": [
+        188,
+        231,
+        244,
+        52,
+        5,
+        151,
+        236,
+        84
+      ]
+    },
+    {
+      "name": "HlpRebalanced",
+      "discriminator": [
+        48,
+        237,
+        118,
+        177,
+        48,
+        168,
+        104,
+        6
+      ]
+    },
     {
       "name": "LiquidityAdded",
       "discriminator": [
@@ -3215,19 +3399,6 @@
       ]
     },
     {
-      "name": "MarketFeesClaimed",
-      "discriminator": [
-        216,
-        66,
-        148,
-        204,
-        52,
-        7,
-        196,
-        0
-      ]
-    },
-    {
       "name": "MarketHealthUpdated",
       "discriminator": [
         99,
@@ -3238,71 +3409,6 @@
         194,
         188,
         225
-      ]
-    },
-    {
-      "name": "MarketHedgeClosed",
-      "discriminator": [
-        94,
-        23,
-        216,
-        248,
-        238,
-        103,
-        249,
-        140
-      ]
-    },
-    {
-      "name": "MarketHedgeFeesClaimed",
-      "discriminator": [
-        107,
-        188,
-        240,
-        134,
-        159,
-        15,
-        240,
-        43
-      ]
-    },
-    {
-      "name": "MarketHedgeOpened",
-      "discriminator": [
-        234,
-        65,
-        71,
-        203,
-        229,
-        161,
-        238,
-        22
-      ]
-    },
-    {
-      "name": "MarketInsuranceFunded",
-      "discriminator": [
-        173,
-        170,
-        246,
-        1,
-        232,
-        8,
-        182,
-        16
-      ]
-    },
-    {
-      "name": "MarketStakeUpdated",
-      "discriminator": [
-        63,
-        209,
-        17,
-        74,
-        217,
-        206,
-        214,
-        193
       ]
     },
     {
@@ -3332,6 +3438,19 @@
       ]
     },
     {
+      "name": "ProtocolFeesClaimed",
+      "discriminator": [
+        22,
+        228,
+        205,
+        252,
+        57,
+        17,
+        156,
+        252
+      ]
+    },
+    {
       "name": "SwapExecuted",
       "discriminator": [
         150,
@@ -3342,6 +3461,45 @@
         89,
         38,
         79
+      ]
+    },
+    {
+      "name": "SwapSettled",
+      "discriminator": [
+        104,
+        192,
+        63,
+        194,
+        238,
+        236,
+        149,
+        85
+      ]
+    },
+    {
+      "name": "YieldClaimed",
+      "discriminator": [
+        177,
+        201,
+        94,
+        68,
+        19,
+        200,
+        227,
+        27
+      ]
+    },
+    {
+      "name": "YieldRecipientUpdated",
+      "discriminator": [
+        154,
+        113,
+        25,
+        74,
+        11,
+        107,
+        114,
+        170
       ]
     }
   ],
@@ -3743,13 +3901,13 @@
     },
     {
       "code": 6079,
-      "name": "InvalidMarketBufferRatio",
-      "msg": "Invalid market buffer ratio"
+      "name": "InvalidSettlementPrice",
+      "msg": "Invalid settlement price"
     },
     {
       "code": 6080,
-      "name": "InsufficientMarketClaimCoverage",
-      "msg": "Market claim coverage is insufficient"
+      "name": "InsufficientMarketShareBacking",
+      "msg": "Market reserve share backing is insufficient"
     },
     {
       "code": 6081,
@@ -3758,96 +3916,101 @@
     },
     {
       "code": 6082,
-      "name": "InvalidStakePosition",
-      "msg": "Invalid stake position"
+      "name": "InvalidYieldAccount",
+      "msg": "Invalid yield account"
     },
     {
       "code": 6083,
-      "name": "InvalidHedgePosition",
-      "msg": "Invalid hedge position"
+      "name": "InvalidHlpVault",
+      "msg": "Invalid hLP vault"
     },
     {
       "code": 6084,
-      "name": "InsufficientBufferShares",
-      "msg": "Buffer shares are insufficient"
+      "name": "NotEnoughAccounts",
+      "msg": "Not enough remaining accounts"
     },
     {
       "code": 6085,
+      "name": "HlpSettlementUnavailable",
+      "msg": "hLP settlement is unavailable"
+    },
+    {
+      "code": 6086,
       "name": "InsufficientBorrowHeadroom",
       "msg": "Borrow headroom is insufficient"
     },
     {
-      "code": 6086,
+      "code": 6087,
       "name": "InsufficientMarketHealth",
       "msg": "Market health is insufficient"
     },
     {
-      "code": 6087,
+      "code": 6088,
       "name": "InvalidMarginPosition",
       "msg": "Invalid margin position"
     },
     {
-      "code": 6088,
+      "code": 6089,
       "name": "InsufficientRecognizedCollateral",
       "msg": "Recognized collateral is insufficient"
     },
     {
-      "code": 6089,
+      "code": 6090,
       "name": "PositionNotLiquidatable",
       "msg": "Position is not liquidatable"
     },
     {
-      "code": 6090,
-      "name": "InsufficientInsuranceReserve",
-      "msg": "Insurance reserve is insufficient"
+      "code": 6091,
+      "name": "InsufficientInsurance",
+      "msg": "Insurance coverage is insufficient"
     },
     {
-      "code": 6091,
+      "code": 6092,
       "name": "LiquidationSocializationExceeded",
       "msg": "Socialized liquidation loss exceeds caller cap"
     },
     {
-      "code": 6092,
+      "code": 6093,
       "name": "InvalidClaimMint",
       "msg": "Claim mint must not charge transfer fees"
     },
     {
-      "code": 6093,
+      "code": 6094,
       "name": "UnbackedFeeLiability",
       "msg": "Fee liability is not backed by fee vault balance"
     },
     {
-      "code": 6094,
+      "code": 6095,
       "name": "InvalidMarketFeeAuthority",
       "msg": "Invalid market fee authority"
     },
     {
-      "code": 6095,
+      "code": 6096,
       "name": "MarketReduceOnly",
       "msg": "Market is reduce-only"
     },
     {
-      "code": 6096,
+      "code": 6097,
       "name": "MarketNotStarted",
       "msg": "Market has not started"
     },
     {
-      "code": 6097,
+      "code": 6098,
       "name": "MarketMathOverflow",
       "msg": "Market math overflow"
     },
     {
-      "code": 6098,
+      "code": 6099,
       "name": "DailyLimitExceeded",
       "msg": "Daily liquidity limit exceeded"
     },
     {
-      "code": 6099,
+      "code": 6100,
       "name": "MarketRiskCircuitBreaker",
       "msg": "Market risk circuit breaker triggered"
     },
     {
-      "code": 6100,
+      "code": 6101,
       "name": "InstructionNotLive",
       "msg": "Instruction is intentionally not live yet"
     }
@@ -3859,23 +4022,19 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_asset",
-            "type": {
-              "defined": {
-                "name": "MarketAsset"
-              }
-            }
-          },
-          {
-            "name": "deposit_amount",
+            "name": "base_deposit_amount",
             "type": "u64"
           },
           {
-            "name": "min_claim_amount",
+            "name": "quote_deposit_amount",
             "type": "u64"
           },
           {
-            "name": "max_buffer_amount",
+            "name": "min_base_ylp_amount",
+            "type": "u64"
+          },
+          {
+            "name": "min_quote_ylp_amount",
             "type": "u64"
           }
         ]
@@ -3910,31 +4069,7 @@
       }
     },
     {
-      "name": "BufferLedger",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "buffer_share_supply",
-            "type": "u64"
-          },
-          {
-            "name": "staked_buffer_share_amount",
-            "type": "u64"
-          },
-          {
-            "name": "required_buffer",
-            "type": "u64"
-          },
-          {
-            "name": "buffer_ratio_bps",
-            "type": "u16"
-          }
-        ]
-      }
-    },
-    {
-      "name": "ClaimFeesArgs",
+      "name": "ClaimYieldArgs",
       "type": {
         "kind": "struct",
         "fields": [
@@ -3947,76 +4082,12 @@
             }
           },
           {
-            "name": "min_fee_amount",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "ClaimHedgeFeesArgs",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market_asset",
+            "name": "token_kind",
             "type": {
               "defined": {
-                "name": "MarketAsset"
+                "name": "YieldTokenKind"
               }
             }
-          },
-          {
-            "name": "min_fee_amount",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "ClaimMarketFeesArgs",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market_asset",
-            "type": {
-              "defined": {
-                "name": "MarketAsset"
-              }
-            }
-          },
-          {
-            "name": "claim_kind",
-            "type": {
-              "defined": {
-                "name": "MarketFeeClaimKind"
-              }
-            }
-          },
-          {
-            "name": "min_fee_amount",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "ClaimTokenLedger",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "protected_claim_token_supply",
-            "type": "u64"
-          },
-          {
-            "name": "hedged_claim_token_supply",
-            "type": "u64"
-          },
-          {
-            "name": "staked_claim_token_supply",
-            "type": "u64"
           }
         ]
       }
@@ -4027,7 +4098,7 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_asset",
+            "name": "target_asset",
             "type": {
               "defined": {
                 "name": "MarketAsset"
@@ -4035,18 +4106,18 @@
             }
           },
           {
-            "name": "hedge_amount",
+            "name": "hlp_amount",
             "type": "u64"
           },
           {
-            "name": "min_claim_amount_out",
+            "name": "min_target_amount_out",
             "type": "u64"
           }
         ]
       }
     },
     {
-      "name": "DailyLimitBook",
+      "name": "DailyLimits",
       "type": {
         "kind": "struct",
         "fields": [
@@ -4066,24 +4137,24 @@
       }
     },
     {
-      "name": "DebtBook",
+      "name": "Debt",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "fixed_base_debt_shares",
+            "name": "fixed_base_shares",
             "type": "u128"
           },
           {
-            "name": "fixed_quote_debt_shares",
+            "name": "fixed_quote_shares",
             "type": "u128"
           },
           {
-            "name": "soft_base_debt_shares",
+            "name": "soft_base_shares",
             "type": "u128"
           },
           {
-            "name": "soft_quote_debt_shares",
+            "name": "soft_quote_shares",
             "type": "u128"
           },
           {
@@ -4093,6 +4164,18 @@
           {
             "name": "quote_borrow_index_nad",
             "type": "u128"
+          },
+          {
+            "name": "recognized_base_collateral_for_quote_debt",
+            "type": "u64"
+          },
+          {
+            "name": "recognized_quote_collateral_for_base_debt",
+            "type": "u64"
+          },
+          {
+            "name": "last_recognition_slot",
+            "type": "u64"
           }
         ]
       }
@@ -4118,56 +4201,40 @@
       }
     },
     {
-      "name": "DepositInsuranceArgs",
+      "name": "Fees",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "market_asset",
-            "type": {
-              "defined": {
-                "name": "MarketAsset"
-              }
-            }
-          },
-          {
-            "name": "deposit_amount",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "FeeLedger",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "fee_growth_index_nad",
+            "name": "swap_fee_growth_index_nad",
             "type": "u128"
           },
           {
-            "name": "hedged_fee_growth_index_nad",
+            "name": "interest_growth_index_nad",
             "type": "u128"
           },
           {
-            "name": "fee_vault_balance",
+            "name": "swap_fee_vault_balance",
             "type": "u64"
           },
           {
-            "name": "fee_liability",
+            "name": "interest_vault_balance",
             "type": "u64"
           },
           {
-            "name": "hedged_fee_liability",
+            "name": "swap_fee_liability",
             "type": "u64"
           },
           {
-            "name": "unallocated_fee_liability",
+            "name": "interest_liability",
             "type": "u64"
           },
           {
-            "name": "unallocated_hedged_fee_liability",
+            "name": "unallocated_swap_fee_liability",
+            "type": "u64"
+          },
+          {
+            "name": "unallocated_interest_liability",
             "type": "u64"
           },
           {
@@ -4182,16 +4249,64 @@
       }
     },
     {
-      "name": "HedgePosition",
+      "name": "FutarchyAuthority",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "owner",
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "authority",
             "type": "pubkey"
           },
           {
+            "name": "recipients",
+            "type": {
+              "defined": {
+                "name": "RevenueRecipients"
+              }
+            }
+          },
+          {
+            "name": "revenue_share",
+            "type": {
+              "defined": {
+                "name": "RevenueShare"
+              }
+            }
+          },
+          {
+            "name": "revenue_distribution",
+            "type": {
+              "defined": {
+                "name": "RevenueDistribution"
+              }
+            }
+          },
+          {
+            "name": "global_reduce_only",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HlpClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
             "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
             "type": "pubkey"
           },
           {
@@ -4199,20 +4314,272 @@
             "type": "pubkey"
           },
           {
-            "name": "hedged_claim_token_amount",
+            "name": "hlp_amount",
             "type": "u64"
           },
           {
-            "name": "fee_growth_checkpoint_nad",
+            "name": "base_ylp_amount",
+            "type": "u64"
+          },
+          {
+            "name": "quote_ylp_amount",
+            "type": "u64"
+          },
+          {
+            "name": "target_amount_out",
+            "type": "u64"
+          },
+          {
+            "name": "debt_repaid",
+            "type": "u64"
+          },
+          {
+            "name": "hlp_supply",
+            "type": "u64"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "MarketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "HlpOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "asset_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "deposit_amount",
+            "type": "u64"
+          },
+          {
+            "name": "borrowed_amount",
+            "type": "u64"
+          },
+          {
+            "name": "base_ylp_amount",
+            "type": "u64"
+          },
+          {
+            "name": "quote_ylp_amount",
+            "type": "u64"
+          },
+          {
+            "name": "hlp_amount",
+            "type": "u64"
+          },
+          {
+            "name": "hlp_supply",
+            "type": "u64"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "MarketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "HlpRebalanced",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "target_side",
+            "type": "u8"
+          },
+          {
+            "name": "ideal_delta",
+            "type": "i128"
+          },
+          {
+            "name": "executed_delta",
+            "type": "i128"
+          },
+          {
+            "name": "pending_rebalance",
+            "type": "i128"
+          },
+          {
+            "name": "nav_nad",
             "type": "u128"
           },
           {
-            "name": "accrued_fee_amount",
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "MarketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "HlpVault",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "target_side",
+            "type": "u8"
+          },
+          {
+            "name": "base_ylp_vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "quote_ylp_vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "ylp_base_shares",
             "type": "u64"
           },
           {
-            "name": "bump",
-            "type": "u8"
+            "name": "ylp_quote_shares",
+            "type": "u64"
+          },
+          {
+            "name": "debt_shares",
+            "type": "u128"
+          },
+          {
+            "name": "hlp_supply",
+            "type": "u64"
+          },
+          {
+            "name": "pending_rebalance",
+            "type": "i128"
+          },
+          {
+            "name": "base_swap_fee_growth_index_nad",
+            "type": "u128"
+          },
+          {
+            "name": "base_interest_growth_index_nad",
+            "type": "u128"
+          },
+          {
+            "name": "quote_swap_fee_growth_index_nad",
+            "type": "u128"
+          },
+          {
+            "name": "quote_interest_growth_index_nad",
+            "type": "u128"
+          },
+          {
+            "name": "base_swap_fee_checkpoint_nad",
+            "type": "u128"
+          },
+          {
+            "name": "base_interest_checkpoint_nad",
+            "type": "u128"
+          },
+          {
+            "name": "quote_swap_fee_checkpoint_nad",
+            "type": "u128"
+          },
+          {
+            "name": "quote_interest_checkpoint_nad",
+            "type": "u128"
+          },
+          {
+            "name": "unallocated_base_swap_fee_amount",
+            "type": "u64"
+          },
+          {
+            "name": "unallocated_base_interest_amount",
+            "type": "u64"
+          },
+          {
+            "name": "unallocated_quote_swap_fee_amount",
+            "type": "u64"
+          },
+          {
+            "name": "unallocated_quote_interest_amount",
+            "type": "u64"
+          },
+          {
+            "name": "last_nav_nad",
+            "type": "u128"
+          },
+          {
+            "name": "cached_settlement_price_nad",
+            "type": "u128"
+          },
+          {
+            "name": "last_rebalance_slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InitFutarchyAuthorityArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "swap_bps",
+            "type": "u16"
+          },
+          {
+            "name": "interest_bps",
+            "type": "u16"
+          },
+          {
+            "name": "futarchy_treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "futarchy_treasury_bps",
+            "type": "u16"
+          },
+          {
+            "name": "buybacks_vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "buybacks_vault_bps",
+            "type": "u16"
+          },
+          {
+            "name": "team_treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "team_treasury_bps",
+            "type": "u16"
           }
         ]
       }
@@ -4251,7 +4618,7 @@
       }
     },
     {
-      "name": "InsuranceReserve",
+      "name": "Insurance",
       "type": {
         "kind": "struct",
         "fields": [
@@ -4320,27 +4687,27 @@
             "type": "pubkey"
           },
           {
-            "name": "asset_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "reserve_credit",
+            "name": "base_reserve_credit",
             "type": "u64"
           },
           {
-            "name": "claim_amount",
+            "name": "quote_reserve_credit",
             "type": "u64"
           },
           {
-            "name": "buffer_amount",
+            "name": "base_ylp_amount",
             "type": "u64"
           },
           {
-            "name": "protected_claim_token_supply",
+            "name": "quote_ylp_amount",
             "type": "u64"
           },
           {
-            "name": "required_buffer",
+            "name": "base_ylp_supply",
+            "type": "u64"
+          },
+          {
+            "name": "quote_ylp_supply",
             "type": "u64"
           },
           {
@@ -4368,19 +4735,27 @@
             "type": "pubkey"
           },
           {
-            "name": "asset_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "claim_amount",
+            "name": "base_ylp_amount",
             "type": "u64"
           },
           {
-            "name": "protected_claim_token_supply",
+            "name": "quote_ylp_amount",
             "type": "u64"
           },
           {
-            "name": "required_buffer",
+            "name": "base_amount_out",
+            "type": "u64"
+          },
+          {
+            "name": "quote_amount_out",
+            "type": "u64"
+          },
+          {
+            "name": "base_ylp_supply",
+            "type": "u64"
+          },
+          {
+            "name": "quote_ylp_supply",
             "type": "u64"
           },
           {
@@ -4424,11 +4799,11 @@
             "type": "u64"
           },
           {
-            "name": "fixed_base_debt_shares",
+            "name": "fixed_base_shares",
             "type": "u128"
           },
           {
-            "name": "fixed_quote_debt_shares",
+            "name": "fixed_quote_shares",
             "type": "u128"
           },
           {
@@ -4488,18 +4863,34 @@
             }
           },
           {
-            "name": "debt_book",
+            "name": "debt",
             "type": {
               "defined": {
-                "name": "DebtBook"
+                "name": "Debt"
               }
             }
           },
           {
-            "name": "risk_book",
+            "name": "base_hlp_vault",
             "type": {
               "defined": {
-                "name": "RiskBook"
+                "name": "HlpVault"
+              }
+            }
+          },
+          {
+            "name": "quote_hlp_vault",
+            "type": {
+              "defined": {
+                "name": "HlpVault"
+              }
+            }
+          },
+          {
+            "name": "risk",
+            "type": {
+              "defined": {
+                "name": "Risk"
               }
             }
           },
@@ -4512,18 +4903,10 @@
             }
           },
           {
-            "name": "recognition_ledger",
+            "name": "insurance",
             "type": {
               "defined": {
-                "name": "RecognitionLedger"
-              }
-            }
-          },
-          {
-            "name": "insurance_reserve",
-            "type": {
-              "defined": {
-                "name": "InsuranceReserve"
+                "name": "Insurance"
               }
             }
           },
@@ -4667,12 +5050,16 @@
             "type": "u16"
           },
           {
-            "name": "buffer_ratio_bps",
+            "name": "target_hlp_leverage_bps",
             "type": "u16"
           },
           {
-            "name": "fee_routing_k_nad",
-            "type": "u64"
+            "name": "settlement_divergence_bps",
+            "type": "u16"
+          },
+          {
+            "name": "emergency_exit_haircut_bps",
+            "type": "u16"
           },
           {
             "name": "ema_half_life_ms",
@@ -4711,14 +5098,6 @@
             "type": "u16"
           },
           {
-            "name": "effective_debt_weight_min_bps",
-            "type": "u16"
-          },
-          {
-            "name": "effective_debt_gamma_nad",
-            "type": "u64"
-          },
-          {
             "name": "soft_borrow_enabled",
             "type": "bool"
           },
@@ -4751,19 +5130,11 @@
             "type": "pubkey"
           },
           {
-            "name": "base_claim_token_mint",
+            "name": "base_ylp_mint",
             "type": "pubkey"
           },
           {
-            "name": "quote_claim_token_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "base_stake_vault",
-            "type": "pubkey"
-          },
-          {
-            "name": "quote_stake_vault",
+            "name": "quote_ylp_mint",
             "type": "pubkey"
           },
           {
@@ -4783,19 +5154,11 @@
             "type": "pubkey"
           },
           {
-            "name": "base_hedge_token_mint",
+            "name": "base_hlp_mint",
             "type": "pubkey"
           },
           {
-            "name": "quote_hedge_token_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "base_hedge_vault",
-            "type": "pubkey"
-          },
-          {
-            "name": "quote_hedge_vault",
+            "name": "quote_hlp_mint",
             "type": "pubkey"
           },
           {
@@ -4807,7 +5170,7 @@
             "type": "pubkey"
           },
           {
-            "name": "buffer_ratio_bps",
+            "name": "target_hlp_leverage_bps",
             "type": "u16"
           },
           {
@@ -4911,20 +5274,6 @@
       }
     },
     {
-      "name": "MarketFeeClaimKind",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "Operator"
-          },
-          {
-            "name": "Protocol"
-          }
-        ]
-      }
-    },
-    {
       "name": "MarketFeeLiabilityClaimed",
       "type": {
         "kind": "struct",
@@ -4944,42 +5293,6 @@
           {
             "name": "claim_kind",
             "type": "u8"
-          },
-          {
-            "name": "fee_amount",
-            "type": "u64"
-          },
-          {
-            "name": "remaining_fee_liability",
-            "type": "u64"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "MarketEventMetadata"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "MarketFeesClaimed",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "owner",
-            "type": "pubkey"
-          },
-          {
-            "name": "asset_mint",
-            "type": "pubkey"
           },
           {
             "name": "fee_amount",
@@ -5077,162 +5390,6 @@
       }
     },
     {
-      "name": "MarketHedgeClosed",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "owner",
-            "type": "pubkey"
-          },
-          {
-            "name": "asset_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "hedge_amount",
-            "type": "u64"
-          },
-          {
-            "name": "claim_amount",
-            "type": "u64"
-          },
-          {
-            "name": "hedged_claim_token_supply",
-            "type": "u64"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "MarketEventMetadata"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "MarketHedgeFeesClaimed",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "owner",
-            "type": "pubkey"
-          },
-          {
-            "name": "asset_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "fee_amount",
-            "type": "u64"
-          },
-          {
-            "name": "remaining_fee_liability",
-            "type": "u64"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "MarketEventMetadata"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "MarketHedgeOpened",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "owner",
-            "type": "pubkey"
-          },
-          {
-            "name": "asset_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "claim_amount",
-            "type": "u64"
-          },
-          {
-            "name": "hedge_amount",
-            "type": "u64"
-          },
-          {
-            "name": "hedged_claim_token_supply",
-            "type": "u64"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "MarketEventMetadata"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "MarketInsuranceFunded",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "sponsor",
-            "type": "pubkey"
-          },
-          {
-            "name": "asset_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "insurance_credit",
-            "type": "u64"
-          },
-          {
-            "name": "base_available",
-            "type": "u64"
-          },
-          {
-            "name": "quote_available",
-            "type": "u64"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "MarketEventMetadata"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "MarketSide",
       "type": {
         "kind": "struct",
@@ -5246,15 +5403,11 @@
             "type": "u8"
           },
           {
-            "name": "claim_token_mint",
+            "name": "ylp_mint",
             "type": "pubkey"
           },
           {
-            "name": "hedge_token_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "hedge_vault",
+            "name": "hlp_mint",
             "type": "pubkey"
           },
           {
@@ -5270,90 +5423,38 @@
             "type": "pubkey"
           },
           {
-            "name": "stake_vault",
+            "name": "interest_vault",
             "type": "pubkey"
           },
           {
-            "name": "reserve_ledger",
+            "name": "reserves",
             "type": {
               "defined": {
-                "name": "ReserveLedger"
+                "name": "Reserves"
               }
             }
           },
           {
-            "name": "claim_token_ledger",
+            "name": "shares",
             "type": {
               "defined": {
-                "name": "ClaimTokenLedger"
+                "name": "ReserveShares"
               }
             }
           },
           {
-            "name": "buffer_ledger",
+            "name": "fees",
             "type": {
               "defined": {
-                "name": "BufferLedger"
+                "name": "Fees"
               }
             }
           },
           {
-            "name": "fee_ledger",
+            "name": "daily_limits",
             "type": {
               "defined": {
-                "name": "FeeLedger"
-              }
-            }
-          },
-          {
-            "name": "daily_limit_book",
-            "type": {
-              "defined": {
-                "name": "DailyLimitBook"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "MarketStakeUpdated",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "owner",
-            "type": "pubkey"
-          },
-          {
-            "name": "asset_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "staked_claim_token_amount",
-            "type": "u64"
-          },
-          {
-            "name": "staked_buffer_share_amount",
-            "type": "u64"
-          },
-          {
-            "name": "active_stake_units",
-            "type": "u64"
-          },
-          {
-            "name": "accrued_fee_amount",
-            "type": "u64"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "MarketEventMetadata"
+                "name": "DailyLimits"
               }
             }
           }
@@ -5374,7 +5475,7 @@
             "type": "bool"
           },
           {
-            "name": "buffer_ratio_bps",
+            "name": "target_hlp_leverage_bps",
             "type": "u16"
           },
           {
@@ -5406,7 +5507,7 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_asset",
+            "name": "target_asset",
             "type": {
               "defined": {
                 "name": "MarketAsset"
@@ -5414,11 +5515,11 @@
             }
           },
           {
-            "name": "claim_amount",
+            "name": "deposit_amount",
             "type": "u64"
           },
           {
-            "name": "min_hedge_amount",
+            "name": "min_hlp_amount",
             "type": "u64"
           }
         ]
@@ -5458,6 +5559,14 @@
             "type": "u64"
           },
           {
+            "name": "collateral_to_liquidator",
+            "type": "u64"
+          },
+          {
+            "name": "insurance_funded",
+            "type": "u64"
+          },
+          {
             "name": "insurance_drawn",
             "type": "u64"
           },
@@ -5481,21 +5590,53 @@
       }
     },
     {
-      "name": "RecognitionLedger",
+      "name": "ProtocolFeesClaimed",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "debt_bearing_base_collateral_for_quote_debt",
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "quote_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "futarchy_treasury_base_amount",
             "type": "u64"
           },
           {
-            "name": "debt_bearing_quote_collateral_for_base_debt",
+            "name": "futarchy_treasury_quote_amount",
             "type": "u64"
           },
           {
-            "name": "last_recognition_slot",
+            "name": "buybacks_vault_base_amount",
             "type": "u64"
+          },
+          {
+            "name": "buybacks_vault_quote_amount",
+            "type": "u64"
+          },
+          {
+            "name": "team_treasury_base_amount",
+            "type": "u64"
+          },
+          {
+            "name": "team_treasury_quote_amount",
+            "type": "u64"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "MarketEventMetadata"
+              }
+            }
           }
         ]
       }
@@ -5506,19 +5647,19 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "market_asset",
-            "type": {
-              "defined": {
-                "name": "MarketAsset"
-              }
-            }
-          },
-          {
-            "name": "claim_amount",
+            "name": "base_ylp_amount",
             "type": "u64"
           },
           {
-            "name": "min_asset_amount_out",
+            "name": "quote_ylp_amount",
+            "type": "u64"
+          },
+          {
+            "name": "min_base_amount_out",
+            "type": "u64"
+          },
+          {
+            "name": "min_quote_amount_out",
             "type": "u64"
           }
         ]
@@ -5545,7 +5686,19 @@
       }
     },
     {
-      "name": "ReserveLedger",
+      "name": "ReserveShares",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ylp_supply",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Reserves",
       "type": {
         "kind": "struct",
         "fields": [
@@ -5565,7 +5718,67 @@
       }
     },
     {
-      "name": "RiskBook",
+      "name": "RevenueDistribution",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "futarchy_treasury_bps",
+            "type": "u16"
+          },
+          {
+            "name": "buybacks_vault_bps",
+            "type": "u16"
+          },
+          {
+            "name": "team_treasury_bps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RevenueRecipients",
+      "docs": [
+        "Revenue recipient wallet addresses. Recipient token accounts are derived or",
+        "validated against these owners when protocol fees are claimed."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "futarchy_treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "buybacks_vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "team_treasury",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RevenueShare",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "swap_bps",
+            "type": "u16"
+          },
+          {
+            "name": "interest_bps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Risk",
       "type": {
         "kind": "struct",
         "fields": [
@@ -5633,6 +5846,18 @@
       }
     },
     {
+      "name": "SetGlobalReduceOnlyArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "reduce_only",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
       "name": "SetMarketReduceOnlyArgs",
       "type": {
         "kind": "struct",
@@ -5645,78 +5870,21 @@
       }
     },
     {
-      "name": "StakeArgs",
+      "name": "SetYieldRecipientArgs",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "market_asset",
+            "name": "token_kind",
             "type": {
               "defined": {
-                "name": "MarketAsset"
+                "name": "YieldTokenKind"
               }
             }
           },
           {
-            "name": "claim_amount",
-            "type": "u64"
-          },
-          {
-            "name": "buffer_share_amount",
-            "type": "u64"
-          },
-          {
-            "name": "min_active_stake_units",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "StakePosition",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "owner",
+            "name": "recipient",
             "type": "pubkey"
-          },
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "asset_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "available_buffer_share_amount",
-            "docs": [
-              "Non-transferable junior buffer accounting credited by add_liquidity.",
-              "Removing claim-token principal does not release these units; they remain",
-              "available to match with claim tokens for future fee eligibility."
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "staked_claim_token_amount",
-            "type": "u64"
-          },
-          {
-            "name": "staked_buffer_share_amount",
-            "type": "u64"
-          },
-          {
-            "name": "fee_growth_checkpoint_nad",
-            "type": "u128"
-          },
-          {
-            "name": "accrued_fee_amount",
-            "type": "u64"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
           }
         ]
       }
@@ -5783,6 +5951,14 @@
             "type": "u64"
           },
           {
+            "name": "base_hlp_pending_rebalance",
+            "type": "i128"
+          },
+          {
+            "name": "quote_hlp_pending_rebalance",
+            "type": "i128"
+          },
+          {
             "name": "metadata",
             "type": {
               "defined": {
@@ -5794,25 +5970,57 @@
       }
     },
     {
-      "name": "UnstakeArgs",
+      "name": "SwapSettled",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "market_asset",
-            "type": {
-              "defined": {
-                "name": "MarketAsset"
-              }
-            }
+            "name": "market",
+            "type": "pubkey"
           },
           {
-            "name": "claim_amount",
+            "name": "trader",
+            "type": "pubkey"
+          },
+          {
+            "name": "asset_in_side",
+            "type": "u8"
+          },
+          {
+            "name": "reserve_credit",
             "type": "u64"
           },
           {
-            "name": "buffer_share_amount",
+            "name": "amount_in_after_fee",
             "type": "u64"
+          },
+          {
+            "name": "amount_out",
+            "type": "u64"
+          },
+          {
+            "name": "fee_credit",
+            "type": "u64"
+          },
+          {
+            "name": "base_hlp_pending_rebalance",
+            "type": "i128"
+          },
+          {
+            "name": "quote_hlp_pending_rebalance",
+            "type": "i128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateFutarchyAuthorityArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "new_authority",
+            "type": "pubkey"
           }
         ]
       }
@@ -5828,6 +6036,62 @@
               "defined": {
                 "name": "MarketConfig"
               }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateProtocolRevenueArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "swap_bps",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "interest_bps",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "revenue_distribution",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "RevenueDistribution"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateRevenueRecipientsArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "futarchy_treasury",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "buybacks_vault",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "team_treasury",
+            "type": {
+              "option": "pubkey"
             }
           }
         ]
@@ -5856,6 +6120,148 @@
           }
         ]
       }
+    },
+    {
+      "name": "YieldAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "asset_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_kind",
+            "type": "u8"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "swap_fee_checkpoint_nad",
+            "type": "u128"
+          },
+          {
+            "name": "interest_checkpoint_nad",
+            "type": "u128"
+          },
+          {
+            "name": "accrued_swap_fee_amount",
+            "type": "u64"
+          },
+          {
+            "name": "accrued_interest_amount",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "YieldClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "asset_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_kind",
+            "type": "u8"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "swap_fee_amount",
+            "type": "u64"
+          },
+          {
+            "name": "interest_amount",
+            "type": "u64"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "MarketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "YieldRecipientUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "asset_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "token_kind",
+            "type": "u8"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "MarketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "YieldTokenKind",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Ylp"
+          },
+          {
+            "name": "Hlp"
+          }
+        ]
+      }
     }
   ],
   "constants": [
@@ -5865,24 +6271,29 @@
       "value": "10000"
     },
     {
-      "name": "HEDGE_POSITION_SEED_PREFIX",
+      "name": "FUTARCHY_AUTHORITY_SEED_PREFIX",
       "type": "bytes",
-      "value": "[104, 101, 100, 103, 101, 95, 112, 111, 115, 105, 116, 105, 111, 110]"
+      "value": "[102, 117, 116, 97, 114, 99, 104, 121, 95, 97, 117, 116, 104, 111, 114, 105, 116, 121]"
     },
     {
-      "name": "HEDGE_VAULT_SEED_PREFIX",
+      "name": "HLP_YLP_VAULT_SEED_PREFIX",
       "type": "bytes",
-      "value": "[104, 101, 100, 103, 101, 100]"
+      "value": "[104, 108, 112, 95, 121, 108, 112, 95, 118, 97, 117, 108, 116]"
     },
     {
-      "name": "INSURANCE_RESERVE_SEED_PREFIX",
+      "name": "INSURANCE_SEED_PREFIX",
       "type": "bytes",
       "value": "[105, 110, 115, 117, 114, 97, 110, 99, 101]"
     },
     {
       "name": "LIQUIDATION_INCENTIVE_BPS",
       "type": "u16",
-      "value": "50"
+      "value": "100"
+    },
+    {
+      "name": "LIQUIDATION_PENALTY_BPS",
+      "type": "u16",
+      "value": "300"
     },
     {
       "name": "MARGIN_POSITION_SEED_PREFIX",
@@ -5895,19 +6306,24 @@
       "value": "[109, 97, 114, 107, 101, 116, 95, 99, 111, 108, 108, 97, 116, 101, 114, 97, 108]"
     },
     {
+      "name": "MARKET_CREATION_FEE_LAMPORTS",
+      "type": "u64",
+      "value": "200000000"
+    },
+    {
       "name": "MARKET_FEE_VAULT_SEED_PREFIX",
       "type": "bytes",
       "value": "[109, 97, 114, 107, 101, 116, 95, 102, 101, 101]"
     },
     {
+      "name": "MARKET_INTEREST_VAULT_SEED_PREFIX",
+      "type": "bytes",
+      "value": "[109, 97, 114, 107, 101, 116, 95, 105, 110, 116, 101, 114, 101, 115, 116]"
+    },
+    {
       "name": "MARKET_RESERVE_VAULT_SEED_PREFIX",
       "type": "bytes",
       "value": "[109, 97, 114, 107, 101, 116, 95, 114, 101, 115, 101, 114, 118, 101]"
-    },
-    {
-      "name": "MARKET_STAKE_VAULT_SEED_PREFIX",
-      "type": "bytes",
-      "value": "[109, 97, 114, 107, 101, 116, 95, 115, 116, 97, 107, 101]"
     },
     {
       "name": "MARKET_V2_SEED_PREFIX",
@@ -5922,7 +6338,7 @@
     {
       "name": "NAD",
       "docs": [
-        "NAD: nine-decimal fixed point unit, similar to WAD in EVM systems."
+        "NAD: Nine-decimal fixed point unit (1e9 scaling), similar to WAD (1e18) by Maker."
       ],
       "type": "u64",
       "value": "1000000000"
@@ -5933,14 +6349,14 @@
       "value": "9"
     },
     {
-      "name": "STAKE_POSITION_SEED_PREFIX",
-      "type": "bytes",
-      "value": "[115, 116, 97, 107, 101]"
-    },
-    {
       "name": "TARGET_MS_PER_SLOT",
       "type": "u64",
       "value": "400"
+    },
+    {
+      "name": "YIELD_ACCOUNT_SEED_PREFIX",
+      "type": "bytes",
+      "value": "[121, 105, 101, 108, 100]"
     }
   ]
 }

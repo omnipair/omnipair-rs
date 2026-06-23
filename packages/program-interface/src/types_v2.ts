@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/omnipair_v2.json`.
  */
 export type OmnipairV2 = {
-  "address": "oMNi2XGwWxDbEvhS2pWRQ6dtw8GkNBV42hfLZD6WmMF",
+  "address": "358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv",
   "metadata": {
     "name": "omnipairV2",
     "version": "0.10.2",
@@ -64,58 +64,85 @@ export type OmnipairV2 = {
           }
         },
         {
-          "name": "owner",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "assetMint"
-        },
-        {
-          "name": "claimTokenMint",
-          "writable": true
-        },
-        {
-          "name": "reserveVault",
-          "writable": true
-        },
-        {
-          "name": "ownerAssetAccount",
-          "writable": true
-        },
-        {
-          "name": "ownerClaimAccount",
-          "writable": true
-        },
-        {
-          "name": "stakePosition",
-          "writable": true,
+          "name": "futarchyAuthority",
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  115,
+                  102,
+                  117,
                   116,
                   97,
-                  107,
-                  101
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
                 ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "account",
-                "path": "assetMint"
               }
             ]
           }
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "baseMint"
+        },
+        {
+          "name": "quoteMint"
+        },
+        {
+          "name": "baseYlpMint",
+          "writable": true
+        },
+        {
+          "name": "quoteYlpMint",
+          "writable": true
+        },
+        {
+          "name": "baseReserveVault",
+          "writable": true
+        },
+        {
+          "name": "quoteReserveVault",
+          "writable": true
+        },
+        {
+          "name": "ownerBaseAccount",
+          "writable": true
+        },
+        {
+          "name": "ownerQuoteAccount",
+          "writable": true
+        },
+        {
+          "name": "ownerBaseYlpAccount",
+          "writable": true
+        },
+        {
+          "name": "ownerQuoteYlpAccount",
+          "writable": true
+        },
+        {
+          "name": "baseYieldAccount",
+          "writable": true
+        },
+        {
+          "name": "quoteYieldAccount",
+          "writable": true
         },
         {
           "name": "tokenProgram",
@@ -224,6 +251,36 @@ export type OmnipairV2 = {
           }
         },
         {
+          "name": "futarchyAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "owner",
           "writable": true,
           "signer": true
@@ -322,16 +379,191 @@ export type OmnipairV2 = {
       ]
     },
     {
-      "name": "claimFees",
+      "name": "claimProtocolFees",
       "discriminator": [
-        82,
-        251,
-        233,
-        156,
-        12,
-        52,
-        184,
-        202
+        34,
+        142,
+        219,
+        112,
+        109,
+        54,
+        133,
+        23
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.base_mint",
+                "account": "market"
+              },
+              {
+                "kind": "account",
+                "path": "market.quote_mint",
+                "account": "market"
+              },
+              {
+                "kind": "account",
+                "path": "market.params_hash",
+                "account": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "futarchyAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "baseMint"
+        },
+        {
+          "name": "quoteMint"
+        },
+        {
+          "name": "baseFeeVault",
+          "writable": true
+        },
+        {
+          "name": "quoteFeeVault",
+          "writable": true
+        },
+        {
+          "name": "futarchyTreasury"
+        },
+        {
+          "name": "buybacksVault"
+        },
+        {
+          "name": "teamTreasury"
+        },
+        {
+          "name": "futarchyTreasuryBaseAccount",
+          "writable": true
+        },
+        {
+          "name": "futarchyTreasuryQuoteAccount",
+          "writable": true
+        },
+        {
+          "name": "buybacksVaultBaseAccount",
+          "writable": true
+        },
+        {
+          "name": "buybacksVaultQuoteAccount",
+          "writable": true
+        },
+        {
+          "name": "teamTreasuryBaseAccount",
+          "writable": true
+        },
+        {
+          "name": "teamTreasuryQuoteAccount",
+          "writable": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "token2022Program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claimYield",
+      "discriminator": [
+        49,
+        74,
+        111,
+        7,
+        186,
+        22,
+        61,
+        165
       ],
       "accounts": [
         {
@@ -380,316 +612,26 @@ export type OmnipairV2 = {
           "name": "assetMint"
         },
         {
-          "name": "feeVault",
+          "name": "lpMint"
+        },
+        {
+          "name": "ownerLpAccount",
           "writable": true
-        },
-        {
-          "name": "ownerFeeAccount",
-          "writable": true
-        },
-        {
-          "name": "stakePosition",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  116,
-                  97,
-                  107,
-                  101
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "account",
-                "path": "assetMint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "token2022Program",
-          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
-        },
-        {
-          "name": "eventAuthority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  95,
-                  95,
-                  101,
-                  118,
-                  101,
-                  110,
-                  116,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "program"
-        }
-      ],
-      "args": [
-        {
-          "name": "args",
-          "type": {
-            "defined": {
-              "name": "claimFeesArgs"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "claimHedgeFees",
-      "discriminator": [
-        169,
-        148,
-        87,
-        149,
-        188,
-        246,
-        204,
-        210
-      ],
-      "accounts": [
-        {
-          "name": "market",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  97,
-                  114,
-                  107,
-                  101,
-                  116,
-                  95,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market.base_mint",
-                "account": "market"
-              },
-              {
-                "kind": "account",
-                "path": "market.quote_mint",
-                "account": "market"
-              },
-              {
-                "kind": "account",
-                "path": "market.params_hash",
-                "account": "market"
-              }
-            ]
-          }
-        },
-        {
-          "name": "owner",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "assetMint"
         },
         {
           "name": "feeVault",
           "writable": true
         },
         {
-          "name": "ownerFeeAccount",
+          "name": "interestVault",
           "writable": true
         },
         {
-          "name": "hedgePosition",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  104,
-                  101,
-                  100,
-                  103,
-                  101,
-                  95,
-                  112,
-                  111,
-                  115,
-                  105,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "account",
-                "path": "assetMint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "token2022Program",
-          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
-        },
-        {
-          "name": "eventAuthority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  95,
-                  95,
-                  101,
-                  118,
-                  101,
-                  110,
-                  116,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "program"
-        }
-      ],
-      "args": [
-        {
-          "name": "args",
-          "type": {
-            "defined": {
-              "name": "claimHedgeFeesArgs"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "claimMarketFees",
-      "discriminator": [
-        181,
-        120,
-        254,
-        224,
-        232,
-        113,
-        48,
-        221
-      ],
-      "accounts": [
-        {
-          "name": "market",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  97,
-                  114,
-                  107,
-                  101,
-                  116,
-                  95,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market.base_mint",
-                "account": "market"
-              },
-              {
-                "kind": "account",
-                "path": "market.quote_mint",
-                "account": "market"
-              },
-              {
-                "kind": "account",
-                "path": "market.params_hash",
-                "account": "market"
-              }
-            ]
-          }
-        },
-        {
-          "name": "feeAuthority",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "assetMint"
-        },
-        {
-          "name": "feeVault",
+          "name": "recipientAssetAccount",
           "writable": true
         },
         {
-          "name": "recipientFeeAccount",
+          "name": "yieldAccount",
           "writable": true
         },
         {
@@ -738,7 +680,7 @@ export type OmnipairV2 = {
           "name": "args",
           "type": {
             "defined": {
-              "name": "claimMarketFeesArgs"
+              "name": "claimYieldArgs"
             }
           }
         }
@@ -800,65 +742,50 @@ export type OmnipairV2 = {
           "signer": true
         },
         {
-          "name": "assetMint"
+          "name": "baseMint"
         },
         {
-          "name": "claimTokenMint"
+          "name": "quoteMint"
         },
         {
-          "name": "hedgeTokenMint",
+          "name": "baseYlpMint",
           "writable": true
         },
         {
-          "name": "hedgeVault",
+          "name": "quoteYlpMint",
           "writable": true
         },
         {
-          "name": "ownerClaimAccount",
+          "name": "targetHlpMint",
           "writable": true
         },
         {
-          "name": "ownerHedgeAccount",
+          "name": "baseReserveVault",
           "writable": true
         },
         {
-          "name": "hedgePosition",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  104,
-                  101,
-                  100,
-                  103,
-                  101,
-                  95,
-                  112,
-                  111,
-                  115,
-                  105,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "account",
-                "path": "assetMint"
-              }
-            ]
-          }
+          "name": "quoteReserveVault",
+          "writable": true
+        },
+        {
+          "name": "ownerTargetAccount",
+          "writable": true
+        },
+        {
+          "name": "ownerHlpAccount",
+          "writable": true
+        },
+        {
+          "name": "hlpBaseYlpAccount",
+          "writable": true
+        },
+        {
+          "name": "hlpQuoteYlpAccount",
+          "writable": true
+        },
+        {
+          "name": "targetYieldAccount",
+          "writable": true
         },
         {
           "name": "tokenProgram",
@@ -867,6 +794,10 @@ export type OmnipairV2 = {
         {
           "name": "token2022Program",
           "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         },
         {
           "name": "eventAuthority",
@@ -1062,93 +993,39 @@ export type OmnipairV2 = {
       ]
     },
     {
-      "name": "depositInsurance",
+      "name": "initFutarchyAuthority",
       "discriminator": [
-        34,
-        221,
-        238,
-        103,
-        190,
-        136,
-        23,
-        194
+        133,
+        110,
+        154,
+        29,
+        240,
+        206,
+        71,
+        100
       ],
       "accounts": [
         {
-          "name": "market",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  97,
-                  114,
-                  107,
-                  101,
-                  116,
-                  95,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market.base_mint",
-                "account": "market"
-              },
-              {
-                "kind": "account",
-                "path": "market.quote_mint",
-                "account": "market"
-              },
-              {
-                "kind": "account",
-                "path": "market.params_hash",
-                "account": "market"
-              }
-            ]
-          }
-        },
-        {
-          "name": "sponsor",
+          "name": "deployer",
           "writable": true,
           "signer": true
         },
         {
-          "name": "assetMint"
-        },
-        {
-          "name": "insuranceVault",
-          "writable": true
-        },
-        {
-          "name": "sponsorAssetAccount",
-          "writable": true
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "token2022Program",
-          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
-        },
-        {
-          "name": "eventAuthority",
+          "name": "futarchyAuthority",
+          "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  95,
-                  95,
-                  101,
-                  118,
-                  101,
-                  110,
+                  102,
+                  117,
                   116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
                   95,
                   97,
                   117,
@@ -1165,7 +1042,89 @@ export type OmnipairV2 = {
           }
         },
         {
-          "name": "program"
+          "name": "programData",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  30,
+                  198,
+                  73,
+                  255,
+                  177,
+                  239,
+                  53,
+                  26,
+                  189,
+                  245,
+                  158,
+                  226,
+                  167,
+                  183,
+                  246,
+                  221,
+                  30,
+                  28,
+                  81,
+                  246,
+                  125,
+                  59,
+                  35,
+                  168,
+                  135,
+                  79,
+                  228,
+                  164,
+                  248,
+                  149,
+                  245,
+                  53
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                2,
+                168,
+                246,
+                145,
+                78,
+                136,
+                161,
+                176,
+                226,
+                16,
+                21,
+                62,
+                247,
+                99,
+                174,
+                43,
+                0,
+                194,
+                185,
+                61,
+                22,
+                193,
+                36,
+                210,
+                192,
+                83,
+                122,
+                16,
+                4,
+                128,
+                0,
+                0
+              ]
+            }
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -1173,7 +1132,7 @@ export type OmnipairV2 = {
           "name": "args",
           "type": {
             "defined": {
-              "name": "depositInsuranceArgs"
+              "name": "initFutarchyAuthorityArgs"
             }
           }
         }
@@ -1238,70 +1197,46 @@ export type OmnipairV2 = {
           }
         },
         {
-          "name": "baseClaimTokenMint"
-        },
-        {
-          "name": "quoteClaimTokenMint"
-        },
-        {
-          "name": "baseHedgeTokenMint"
-        },
-        {
-          "name": "quoteHedgeTokenMint"
-        },
-        {
-          "name": "baseHedgeVault",
-          "writable": true,
+          "name": "futarchyAuthority",
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
                   104,
-                  101,
-                  100,
-                  103,
-                  101,
-                  100
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
                 ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "baseClaimTokenMint"
               }
             ]
           }
         },
         {
-          "name": "quoteHedgeVault",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  104,
-                  101,
-                  100,
-                  103,
-                  101,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "quoteClaimTokenMint"
-              }
-            ]
-          }
+          "name": "baseYlpMint"
+        },
+        {
+          "name": "quoteYlpMint"
+        },
+        {
+          "name": "baseHlpMint"
+        },
+        {
+          "name": "quoteHlpMint"
         },
         {
           "name": "baseReserveVault",
@@ -1572,7 +1507,7 @@ export type OmnipairV2 = {
           }
         },
         {
-          "name": "baseStakeVault",
+          "name": "baseInterestVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1586,11 +1521,14 @@ export type OmnipairV2 = {
                   101,
                   116,
                   95,
-                  115,
+                  105,
+                  110,
                   116,
-                  97,
-                  107,
-                  101
+                  101,
+                  114,
+                  101,
+                  115,
+                  116
                 ]
               },
               {
@@ -1599,13 +1537,13 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "baseClaimTokenMint"
+                "path": "baseMint"
               }
             ]
           }
         },
         {
-          "name": "quoteStakeVault",
+          "name": "quoteInterestVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1619,11 +1557,14 @@ export type OmnipairV2 = {
                   101,
                   116,
                   95,
-                  115,
+                  105,
+                  110,
                   116,
-                  97,
-                  107,
-                  101
+                  101,
+                  114,
+                  101,
+                  115,
+                  116
                 ]
               },
               {
@@ -1632,10 +1573,17 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "quoteClaimTokenMint"
+                "path": "quoteMint"
               }
             ]
           }
+        },
+        {
+          "name": "teamTreasury"
+        },
+        {
+          "name": "teamTreasuryWsolAccount",
+          "writable": true
         },
         {
           "name": "systemProgram",
@@ -1764,6 +1712,10 @@ export type OmnipairV2 = {
         },
         {
           "name": "insuranceVault",
+          "writable": true
+        },
+        {
+          "name": "collateralInsuranceVault",
           "writable": true
         },
         {
@@ -1905,70 +1857,85 @@ export type OmnipairV2 = {
           }
         },
         {
-          "name": "owner",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "assetMint"
-        },
-        {
-          "name": "claimTokenMint"
-        },
-        {
-          "name": "hedgeTokenMint",
-          "writable": true
-        },
-        {
-          "name": "hedgeVault",
-          "writable": true
-        },
-        {
-          "name": "ownerClaimAccount",
-          "writable": true
-        },
-        {
-          "name": "ownerHedgeAccount",
-          "writable": true
-        },
-        {
-          "name": "hedgePosition",
-          "writable": true,
+          "name": "futarchyAuthority",
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
                   104,
-                  101,
-                  100,
-                  103,
-                  101,
+                  121,
                   95,
-                  112,
+                  97,
+                  117,
+                  116,
+                  104,
                   111,
-                  115,
+                  114,
                   105,
                   116,
-                  105,
-                  111,
-                  110
+                  121
                 ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "account",
-                "path": "assetMint"
               }
             ]
           }
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "baseMint"
+        },
+        {
+          "name": "quoteMint"
+        },
+        {
+          "name": "baseYlpMint",
+          "writable": true
+        },
+        {
+          "name": "quoteYlpMint",
+          "writable": true
+        },
+        {
+          "name": "targetHlpMint",
+          "writable": true
+        },
+        {
+          "name": "baseReserveVault",
+          "writable": true
+        },
+        {
+          "name": "quoteReserveVault",
+          "writable": true
+        },
+        {
+          "name": "ownerTargetAccount",
+          "writable": true
+        },
+        {
+          "name": "ownerHlpAccount",
+          "writable": true
+        },
+        {
+          "name": "hlpBaseYlpAccount",
+          "writable": true
+        },
+        {
+          "name": "hlpQuoteYlpAccount",
+          "writable": true
+        },
+        {
+          "name": "targetYieldAccount",
+          "writable": true
         },
         {
           "name": "tokenProgram",
@@ -2082,22 +2049,49 @@ export type OmnipairV2 = {
           "signer": true
         },
         {
-          "name": "assetMint"
+          "name": "baseMint"
         },
         {
-          "name": "claimTokenMint",
+          "name": "quoteMint"
+        },
+        {
+          "name": "baseYlpMint",
           "writable": true
         },
         {
-          "name": "reserveVault",
+          "name": "quoteYlpMint",
           "writable": true
         },
         {
-          "name": "ownerAssetAccount",
+          "name": "baseReserveVault",
           "writable": true
         },
         {
-          "name": "ownerClaimAccount",
+          "name": "quoteReserveVault",
+          "writable": true
+        },
+        {
+          "name": "ownerBaseAccount",
+          "writable": true
+        },
+        {
+          "name": "ownerQuoteAccount",
+          "writable": true
+        },
+        {
+          "name": "ownerBaseYlpAccount",
+          "writable": true
+        },
+        {
+          "name": "ownerQuoteYlpAccount",
+          "writable": true
+        },
+        {
+          "name": "baseYieldAccount",
+          "writable": true
+        },
+        {
+          "name": "quoteYieldAccount",
           "writable": true
         },
         {
@@ -2298,6 +2292,68 @@ export type OmnipairV2 = {
       ]
     },
     {
+      "name": "setGlobalReduceOnly",
+      "discriminator": [
+        242,
+        151,
+        123,
+        139,
+        239,
+        87,
+        249,
+        98
+      ],
+      "accounts": [
+        {
+          "name": "authoritySigner",
+          "writable": true,
+          "signer": true,
+          "address": "3YL87sTCrHMB6DYKorE9CCN4dL45kZPahoREcMLDY6QV"
+        },
+        {
+          "name": "futarchyAuthority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "setGlobalReduceOnlyArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "setReduceOnly",
       "discriminator": [
         187,
@@ -2348,8 +2404,9 @@ export type OmnipairV2 = {
           }
         },
         {
-          "name": "authority",
-          "signer": true
+          "name": "authoritySigner",
+          "signer": true,
+          "address": "3YL87sTCrHMB6DYKorE9CCN4dL45kZPahoREcMLDY6QV"
         },
         {
           "name": "eventAuthority",
@@ -2396,21 +2453,20 @@ export type OmnipairV2 = {
       ]
     },
     {
-      "name": "stake",
+      "name": "setYieldRecipient",
       "discriminator": [
-        206,
-        176,
-        202,
-        18,
-        200,
-        209,
-        179,
-        108
+        178,
+        211,
+        80,
+        10,
+        138,
+        52,
+        188,
+        22
       ],
       "accounts": [
         {
           "name": "market",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -2454,53 +2510,8 @@ export type OmnipairV2 = {
           "name": "assetMint"
         },
         {
-          "name": "claimTokenMint"
-        },
-        {
-          "name": "stakeVault",
+          "name": "yieldAccount",
           "writable": true
-        },
-        {
-          "name": "ownerClaimAccount",
-          "writable": true
-        },
-        {
-          "name": "stakePosition",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  116,
-                  97,
-                  107,
-                  101
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "account",
-                "path": "assetMint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "token2022Program",
-          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
         },
         {
           "name": "eventAuthority",
@@ -2540,7 +2551,7 @@ export type OmnipairV2 = {
           "name": "args",
           "type": {
             "defined": {
-              "name": "stakeArgs"
+              "name": "setYieldRecipientArgs"
             }
           }
         }
@@ -2592,6 +2603,36 @@ export type OmnipairV2 = {
                 "kind": "account",
                 "path": "market.params_hash",
                 "account": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "futarchyAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
               }
             ]
           }
@@ -2680,157 +2721,6 @@ export type OmnipairV2 = {
       ]
     },
     {
-      "name": "unstake",
-      "discriminator": [
-        90,
-        95,
-        107,
-        42,
-        205,
-        124,
-        50,
-        225
-      ],
-      "accounts": [
-        {
-          "name": "market",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  97,
-                  114,
-                  107,
-                  101,
-                  116,
-                  95,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market.base_mint",
-                "account": "market"
-              },
-              {
-                "kind": "account",
-                "path": "market.quote_mint",
-                "account": "market"
-              },
-              {
-                "kind": "account",
-                "path": "market.params_hash",
-                "account": "market"
-              }
-            ]
-          }
-        },
-        {
-          "name": "owner",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "assetMint"
-        },
-        {
-          "name": "claimTokenMint"
-        },
-        {
-          "name": "stakeVault",
-          "writable": true
-        },
-        {
-          "name": "ownerClaimAccount",
-          "writable": true
-        },
-        {
-          "name": "stakePosition",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  116,
-                  97,
-                  107,
-                  101
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              },
-              {
-                "kind": "account",
-                "path": "assetMint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "token2022Program",
-          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
-        },
-        {
-          "name": "eventAuthority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  95,
-                  95,
-                  101,
-                  118,
-                  101,
-                  110,
-                  116,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "program"
-        }
-      ],
-      "args": [
-        {
-          "name": "args",
-          "type": {
-            "defined": {
-              "name": "unstakeArgs"
-            }
-          }
-        }
-      ]
-    },
-    {
       "name": "updateConfig",
       "discriminator": [
         29,
@@ -2881,7 +2771,37 @@ export type OmnipairV2 = {
           }
         },
         {
-          "name": "operator",
+          "name": "futarchyAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authoritySigner",
           "signer": true
         },
         {
@@ -2923,6 +2843,201 @@ export type OmnipairV2 = {
           "type": {
             "defined": {
               "name": "updateMarketConfigArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "updateFutarchyAuthority",
+      "discriminator": [
+        15,
+        196,
+        157,
+        217,
+        113,
+        226,
+        89,
+        25
+      ],
+      "accounts": [
+        {
+          "name": "authoritySigner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "futarchyAuthority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "updateFutarchyAuthorityArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "updateProtocolRevenue",
+      "discriminator": [
+        176,
+        139,
+        131,
+        197,
+        40,
+        225,
+        125,
+        200
+      ],
+      "accounts": [
+        {
+          "name": "authoritySigner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "futarchyAuthority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "updateProtocolRevenueArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "updateRevenueRecipients",
+      "discriminator": [
+        116,
+        179,
+        137,
+        47,
+        118,
+        167,
+        65,
+        217
+      ],
+      "accounts": [
+        {
+          "name": "authoritySigner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "futarchyAuthority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "updateRevenueRecipientsArgs"
             }
           }
         }
@@ -2974,6 +3089,36 @@ export type OmnipairV2 = {
                 "kind": "account",
                 "path": "market.params_hash",
                 "account": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "futarchyAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
               }
             ]
           }
@@ -3076,16 +3221,16 @@ export type OmnipairV2 = {
   ],
   "accounts": [
     {
-      "name": "hedgePosition",
+      "name": "futarchyAuthority",
       "discriminator": [
-        88,
-        83,
-        42,
-        238,
-        125,
-        99,
-        252,
-        52
+        175,
+        247,
+        160,
+        182,
+        140,
+        128,
+        211,
+        226
       ]
     },
     {
@@ -3115,20 +3260,59 @@ export type OmnipairV2 = {
       ]
     },
     {
-      "name": "stakePosition",
+      "name": "yieldAccount",
       "discriminator": [
-        78,
-        165,
-        30,
-        111,
-        171,
-        125,
-        11,
-        220
+        233,
+        241,
+        119,
+        6,
+        2,
+        14,
+        106,
+        156
       ]
     }
   ],
   "events": [
+    {
+      "name": "hlpClosed",
+      "discriminator": [
+        87,
+        126,
+        152,
+        164,
+        162,
+        203,
+        111,
+        235
+      ]
+    },
+    {
+      "name": "hlpOpened",
+      "discriminator": [
+        188,
+        231,
+        244,
+        52,
+        5,
+        151,
+        236,
+        84
+      ]
+    },
+    {
+      "name": "hlpRebalanced",
+      "discriminator": [
+        48,
+        237,
+        118,
+        177,
+        48,
+        168,
+        104,
+        6
+      ]
+    },
     {
       "name": "liquidityAdded",
       "discriminator": [
@@ -3221,19 +3405,6 @@ export type OmnipairV2 = {
       ]
     },
     {
-      "name": "marketFeesClaimed",
-      "discriminator": [
-        216,
-        66,
-        148,
-        204,
-        52,
-        7,
-        196,
-        0
-      ]
-    },
-    {
       "name": "marketHealthUpdated",
       "discriminator": [
         99,
@@ -3244,71 +3415,6 @@ export type OmnipairV2 = {
         194,
         188,
         225
-      ]
-    },
-    {
-      "name": "marketHedgeClosed",
-      "discriminator": [
-        94,
-        23,
-        216,
-        248,
-        238,
-        103,
-        249,
-        140
-      ]
-    },
-    {
-      "name": "marketHedgeFeesClaimed",
-      "discriminator": [
-        107,
-        188,
-        240,
-        134,
-        159,
-        15,
-        240,
-        43
-      ]
-    },
-    {
-      "name": "marketHedgeOpened",
-      "discriminator": [
-        234,
-        65,
-        71,
-        203,
-        229,
-        161,
-        238,
-        22
-      ]
-    },
-    {
-      "name": "marketInsuranceFunded",
-      "discriminator": [
-        173,
-        170,
-        246,
-        1,
-        232,
-        8,
-        182,
-        16
-      ]
-    },
-    {
-      "name": "marketStakeUpdated",
-      "discriminator": [
-        63,
-        209,
-        17,
-        74,
-        217,
-        206,
-        214,
-        193
       ]
     },
     {
@@ -3338,6 +3444,19 @@ export type OmnipairV2 = {
       ]
     },
     {
+      "name": "protocolFeesClaimed",
+      "discriminator": [
+        22,
+        228,
+        205,
+        252,
+        57,
+        17,
+        156,
+        252
+      ]
+    },
+    {
       "name": "swapExecuted",
       "discriminator": [
         150,
@@ -3348,6 +3467,45 @@ export type OmnipairV2 = {
         89,
         38,
         79
+      ]
+    },
+    {
+      "name": "swapSettled",
+      "discriminator": [
+        104,
+        192,
+        63,
+        194,
+        238,
+        236,
+        149,
+        85
+      ]
+    },
+    {
+      "name": "yieldClaimed",
+      "discriminator": [
+        177,
+        201,
+        94,
+        68,
+        19,
+        200,
+        227,
+        27
+      ]
+    },
+    {
+      "name": "yieldRecipientUpdated",
+      "discriminator": [
+        154,
+        113,
+        25,
+        74,
+        11,
+        107,
+        114,
+        170
       ]
     }
   ],
@@ -3749,13 +3907,13 @@ export type OmnipairV2 = {
     },
     {
       "code": 6079,
-      "name": "invalidMarketBufferRatio",
-      "msg": "Invalid market buffer ratio"
+      "name": "invalidSettlementPrice",
+      "msg": "Invalid settlement price"
     },
     {
       "code": 6080,
-      "name": "insufficientMarketClaimCoverage",
-      "msg": "Market claim coverage is insufficient"
+      "name": "insufficientMarketShareBacking",
+      "msg": "Market reserve share backing is insufficient"
     },
     {
       "code": 6081,
@@ -3764,96 +3922,101 @@ export type OmnipairV2 = {
     },
     {
       "code": 6082,
-      "name": "invalidStakePosition",
-      "msg": "Invalid stake position"
+      "name": "invalidYieldAccount",
+      "msg": "Invalid yield account"
     },
     {
       "code": 6083,
-      "name": "invalidHedgePosition",
-      "msg": "Invalid hedge position"
+      "name": "invalidHlpVault",
+      "msg": "Invalid hLP vault"
     },
     {
       "code": 6084,
-      "name": "insufficientBufferShares",
-      "msg": "Buffer shares are insufficient"
+      "name": "notEnoughAccounts",
+      "msg": "Not enough remaining accounts"
     },
     {
       "code": 6085,
+      "name": "hlpSettlementUnavailable",
+      "msg": "hLP settlement is unavailable"
+    },
+    {
+      "code": 6086,
       "name": "insufficientBorrowHeadroom",
       "msg": "Borrow headroom is insufficient"
     },
     {
-      "code": 6086,
+      "code": 6087,
       "name": "insufficientMarketHealth",
       "msg": "Market health is insufficient"
     },
     {
-      "code": 6087,
+      "code": 6088,
       "name": "invalidMarginPosition",
       "msg": "Invalid margin position"
     },
     {
-      "code": 6088,
+      "code": 6089,
       "name": "insufficientRecognizedCollateral",
       "msg": "Recognized collateral is insufficient"
     },
     {
-      "code": 6089,
+      "code": 6090,
       "name": "positionNotLiquidatable",
       "msg": "Position is not liquidatable"
     },
     {
-      "code": 6090,
-      "name": "insufficientInsuranceReserve",
-      "msg": "Insurance reserve is insufficient"
+      "code": 6091,
+      "name": "insufficientInsurance",
+      "msg": "Insurance coverage is insufficient"
     },
     {
-      "code": 6091,
+      "code": 6092,
       "name": "liquidationSocializationExceeded",
       "msg": "Socialized liquidation loss exceeds caller cap"
     },
     {
-      "code": 6092,
+      "code": 6093,
       "name": "invalidClaimMint",
       "msg": "Claim mint must not charge transfer fees"
     },
     {
-      "code": 6093,
+      "code": 6094,
       "name": "unbackedFeeLiability",
       "msg": "Fee liability is not backed by fee vault balance"
     },
     {
-      "code": 6094,
+      "code": 6095,
       "name": "invalidMarketFeeAuthority",
       "msg": "Invalid market fee authority"
     },
     {
-      "code": 6095,
+      "code": 6096,
       "name": "marketReduceOnly",
       "msg": "Market is reduce-only"
     },
     {
-      "code": 6096,
+      "code": 6097,
       "name": "marketNotStarted",
       "msg": "Market has not started"
     },
     {
-      "code": 6097,
+      "code": 6098,
       "name": "marketMathOverflow",
       "msg": "Market math overflow"
     },
     {
-      "code": 6098,
+      "code": 6099,
       "name": "dailyLimitExceeded",
       "msg": "Daily liquidity limit exceeded"
     },
     {
-      "code": 6099,
+      "code": 6100,
       "name": "marketRiskCircuitBreaker",
       "msg": "Market risk circuit breaker triggered"
     },
     {
-      "code": 6100,
+      "code": 6101,
       "name": "instructionNotLive",
       "msg": "Instruction is intentionally not live yet"
     }
@@ -3865,23 +4028,19 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketAsset",
-            "type": {
-              "defined": {
-                "name": "marketAsset"
-              }
-            }
-          },
-          {
-            "name": "depositAmount",
+            "name": "baseDepositAmount",
             "type": "u64"
           },
           {
-            "name": "minClaimAmount",
+            "name": "quoteDepositAmount",
             "type": "u64"
           },
           {
-            "name": "maxBufferAmount",
+            "name": "minBaseYlpAmount",
+            "type": "u64"
+          },
+          {
+            "name": "minQuoteYlpAmount",
             "type": "u64"
           }
         ]
@@ -3916,31 +4075,7 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "bufferLedger",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "bufferShareSupply",
-            "type": "u64"
-          },
-          {
-            "name": "stakedBufferShareAmount",
-            "type": "u64"
-          },
-          {
-            "name": "requiredBuffer",
-            "type": "u64"
-          },
-          {
-            "name": "bufferRatioBps",
-            "type": "u16"
-          }
-        ]
-      }
-    },
-    {
-      "name": "claimFeesArgs",
+      "name": "claimYieldArgs",
       "type": {
         "kind": "struct",
         "fields": [
@@ -3953,76 +4088,12 @@ export type OmnipairV2 = {
             }
           },
           {
-            "name": "minFeeAmount",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "claimHedgeFeesArgs",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "marketAsset",
+            "name": "tokenKind",
             "type": {
               "defined": {
-                "name": "marketAsset"
+                "name": "yieldTokenKind"
               }
             }
-          },
-          {
-            "name": "minFeeAmount",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "claimMarketFeesArgs",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "marketAsset",
-            "type": {
-              "defined": {
-                "name": "marketAsset"
-              }
-            }
-          },
-          {
-            "name": "claimKind",
-            "type": {
-              "defined": {
-                "name": "marketFeeClaimKind"
-              }
-            }
-          },
-          {
-            "name": "minFeeAmount",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "claimTokenLedger",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "protectedClaimTokenSupply",
-            "type": "u64"
-          },
-          {
-            "name": "hedgedClaimTokenSupply",
-            "type": "u64"
-          },
-          {
-            "name": "stakedClaimTokenSupply",
-            "type": "u64"
           }
         ]
       }
@@ -4033,7 +4104,7 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketAsset",
+            "name": "targetAsset",
             "type": {
               "defined": {
                 "name": "marketAsset"
@@ -4041,18 +4112,18 @@ export type OmnipairV2 = {
             }
           },
           {
-            "name": "hedgeAmount",
+            "name": "hlpAmount",
             "type": "u64"
           },
           {
-            "name": "minClaimAmountOut",
+            "name": "minTargetAmountOut",
             "type": "u64"
           }
         ]
       }
     },
     {
-      "name": "dailyLimitBook",
+      "name": "dailyLimits",
       "type": {
         "kind": "struct",
         "fields": [
@@ -4072,24 +4143,24 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "debtBook",
+      "name": "debt",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "fixedBaseDebtShares",
+            "name": "fixedBaseShares",
             "type": "u128"
           },
           {
-            "name": "fixedQuoteDebtShares",
+            "name": "fixedQuoteShares",
             "type": "u128"
           },
           {
-            "name": "softBaseDebtShares",
+            "name": "softBaseShares",
             "type": "u128"
           },
           {
-            "name": "softQuoteDebtShares",
+            "name": "softQuoteShares",
             "type": "u128"
           },
           {
@@ -4099,6 +4170,18 @@ export type OmnipairV2 = {
           {
             "name": "quoteBorrowIndexNad",
             "type": "u128"
+          },
+          {
+            "name": "recognizedBaseCollateralForQuoteDebt",
+            "type": "u64"
+          },
+          {
+            "name": "recognizedQuoteCollateralForBaseDebt",
+            "type": "u64"
+          },
+          {
+            "name": "lastRecognitionSlot",
+            "type": "u64"
           }
         ]
       }
@@ -4124,56 +4207,40 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "depositInsuranceArgs",
+      "name": "fees",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketAsset",
-            "type": {
-              "defined": {
-                "name": "marketAsset"
-              }
-            }
-          },
-          {
-            "name": "depositAmount",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "feeLedger",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "feeGrowthIndexNad",
+            "name": "swapFeeGrowthIndexNad",
             "type": "u128"
           },
           {
-            "name": "hedgedFeeGrowthIndexNad",
+            "name": "interestGrowthIndexNad",
             "type": "u128"
           },
           {
-            "name": "feeVaultBalance",
+            "name": "swapFeeVaultBalance",
             "type": "u64"
           },
           {
-            "name": "feeLiability",
+            "name": "interestVaultBalance",
             "type": "u64"
           },
           {
-            "name": "hedgedFeeLiability",
+            "name": "swapFeeLiability",
             "type": "u64"
           },
           {
-            "name": "unallocatedFeeLiability",
+            "name": "interestLiability",
             "type": "u64"
           },
           {
-            "name": "unallocatedHedgedFeeLiability",
+            "name": "unallocatedSwapFeeLiability",
+            "type": "u64"
+          },
+          {
+            "name": "unallocatedInterestLiability",
             "type": "u64"
           },
           {
@@ -4188,16 +4255,64 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "hedgePosition",
+      "name": "futarchyAuthority",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "owner",
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "authority",
             "type": "pubkey"
           },
           {
+            "name": "recipients",
+            "type": {
+              "defined": {
+                "name": "revenueRecipients"
+              }
+            }
+          },
+          {
+            "name": "revenueShare",
+            "type": {
+              "defined": {
+                "name": "revenueShare"
+              }
+            }
+          },
+          {
+            "name": "revenueDistribution",
+            "type": {
+              "defined": {
+                "name": "revenueDistribution"
+              }
+            }
+          },
+          {
+            "name": "globalReduceOnly",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "hlpClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
             "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
             "type": "pubkey"
           },
           {
@@ -4205,20 +4320,272 @@ export type OmnipairV2 = {
             "type": "pubkey"
           },
           {
-            "name": "hedgedClaimTokenAmount",
+            "name": "hlpAmount",
             "type": "u64"
           },
           {
-            "name": "feeGrowthCheckpointNad",
+            "name": "baseYlpAmount",
+            "type": "u64"
+          },
+          {
+            "name": "quoteYlpAmount",
+            "type": "u64"
+          },
+          {
+            "name": "targetAmountOut",
+            "type": "u64"
+          },
+          {
+            "name": "debtRepaid",
+            "type": "u64"
+          },
+          {
+            "name": "hlpSupply",
+            "type": "u64"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "marketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "hlpOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "assetMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "depositAmount",
+            "type": "u64"
+          },
+          {
+            "name": "borrowedAmount",
+            "type": "u64"
+          },
+          {
+            "name": "baseYlpAmount",
+            "type": "u64"
+          },
+          {
+            "name": "quoteYlpAmount",
+            "type": "u64"
+          },
+          {
+            "name": "hlpAmount",
+            "type": "u64"
+          },
+          {
+            "name": "hlpSupply",
+            "type": "u64"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "marketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "hlpRebalanced",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "targetSide",
+            "type": "u8"
+          },
+          {
+            "name": "idealDelta",
+            "type": "i128"
+          },
+          {
+            "name": "executedDelta",
+            "type": "i128"
+          },
+          {
+            "name": "pendingRebalance",
+            "type": "i128"
+          },
+          {
+            "name": "navNad",
             "type": "u128"
           },
           {
-            "name": "accruedFeeAmount",
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "marketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "hlpVault",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "targetSide",
+            "type": "u8"
+          },
+          {
+            "name": "baseYlpVault",
+            "type": "pubkey"
+          },
+          {
+            "name": "quoteYlpVault",
+            "type": "pubkey"
+          },
+          {
+            "name": "ylpBaseShares",
             "type": "u64"
           },
           {
-            "name": "bump",
-            "type": "u8"
+            "name": "ylpQuoteShares",
+            "type": "u64"
+          },
+          {
+            "name": "debtShares",
+            "type": "u128"
+          },
+          {
+            "name": "hlpSupply",
+            "type": "u64"
+          },
+          {
+            "name": "pendingRebalance",
+            "type": "i128"
+          },
+          {
+            "name": "baseSwapFeeGrowthIndexNad",
+            "type": "u128"
+          },
+          {
+            "name": "baseInterestGrowthIndexNad",
+            "type": "u128"
+          },
+          {
+            "name": "quoteSwapFeeGrowthIndexNad",
+            "type": "u128"
+          },
+          {
+            "name": "quoteInterestGrowthIndexNad",
+            "type": "u128"
+          },
+          {
+            "name": "baseSwapFeeCheckpointNad",
+            "type": "u128"
+          },
+          {
+            "name": "baseInterestCheckpointNad",
+            "type": "u128"
+          },
+          {
+            "name": "quoteSwapFeeCheckpointNad",
+            "type": "u128"
+          },
+          {
+            "name": "quoteInterestCheckpointNad",
+            "type": "u128"
+          },
+          {
+            "name": "unallocatedBaseSwapFeeAmount",
+            "type": "u64"
+          },
+          {
+            "name": "unallocatedBaseInterestAmount",
+            "type": "u64"
+          },
+          {
+            "name": "unallocatedQuoteSwapFeeAmount",
+            "type": "u64"
+          },
+          {
+            "name": "unallocatedQuoteInterestAmount",
+            "type": "u64"
+          },
+          {
+            "name": "lastNavNad",
+            "type": "u128"
+          },
+          {
+            "name": "cachedSettlementPriceNad",
+            "type": "u128"
+          },
+          {
+            "name": "lastRebalanceSlot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "initFutarchyAuthorityArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "swapBps",
+            "type": "u16"
+          },
+          {
+            "name": "interestBps",
+            "type": "u16"
+          },
+          {
+            "name": "futarchyTreasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "futarchyTreasuryBps",
+            "type": "u16"
+          },
+          {
+            "name": "buybacksVault",
+            "type": "pubkey"
+          },
+          {
+            "name": "buybacksVaultBps",
+            "type": "u16"
+          },
+          {
+            "name": "teamTreasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "teamTreasuryBps",
+            "type": "u16"
           }
         ]
       }
@@ -4257,7 +4624,7 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "insuranceReserve",
+      "name": "insurance",
       "type": {
         "kind": "struct",
         "fields": [
@@ -4326,27 +4693,27 @@ export type OmnipairV2 = {
             "type": "pubkey"
           },
           {
-            "name": "assetMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "reserveCredit",
+            "name": "baseReserveCredit",
             "type": "u64"
           },
           {
-            "name": "claimAmount",
+            "name": "quoteReserveCredit",
             "type": "u64"
           },
           {
-            "name": "bufferAmount",
+            "name": "baseYlpAmount",
             "type": "u64"
           },
           {
-            "name": "protectedClaimTokenSupply",
+            "name": "quoteYlpAmount",
             "type": "u64"
           },
           {
-            "name": "requiredBuffer",
+            "name": "baseYlpSupply",
+            "type": "u64"
+          },
+          {
+            "name": "quoteYlpSupply",
             "type": "u64"
           },
           {
@@ -4374,19 +4741,27 @@ export type OmnipairV2 = {
             "type": "pubkey"
           },
           {
-            "name": "assetMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "claimAmount",
+            "name": "baseYlpAmount",
             "type": "u64"
           },
           {
-            "name": "protectedClaimTokenSupply",
+            "name": "quoteYlpAmount",
             "type": "u64"
           },
           {
-            "name": "requiredBuffer",
+            "name": "baseAmountOut",
+            "type": "u64"
+          },
+          {
+            "name": "quoteAmountOut",
+            "type": "u64"
+          },
+          {
+            "name": "baseYlpSupply",
+            "type": "u64"
+          },
+          {
+            "name": "quoteYlpSupply",
             "type": "u64"
           },
           {
@@ -4430,11 +4805,11 @@ export type OmnipairV2 = {
             "type": "u64"
           },
           {
-            "name": "fixedBaseDebtShares",
+            "name": "fixedBaseShares",
             "type": "u128"
           },
           {
-            "name": "fixedQuoteDebtShares",
+            "name": "fixedQuoteShares",
             "type": "u128"
           },
           {
@@ -4494,18 +4869,34 @@ export type OmnipairV2 = {
             }
           },
           {
-            "name": "debtBook",
+            "name": "debt",
             "type": {
               "defined": {
-                "name": "debtBook"
+                "name": "debt"
               }
             }
           },
           {
-            "name": "riskBook",
+            "name": "baseHlpVault",
             "type": {
               "defined": {
-                "name": "riskBook"
+                "name": "hlpVault"
+              }
+            }
+          },
+          {
+            "name": "quoteHlpVault",
+            "type": {
+              "defined": {
+                "name": "hlpVault"
+              }
+            }
+          },
+          {
+            "name": "risk",
+            "type": {
+              "defined": {
+                "name": "risk"
               }
             }
           },
@@ -4518,18 +4909,10 @@ export type OmnipairV2 = {
             }
           },
           {
-            "name": "recognitionLedger",
+            "name": "insurance",
             "type": {
               "defined": {
-                "name": "recognitionLedger"
-              }
-            }
-          },
-          {
-            "name": "insuranceReserve",
-            "type": {
-              "defined": {
-                "name": "insuranceReserve"
+                "name": "insurance"
               }
             }
           },
@@ -4673,12 +5056,16 @@ export type OmnipairV2 = {
             "type": "u16"
           },
           {
-            "name": "bufferRatioBps",
+            "name": "targetHlpLeverageBps",
             "type": "u16"
           },
           {
-            "name": "feeRoutingKNad",
-            "type": "u64"
+            "name": "settlementDivergenceBps",
+            "type": "u16"
+          },
+          {
+            "name": "emergencyExitHaircutBps",
+            "type": "u16"
           },
           {
             "name": "emaHalfLifeMs",
@@ -4717,14 +5104,6 @@ export type OmnipairV2 = {
             "type": "u16"
           },
           {
-            "name": "effectiveDebtWeightMinBps",
-            "type": "u16"
-          },
-          {
-            "name": "effectiveDebtGammaNad",
-            "type": "u64"
-          },
-          {
             "name": "softBorrowEnabled",
             "type": "bool"
           },
@@ -4757,19 +5136,11 @@ export type OmnipairV2 = {
             "type": "pubkey"
           },
           {
-            "name": "baseClaimTokenMint",
+            "name": "baseYlpMint",
             "type": "pubkey"
           },
           {
-            "name": "quoteClaimTokenMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "baseStakeVault",
-            "type": "pubkey"
-          },
-          {
-            "name": "quoteStakeVault",
+            "name": "quoteYlpMint",
             "type": "pubkey"
           },
           {
@@ -4789,19 +5160,11 @@ export type OmnipairV2 = {
             "type": "pubkey"
           },
           {
-            "name": "baseHedgeTokenMint",
+            "name": "baseHlpMint",
             "type": "pubkey"
           },
           {
-            "name": "quoteHedgeTokenMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "baseHedgeVault",
-            "type": "pubkey"
-          },
-          {
-            "name": "quoteHedgeVault",
+            "name": "quoteHlpMint",
             "type": "pubkey"
           },
           {
@@ -4813,7 +5176,7 @@ export type OmnipairV2 = {
             "type": "pubkey"
           },
           {
-            "name": "bufferRatioBps",
+            "name": "targetHlpLeverageBps",
             "type": "u16"
           },
           {
@@ -4917,20 +5280,6 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "marketFeeClaimKind",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "operator"
-          },
-          {
-            "name": "protocol"
-          }
-        ]
-      }
-    },
-    {
       "name": "marketFeeLiabilityClaimed",
       "type": {
         "kind": "struct",
@@ -4950,42 +5299,6 @@ export type OmnipairV2 = {
           {
             "name": "claimKind",
             "type": "u8"
-          },
-          {
-            "name": "feeAmount",
-            "type": "u64"
-          },
-          {
-            "name": "remainingFeeLiability",
-            "type": "u64"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "marketEventMetadata"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "marketFeesClaimed",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "owner",
-            "type": "pubkey"
-          },
-          {
-            "name": "assetMint",
-            "type": "pubkey"
           },
           {
             "name": "feeAmount",
@@ -5083,162 +5396,6 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "marketHedgeClosed",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "owner",
-            "type": "pubkey"
-          },
-          {
-            "name": "assetMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "hedgeAmount",
-            "type": "u64"
-          },
-          {
-            "name": "claimAmount",
-            "type": "u64"
-          },
-          {
-            "name": "hedgedClaimTokenSupply",
-            "type": "u64"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "marketEventMetadata"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "marketHedgeFeesClaimed",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "owner",
-            "type": "pubkey"
-          },
-          {
-            "name": "assetMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "feeAmount",
-            "type": "u64"
-          },
-          {
-            "name": "remainingFeeLiability",
-            "type": "u64"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "marketEventMetadata"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "marketHedgeOpened",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "owner",
-            "type": "pubkey"
-          },
-          {
-            "name": "assetMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "claimAmount",
-            "type": "u64"
-          },
-          {
-            "name": "hedgeAmount",
-            "type": "u64"
-          },
-          {
-            "name": "hedgedClaimTokenSupply",
-            "type": "u64"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "marketEventMetadata"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "marketInsuranceFunded",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "sponsor",
-            "type": "pubkey"
-          },
-          {
-            "name": "assetMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "insuranceCredit",
-            "type": "u64"
-          },
-          {
-            "name": "baseAvailable",
-            "type": "u64"
-          },
-          {
-            "name": "quoteAvailable",
-            "type": "u64"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "marketEventMetadata"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "marketSide",
       "type": {
         "kind": "struct",
@@ -5252,15 +5409,11 @@ export type OmnipairV2 = {
             "type": "u8"
           },
           {
-            "name": "claimTokenMint",
+            "name": "ylpMint",
             "type": "pubkey"
           },
           {
-            "name": "hedgeTokenMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "hedgeVault",
+            "name": "hlpMint",
             "type": "pubkey"
           },
           {
@@ -5276,90 +5429,38 @@ export type OmnipairV2 = {
             "type": "pubkey"
           },
           {
-            "name": "stakeVault",
+            "name": "interestVault",
             "type": "pubkey"
           },
           {
-            "name": "reserveLedger",
+            "name": "reserves",
             "type": {
               "defined": {
-                "name": "reserveLedger"
+                "name": "reserves"
               }
             }
           },
           {
-            "name": "claimTokenLedger",
+            "name": "shares",
             "type": {
               "defined": {
-                "name": "claimTokenLedger"
+                "name": "reserveShares"
               }
             }
           },
           {
-            "name": "bufferLedger",
+            "name": "fees",
             "type": {
               "defined": {
-                "name": "bufferLedger"
+                "name": "fees"
               }
             }
           },
           {
-            "name": "feeLedger",
+            "name": "dailyLimits",
             "type": {
               "defined": {
-                "name": "feeLedger"
-              }
-            }
-          },
-          {
-            "name": "dailyLimitBook",
-            "type": {
-              "defined": {
-                "name": "dailyLimitBook"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "marketStakeUpdated",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "owner",
-            "type": "pubkey"
-          },
-          {
-            "name": "assetMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "stakedClaimTokenAmount",
-            "type": "u64"
-          },
-          {
-            "name": "stakedBufferShareAmount",
-            "type": "u64"
-          },
-          {
-            "name": "activeStakeUnits",
-            "type": "u64"
-          },
-          {
-            "name": "accruedFeeAmount",
-            "type": "u64"
-          },
-          {
-            "name": "metadata",
-            "type": {
-              "defined": {
-                "name": "marketEventMetadata"
+                "name": "dailyLimits"
               }
             }
           }
@@ -5380,7 +5481,7 @@ export type OmnipairV2 = {
             "type": "bool"
           },
           {
-            "name": "bufferRatioBps",
+            "name": "targetHlpLeverageBps",
             "type": "u16"
           },
           {
@@ -5412,7 +5513,7 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketAsset",
+            "name": "targetAsset",
             "type": {
               "defined": {
                 "name": "marketAsset"
@@ -5420,11 +5521,11 @@ export type OmnipairV2 = {
             }
           },
           {
-            "name": "claimAmount",
+            "name": "depositAmount",
             "type": "u64"
           },
           {
-            "name": "minHedgeAmount",
+            "name": "minHlpAmount",
             "type": "u64"
           }
         ]
@@ -5464,6 +5565,14 @@ export type OmnipairV2 = {
             "type": "u64"
           },
           {
+            "name": "collateralToLiquidator",
+            "type": "u64"
+          },
+          {
+            "name": "insuranceFunded",
+            "type": "u64"
+          },
+          {
             "name": "insuranceDrawn",
             "type": "u64"
           },
@@ -5487,21 +5596,53 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "recognitionLedger",
+      "name": "protocolFeesClaimed",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "debtBearingBaseCollateralForQuoteDebt",
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "baseMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "quoteMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "futarchyTreasuryBaseAmount",
             "type": "u64"
           },
           {
-            "name": "debtBearingQuoteCollateralForBaseDebt",
+            "name": "futarchyTreasuryQuoteAmount",
             "type": "u64"
           },
           {
-            "name": "lastRecognitionSlot",
+            "name": "buybacksVaultBaseAmount",
             "type": "u64"
+          },
+          {
+            "name": "buybacksVaultQuoteAmount",
+            "type": "u64"
+          },
+          {
+            "name": "teamTreasuryBaseAmount",
+            "type": "u64"
+          },
+          {
+            "name": "teamTreasuryQuoteAmount",
+            "type": "u64"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "marketEventMetadata"
+              }
+            }
           }
         ]
       }
@@ -5512,19 +5653,19 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketAsset",
-            "type": {
-              "defined": {
-                "name": "marketAsset"
-              }
-            }
-          },
-          {
-            "name": "claimAmount",
+            "name": "baseYlpAmount",
             "type": "u64"
           },
           {
-            "name": "minAssetAmountOut",
+            "name": "quoteYlpAmount",
+            "type": "u64"
+          },
+          {
+            "name": "minBaseAmountOut",
+            "type": "u64"
+          },
+          {
+            "name": "minQuoteAmountOut",
             "type": "u64"
           }
         ]
@@ -5551,7 +5692,19 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "reserveLedger",
+      "name": "reserveShares",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ylpSupply",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "reserves",
       "type": {
         "kind": "struct",
         "fields": [
@@ -5571,7 +5724,67 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "riskBook",
+      "name": "revenueDistribution",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "futarchyTreasuryBps",
+            "type": "u16"
+          },
+          {
+            "name": "buybacksVaultBps",
+            "type": "u16"
+          },
+          {
+            "name": "teamTreasuryBps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "revenueRecipients",
+      "docs": [
+        "Revenue recipient wallet addresses. Recipient token accounts are derived or",
+        "validated against these owners when protocol fees are claimed."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "futarchyTreasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "buybacksVault",
+            "type": "pubkey"
+          },
+          {
+            "name": "teamTreasury",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "revenueShare",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "swapBps",
+            "type": "u16"
+          },
+          {
+            "name": "interestBps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "risk",
       "type": {
         "kind": "struct",
         "fields": [
@@ -5639,6 +5852,18 @@ export type OmnipairV2 = {
       }
     },
     {
+      "name": "setGlobalReduceOnlyArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "reduceOnly",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
       "name": "setMarketReduceOnlyArgs",
       "type": {
         "kind": "struct",
@@ -5651,78 +5876,21 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "stakeArgs",
+      "name": "setYieldRecipientArgs",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketAsset",
+            "name": "tokenKind",
             "type": {
               "defined": {
-                "name": "marketAsset"
+                "name": "yieldTokenKind"
               }
             }
           },
           {
-            "name": "claimAmount",
-            "type": "u64"
-          },
-          {
-            "name": "bufferShareAmount",
-            "type": "u64"
-          },
-          {
-            "name": "minActiveStakeUnits",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "stakePosition",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "owner",
+            "name": "recipient",
             "type": "pubkey"
-          },
-          {
-            "name": "market",
-            "type": "pubkey"
-          },
-          {
-            "name": "assetMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "availableBufferShareAmount",
-            "docs": [
-              "Non-transferable junior buffer accounting credited by add_liquidity.",
-              "Removing claim-token principal does not release these units; they remain",
-              "available to match with claim tokens for future fee eligibility."
-            ],
-            "type": "u64"
-          },
-          {
-            "name": "stakedClaimTokenAmount",
-            "type": "u64"
-          },
-          {
-            "name": "stakedBufferShareAmount",
-            "type": "u64"
-          },
-          {
-            "name": "feeGrowthCheckpointNad",
-            "type": "u128"
-          },
-          {
-            "name": "accruedFeeAmount",
-            "type": "u64"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
           }
         ]
       }
@@ -5789,6 +5957,14 @@ export type OmnipairV2 = {
             "type": "u64"
           },
           {
+            "name": "baseHlpPendingRebalance",
+            "type": "i128"
+          },
+          {
+            "name": "quoteHlpPendingRebalance",
+            "type": "i128"
+          },
+          {
             "name": "metadata",
             "type": {
               "defined": {
@@ -5800,25 +5976,57 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "unstakeArgs",
+      "name": "swapSettled",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "marketAsset",
-            "type": {
-              "defined": {
-                "name": "marketAsset"
-              }
-            }
+            "name": "market",
+            "type": "pubkey"
           },
           {
-            "name": "claimAmount",
+            "name": "trader",
+            "type": "pubkey"
+          },
+          {
+            "name": "assetInSide",
+            "type": "u8"
+          },
+          {
+            "name": "reserveCredit",
             "type": "u64"
           },
           {
-            "name": "bufferShareAmount",
+            "name": "amountInAfterFee",
             "type": "u64"
+          },
+          {
+            "name": "amountOut",
+            "type": "u64"
+          },
+          {
+            "name": "feeCredit",
+            "type": "u64"
+          },
+          {
+            "name": "baseHlpPendingRebalance",
+            "type": "i128"
+          },
+          {
+            "name": "quoteHlpPendingRebalance",
+            "type": "i128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "updateFutarchyAuthorityArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "newAuthority",
+            "type": "pubkey"
           }
         ]
       }
@@ -5834,6 +6042,62 @@ export type OmnipairV2 = {
               "defined": {
                 "name": "marketConfig"
               }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "updateProtocolRevenueArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "swapBps",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "interestBps",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "revenueDistribution",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "revenueDistribution"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "updateRevenueRecipientsArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "futarchyTreasury",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "buybacksVault",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "teamTreasury",
+            "type": {
+              "option": "pubkey"
             }
           }
         ]
@@ -5862,6 +6126,148 @@ export type OmnipairV2 = {
           }
         ]
       }
+    },
+    {
+      "name": "yieldAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "assetMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "tokenKind",
+            "type": "u8"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "swapFeeCheckpointNad",
+            "type": "u128"
+          },
+          {
+            "name": "interestCheckpointNad",
+            "type": "u128"
+          },
+          {
+            "name": "accruedSwapFeeAmount",
+            "type": "u64"
+          },
+          {
+            "name": "accruedInterestAmount",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "yieldClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "assetMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "tokenKind",
+            "type": "u8"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "swapFeeAmount",
+            "type": "u64"
+          },
+          {
+            "name": "interestAmount",
+            "type": "u64"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "marketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "yieldRecipientUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "assetMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "tokenKind",
+            "type": "u8"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "marketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "yieldTokenKind",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "ylp"
+          },
+          {
+            "name": "hlp"
+          }
+        ]
+      }
     }
   ],
   "constants": [
@@ -5871,24 +6277,29 @@ export type OmnipairV2 = {
       "value": "10000"
     },
     {
-      "name": "hedgePositionSeedPrefix",
+      "name": "futarchyAuthoritySeedPrefix",
       "type": "bytes",
-      "value": "[104, 101, 100, 103, 101, 95, 112, 111, 115, 105, 116, 105, 111, 110]"
+      "value": "[102, 117, 116, 97, 114, 99, 104, 121, 95, 97, 117, 116, 104, 111, 114, 105, 116, 121]"
     },
     {
-      "name": "hedgeVaultSeedPrefix",
+      "name": "hlpYlpVaultSeedPrefix",
       "type": "bytes",
-      "value": "[104, 101, 100, 103, 101, 100]"
+      "value": "[104, 108, 112, 95, 121, 108, 112, 95, 118, 97, 117, 108, 116]"
     },
     {
-      "name": "insuranceReserveSeedPrefix",
+      "name": "insuranceSeedPrefix",
       "type": "bytes",
       "value": "[105, 110, 115, 117, 114, 97, 110, 99, 101]"
     },
     {
       "name": "liquidationIncentiveBps",
       "type": "u16",
-      "value": "50"
+      "value": "100"
+    },
+    {
+      "name": "liquidationPenaltyBps",
+      "type": "u16",
+      "value": "300"
     },
     {
       "name": "marginPositionSeedPrefix",
@@ -5901,19 +6312,24 @@ export type OmnipairV2 = {
       "value": "[109, 97, 114, 107, 101, 116, 95, 99, 111, 108, 108, 97, 116, 101, 114, 97, 108]"
     },
     {
+      "name": "marketCreationFeeLamports",
+      "type": "u64",
+      "value": "200000000"
+    },
+    {
       "name": "marketFeeVaultSeedPrefix",
       "type": "bytes",
       "value": "[109, 97, 114, 107, 101, 116, 95, 102, 101, 101]"
     },
     {
+      "name": "marketInterestVaultSeedPrefix",
+      "type": "bytes",
+      "value": "[109, 97, 114, 107, 101, 116, 95, 105, 110, 116, 101, 114, 101, 115, 116]"
+    },
+    {
       "name": "marketReserveVaultSeedPrefix",
       "type": "bytes",
       "value": "[109, 97, 114, 107, 101, 116, 95, 114, 101, 115, 101, 114, 118, 101]"
-    },
-    {
-      "name": "marketStakeVaultSeedPrefix",
-      "type": "bytes",
-      "value": "[109, 97, 114, 107, 101, 116, 95, 115, 116, 97, 107, 101]"
     },
     {
       "name": "marketV2SeedPrefix",
@@ -5928,7 +6344,7 @@ export type OmnipairV2 = {
     {
       "name": "nad",
       "docs": [
-        "NAD: nine-decimal fixed point unit, similar to WAD in EVM systems."
+        "NAD: Nine-decimal fixed point unit (1e9 scaling), similar to WAD (1e18) by Maker."
       ],
       "type": "u64",
       "value": "1000000000"
@@ -5939,14 +6355,14 @@ export type OmnipairV2 = {
       "value": "9"
     },
     {
-      "name": "stakePositionSeedPrefix",
-      "type": "bytes",
-      "value": "[115, 116, 97, 107, 101]"
-    },
-    {
       "name": "targetMsPerSlot",
       "type": "u64",
       "value": "400"
+    },
+    {
+      "name": "yieldAccountSeedPrefix",
+      "type": "bytes",
+      "value": "[121, 105, 101, 108, 100]"
     }
   ]
 };

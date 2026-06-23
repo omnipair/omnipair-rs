@@ -7,7 +7,7 @@ use carbon_core::{borsh, CarbonDeserialize};
     CarbonDeserialize, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Hash,
 )]
 pub struct OpenHedgeArgs {
-    pub market_asset: MarketAsset,
-    pub claim_amount: u64,
-    pub min_hedge_amount: u64,
+    pub target_asset: MarketAsset,
+    pub deposit_amount: u64,
+    pub min_hlp_amount: u64,
 }

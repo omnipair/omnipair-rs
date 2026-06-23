@@ -14,6 +14,7 @@ pub struct WithdrawCollateral {
 #[derive(Debug, PartialEq, Eq, Clone, Hash, serde::Serialize, serde::Deserialize)]
 pub struct WithdrawCollateralInstructionAccounts {
     pub market: solana_pubkey::Pubkey,
+    pub futarchy_authority: solana_pubkey::Pubkey,
     pub owner: solana_pubkey::Pubkey,
     pub asset_mint: solana_pubkey::Pubkey,
     pub collateral_vault: solana_pubkey::Pubkey,
@@ -33,6 +34,7 @@ impl carbon_core::deserialize::ArrangeAccounts for WithdrawCollateral {
     ) -> Option<Self::ArrangedAccounts> {
         let mut iter = accounts.iter();
         let market = next_account(&mut iter)?;
+        let futarchy_authority = next_account(&mut iter)?;
         let owner = next_account(&mut iter)?;
         let asset_mint = next_account(&mut iter)?;
         let collateral_vault = next_account(&mut iter)?;
@@ -45,6 +47,7 @@ impl carbon_core::deserialize::ArrangeAccounts for WithdrawCollateral {
 
         Some(WithdrawCollateralInstructionAccounts {
             market,
+            futarchy_authority,
             owner,
             asset_mint,
             collateral_vault,

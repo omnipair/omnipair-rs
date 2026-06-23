@@ -15,5 +15,7 @@ pub struct SwapExecuted {
     pub amount_in_after_fee: u64,
     pub amount_out: u64,
     pub fee_credit: u64,
+    pub base_hlp_pending_rebalance: i128,
+    pub quote_hlp_pending_rebalance: i128,
     pub metadata: MarketEventMetadata,
 }

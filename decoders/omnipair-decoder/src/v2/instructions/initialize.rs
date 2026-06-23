@@ -17,12 +17,11 @@ pub struct InitializeInstructionAccounts {
     pub base_mint: solana_pubkey::Pubkey,
     pub quote_mint: solana_pubkey::Pubkey,
     pub market: solana_pubkey::Pubkey,
-    pub base_claim_token_mint: solana_pubkey::Pubkey,
-    pub quote_claim_token_mint: solana_pubkey::Pubkey,
-    pub base_hedge_token_mint: solana_pubkey::Pubkey,
-    pub quote_hedge_token_mint: solana_pubkey::Pubkey,
-    pub base_hedge_vault: solana_pubkey::Pubkey,
-    pub quote_hedge_vault: solana_pubkey::Pubkey,
+    pub futarchy_authority: solana_pubkey::Pubkey,
+    pub base_ylp_mint: solana_pubkey::Pubkey,
+    pub quote_ylp_mint: solana_pubkey::Pubkey,
+    pub base_hlp_mint: solana_pubkey::Pubkey,
+    pub quote_hlp_mint: solana_pubkey::Pubkey,
     pub base_reserve_vault: solana_pubkey::Pubkey,
     pub quote_reserve_vault: solana_pubkey::Pubkey,
     pub base_collateral_vault: solana_pubkey::Pubkey,
@@ -31,8 +30,10 @@ pub struct InitializeInstructionAccounts {
     pub quote_insurance_vault: solana_pubkey::Pubkey,
     pub base_fee_vault: solana_pubkey::Pubkey,
     pub quote_fee_vault: solana_pubkey::Pubkey,
-    pub base_stake_vault: solana_pubkey::Pubkey,
-    pub quote_stake_vault: solana_pubkey::Pubkey,
+    pub base_interest_vault: solana_pubkey::Pubkey,
+    pub quote_interest_vault: solana_pubkey::Pubkey,
+    pub team_treasury: solana_pubkey::Pubkey,
+    pub team_treasury_wsol_account: solana_pubkey::Pubkey,
     pub system_program: solana_pubkey::Pubkey,
     pub token_program: solana_pubkey::Pubkey,
     pub token_2022_program: solana_pubkey::Pubkey,
@@ -51,12 +52,11 @@ impl carbon_core::deserialize::ArrangeAccounts for Initialize {
         let base_mint = next_account(&mut iter)?;
         let quote_mint = next_account(&mut iter)?;
         let market = next_account(&mut iter)?;
-        let base_claim_token_mint = next_account(&mut iter)?;
-        let quote_claim_token_mint = next_account(&mut iter)?;
-        let base_hedge_token_mint = next_account(&mut iter)?;
-        let quote_hedge_token_mint = next_account(&mut iter)?;
-        let base_hedge_vault = next_account(&mut iter)?;
-        let quote_hedge_vault = next_account(&mut iter)?;
+        let futarchy_authority = next_account(&mut iter)?;
+        let base_ylp_mint = next_account(&mut iter)?;
+        let quote_ylp_mint = next_account(&mut iter)?;
+        let base_hlp_mint = next_account(&mut iter)?;
+        let quote_hlp_mint = next_account(&mut iter)?;
         let base_reserve_vault = next_account(&mut iter)?;
         let quote_reserve_vault = next_account(&mut iter)?;
         let base_collateral_vault = next_account(&mut iter)?;
@@ -65,8 +65,10 @@ impl carbon_core::deserialize::ArrangeAccounts for Initialize {
         let quote_insurance_vault = next_account(&mut iter)?;
         let base_fee_vault = next_account(&mut iter)?;
         let quote_fee_vault = next_account(&mut iter)?;
-        let base_stake_vault = next_account(&mut iter)?;
-        let quote_stake_vault = next_account(&mut iter)?;
+        let base_interest_vault = next_account(&mut iter)?;
+        let quote_interest_vault = next_account(&mut iter)?;
+        let team_treasury = next_account(&mut iter)?;
+        let team_treasury_wsol_account = next_account(&mut iter)?;
         let system_program = next_account(&mut iter)?;
         let token_program = next_account(&mut iter)?;
         let token_2022_program = next_account(&mut iter)?;
@@ -78,12 +80,11 @@ impl carbon_core::deserialize::ArrangeAccounts for Initialize {
             base_mint,
             quote_mint,
             market,
-            base_claim_token_mint,
-            quote_claim_token_mint,
-            base_hedge_token_mint,
-            quote_hedge_token_mint,
-            base_hedge_vault,
-            quote_hedge_vault,
+            futarchy_authority,
+            base_ylp_mint,
+            quote_ylp_mint,
+            base_hlp_mint,
+            quote_hlp_mint,
             base_reserve_vault,
             quote_reserve_vault,
             base_collateral_vault,
@@ -92,8 +93,10 @@ impl carbon_core::deserialize::ArrangeAccounts for Initialize {
             quote_insurance_vault,
             base_fee_vault,
             quote_fee_vault,
-            base_stake_vault,
-            quote_stake_vault,
+            base_interest_vault,
+            quote_interest_vault,
+            team_treasury,
+            team_treasury_wsol_account,
             system_program,
             token_program,
             token_2022_program,

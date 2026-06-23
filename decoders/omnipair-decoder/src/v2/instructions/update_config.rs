@@ -14,7 +14,8 @@ pub struct UpdateConfig {
 #[derive(Debug, PartialEq, Eq, Clone, Hash, serde::Serialize, serde::Deserialize)]
 pub struct UpdateConfigInstructionAccounts {
     pub market: solana_pubkey::Pubkey,
-    pub operator: solana_pubkey::Pubkey,
+    pub futarchy_authority: solana_pubkey::Pubkey,
+    pub authority_signer: solana_pubkey::Pubkey,
     pub event_authority: solana_pubkey::Pubkey,
     pub program: solana_pubkey::Pubkey,
 }
@@ -27,13 +28,15 @@ impl carbon_core::deserialize::ArrangeAccounts for UpdateConfig {
     ) -> Option<Self::ArrangedAccounts> {
         let mut iter = accounts.iter();
         let market = next_account(&mut iter)?;
-        let operator = next_account(&mut iter)?;
+        let futarchy_authority = next_account(&mut iter)?;
+        let authority_signer = next_account(&mut iter)?;
         let event_authority = next_account(&mut iter)?;
         let program = next_account(&mut iter)?;
 
         Some(UpdateConfigInstructionAccounts {
             market,
-            operator,
+            futarchy_authority,
+            authority_signer,
             event_authority,
             program,
         })

@@ -143,7 +143,7 @@ V2 is a separate market program, not a drop-in account rename for the legacy V1 
 - Use `IDL_V2` / `OMNIPAIR_V2_PROGRAM_ID` / `deriveMarketAddress` for V2 markets.
 - Store V1 pair metrics and V2 market metrics separately at the source level, then aggregate them under the Omnipair brand in analytics.
 - Do not sort V2 market mints client-side. The creator's chosen `baseMint` / `quoteMint` order defines the market and its price direction.
-- Treat V2 claim and hedge mints as distinct SPL token concepts. Base claim tokens are fixed-principal claims; fee rights come from staking matched claim tokens and buffer shares.
+- Treat V2 yLP and hLP mints as distinct Token-2022 token concepts. yLP tokens are floating reserve-side yield shares; hLP tokens are aggregate leveraged LP vault shares. Fee rights are checkpointed through `YieldAccount`.
 
 ## JavaScript runtime-only imports
 
@@ -169,12 +169,12 @@ All TypeScript types generated from the IDL, plus named account and event aliase
 - `Omnipair` - The program type (type-only export)
 - `OmnipairV2` - The V2 program type (type-only export)
 - V1 account types: `Pair`, `UserPosition`, `RateModel`, `FutarchyAuthority`
-- V2 account types: `Market`, `StakePosition`, `MarginPosition`, `HedgePosition`
+- V2 account types: `Market`, `MarginPosition`, `YieldAccount`, `V2FutarchyAuthority`
 - Instruction argument types
 - V2 market/admin event types: `MarketCreated`, `MarketUpdated`, `MarketHealthUpdated`
-- V2 liquidity event types: `LiquidityAdded`, `LiquidityRemoved`, `MarketStakeUpdated`, `MarketHedgeOpened`, `MarketHedgeClosed`
-- V2 lending/settlement event types: `SwapExecuted`, `MarketCollateralDeposited`, `MarketCollateralWithdrawn`, `MarketDebtUpdated`, `MarketInsuranceFunded`, `PositionLiquidated`
-- V2 fee event types: `MarketFeesClaimed`, `MarketFeeLiabilityClaimed`, `MarketHedgeFeesClaimed`
+- V2 liquidity event types: `LiquidityAdded`, `LiquidityRemoved`, `HlpOpened`, `HlpClosed`, `HlpRebalanced`
+- V2 lending/settlement event types: `SwapExecuted`, `MarketCollateralDeposited`, `MarketCollateralWithdrawn`, `MarketDebtUpdated`, `PositionLiquidated`
+- V2 fee event types: `YieldClaimed`, `YieldRecipientUpdated`, `MarketFeeLiabilityClaimed`, `ProtocolFeesClaimed`
 
 ### Constants
 - `PROGRAM_ID` / `OMNIPAIR_PROGRAM_ID` - The Omnipair V1 program ID
@@ -192,14 +192,12 @@ All TypeScript types generated from the IDL, plus named account and event aliase
 - `deriveMarketReserveVaultAddress(market, reserveMint)` - Derive a V2 market reserve vault PDA
 - `deriveMarketCollateralVaultAddress(market, collateralMint)` - Derive a V2 market collateral vault PDA
 - `deriveMarketFeeVaultAddress(market, feeMint)` - Derive a V2 market fee vault PDA
-- `deriveMarketStakeVaultAddress(market, claimTokenMint)` - Derive a V2 market stake vault PDA
-- `deriveStakePositionAddress(market, owner, assetMint)` - Derive a V2 stake position PDA
+- `deriveMarketInterestVaultAddress(market, interestMint)` - Derive a V2 market interest vault PDA
 - `deriveMarginPositionAddress(market, owner)` - Derive a V2 borrower margin position PDA
-- `deriveHedgeVaultAddress(market, claimTokenMint)` - Derive a V2 hedged-claim escrow PDA
-- `deriveHedgePositionAddress(market, owner, assetMint)` - Derive a V2 hedge position PDA
-- `deriveInsuranceReserveAddress(market, assetMint)` - Derive a V2 insurance reserve vault PDA
+- `deriveYieldAccountAddress(market, owner, assetMint, tokenKind)` - Derive a V2 yLP/hLP revenue checkpoint PDA
+- `deriveInsuranceAddress(market, assetMint)` - Derive a V2 insurance vault PDA
 
-V2 risk, recognition, and daily-limit books are embedded in the `Market` account rather than standalone PDAs.
+V2 risk, debt, yLP share accounting, daily limits, and hLP vault state are embedded in the `Market` account rather than standalone PDAs.
 
 ## Peer Dependencies
 

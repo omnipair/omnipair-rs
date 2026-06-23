@@ -11,7 +11,7 @@ pub struct MarginPosition {
     pub quote_collateral: u64,
     pub recognized_base_collateral_for_quote_debt: u64,
     pub recognized_quote_collateral_for_base_debt: u64,
-    pub fixed_base_debt_shares: u128,
-    pub fixed_quote_debt_shares: u128,
+    pub fixed_base_shares: u128,
+    pub fixed_quote_shares: u128,
     pub bump: u8,
 }

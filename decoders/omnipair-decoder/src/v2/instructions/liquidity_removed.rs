@@ -10,9 +10,11 @@ use carbon_core::{borsh, CarbonDeserialize};
 pub struct LiquidityRemoved {
     pub market: solana_pubkey::Pubkey,
     pub owner: solana_pubkey::Pubkey,
-    pub asset_mint: solana_pubkey::Pubkey,
-    pub claim_amount: u64,
-    pub protected_claim_token_supply: u64,
-    pub required_buffer: u64,
+    pub base_ylp_amount: u64,
+    pub quote_ylp_amount: u64,
+    pub base_amount_out: u64,
+    pub quote_amount_out: u64,
+    pub base_ylp_supply: u64,
+    pub quote_ylp_supply: u64,
     pub metadata: MarketEventMetadata,
 }
