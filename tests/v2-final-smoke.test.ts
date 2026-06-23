@@ -47,10 +47,10 @@ import { getCoverageReport, trackV2Instruction } from "./utils/instruction-cover
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const { AnchorProvider, BN, Program, Wallet } = anchor;
-const OMNIPAIR_V2_PROGRAM_ID = new PublicKey("358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv");
 const idl = JSON.parse(
   fs.readFileSync(path.join(__dirname, "../target/idl/omnipair_v2.json"), "utf-8")
 );
+const OMNIPAIR_V2_PROGRAM_ID = new PublicKey(idl.address);
 const accountCoder = new anchor.BorshAccountsCoder(idl);
 const REDUCE_ONLY_EMERGENCY_AUTHORITY = new PublicKey(
   "3YL87sTCrHMB6DYKorE9CCN4dL45kZPahoREcMLDY6QV"

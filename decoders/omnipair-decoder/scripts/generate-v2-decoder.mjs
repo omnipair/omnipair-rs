@@ -16,6 +16,10 @@ const generatedHeader =
   "// This V2 decoder code is generated from packages/program-interface/src/idl_v2.json.\n";
 
 const idl = JSON.parse(fs.readFileSync(idlPath, "utf8"));
+const programId = idl.address;
+if (!programId) {
+  throw new Error("V2 IDL is missing address");
+}
 
 function snake(name) {
   return name
@@ -233,7 +237,7 @@ function writeInstructions() {
 function writeRoot() {
   writeFile(
     path.join(root, "mod.rs"),
-    `${generatedHeader}pub const PROGRAM_ID: solana_pubkey::Pubkey =\n    solana_pubkey::Pubkey::from_str_const(\"358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv\");\n\npub struct OmnipairV2Decoder;\n\npub mod accounts;\npub mod instructions;\npub mod types;\n`
+    `${generatedHeader}pub const PROGRAM_ID: solana_pubkey::Pubkey =\n    solana_pubkey::Pubkey::from_str_const(\"${programId}\");\n\npub struct OmnipairV2Decoder;\n\npub mod accounts;\npub mod instructions;\npub mod types;\n`
   );
 }
 

@@ -41,10 +41,11 @@ solana-verify verify-from-repo \
      --config "env.GIT_RELEASE=\"$RELEASE_TAG\""
 
 # Verify V2 against mainnet
+V2_MAINNET_PROGRAM_ID=<V2_MAINNET_PROGRAM_ID>
 solana-verify verify-from-repo \
   --skip-prompt \
   --base-image solanafoundation/anchor:v0.31.1 \
-  --program-id 358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv \
+  --program-id "$V2_MAINNET_PROGRAM_ID" \
   https://github.com/omnipair/omnipair-rs \
   --commit-hash "$COMMIT_SHA" \
   --library-name omnipair_v2 \

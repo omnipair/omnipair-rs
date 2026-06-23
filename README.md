@@ -118,8 +118,8 @@ See [security policy](https://omnipair.fi/security) for details.
 |---------|---------|------------|
 | Omnipair V1 | Mainnet | `omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE` |
 | Omnipair V1 | Devnet | `omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE` |
-| Omnipair V2 | Mainnet | `358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv` |
-| Omnipair V2 | Devnet | `358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv` |
+| Omnipair V2 | Mainnet | TBD |
+| Omnipair V2 | Devnet | `oMNi2XGwWxDbEvhS2pWRQ6dtw8GkNBV42hfLZD6WmMF` |
 
 ## Quick Start
 
@@ -319,10 +319,11 @@ solana-verify verify-from-repo \
      --config "env.GIT_RELEASE=\"$RELEASE_TAG\""
 
 # Verify V2 from repository
+V2_MAINNET_PROGRAM_ID=<V2_MAINNET_PROGRAM_ID>
 solana-verify verify-from-repo \
   --skip-prompt \
   --base-image solanafoundation/anchor:v0.31.1 \
-  --program-id 358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv \
+  --program-id "$V2_MAINNET_PROGRAM_ID" \
   https://github.com/omnipair/omnipair-rs \
   --commit-hash "$COMMIT_SHA" \
   --library-name omnipair_v2 \
@@ -343,8 +344,9 @@ solana-verify remote submit-job \
   --uploader "$SQUADS_VAULT"
 
 # Submit V2 to OtterSec Registry
+V2_MAINNET_PROGRAM_ID=<V2_MAINNET_PROGRAM_ID>
 solana-verify remote submit-job \
-  --program-id 358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv \
+  --program-id "$V2_MAINNET_PROGRAM_ID" \
   --uploader "$SQUADS_VAULT"
 ```
 
@@ -378,7 +380,7 @@ PROGRAM_ID=omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE
 # PROGRAM_CRATE=omnipair-v2
 # PROGRAM_LIBRARY=omnipair_v2
 # PROGRAM_SO=omnipair_v2.so
-# PROGRAM_ID=358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv
+# PROGRAM_ID=<V2_MAINNET_PROGRAM_ID>
 
 # 2. Build verifiable binary
 export GIT_REV=$(git rev-parse HEAD)

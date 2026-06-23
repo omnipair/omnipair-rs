@@ -29,7 +29,7 @@ security_txt! {
     policy: "https://omnipair.fi/security"
 }
 
-declare_id!("358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv");
+declare_id!("oMNi2XGwWxDbEvhS2pWRQ6dtw8GkNBV42hfLZD6WmMF");
 
 #[program]
 pub mod omnipair_v2 {
