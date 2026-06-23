@@ -34,5 +34,6 @@ Useful knobs:
 - `OMNIPAIR_V2_MINT_AMOUNT=1000000` controls tester faucet size in human units.
 - `OMNIPAIR_V2_BASE_LIQUIDITY=100000` and `OMNIPAIR_V2_QUOTE_LIQUIDITY=100000` control bootstrap reserves.
 - `OMNIPAIR_V2_FORCE_SEED=1` adds more bootstrap liquidity to an existing market.
-- `OMNIPAIR_V2_POST_SEED_BUFFER_RATIO_BPS=1000` lowers the post-bootstrap buffer ratio to create swap-ready ledger surplus. Set it to `0` to skip this config update.
+- `OMNIPAIR_V2_SMOKE_OPEN_HEDGE=0` skips the default smoke-test hLP open.
+- `OMNIPAIR_V2_SMOKE_HEDGE_AMOUNT=10` controls the smoke-test base hLP open amount.
 - `OMNIPAIR_V2_SMOKE_SWAP=0` fetches state without sending the smoke swap.

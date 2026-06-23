@@ -1,13 +1,18 @@
 import anchor from "@coral-xyz/anchor";
 import {
+  NATIVE_MINT,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
   PublicKey,
   SystemProgram,
   bnFromUnits,
-  createMintIfMissing,
+  createHookedLpMintIfMissing,
   defaultMarketConfig,
+  deriveFutarchyAuthorityAddress,
+  deriveHlpYlpVaultAddress,
   deriveMarketAddresses,
+  deriveProgramDataAddress,
+  deriveYieldAccountAddress,
   explorerTx,
   getOrCreateAta,
   mintDecimals,
@@ -18,7 +23,6 @@ import {
   payerFromProvider,
   providerFromEnv,
   readState,
-  stakePositionAddress,
   tokenProgramForMint,
   v2Program,
   writeState,
@@ -47,67 +51,96 @@ async function main() {
   const baseDecimals = await mintDecimals(provider.connection, baseMint);
   const quoteDecimals = await mintDecimals(provider.connection, quoteMint);
   const paramsHash = paramsHashForMarket(marketLabel, baseMint, quoteMint);
-  const provisionalMarket = deriveMarketAddresses({
-    programId: program.programId,
-    baseMint,
-    quoteMint,
-    paramsHash,
-    baseClaimTokenMint: PublicKey.default,
-    quoteClaimTokenMint: PublicKey.default,
-  }).market;
-
-  const baseClaimTokenMint = await createMintIfMissing({
-    connection: provider.connection,
-    payer,
-    label: `${marketLabel}-base-claim`,
-    decimals: baseDecimals,
-    mintAuthority: provisionalMarket,
-    tokenProgram: TOKEN_PROGRAM_ID,
-  });
-  const quoteClaimTokenMint = await createMintIfMissing({
-    connection: provider.connection,
-    payer,
-    label: `${marketLabel}-quote-claim`,
-    decimals: quoteDecimals,
-    mintAuthority: provisionalMarket,
-    tokenProgram: TOKEN_PROGRAM_ID,
-  });
-  const baseHedgeTokenMint = await createMintIfMissing({
-    connection: provider.connection,
-    payer,
-    label: `${marketLabel}-base-hedge`,
-    decimals: baseDecimals,
-    mintAuthority: provisionalMarket,
-    tokenProgram: TOKEN_PROGRAM_ID,
-  });
-  const quoteHedgeTokenMint = await createMintIfMissing({
-    connection: provider.connection,
-    payer,
-    label: `${marketLabel}-quote-hedge`,
-    decimals: quoteDecimals,
-    mintAuthority: provisionalMarket,
-    tokenProgram: TOKEN_PROGRAM_ID,
-  });
-
   const addresses = deriveMarketAddresses({
     programId: program.programId,
     baseMint,
     quoteMint,
     paramsHash,
-    baseClaimTokenMint: new PublicKey(baseClaimTokenMint.mint),
-    quoteClaimTokenMint: new PublicKey(quoteClaimTokenMint.mint),
   });
-  if (!addresses.market.equals(provisionalMarket)) {
-    throw new Error("Market PDA changed unexpectedly while deriving claim mint authorities");
-  }
+  const market = addresses.market;
 
-  const marketAccount = await provider.connection.getAccountInfo(addresses.market, "confirmed");
+  const futarchyAuthority = deriveFutarchyAuthorityAddress(program.programId);
+  const futarchy = await ensureFutarchyAuthority({
+    program,
+    payer: payer.publicKey,
+    futarchyAuthority,
+  });
+  const teamTreasury = futarchy.recipients.teamTreasury as PublicKey;
+  const teamTreasuryWsolAccount = await getOrCreateAta({
+    connection: provider.connection,
+    payer,
+    mint: NATIVE_MINT,
+    owner: teamTreasury,
+    tokenProgram: TOKEN_PROGRAM_ID,
+  });
+
+  const baseYlpMint = await createHookedLpMintIfMissing({
+    connection: provider.connection,
+    payer,
+    label: `${marketLabel}-base-ylp`,
+    decimals: baseDecimals,
+    mintAuthority: market,
+    transferHookProgramId: program.programId,
+  });
+  const quoteYlpMint = await createHookedLpMintIfMissing({
+    connection: provider.connection,
+    payer,
+    label: `${marketLabel}-quote-ylp`,
+    decimals: quoteDecimals,
+    mintAuthority: market,
+    transferHookProgramId: program.programId,
+  });
+  const baseHlpMint = await createHookedLpMintIfMissing({
+    connection: provider.connection,
+    payer,
+    label: `${marketLabel}-base-hlp`,
+    decimals: baseDecimals,
+    mintAuthority: market,
+    transferHookProgramId: program.programId,
+  });
+  const quoteHlpMint = await createHookedLpMintIfMissing({
+    connection: provider.connection,
+    payer,
+    label: `${marketLabel}-quote-hlp`,
+    decimals: quoteDecimals,
+    mintAuthority: market,
+    transferHookProgramId: program.programId,
+  });
+
+  const baseYlp = new PublicKey(baseYlpMint.mint);
+  const quoteYlp = new PublicKey(quoteYlpMint.mint);
+  const baseHlpBaseYlpVault = deriveHlpYlpVaultAddress(
+    program.programId,
+    market,
+    "base",
+    baseYlp
+  );
+  const baseHlpQuoteYlpVault = deriveHlpYlpVaultAddress(
+    program.programId,
+    market,
+    "base",
+    quoteYlp
+  );
+  const quoteHlpBaseYlpVault = deriveHlpYlpVaultAddress(
+    program.programId,
+    market,
+    "quote",
+    baseYlp
+  );
+  const quoteHlpQuoteYlpVault = deriveHlpYlpVaultAddress(
+    program.programId,
+    market,
+    "quote",
+    quoteYlp
+  );
+
+  const marketAccount = await provider.connection.getAccountInfo(market, "confirmed");
   if (!marketAccount) {
-    console.log(`Initializing V2 market ${addresses.market.toBase58()}`);
+    console.log(`Initializing V2 yLP/hLP market ${market.toBase58()}`);
     const signature = await program.methods
       .initialize({
         operator: payer.publicKey,
-        manager: payer.publicKey,
+        manager: futarchy.authority,
         config: defaultMarketConfig(),
         paramsHash: [...paramsHash],
       })
@@ -115,13 +148,12 @@ async function main() {
         payer: payer.publicKey,
         baseMint,
         quoteMint,
-        market: addresses.market,
-        baseClaimTokenMint: new PublicKey(baseClaimTokenMint.mint),
-        quoteClaimTokenMint: new PublicKey(quoteClaimTokenMint.mint),
-        baseHedgeTokenMint: new PublicKey(baseHedgeTokenMint.mint),
-        quoteHedgeTokenMint: new PublicKey(quoteHedgeTokenMint.mint),
-        baseHedgeVault: addresses.baseHedgeVault,
-        quoteHedgeVault: addresses.quoteHedgeVault,
+        market,
+        futarchyAuthority,
+        baseYlpMint: baseYlp,
+        quoteYlpMint: quoteYlp,
+        baseHlpMint: new PublicKey(baseHlpMint.mint),
+        quoteHlpMint: new PublicKey(quoteHlpMint.mint),
         baseReserveVault: addresses.baseReserveVault,
         quoteReserveVault: addresses.quoteReserveVault,
         baseCollateralVault: addresses.baseCollateralVault,
@@ -130,32 +162,34 @@ async function main() {
         quoteInsuranceVault: addresses.quoteInsuranceVault,
         baseFeeVault: addresses.baseFeeVault,
         quoteFeeVault: addresses.quoteFeeVault,
-        baseStakeVault: addresses.baseStakeVault,
-        quoteStakeVault: addresses.quoteStakeVault,
+        baseInterestVault: addresses.baseInterestVault,
+        quoteInterestVault: addresses.quoteInterestVault,
+        teamTreasury,
+        teamTreasuryWsolAccount: teamTreasuryWsolAccount.address,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority: addresses.eventAuthority,
         program: program.programId,
       })
-      .preInstructions([anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 })])
+      .preInstructions([anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 })])
       .rpc();
     console.log(`Initialize tx: ${explorerTx(signature)}`);
   } else {
-    console.log(`Market already exists: ${addresses.market.toBase58()}`);
+    console.log(`Market already exists: ${market.toBase58()}`);
   }
 
   const storedMarket = {
     label: marketLabel,
     programId: program.programId.toBase58(),
-    market: addresses.market.toBase58(),
+    market: market.toBase58(),
     paramsHash: paramsHash.toString("hex"),
     baseMint: baseMint.toBase58(),
     quoteMint: quoteMint.toBase58(),
-    baseClaimTokenMint: baseClaimTokenMint.mint,
-    quoteClaimTokenMint: quoteClaimTokenMint.mint,
-    baseHedgeTokenMint: baseHedgeTokenMint.mint,
-    quoteHedgeTokenMint: quoteHedgeTokenMint.mint,
+    baseYlpMint: baseYlpMint.mint,
+    quoteYlpMint: quoteYlpMint.mint,
+    baseHlpMint: baseHlpMint.mint,
+    quoteHlpMint: quoteHlpMint.mint,
     baseReserveVault: addresses.baseReserveVault.toBase58(),
     quoteReserveVault: addresses.quoteReserveVault.toBase58(),
     baseCollateralVault: addresses.baseCollateralVault.toBase58(),
@@ -164,20 +198,17 @@ async function main() {
     quoteInsuranceVault: addresses.quoteInsuranceVault.toBase58(),
     baseFeeVault: addresses.baseFeeVault.toBase58(),
     quoteFeeVault: addresses.quoteFeeVault.toBase58(),
-    baseStakeVault: addresses.baseStakeVault.toBase58(),
-    quoteStakeVault: addresses.quoteStakeVault.toBase58(),
-    baseHedgeVault: addresses.baseHedgeVault.toBase58(),
-    quoteHedgeVault: addresses.quoteHedgeVault.toBase58(),
+    baseInterestVault: addresses.baseInterestVault.toBase58(),
+    quoteInterestVault: addresses.quoteInterestVault.toBase58(),
+    baseHlpBaseYlpVault: baseHlpBaseYlpVault.toBase58(),
+    baseHlpQuoteYlpVault: baseHlpQuoteYlpVault.toBase58(),
+    quoteHlpBaseYlpVault: quoteHlpBaseYlpVault.toBase58(),
+    quoteHlpQuoteYlpVault: quoteHlpQuoteYlpVault.toBase58(),
     eventAuthority: addresses.eventAuthority.toBase58(),
-    seededBaseLiquidity:
-      state.markets[marketLabel]?.seededBaseLiquidity ??
-      state.markets[marketLabel]?.seededLiquidity ??
-      false,
-    seededQuoteLiquidity:
-      state.markets[marketLabel]?.seededQuoteLiquidity ??
-      state.markets[marketLabel]?.seededLiquidity ??
-      false,
-    seededLiquidity: state.markets[marketLabel]?.seededLiquidity ?? false,
+    seededLiquidity:
+      state.markets[marketLabel]?.market === market.toBase58()
+        ? state.markets[marketLabel]?.seededLiquidity ?? false
+        : false,
   };
   state.markets[marketLabel] = storedMarket;
   writeState(state);
@@ -187,66 +218,30 @@ async function main() {
     (!storedMarket.seededLiquidity || process.env.OMNIPAIR_V2_FORCE_SEED === "1");
   if (!shouldSeed) {
     console.log("Skipping reserve seeding");
-    await maybeApplyPostSeedConfig({
-      program,
-      market: addresses.market,
-      operator: payer.publicKey,
-      eventAuthority: addresses.eventAuthority,
-    });
     console.log(JSON.stringify(storedMarket, null, 2));
     return;
   }
 
   const baseAmount = parseUnits(process.env.OMNIPAIR_V2_BASE_LIQUIDITY ?? "100000", baseDecimals);
-  const quoteAmount = parseUnits(process.env.OMNIPAIR_V2_QUOTE_LIQUIDITY ?? "100000", quoteDecimals);
-  if (!storedMarket.seededBaseLiquidity || process.env.OMNIPAIR_V2_FORCE_SEED === "1") {
-    await seedLiquiditySide({
-      provider,
-      payer,
-      program,
-      market: addresses.market,
-      eventAuthority: addresses.eventAuthority,
-      marketAsset: { base: {} },
-      assetMint: baseMint,
-      claimTokenMint: new PublicKey(baseClaimTokenMint.mint),
-      reserveVault: addresses.baseReserveVault,
-      amount: baseAmount,
-    });
-    state.markets[marketLabel] = {
-      ...state.markets[marketLabel],
-      seededBaseLiquidity: true,
-    };
-    writeState(state);
-  } else {
-    console.log("Skipping base reserve seeding");
-  }
-  if (!storedMarket.seededQuoteLiquidity || process.env.OMNIPAIR_V2_FORCE_SEED === "1") {
-    await seedLiquiditySide({
-      provider,
-      payer,
-      program,
-      market: addresses.market,
-      eventAuthority: addresses.eventAuthority,
-      marketAsset: { quote: {} },
-      assetMint: quoteMint,
-      claimTokenMint: new PublicKey(quoteClaimTokenMint.mint),
-      reserveVault: addresses.quoteReserveVault,
-      amount: quoteAmount,
-    });
-    state.markets[marketLabel] = {
-      ...state.markets[marketLabel],
-      seededQuoteLiquidity: true,
-    };
-    writeState(state);
-  } else {
-    console.log("Skipping quote reserve seeding");
-  }
-
-  await maybeApplyPostSeedConfig({
+  const quoteAmount = parseUnits(
+    process.env.OMNIPAIR_V2_QUOTE_LIQUIDITY ?? "100000",
+    quoteDecimals
+  );
+  await seedBalancedLiquidity({
+    provider,
+    payer,
     program,
-    market: addresses.market,
-    operator: payer.publicKey,
+    market,
+    futarchyAuthority,
     eventAuthority: addresses.eventAuthority,
+    baseMint,
+    quoteMint,
+    baseYlpMint: baseYlp,
+    quoteYlpMint: quoteYlp,
+    baseReserveVault: addresses.baseReserveVault,
+    quoteReserveVault: addresses.quoteReserveVault,
+    baseAmount,
+    quoteAmount,
   });
 
   state.markets[marketLabel] = {
@@ -254,108 +249,157 @@ async function main() {
     seededLiquidity: true,
   };
   writeState(state);
-  console.log("V2 market bootstrap complete");
+  console.log("V2 yLP/hLP market bootstrap complete");
   console.log(JSON.stringify(state.markets[marketLabel], null, 2));
 }
 
-async function maybeApplyPostSeedConfig(params: {
+async function ensureFutarchyAuthority(params: {
   program: any;
-  market: PublicKey;
-  operator: PublicKey;
-  eventAuthority: PublicKey;
+  payer: PublicKey;
+  futarchyAuthority: PublicKey;
 }) {
-  const postSeedBufferRatioBps = Number(
-    process.env.OMNIPAIR_V2_POST_SEED_BUFFER_RATIO_BPS ?? "1000"
+  const existing = await params.program.account.futarchyAuthority.fetchNullable(
+    params.futarchyAuthority
   );
-  if (!Number.isFinite(postSeedBufferRatioBps) || postSeedBufferRatioBps <= 0) return;
+  if (existing) {
+    console.log(`Futarchy authority already exists: ${params.futarchyAuthority.toBase58()}`);
+    return existing;
+  }
 
-  const marketAccount = await params.program.account.market.fetch(params.market);
-  if (marketAccount.config.bufferRatioBps === postSeedBufferRatioBps) return;
-
-  const config = {
-    ...marketAccount.config,
-    bufferRatioBps: postSeedBufferRatioBps,
-  };
+  console.log(`Initializing V2 futarchy authority ${params.futarchyAuthority.toBase58()}`);
   const signature = await params.program.methods
-    .updateConfig({ config })
+    .initFutarchyAuthority({
+      authority: params.payer,
+      swapBps: Number(process.env.OMNIPAIR_V2_PROTOCOL_SWAP_BPS ?? "0"),
+      interestBps: Number(process.env.OMNIPAIR_V2_PROTOCOL_INTEREST_BPS ?? "0"),
+      futarchyTreasury: params.payer,
+      futarchyTreasuryBps: 0,
+      buybacksVault: params.payer,
+      buybacksVaultBps: 0,
+      teamTreasury: params.payer,
+      teamTreasuryBps: 10_000,
+    })
     .accounts({
-      market: params.market,
-      operator: params.operator,
-      eventAuthority: params.eventAuthority,
-      program: params.program.programId,
+      deployer: params.payer,
+      futarchyAuthority: params.futarchyAuthority,
+      programData: deriveProgramDataAddress(params.program.programId),
+      systemProgram: SystemProgram.programId,
     })
     .rpc();
-  console.log(`Post-seed buffer ratio: ${postSeedBufferRatioBps}`);
-  console.log(explorerTx(signature));
+  console.log(`Futarchy init tx: ${explorerTx(signature)}`);
+  return await params.program.account.futarchyAuthority.fetch(params.futarchyAuthority);
 }
 
-async function seedLiquiditySide(params: {
+async function seedBalancedLiquidity(params: {
   provider: anchor.AnchorProvider;
   payer: anchor.web3.Keypair;
   program: any;
   market: PublicKey;
+  futarchyAuthority: PublicKey;
   eventAuthority: PublicKey;
-  marketAsset: { base?: {}; quote?: {} };
-  assetMint: PublicKey;
-  claimTokenMint: PublicKey;
-  reserveVault: PublicKey;
-  amount: bigint;
+  baseMint: PublicKey;
+  quoteMint: PublicKey;
+  baseYlpMint: PublicKey;
+  quoteYlpMint: PublicKey;
+  baseReserveVault: PublicKey;
+  quoteReserveVault: PublicKey;
+  baseAmount: bigint;
+  quoteAmount: bigint;
 }) {
-  const tokenProgram = await tokenProgramForMint(params.provider.connection, params.assetMint);
-  const ownerAssetAccount = await getOrCreateAta({
+  const baseTokenProgram = await tokenProgramForMint(params.provider.connection, params.baseMint);
+  const quoteTokenProgram = await tokenProgramForMint(params.provider.connection, params.quoteMint);
+  const ownerBaseAccount = await getOrCreateAta({
     connection: params.provider.connection,
     payer: params.payer,
-    mint: params.assetMint,
+    mint: params.baseMint,
     owner: params.payer.publicKey,
-    tokenProgram,
+    tokenProgram: baseTokenProgram,
   });
-  const ownerClaimAccount = await getOrCreateAta({
+  const ownerQuoteAccount = await getOrCreateAta({
     connection: params.provider.connection,
     payer: params.payer,
-    mint: params.claimTokenMint,
+    mint: params.quoteMint,
     owner: params.payer.publicKey,
-    tokenProgram: TOKEN_PROGRAM_ID,
+    tokenProgram: quoteTokenProgram,
+  });
+  const ownerBaseYlpAccount = await getOrCreateAta({
+    connection: params.provider.connection,
+    payer: params.payer,
+    mint: params.baseYlpMint,
+    owner: params.payer.publicKey,
+    tokenProgram: TOKEN_2022_PROGRAM_ID,
+  });
+  const ownerQuoteYlpAccount = await getOrCreateAta({
+    connection: params.provider.connection,
+    payer: params.payer,
+    mint: params.quoteYlpMint,
+    owner: params.payer.publicKey,
+    tokenProgram: TOKEN_2022_PROGRAM_ID,
   });
 
   await mintMockTokens({
     connection: params.provider.connection,
     payer: params.payer,
-    mint: params.assetMint,
+    mint: params.baseMint,
     recipient: params.payer.publicKey,
-    amount: params.amount,
-    tokenProgram,
+    amount: params.baseAmount,
+    tokenProgram: baseTokenProgram,
+  });
+  await mintMockTokens({
+    connection: params.provider.connection,
+    payer: params.payer,
+    mint: params.quoteMint,
+    recipient: params.payer.publicKey,
+    amount: params.quoteAmount,
+    tokenProgram: quoteTokenProgram,
   });
 
-  const stakePosition = stakePositionAddress(
-    params.program.programId,
-    params.market,
-    params.payer.publicKey,
-    params.assetMint
-  );
   const signature = await params.program.methods
     .addLiquidity({
-      marketAsset: params.marketAsset,
-      depositAmount: bnFromUnits(params.amount),
-      minClaimAmount: new anchor.BN(0),
-      maxBufferAmount: bnFromUnits(params.amount),
+      baseDepositAmount: bnFromUnits(params.baseAmount),
+      quoteDepositAmount: bnFromUnits(params.quoteAmount),
+      minBaseYlpAmount: new anchor.BN(0),
+      minQuoteYlpAmount: new anchor.BN(0),
     })
     .accounts({
       market: params.market,
+      futarchyAuthority: params.futarchyAuthority,
       owner: params.payer.publicKey,
-      assetMint: params.assetMint,
-      claimTokenMint: params.claimTokenMint,
-      reserveVault: params.reserveVault,
-      ownerAssetAccount: ownerAssetAccount.address,
-      ownerClaimAccount: ownerClaimAccount.address,
-      stakePosition,
+      baseMint: params.baseMint,
+      quoteMint: params.quoteMint,
+      baseYlpMint: params.baseYlpMint,
+      quoteYlpMint: params.quoteYlpMint,
+      baseReserveVault: params.baseReserveVault,
+      quoteReserveVault: params.quoteReserveVault,
+      ownerBaseAccount: ownerBaseAccount.address,
+      ownerQuoteAccount: ownerQuoteAccount.address,
+      ownerBaseYlpAccount: ownerBaseYlpAccount.address,
+      ownerQuoteYlpAccount: ownerQuoteYlpAccount.address,
+      baseYieldAccount: deriveYieldAccountAddress(
+        params.program.programId,
+        params.market,
+        params.payer.publicKey,
+        params.baseMint,
+        "ylp"
+      ),
+      quoteYieldAccount: deriveYieldAccountAddress(
+        params.program.programId,
+        params.market,
+        params.payer.publicKey,
+        params.quoteMint,
+        "ylp"
+      ),
       tokenProgram: TOKEN_PROGRAM_ID,
       token2022Program: TOKEN_2022_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
       eventAuthority: params.eventAuthority,
       program: params.program.programId,
     })
+    .preInstructions([anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 })])
     .rpc();
-  console.log(`Seeded ${params.amount.toString()} units into ${params.assetMint.toBase58()}`);
+  console.log(
+    `Seeded ${params.baseAmount.toString()} base units and ${params.quoteAmount.toString()} quote units`
+  );
   console.log(explorerTx(signature));
 }
 

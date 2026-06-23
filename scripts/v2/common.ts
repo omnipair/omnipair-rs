@@ -4,12 +4,18 @@ import {
   Keypair,
   PublicKey,
   SystemProgram,
+  Transaction,
 } from "@solana/web3.js";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
+  ExtensionType,
+  NATIVE_MINT,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  createInitializeMintInstruction,
+  createInitializeTransferHookInstruction,
   createMint,
+  getMintLen,
   getAccount,
   getMint,
   getOrCreateAssociatedTokenAccount,
@@ -42,10 +48,10 @@ export type StoredMarket = {
   paramsHash: string;
   baseMint: string;
   quoteMint: string;
-  baseClaimTokenMint: string;
-  quoteClaimTokenMint: string;
-  baseHedgeTokenMint: string;
-  quoteHedgeTokenMint: string;
+  baseYlpMint: string;
+  quoteYlpMint: string;
+  baseHlpMint: string;
+  quoteHlpMint: string;
   baseReserveVault: string;
   quoteReserveVault: string;
   baseCollateralVault: string;
@@ -54,13 +60,13 @@ export type StoredMarket = {
   quoteInsuranceVault: string;
   baseFeeVault: string;
   quoteFeeVault: string;
-  baseStakeVault: string;
-  quoteStakeVault: string;
-  baseHedgeVault: string;
-  quoteHedgeVault: string;
+  baseInterestVault: string;
+  quoteInterestVault: string;
+  baseHlpBaseYlpVault: string;
+  baseHlpQuoteYlpVault: string;
+  quoteHlpBaseYlpVault: string;
+  quoteHlpQuoteYlpVault: string;
   eventAuthority: string;
-  seededBaseLiquidity?: boolean;
-  seededQuoteLiquidity?: boolean;
   seededLiquidity?: boolean;
 };
 
@@ -183,6 +189,58 @@ export async function createMintIfMissing(params: {
     mint: keypair.publicKey.toBase58(),
     decimals: params.decimals,
     tokenProgram: tokenProgram.toBase58(),
+    keypairPath: mintKeypairPath,
+    mintAuthority: params.mintAuthority.toBase58(),
+  };
+}
+
+export async function createHookedLpMintIfMissing(params: {
+  connection: Connection;
+  payer: Keypair;
+  label: string;
+  decimals: number;
+  mintAuthority: PublicKey;
+  transferHookProgramId: PublicKey;
+}): Promise<StoredMint> {
+  const { keypair, path: mintKeypairPath } = loadOrCreateKeypair(`mint-${params.label}`);
+  const existing = await params.connection.getAccountInfo(keypair.publicKey, "confirmed");
+
+  if (!existing) {
+    const mintLen = getMintLen([ExtensionType.TransferHook]);
+    const lamports = await params.connection.getMinimumBalanceForRentExemption(mintLen);
+    const transaction = new Transaction().add(
+      SystemProgram.createAccount({
+        fromPubkey: params.payer.publicKey,
+        newAccountPubkey: keypair.publicKey,
+        lamports,
+        space: mintLen,
+        programId: TOKEN_2022_PROGRAM_ID,
+      }),
+      createInitializeTransferHookInstruction(
+        keypair.publicKey,
+        params.payer.publicKey,
+        params.transferHookProgramId,
+        TOKEN_2022_PROGRAM_ID
+      ),
+      createInitializeMintInstruction(
+        keypair.publicKey,
+        params.decimals,
+        params.mintAuthority,
+        null,
+        TOKEN_2022_PROGRAM_ID
+      )
+    );
+    await anchor.web3.sendAndConfirmTransaction(params.connection, transaction, [
+      params.payer,
+      keypair,
+    ]);
+  }
+
+  return {
+    label: params.label,
+    mint: keypair.publicKey.toBase58(),
+    decimals: params.decimals,
+    tokenProgram: TOKEN_2022_PROGRAM_ID.toBase58(),
     keypairPath: mintKeypairPath,
     mintAuthority: params.mintAuthority.toBase58(),
   };
@@ -346,7 +404,7 @@ export function paramsHashForMarket(label: string, baseMint: PublicKey, quoteMin
   }
   return crypto
     .createHash("sha256")
-    .update(`omnipair-v2-devnet:${label}:${baseMint.toBase58()}:${quoteMint.toBase58()}`)
+    .update(`omnipair-v2-final-devnet:${label}:${baseMint.toBase58()}:${quoteMint.toBase58()}`)
     .digest();
 }
 
@@ -359,8 +417,6 @@ export function deriveMarketAddresses(params: {
   baseMint: PublicKey;
   quoteMint: PublicKey;
   paramsHash: Buffer;
-  baseClaimTokenMint: PublicKey;
-  quoteClaimTokenMint: PublicKey;
 }) {
   const market = derivePda(
     params.programId,
@@ -380,25 +436,63 @@ export function deriveMarketAddresses(params: {
     quoteInsuranceVault: derivePda(params.programId, Buffer.from("insurance"), market.toBuffer(), params.quoteMint.toBuffer()),
     baseFeeVault: derivePda(params.programId, Buffer.from("market_fee"), market.toBuffer(), params.baseMint.toBuffer()),
     quoteFeeVault: derivePda(params.programId, Buffer.from("market_fee"), market.toBuffer(), params.quoteMint.toBuffer()),
-    baseStakeVault: derivePda(params.programId, Buffer.from("market_stake"), market.toBuffer(), params.baseClaimTokenMint.toBuffer()),
-    quoteStakeVault: derivePda(params.programId, Buffer.from("market_stake"), market.toBuffer(), params.quoteClaimTokenMint.toBuffer()),
-    baseHedgeVault: derivePda(params.programId, Buffer.from("hedged"), market.toBuffer(), params.baseClaimTokenMint.toBuffer()),
-    quoteHedgeVault: derivePda(params.programId, Buffer.from("hedged"), market.toBuffer(), params.quoteClaimTokenMint.toBuffer()),
+    baseInterestVault: derivePda(params.programId, Buffer.from("market_interest"), market.toBuffer(), params.baseMint.toBuffer()),
+    quoteInterestVault: derivePda(params.programId, Buffer.from("market_interest"), market.toBuffer(), params.quoteMint.toBuffer()),
   };
 }
 
-export function stakePositionAddress(programId: PublicKey, market: PublicKey, owner: PublicKey, assetMint: PublicKey): PublicKey {
-  return derivePda(programId, Buffer.from("stake"), market.toBuffer(), owner.toBuffer(), assetMint.toBuffer());
+export function deriveFutarchyAuthorityAddress(programId: PublicKey): PublicKey {
+  return derivePda(programId, Buffer.from("futarchy_authority"));
+}
+
+export function deriveProgramDataAddress(programId: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [programId.toBuffer()],
+    new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111")
+  )[0];
+}
+
+export function deriveYieldAccountAddress(
+  programId: PublicKey,
+  market: PublicKey,
+  owner: PublicKey,
+  assetMint: PublicKey,
+  tokenKind: "ylp" | "hlp"
+): PublicKey {
+  return derivePda(
+    programId,
+    Buffer.from("yield"),
+    market.toBuffer(),
+    owner.toBuffer(),
+    assetMint.toBuffer(),
+    Buffer.from([tokenKind === "ylp" ? 0 : 1])
+  );
+}
+
+export function deriveHlpYlpVaultAddress(
+  programId: PublicKey,
+  market: PublicKey,
+  targetAsset: "base" | "quote",
+  ylpMint: PublicKey
+): PublicKey {
+  return derivePda(
+    programId,
+    Buffer.from("hlp_ylp_vault"),
+    market.toBuffer(),
+    Buffer.from([targetAsset === "base" ? 0 : 1]),
+    ylpMint.toBuffer()
+  );
 }
 
 export function defaultMarketConfig() {
   const startTime = process.env.OMNIPAIR_V2_MARKET_START_TIME ?? "0";
   return {
     swapFeeBps: Number(process.env.OMNIPAIR_V2_SWAP_FEE_BPS ?? "30"),
-    operatorFeeBps: Number(process.env.OMNIPAIR_V2_OPERATOR_FEE_BPS ?? "1000"),
+    operatorFeeBps: Number(process.env.OMNIPAIR_V2_OPERATOR_FEE_BPS ?? "0"),
     protocolFeeBps: Number(process.env.OMNIPAIR_V2_PROTOCOL_FEE_BPS ?? "0"),
-    bufferRatioBps: Number(process.env.OMNIPAIR_V2_BUFFER_RATIO_BPS ?? "2000"),
-    feeRoutingKNad: NAD,
+    targetHlpLeverageBps: Number(process.env.OMNIPAIR_V2_TARGET_HLP_LEVERAGE_BPS ?? "20000"),
+    settlementDivergenceBps: Number(process.env.OMNIPAIR_V2_SETTLEMENT_DIVERGENCE_BPS ?? "500"),
+    emergencyExitHaircutBps: Number(process.env.OMNIPAIR_V2_EMERGENCY_EXIT_HAIRCUT_BPS ?? "250"),
     emaHalfLifeMs: new anchor.BN(process.env.OMNIPAIR_V2_EMA_HALF_LIFE_MS ?? "60000"),
     directionalEmaHalfLifeMs: new anchor.BN(process.env.OMNIPAIR_V2_DIRECTIONAL_EMA_HALF_LIFE_MS ?? "60000"),
     kEmaHalfLifeMs: new anchor.BN(process.env.OMNIPAIR_V2_K_EMA_HALF_LIFE_MS ?? "60000"),
@@ -408,8 +502,6 @@ export function defaultMarketConfig() {
     kEmaDrawdownBps: Number(process.env.OMNIPAIR_V2_K_EMA_DRAWDOWN_BPS ?? "1000"),
     recognizedCollateralCapBps: Number(process.env.OMNIPAIR_V2_RECOGNIZED_COLLATERAL_CAP_BPS ?? "15000"),
     marketHealthMinBps: Number(process.env.OMNIPAIR_V2_MARKET_HEALTH_MIN_BPS ?? "11000"),
-    effectiveDebtWeightMinBps: Number(process.env.OMNIPAIR_V2_EFFECTIVE_DEBT_WEIGHT_MIN_BPS ?? "10000"),
-    effectiveDebtGammaNad: NAD,
     softBorrowEnabled: process.env.OMNIPAIR_V2_SOFT_BORROW_ENABLED === "1",
     hedgedLpEnabled: process.env.OMNIPAIR_V2_HEDGED_LP_ENABLED !== "0",
     startTime: new anchor.BN(startTime),
@@ -434,3 +526,4 @@ export async function tokenBalance(connection: Connection, tokenAccount: PublicK
 }
 
 export { PublicKey, SystemProgram, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID };
+export { NATIVE_MINT };
