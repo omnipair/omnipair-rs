@@ -35,25 +35,27 @@ const V1_INSTRUCTIONS = [
 ];
 
 const V2_INSTRUCTIONS = [
+  "initFutarchyAuthority",
+  "updateFutarchyAuthority",
+  "updateProtocolRevenue",
+  "updateRevenueRecipients",
+  "setGlobalReduceOnly",
+  "claimProtocolFees",
   "initialize",
   "updateConfig",
   "setReduceOnly",
   "addLiquidity",
   "removeLiquidity",
-  "stake",
-  "unstake",
-  "claimFees",
-  "claimMarketFees",
+  "setYieldRecipient",
+  "claimYield",
   "swap",
   "depositCollateral",
   "withdrawCollateral",
   "borrow",
   "repay",
-  "depositInsurance",
   "liquidate",
   "openHedge",
   "closeHedge",
-  "claimHedgeFees"
 ];
 
 const ALL_INSTRUCTIONS = [

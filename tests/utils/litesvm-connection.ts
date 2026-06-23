@@ -84,9 +84,16 @@ export class LiteSVMConnection extends Connection {
     // Check if result has err method (FailedTransactionMetadata)
     if (result && typeof (result as any).err === 'function') {
       const err = (result as any).err();
-      const logs = (result as any).meta?.()?.logs?.() || [];
-      const errMsg = err ? (typeof err === 'string' ? err : JSON.stringify(err)) : 
-        (logs.length > 0 ? `Transaction failed. Logs: ${logs.join('\n')}` : "Transaction failed");
+      const meta = (result as any).meta?.();
+      const logs = meta?.logs?.() || [];
+      const prettyLogs = meta?.prettyLogs?.();
+      const errMsg = err
+        ? (typeof err === 'string' ? err : err.toString?.() || JSON.stringify(err))
+        : (logs.length > 0 ? `Transaction failed. Logs: ${logs.join('\n')}` : "Transaction failed");
+      const logMsg = prettyLogs || (logs.length > 0 ? logs.join('\n') : "");
+      if (logMsg) {
+        throw new Error(`Transaction failed: ${errMsg}\nLogs:\n${logMsg}`);
+      }
       throw new Error(`Transaction failed: ${errMsg}`);
     }
     
@@ -216,6 +223,5 @@ export class LiteSVMConnection extends Connection {
     return { value: { err: null } };
   }
 }
-
 
 

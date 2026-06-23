@@ -1,728 +1,172 @@
-# Omnipair v2 Architecture Plan
+# Omnipair V2 Final yLP / hLP Architecture
 
-## Current Status
+This document captures the current V2 direction. It supersedes the earlier
+protected-principal LP, public staking, and underwriter-market plans.
 
-This plan has moved from proposal to implementation. The current branch has a
-standalone `programs/omnipair-v2` Anchor program while the legacy
-`programs/omnipair` program remains the V1 surface.
+## Summary
 
-Implemented V2 product surface:
+V2 is a standalone `omnipair_v2` program with a market-native account model.
+V1 remains unchanged for legacy pairs.
 
-- `initialize`, `update_config`, and `set_reduce_only`
-- `add_liquidity` and `remove_liquidity`
-- `stake`, `unstake`, `claim_fees`, `claim_market_fees`, and `claim_hedge_fees`
-- `swap`
-- `deposit_collateral`, `withdraw_collateral`, `borrow`, `repay`, and `liquidate`
-- `deposit_insurance`
-- `open_hedge` and `close_hedge`
+The final V2 product surface is:
 
-Implemented V2 architecture pieces:
+- `yLP_X` and `yLP_Y`: floating reserve-side yield LP shares.
+- `hLP_X` and `hLP_Y`: aggregate 2x leveraged LP vault shares targeting
+  approximately linear exposure to one market asset.
 
-- standalone V2 program ID and IDL;
-- V1-style one-instruction-per-file layout;
-- market-based state, vaults, seeds, events, and SDK helpers;
-- claim-minus-buffer liquidity accounting;
-- buffer shares as non-transferable junior risk-capital accounting units that
-  stay with the stake position after protected claim-token principal is
-  redeemed;
-- fixed 1:1 claim-token principal;
-- staking-gated non-compounding fee indexes;
-- market reserve floors on swaps and withdrawals;
-- fixed-token debt with recognized-collateral market health;
-- cached spot observations for EMA updates;
-- pre-action risk snapshots for swaps and liquidity adds, so EMA bootstraps from
-  the previous observed market state rather than same-instruction post-state
-  spot;
-- liquidity-EMA daily limits and circuit breakers;
-- buffer-ratio updates locked while active stake, allocated staker fee
-  liabilities, or carried-forward no-stake LP fee liabilities exist;
-- liquidation with collateral seizure, insurance draw, and LP socialization;
-- h-omLP hedge wrappers as 1:1 claim-token overlays;
-- hedge opens bounded by post-open market health after gamma-weighted overlay
-  debt refresh;
-- config updates are conservative: after a config change, refreshed market
-  health must still satisfy the configured health floor for existing debt.
+Removed concepts:
 
-Remaining work before treating V2 as production-ready:
+- no legacy LP-token branding;
+- no fixed 1:1 protected-principal LP token;
+- no protected-principal plus junior-capital split;
+- no separate fee-eligibility step for normal LPs;
+- no public reserve LP token;
+- no LP-token-denominated hLP debt;
+- no per-user hLP leverage position;
+- no V1/V2 swap router.
 
-- run a fresh end-to-end security review against the final standalone program;
-- finish deployment/release checklist review for mainnet, app, SDK, indexer,
-  analytics, and aggregator owners;
-- keep the deferred feature scope disabled until separate reviewed specs are
-  ready: soft borrow/liquidation, LLAMMA-style liquidation, Jupiter or external
-  aggregator conversion routing, explicit hedge premium pricing,
-  user-selectable settlement side, and stale locked collateral-factor
-  machinery.
+## Public Instructions
 
-## Purpose
-
-This document captures the current design direction for Omnipair v2 so a coding model can work from one coherent brief.
-
-The main conclusion is that v2 should be a separate Solana program rather than live inside the existing v1 program. V2 is not only a feature upgrade. It has a different account model, token model, risk model, event surface, and integration surface. Keeping it inside the v1 program preserves the program ID, but it does not avoid new integration work, and it forces awkward public instruction names like `market_swap`, `market_borrow`, and `market_liquidate`.
-
-A separate program lets v1 remain stable while v2 gets a clean, canonical protocol surface.
-
-## Core Decision
-
-Use two programs:
-
-- `omnipair`: legacy v1 GAMM pair program, kept working as-is.
-- `omnipair_v2`: new market architecture program.
-
-Product routing:
-
-- `omnipair.fi`: canonical v2 app.
-- `v1.omnipair.fi`: legacy v1 app.
-- SDK and analytics should support both and combine metrics under the Omnipair brand.
-
-This should be framed as one protocol brand with two program generations:
-
-- Omnipair v1: legacy GAMM pair program.
-- Omnipair v2: market architecture program.
-
-## Why Separate Program
-
-V2 needs new integrations regardless of whether it lives in the old program because integrators still need to understand:
-
-- new market accounts,
-- new vault layout,
-- new token mints,
-- new instructions,
-- new events,
-- new pricing and liquidity math,
-- new liquidation and debt semantics.
-
-The benefit of staying in the same program is mostly program-ID continuity, not automatic compatibility. A separate program gives cleaner code and cleaner external API:
-
-- reclaim simple instruction names like `swap`, `borrow`, `repay`, and `liquidate`;
-- avoid mixed v1/v2 IDL catalogs;
-- keep events and errors domain-specific;
-- simplify audits by making v2 its own state machine;
-- avoid keeping v1 baggage in the v2 root module;
-- make integrator docs clearer: v1 program is legacy, v2 program is current.
-
-## Non-Goals
-
-- Do not realloc existing v1 accounts.
-- Do not perform a forced stateful migration.
-- Do not break existing v1 integrations.
-- Do not leave temporary migration logic inside v1.
-- Do not preserve awkward `market_*` instruction names; V2 has its own program
-  namespace.
-- Do not copy MakerDAO's cryptic names directly.
-
-## Migration Strategy
-
-V1 remains live and untouched except for any cleanup needed to remove mixed v2 code from the current branch.
-
-V2 launches as a fresh program with fresh accounts and fresh liquidity. Migration is lazy:
-
-- v1 liquidity stays withdrawable;
-- users voluntarily withdraw from v1 and deposit into v2;
-- aggregators can integrate v2 as a new venue/source;
-- analytics can combine both programs under one Omnipair dashboard;
-- the SDK can expose one high-level Omnipair interface while routing to v1 or v2 internally.
-
-## Public Naming Direction
-
-Because v2 gets its own program namespace, public instruction names should be clean and action-oriented.
-
-Preferred public names:
+V2 uses simple action names inside the standalone program:
 
 ```text
 initialize
 update_config
 set_reduce_only
-swap
 add_liquidity
 remove_liquidity
+set_yield_recipient
+claim_yield
+swap
 deposit_collateral
 withdraw_collateral
 borrow
 repay
 liquidate
-deposit_insurance
-stake
-unstake
-claim_fees
-claim_market_fees
 open_hedge
-claim_hedge_fees
 close_hedge
 ```
 
-Avoid temporal or workaround names:
+Futarchy and revenue administration mirrors the V1 flow:
 
 ```text
-swap_v2
-borrow_v2
-market_swap
-market_borrow
-market_repay
-market_liquidate
+init_futarchy_authority
+update_futarchy_authority
+update_protocol_revenue
+update_revenue_recipients
+set_global_reduce_only
+claim_protocol_fees
 ```
 
-`market` is still a good domain/account concept, but it should not be a forced prefix on every public instruction.
+## yLP Model
 
-## Source Grouping Direction
-
-Keep the v1 style of grouping related instructions together. That was a good ergonomic choice.
-
-The instruction tree should use user-facing protocol language where it maps cleanly to the product surface, and should split larger domains when that makes review easier. The current implementation keeps `reserve`, `staking`, `hedge`, `lending`, `liquidation`, `spot`, and `market` as separate audit-sized folders.
-
-Current v2 instruction layout:
+Normal liquidity is always yield-bearing. A user deposits both assets at the
+current market ratio and receives both side tokens:
 
 ```text
-instructions/
-  market/
-    initialize.rs
-    update_config.rs
-    set_reduce_only.rs
-
-  reserve/
-    add_liquidity.rs
-    remove_liquidity.rs
-
-  staking/
-    stake.rs
-    unstake.rs
-    claim_fees.rs
-    claim_market_fees.rs
-
-  hedge/
-    open_hedge.rs
-    claim_hedge_fees.rs
-    close_hedge.rs
-
-  spot/
-    swap.rs
-
-  lending/
-    deposit_collateral.rs
-    withdraw_collateral.rs
-    borrow.rs
-    repay.rs
-
-  liquidation/
-    liquidate.rs
-    deposit_insurance.rs
+user X + Y -> market reserves -> yLP_X + yLP_Y
 ```
 
-Hedging, staking, reserve liquidity, and liquidation now live in separate folders because their account sets and risk checks are different enough that reviewers benefit from narrower modules. The source tree should optimize for how users and auditors follow the protocol state machine.
-
-This gives both:
-
-- v1-style source ergonomics for auditing and development;
-- clean public instruction names in the IDL.
-
-Example root dispatch:
-
-```rust
-pub fn swap(ctx: Context<Swap>, args: SwapArgs) -> Result<()> {
-    spot::Swap::handle(ctx, args)
-}
-
-pub fn borrow(ctx: Context<Borrow>, args: BorrowArgs) -> Result<()> {
-    lending::Borrow::handle(ctx, args)
-}
-
-pub fn liquidate(ctx: Context<Liquidate>, args: LiquidateArgs) -> Result<()> {
-    liquidation::Liquidate::handle(ctx, args)
-}
-```
-
-## Liquidity vs Reserve Naming
-
-Use `liquidity` for user-facing actions.
-
-Use `reserve` for internal custody/accounting and for the current add/remove liquidity instruction folder.
-
-Rationale:
-
-- `liquidity` is what users, LPs, aggregators, dashboards, and integrations understand.
-- `reserve` is more precise for internal state like vaults, backing, claim coverage, and accounting floors.
-
-Current split:
+yLP is a floating pro-rata reserve share:
 
 ```text
-instructions/reserve/add_liquidity.rs
-instructions/reserve/remove_liquidity.rs
-state/ledgers.rs
-transitions/reserve.rs
+asset_claim_i = ylp_shares_i * live_reserve_i / ylp_supply_i
 ```
 
-Internal names can still use:
+Principal reserves exclude fee and interest vault balances. Swap fees and
+borrow interest are routed to side-specific revenue vaults and growth indexes,
+then claimed through `claim_yield`. Revenue does not auto-compound into
+principal reserves.
 
-```rust
-ReserveLedger
-reserve_vault
-cash_reserve
-live_reserve
-```
+Token-2022 transfer hooks checkpoint sender and receiver yield state before
+transfer. `set_yield_recipient` lets treasuries or protocol-owned liquidity
+route claimable revenue to an external wallet.
 
-Public instruction names can use:
+## hLP Model
 
-```rust
-add_liquidity
-remove_liquidity
-```
+Each market has two aggregate hLP vaults:
 
-The current preference is to keep the familiar v1-style `add_liquidity` and `remove_liquidity` names in the new v2 namespace, even if the underlying v2 accounting is one-sided and reserve-backed.
+- `hLP_X`: user deposits X, vault borrows Y.
+- `hLP_Y`: user deposits Y, vault borrows X.
 
-## Token Vocabulary
-
-Solana does not make tokenization visually obvious the way Ethereum does with contracts like `cToken.sol`, `aToken`, `stETH`, or `crvUSD`. In Omnipair v2, names should make it obvious what is an externally transferable SPL token and what is internal accounting.
-
-Naming rules:
-
-- `*Token` means an externally transferable SPL token concept.
-- `*Mint` means the SPL mint account.
-- `*Vault` means token custody account.
-- `*Shares` means internal pro-rata accounting, not necessarily transferable.
-- `*Units` means derived accounting weight.
-- `*Ledger` means stored accounting balances.
-- `*Book` means a broader portfolio, exposure, or risk/accounting model.
-- Avoid `token` in internal accounting names unless there is a real SPL mint behind it.
-
-Preferred examples:
-
-```rust
-claim_token_mint
-hedge_token_mint
-claim_token_supply
-hedged_claim_token_supply
-staked_claim_token_amount
-buffer_share_supply
-staked_buffer_share_amount
-```
-
-Clear accounting names:
-
-```rust
-ReserveLedger
-ClaimTokenLedger
-BufferLedger
-FeeLedger
-DebtBook
-RiskBook
-```
-
-Avoid ambiguous names like:
-
-```rust
-claim_mint
-hedge_mint
-staked_claim_supply
-buffer_book
-```
-
-unless the surrounding module makes the meaning very clear.
-
-## Book vs Ledger
-
-Use `Ledger` when the struct mostly stores balances and accounting totals.
-
-Examples:
-
-```rust
-ReserveLedger
-ClaimTokenLedger
-BufferLedger
-FeeLedger
-```
-
-Use `Book` when the struct represents a broader financial model, exposure set, or derived risk/accounting view.
-
-Examples:
-
-```rust
-DebtBook
-RiskBook
-```
-
-`BufferBook` is less natural because "buffer book" is not a common finance phrase. `BufferLedger` is clearer.
-
-## Token Modules
-
-Even though Solana tokens are mints/accounts rather than contracts, v2 should give tokenized assets first-class source modules.
-
-Suggested layout:
+hLP is a vault share, not a wrapper around one yLP side. Opening `hLP_X`:
 
 ```text
-tokens/
-  claim_token.rs
-  hedge_token.rs
+user deposits X
+vault borrows Y
+vault adds balanced X/Y liquidity
+vault receives and locks yLP_X + yLP_Y
+user receives hLP_X
 ```
 
-These files should define protocol meaning, mint constraints, supply accounting, vault relationships, and mint/burn/escrow helpers. They are not separate SPL token programs. They are documentation and implementation boundaries for tokenized protocol assets.
-
-## Atomic State Transition Philosophy
-
-Adopt the useful part of MakerDAO's style: small accounting kernels, precise state transitions, and invariant-centered mutation.
-
-Do not copy MakerDAO's intentionally terse or cryptic naming. The goal is a readable Omnipair accounting language.
-
-Instructions should be thin adapters around atomic state transitions.
-
-Pattern:
+Closing `hLP_X`:
 
 ```text
-1. Validate accounts.
-2. Measure real token movement if needed.
-3. Construct a transition.
-4. Apply the transition to protocol books.
-5. Assert invariants.
-6. Settle token transfers.
-7. Emit a receipt/event.
+user burns hLP_X
+vault burns proportional yLP_X + yLP_Y
+Y proceeds repay Y debt
+remaining X returns to user
 ```
 
-Avoid scattered direct mutations outside transition code:
-
-```rust
-market.side0.reserve_ledger.cash_reserve = ...
-market.debt_book.fixed_debt0_shares = ...
-position.recognized_collateral1_for_debt0 = ...
-```
-
-Prefer named transitions:
-
-```rust
-Borrow::apply(...)
-Repay::apply(...)
-Swap::apply(...)
-Liquidation::apply(...)
-Stake::apply(...)
-Redeem::apply(...)
-```
-
-Each transition should return a receipt used by events and tests.
-
-Example shape:
-
-```rust
-pub struct Borrow {
-    pub borrow_asset: MarketAsset,
-    pub borrow_amount: u64,
-    pub min_health_bps: u64,
-}
-
-pub struct BorrowReceipt {
-    pub owner: Pubkey,
-    pub debt_asset_mint: Pubkey,
-    pub debt_delta: i64,
-    pub fixed_debt0: u128,
-    pub fixed_debt1: u128,
-    pub health0_bps: u64,
-    pub health1_bps: u64,
-}
-
-impl Borrow {
-    pub fn apply(
-        self,
-        market: &mut Market,
-        position: &mut MarginPosition,
-    ) -> Result<BorrowReceipt> {
-        // single named mutation path
-    }
-}
-```
-
-## Current Program Layout
-
-The standalone V2 program follows this review shape:
+hLP debt is denominated in the borrowed underlying asset. Principal NAV is:
 
 ```text
-programs/omnipair-v2/src/
-  lib.rs
-  constants.rs
-  errors.rs
-  events.rs
-
-  state/
-    market.rs
-    side.rs
-    positions.rs
-    ledgers.rs
-    risk.rs
-
-  instructions/
-    market/
-      initialize.rs
-      update_config.rs
-      set_reduce_only.rs
-    reserve/
-      add_liquidity.rs
-      remove_liquidity.rs
-    staking/
-      stake.rs
-      unstake.rs
-      claim_fees.rs
-      claim_market_fees.rs
-    hedge/
-      open_hedge.rs
-      claim_hedge_fees.rs
-      close_hedge.rs
-    spot/
-      swap.rs
-    lending/
-      deposit_collateral.rs
-      withdraw_collateral.rs
-      borrow.rs
-      repay.rs
-    liquidation/
-      liquidate.rs
-      deposit_insurance.rs
-
-  transitions/
-    reserve.rs
-    staking.rs
-    fee.rs
-    debt.rs
-    collateral.rs
-    swap.rs
-    liquidation.rs
-    hedge.rs
-    insurance.rs
-
-  tokens/
-    claim_token.rs
-    hedge_token.rs
-
-  math/
-    gamm.rs
-    fixed_point.rs
-    risk.rs
-
-  shared/
-    account.rs
-    token.rs
+hLP_NAV = value(vault_owned_yLP_X + vault_owned_yLP_Y) - borrowed_asset_debt
 ```
 
-The exact file split can evolve, but avoid one huge `market.rs` containing all state, risk math, token semantics, accounting transitions, helpers, seed macros, and tests.
+Fee revenue remains separate from principal NAV.
 
-## State and Transition Boundaries
+## Swap And hLP Rebalancing
 
-State structs should mostly describe stored data and small local invariants.
+`swap` is the V2 swap instruction. It snapshots risk, applies the user swap,
+then checkpoints both aggregate hLP vaults in O(1). The hLP reaction uses a
+bounded balanced-yLP adjustment, so the post-swap spot used for the quote is
+preserved within rounding and there is no hidden second price move.
 
-Good examples:
+Current implementation status:
 
-```rust
-ReserveLedger
-ClaimTokenLedger
-BufferLedger
-FeeLedger
-DebtBook
-RiskBook
-MarketSide
-MarginPosition
-StakePosition
-HedgePosition
+- swaps stay live and checkpoint active hLP vaults;
+- active hLP swaps require the canonical hLP-owned yLP vault accounts;
+- hLP rebalance deltas execute as balanced yLP mint/burn plus underlying debt
+  adjustment when feasible;
+- leverage-up is capped by borrowed-side cash headroom;
+- unexecuted hLP rebalance is stored as `pending_rebalance` without blocking
+  ordinary swaps.
+
+Settlement guards apply to hLP mint/burn realization, not ordinary swaps.
+
+## Risk And Settlement
+
+V2 uses cached settlement references and liquidity EMA state so settlement
+cannot rely on one-block manipulated spot. Ordinary swaps remain optimistic,
+while hLP mint/burn uses conservative settlement pricing.
+
+Daily limits are sized from liquidity EMA. Risk checks use normalized market
+valuation, recognized debt-bearing collateral, and the market health floor.
+Soft borrow remains disabled by default.
+
+## Invariants
+
+- yLP supply is backed by reserve-side principal accounting.
+- No operation mints yLP without corresponding reserve value.
+- Fee liabilities are backed by fee or interest vault balances.
+- hLP NAV satisfies `collateral_value - debt_value >= 0`.
+- hLP debt shares match the aggregate vault debt.
+- hLP operations never use yLP-denominated debt.
+- Swap-time hLP updates are O(1) and never iterate user positions.
+- V1 pair instructions, events, seeds, and account layouts remain unchanged.
+
+## Verification Gates
+
+Core local gates:
+
+```bash
+anchor build -p omnipair_v2
+cargo test -p omnipair-v2 --lib
+npm run build --prefix packages/program-interface
+yarn test-litesvm
 ```
 
-Transition modules should coordinate coupled mutations across those structs.
-
-Unlike `instructions/`, the global `transitions/` folder can use more technical accounting terminology. This is where names like `reserve`, `staking`, `fee`, `debt`, `collateral`, `swap`, `liquidation`, `hedge`, and `insurance` are useful. The public instruction layer should stay simple; the transition layer should be precise.
-
-Examples:
-
-```text
-transitions/debt.rs
-transitions/collateral.rs
-transitions/liquidation.rs
-transitions/reserve.rs
-transitions/staking.rs
-transitions/fee.rs
-transitions/swap.rs
-```
-
-Instruction modules should:
-
-- validate canonical accounts;
-- perform token transfers or measure token credits;
-- call one transition;
-- emit events from the transition receipt.
-
-## Side Selection
-
-Avoid long-term reliance on booleans like:
-
-```rust
-debt_asset_is_asset0: bool
-asset_in_is_asset0: bool
-```
-
-Prefer a typed side selector:
-
-```rust
-pub enum MarketAsset {
-    Base,
-    Quote,
-}
-```
-
-This can expose helpers like:
-
-```rust
-market.side(asset)?;
-market.side_mut(asset)?;
-asset.opposite()
-```
-
-Booleans are acceptable during migration, but the target style should make side semantics explicit.
-
-## Event and Error Surface
-
-In the separate v2 program, keep events and errors cleanly v2-specific.
-
-Avoid mixed catalogs containing both v1 and v2 events.
-
-Events should be derived from transition receipts where possible:
-
-```rust
-let receipt = Borrow::new(args).apply(&mut market, &mut position)?;
-emit_cpi!(DebtUpdated::from(receipt));
-```
-
-This keeps events aligned with actual state changes.
-
-## Tests
-
-Use both direct unit tests and LiteSVM integration tests.
-
-Unit tests:
-
-- transition-level accounting;
-- ledger invariants;
-- risk math;
-- fee allocation;
-- liquidation edge cases;
-- token supply accounting.
-
-LiteSVM tests:
-
-- account constraints;
-- real SPL token transfers;
-- mint/burn behavior;
-- PDA/vault correctness;
-- full user flows.
-
-Instruction coverage tracking can remain a useful checklist, but do not treat it as true behavioral coverage. A test that only checks an IDL or PDA should not imply the instruction behavior is covered.
-
-## SDK and Integration Strategy
-
-The SDK can expose clean high-level names and route internally:
-
-```ts
-omnipair.swap(...)
-omnipair.borrow(...)
-omnipair.repay(...)
-omnipair.liquidate(...)
-```
-
-The SDK may support both v1 and v2 under one package, but it should make the account model explicit.
-
-Analytics should combine both programs under the Omnipair brand while still tracking v1 and v2 separately at the source level.
-
-Frontend routing:
-
-```text
-omnipair.fi       -> v2 canonical app
-v1.omnipair.fi    -> legacy v1 app
-```
-
-## Implementation Status By Phase
-
-### Phase 1: Split Program Architecture
-
-Status: implemented.
-
-- Created the standalone `programs/omnipair-v2` program crate.
-- Moved V2 code into the standalone program.
-- Restored the existing `omnipair` program to a clean V1-only surface.
-- Kept V1 public instruction names and integrations stable.
-
-### Phase 2: Reclaim Public Names
-
-Status: implemented.
-
-- Public V2 instructions use clean names such as `swap`, `borrow`, `repay`,
-  and `liquidate`.
-- Domain clarity lives in account, state, event, and folder names instead of
-  workaround instruction prefixes.
-
-### Phase 3: Preserve Grouped Instruction Layout
-
-Status: implemented.
-
-- V2 keeps V1-style domain grouping.
-- Instructions are split across `instructions/reserve`, `instructions/staking`,
-  `instructions/hedge`, `instructions/lending`, `instructions/liquidation`,
-  `instructions/spot`, and `instructions/market`.
-- Staking, market fee claiming, hedge fee claiming, and liquidation have
-  narrow review surfaces.
-
-### Phase 4: Clean Token Vocabulary
-
-Status: implemented.
-
-- Claim and hedge token concepts are explicit.
-- Ambiguous mint, supply, and share fields were renamed where needed.
-- `tokens/claim_token.rs` and `tokens/hedge_token.rs` define token constraints.
-- SPL token concepts are separated from internal accounting units.
-- `buffer shares` remains the explicit V2 term for retained junior
-  risk-capital accounting. No separate branded product label is introduced at
-  the protocol boundary.
-
-### Phase 5: Introduce Atomic Transitions
-
-Status: implemented.
-
-- Coupled state mutation logic lives under `transitions/`.
-- Receipt structs drive event emission and tests.
-- Instruction handlers are thin account/token adapters around transition calls.
-- Transition boundaries assert the relevant local invariants.
-
-### Phase 6: Improve Modularity
-
-Status: implemented.
-
-- State is split into market, side, ledgers, positions, config, health, and risk
-  modules.
-- Math helpers live under `math/` and `utils/`.
-- Ledgers remain small and invariant-focused.
-- Risk math has dedicated modules for risk-book and fixed-point behavior.
-
-### Phase 7: Rebuild Tests
-
-Status: implemented for local review coverage.
-
-- Transition, state, math, and helper modules have direct unit/property tests.
-- LiteSVM covers real program behavior and all 19 standalone V2 instructions.
-- Coverage tracking reports V2 instruction smoke coverage separately from the
-  legacy V1 surface.
-
-### Phase 8: Integration and Product Surface
-
-Status: implemented locally; production owner signoffs and deployment gates
-remain pending.
-
-- Separate V2 IDL and TypeScript bindings exist.
-- SDK constants expose V2 program ID and PDA helpers.
-- The V2 README includes app, SDK, indexer, analytics, and aggregator handoff
-  notes.
-- V1 documentation and the V1 program remain available for legacy users.
-- Remaining production work is gate-based rather than local implementation
-  work: collect owner signoff for app/front-end routing,
-  aggregator/indexer/analytics integration, deployment review, and external
-  security review.
-
-## Success Criteria
-
-- V1 remains stable and usable.
-- V2 has a clean IDL with no awkward version-prefixed or `market_*` workaround instruction names.
-- Source code keeps v1-style domain grouping for related instructions.
-- Tokenized assets are obvious from names.
-- Internal accounting units are clearly separated from SPL tokens.
-- Core state transitions are atomic, named, tested, and auditable.
-- No forced migration or realloc path is required.
-- Integrators can reason about v2 as a clean new program while analytics and product surfaces still present one Omnipair brand.
+Before production, add full LiteSVM coverage for the remaining unexercised V2
+administration and liquidation flows, then complete the composite hLP swap
+rebalancing tests.
