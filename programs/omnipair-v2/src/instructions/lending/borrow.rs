@@ -10,7 +10,7 @@ use crate::{
     events::{MarketDebtUpdated, MarketEventMetadata, MarketHealthUpdated},
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
-    state::{MarginPosition, Market, MarketAsset},
+    state::{FutarchyAuthority, MarginPosition, Market, MarketAsset},
     transitions::debt::Borrow as BorrowTransition,
 };
 
@@ -44,6 +44,12 @@ pub struct Borrow<'info> {
     )]
     pub market: Box<Account<'info, Market>>,
 
+    #[account(
+        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
+        bump = futarchy_authority.bump
+    )]
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
+
     #[account(mut)]
     pub owner: Signer<'info>,
 
@@ -74,7 +80,8 @@ pub struct Borrow<'info> {
 
 impl<'info> Borrow<'info> {
     pub fn validate(&self, args: &BorrowArgs) -> Result<()> {
-        self.market.assert_live()?;
+        self.market
+            .assert_live_with_futarchy(&self.futarchy_authority)?;
         require!(
             !self.market.config.soft_borrow_enabled,
             ErrorCode::InvalidMarketConfig
@@ -145,7 +152,7 @@ impl<'info> Borrow<'info> {
             quote_debt_health_bps: debt_receipt.quote_debt_health_bps,
             metadata: MarketEventMetadata::new(owner_key, market_key)?,
         });
-        emit_cpi!(MarketHealthUpdated {
+        emit!(MarketHealthUpdated {
             market: market_key,
             recognized_base_collateral_for_quote_debt: ctx
                 .accounts

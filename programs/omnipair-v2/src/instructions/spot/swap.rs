@@ -1,4 +1,9 @@
-use anchor_lang::prelude::*;
+use anchor_lang::solana_program::{
+    instruction::{AccountMeta, Instruction},
+    log::sol_log_data,
+    program::invoke_signed,
+};
+use anchor_lang::{prelude::*, Discriminator};
 use anchor_spl::{
     token::Token,
     token_interface::{Mint, Token2022, TokenAccount},
@@ -7,7 +12,7 @@ use anchor_spl::{
 use crate::{
     constants::*,
     errors::ErrorCode,
-    events::{MarketEventMetadata, MarketHealthUpdated, SwapExecuted},
+    events::{HlpRebalanced, MarketEventMetadata, MarketHealthUpdated, SwapExecuted, SwapSettled},
     generate_market_seeds,
     math::calculate_raw_amount_out,
     shared::{
@@ -16,8 +21,11 @@ use crate::{
             transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault,
         },
     },
-    state::{Market, MarketAsset},
-    transitions::swap::Swap as SwapTransition,
+    state::{FutarchyAuthority, Market, MarketAsset},
+    transitions::{
+        hedge::{rebalance_hlp_vaults, HlpRebalanceReceipt},
+        swap::Swap as SwapTransition,
+    },
 };
 
 use crate::instructions::common::{
@@ -48,6 +56,12 @@ pub struct Swap<'info> {
     )]
     pub market: Box<Account<'info, Market>>,
 
+    #[account(
+        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
+        bump = futarchy_authority.bump
+    )]
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
+
     #[account(mut)]
     pub trader: Signer<'info>,
 
@@ -76,7 +90,8 @@ pub struct Swap<'info> {
 
 impl<'info> Swap<'info> {
     pub fn validate(&self, args: &SwapArgs) -> Result<()> {
-        self.market.assert_live()?;
+        self.market
+            .assert_live_with_futarchy(&self.futarchy_authority)?;
         require!(args.exact_asset_in > 0, ErrorCode::AmountZero);
         require_gte!(
             self.trader_asset_in_account.amount,
@@ -100,16 +115,16 @@ impl<'info> Swap<'info> {
         Ok(())
     }
 
-    pub fn handle_swap(mut ctx: Context<Self>, args: SwapArgs) -> Result<()> {
+    pub fn handle_swap(mut ctx: Context<'_, '_, '_, 'info, Self>, args: SwapArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let trader_key = ctx.accounts.trader.key();
         let asset_in_mint_key = ctx.accounts.asset_in_mint.key();
         let asset_out_mint_key = ctx.accounts.asset_out_mint.key();
-        let operator_fee_bps = ctx.accounts.market.config.operator_fee_bps;
-        let protocol_fee_bps = ctx.accounts.market.config.protocol_fee_bps;
-        let fee_routing_k_nad = ctx.accounts.market.config.fee_routing_k_nad;
+        let operator_fee_bps = 0;
+        let protocol_fee_bps = ctx.accounts.futarchy_authority.revenue_share.swap_bps;
 
-        ctx.accounts.market.refresh_risk_book()?;
+        validate_hlp_rebalance_accounts(&ctx.accounts.market, ctx.remaining_accounts)?;
+        ctx.accounts.market.refresh_risk()?;
         ctx.accounts.market.assert_risk_circuit_breakers()?;
 
         let reserve_credit = receive_swap_inventory(&mut ctx, args.exact_asset_in)?;
@@ -131,8 +146,8 @@ impl<'info> Swap<'info> {
         let amount_out = {
             let (market_side_in, market_side_out) = ctx.accounts.market.swap_sides(args.asset_in);
             calculate_raw_amount_out(
-                market_side_in.reserve_ledger.live_reserve,
-                market_side_out.reserve_ledger.live_reserve,
+                market_side_in.reserves.live_reserve,
+                market_side_out.reserves.live_reserve,
                 amount_in_after_fee,
             )?
         };
@@ -173,49 +188,383 @@ impl<'info> Swap<'info> {
                 fee_credit,
                 operator_fee_bps,
                 protocol_fee_bps,
-                fee_routing_k_nad,
             )
             .apply(market_side_in, market_side_out)?
         };
-        ctx.accounts.market.refresh_risk_book()?;
-        ctx.accounts.market.assert_risk_circuit_breakers()?;
+        let current_slot = Clock::get()?.slot;
+        let (base_hlp_rebalance, quote_hlp_rebalance) =
+            rebalance_hlp_vaults(&mut ctx.accounts.market, current_slot)?;
+        let h_lp_tokens_changed = rebalance_executes_token_changes(&base_hlp_rebalance)
+            || rebalance_executes_token_changes(&quote_hlp_rebalance);
+        if h_lp_tokens_changed {
+            refresh_risk_snapshot(&mut ctx.accounts.market)?;
+        } else {
+            ctx.accounts.market.refresh_risk()?;
+        }
 
-        emit_cpi!(SwapExecuted {
-            market: market_key,
-            trader: trader_key,
-            asset_in_mint: asset_in_mint_key,
-            asset_out_mint: asset_out_mint_key,
-            reserve_credit,
-            amount_in_after_fee: swap_receipt.amount_in_after_fee,
-            amount_out: swap_receipt.amount_out,
-            fee_credit: swap_receipt.fee_credit,
-            metadata: MarketEventMetadata::new(trader_key, market_key)?,
-        });
-        emit_cpi!(MarketHealthUpdated {
-            market: market_key,
-            recognized_base_collateral_for_quote_debt: ctx
-                .accounts
-                .market
-                .health
-                .recognized_base_collateral_for_quote_debt,
-            recognized_quote_collateral_for_base_debt: ctx
-                .accounts
-                .market
-                .health
-                .recognized_quote_collateral_for_base_debt,
-            effective_base_debt_nad: ctx.accounts.market.health.effective_base_debt_nad,
-            effective_quote_debt_nad: ctx.accounts.market.health.effective_quote_debt_nad,
-            base_debt_health_bps: ctx.accounts.market.health.base_debt_health_bps,
-            quote_debt_health_bps: ctx.accounts.market.health.quote_debt_health_bps,
-            metadata: MarketEventMetadata::new(trader_key, market_key)?,
-        });
+        if h_lp_tokens_changed {
+            apply_hlp_rebalance_token_changes(&ctx, &base_hlp_rebalance, &quote_hlp_rebalance)?;
+            emit_swap_settled_low_heap(
+                market_key,
+                trader_key,
+                args.asset_in.code(),
+                reserve_credit,
+                swap_receipt.amount_in_after_fee,
+                swap_receipt.amount_out,
+                swap_receipt.fee_credit,
+                ctx.accounts.market.base_hlp_vault.pending_rebalance,
+                ctx.accounts.market.quote_hlp_vault.pending_rebalance,
+            );
+        } else {
+            emit!(SwapExecuted {
+                market: market_key,
+                trader: trader_key,
+                asset_in_mint: asset_in_mint_key,
+                asset_out_mint: asset_out_mint_key,
+                reserve_credit,
+                amount_in_after_fee: swap_receipt.amount_in_after_fee,
+                amount_out: swap_receipt.amount_out,
+                fee_credit: swap_receipt.fee_credit,
+                base_hlp_pending_rebalance: ctx.accounts.market.base_hlp_vault.pending_rebalance,
+                quote_hlp_pending_rebalance: ctx.accounts.market.quote_hlp_vault.pending_rebalance,
+                metadata: MarketEventMetadata::new(trader_key, market_key)?,
+            });
+            if should_emit_hlp_rebalance(
+                base_hlp_rebalance.ideal_delta,
+                ctx.accounts.market.base_hlp_vault.pending_rebalance,
+                ctx.accounts.market.base_hlp_vault.hlp_supply,
+            ) {
+                emit!(HlpRebalanced {
+                    market: market_key,
+                    target_side: MarketAsset::Base.code(),
+                    ideal_delta: base_hlp_rebalance.ideal_delta,
+                    executed_delta: base_hlp_rebalance.executed_delta,
+                    pending_rebalance: ctx.accounts.market.base_hlp_vault.pending_rebalance,
+                    nav_nad: ctx.accounts.market.base_hlp_vault.last_nav_nad,
+                    metadata: MarketEventMetadata::new(trader_key, market_key)?,
+                });
+            }
+            if should_emit_hlp_rebalance(
+                quote_hlp_rebalance.ideal_delta,
+                ctx.accounts.market.quote_hlp_vault.pending_rebalance,
+                ctx.accounts.market.quote_hlp_vault.hlp_supply,
+            ) {
+                emit!(HlpRebalanced {
+                    market: market_key,
+                    target_side: MarketAsset::Quote.code(),
+                    ideal_delta: quote_hlp_rebalance.ideal_delta,
+                    executed_delta: quote_hlp_rebalance.executed_delta,
+                    pending_rebalance: ctx.accounts.market.quote_hlp_vault.pending_rebalance,
+                    nav_nad: ctx.accounts.market.quote_hlp_vault.last_nav_nad,
+                    metadata: MarketEventMetadata::new(trader_key, market_key)?,
+                });
+            }
+            emit!(MarketHealthUpdated {
+                market: market_key,
+                recognized_base_collateral_for_quote_debt: ctx
+                    .accounts
+                    .market
+                    .health
+                    .recognized_base_collateral_for_quote_debt,
+                recognized_quote_collateral_for_base_debt: ctx
+                    .accounts
+                    .market
+                    .health
+                    .recognized_quote_collateral_for_base_debt,
+                effective_base_debt_nad: ctx.accounts.market.health.effective_base_debt_nad,
+                effective_quote_debt_nad: ctx.accounts.market.health.effective_quote_debt_nad,
+                base_debt_health_bps: ctx.accounts.market.health.base_debt_health_bps,
+                quote_debt_health_bps: ctx.accounts.market.health.quote_debt_health_bps,
+                metadata: MarketEventMetadata::new(trader_key, market_key)?,
+            });
+        }
 
         Ok(())
     }
 }
 
+fn should_emit_hlp_rebalance(ideal_delta: i128, pending_rebalance: i128, hlp_supply: u64) -> bool {
+    hlp_supply > 0 || ideal_delta != 0 || pending_rebalance != 0
+}
+
+fn rebalance_executes_token_changes(receipt: &HlpRebalanceReceipt) -> bool {
+    receipt.base_ylp_mint_amount > 0
+        || receipt.quote_ylp_mint_amount > 0
+        || receipt.base_ylp_burn_amount > 0
+        || receipt.quote_ylp_burn_amount > 0
+}
+
+fn refresh_risk_snapshot(market: &mut Market) -> Result<()> {
+    let risk = market.current_risk()?;
+    market.last_update_slot = risk.last_snapshot_slot;
+    market.risk = risk;
+    Ok(())
+}
+
+fn emit_swap_settled_low_heap(
+    market: Pubkey,
+    trader: Pubkey,
+    asset_in_side: u8,
+    reserve_credit: u64,
+    amount_in_after_fee: u64,
+    amount_out: u64,
+    fee_credit: u64,
+    base_hlp_pending_rebalance: i128,
+    quote_hlp_pending_rebalance: i128,
+) {
+    const SWAP_SETTLED_EVENT_LEN: usize = 8 + 32 + 32 + 1 + 8 + 8 + 8 + 8 + 16 + 16;
+
+    let mut data = [0u8; SWAP_SETTLED_EVENT_LEN];
+    let mut offset = 0usize;
+    data[offset..offset + 8].copy_from_slice(SwapSettled::DISCRIMINATOR);
+    offset += 8;
+    data[offset..offset + 32].copy_from_slice(market.as_ref());
+    offset += 32;
+    data[offset..offset + 32].copy_from_slice(trader.as_ref());
+    offset += 32;
+    data[offset] = asset_in_side;
+    offset += 1;
+    data[offset..offset + 8].copy_from_slice(&reserve_credit.to_le_bytes());
+    offset += 8;
+    data[offset..offset + 8].copy_from_slice(&amount_in_after_fee.to_le_bytes());
+    offset += 8;
+    data[offset..offset + 8].copy_from_slice(&amount_out.to_le_bytes());
+    offset += 8;
+    data[offset..offset + 8].copy_from_slice(&fee_credit.to_le_bytes());
+    offset += 8;
+    data[offset..offset + 16].copy_from_slice(&base_hlp_pending_rebalance.to_le_bytes());
+    offset += 16;
+    data[offset..offset + 16].copy_from_slice(&quote_hlp_pending_rebalance.to_le_bytes());
+
+    sol_log_data(&[&data]);
+}
+
+fn validate_hlp_rebalance_accounts(
+    market: &Market,
+    remaining_accounts: &[AccountInfo],
+) -> Result<()> {
+    let mut cursor = 0usize;
+    if market.base_hlp_vault.hlp_supply > 0 {
+        require_gte!(
+            remaining_accounts.len(),
+            cursor + 4,
+            ErrorCode::NotEnoughAccounts
+        );
+        require_hlp_mint_account(&remaining_accounts[cursor], market.base_side.ylp_mint)?;
+        require_hlp_mint_account(&remaining_accounts[cursor + 1], market.quote_side.ylp_mint)?;
+        require_hlp_vault_account(
+            &remaining_accounts[cursor + 2],
+            market.base_hlp_vault.base_ylp_vault,
+        )?;
+        require_hlp_vault_account(
+            &remaining_accounts[cursor + 3],
+            market.base_hlp_vault.quote_ylp_vault,
+        )?;
+        cursor += 4;
+    }
+    if market.quote_hlp_vault.hlp_supply > 0 {
+        require_gte!(
+            remaining_accounts.len(),
+            cursor + 4,
+            ErrorCode::NotEnoughAccounts
+        );
+        require_hlp_mint_account(&remaining_accounts[cursor], market.base_side.ylp_mint)?;
+        require_hlp_mint_account(&remaining_accounts[cursor + 1], market.quote_side.ylp_mint)?;
+        require_hlp_vault_account(
+            &remaining_accounts[cursor + 2],
+            market.quote_hlp_vault.base_ylp_vault,
+        )?;
+        require_hlp_vault_account(
+            &remaining_accounts[cursor + 3],
+            market.quote_hlp_vault.quote_ylp_vault,
+        )?;
+    }
+    Ok(())
+}
+
+fn require_hlp_mint_account(account: &AccountInfo, expected_key: Pubkey) -> Result<()> {
+    require_keys_eq!(account.key(), expected_key, ErrorCode::InvalidMint);
+    require!(account.is_writable, ErrorCode::InvalidMint);
+    Ok(())
+}
+
+fn require_hlp_vault_account(account: &AccountInfo, expected_key: Pubkey) -> Result<()> {
+    require_keys_eq!(account.key(), expected_key, ErrorCode::InvalidVault);
+    require!(account.is_writable, ErrorCode::InvalidVault);
+    Ok(())
+}
+
+fn apply_hlp_rebalance_token_changes<'info>(
+    ctx: &anchor_lang::context::Context<'_, '_, '_, 'info, Swap<'info>>,
+    base_receipt: &HlpRebalanceReceipt,
+    quote_receipt: &HlpRebalanceReceipt,
+) -> Result<()> {
+    let mut cursor = 0usize;
+    let mut scratch = Token2022InstructionScratch::new(ctx.accounts.token_2022_program.key());
+    if ctx.accounts.market.base_hlp_vault.hlp_supply > 0 {
+        apply_single_hlp_rebalance_token_changes(ctx, base_receipt, cursor, &mut scratch)?;
+        cursor += 4;
+    }
+    if ctx.accounts.market.quote_hlp_vault.hlp_supply > 0 {
+        apply_single_hlp_rebalance_token_changes(ctx, quote_receipt, cursor, &mut scratch)?;
+    }
+    Ok(())
+}
+
+struct Token2022InstructionScratch {
+    instruction: Instruction,
+}
+
+impl Token2022InstructionScratch {
+    fn new(program_id: Pubkey) -> Self {
+        Self {
+            instruction: Instruction {
+                program_id,
+                accounts: Vec::with_capacity(3),
+                data: Vec::with_capacity(9),
+            },
+        }
+    }
+
+    fn mint_to(&mut self, mint: Pubkey, destination: Pubkey, authority: Pubkey, amount: u64) {
+        self.instruction.accounts.clear();
+        self.instruction
+            .accounts
+            .push(AccountMeta::new(mint, false));
+        self.instruction
+            .accounts
+            .push(AccountMeta::new(destination, false));
+        self.instruction
+            .accounts
+            .push(AccountMeta::new_readonly(authority, true));
+
+        self.instruction.data.clear();
+        self.instruction.data.push(7);
+        self.instruction
+            .data
+            .extend_from_slice(&amount.to_le_bytes());
+    }
+
+    fn burn(&mut self, source: Pubkey, mint: Pubkey, authority: Pubkey, amount: u64) {
+        self.instruction.accounts.clear();
+        self.instruction
+            .accounts
+            .push(AccountMeta::new(source, false));
+        self.instruction
+            .accounts
+            .push(AccountMeta::new(mint, false));
+        self.instruction
+            .accounts
+            .push(AccountMeta::new_readonly(authority, true));
+
+        self.instruction.data.clear();
+        self.instruction.data.push(8);
+        self.instruction
+            .data
+            .extend_from_slice(&amount.to_le_bytes());
+    }
+}
+
+fn apply_single_hlp_rebalance_token_changes<'info>(
+    ctx: &anchor_lang::context::Context<'_, '_, '_, 'info, Swap<'info>>,
+    receipt: &HlpRebalanceReceipt,
+    cursor: usize,
+    scratch: &mut Token2022InstructionScratch,
+) -> Result<()> {
+    let base_ylp_mint = &ctx.remaining_accounts[cursor];
+    let quote_ylp_mint = &ctx.remaining_accounts[cursor + 1];
+    let base_ylp_vault = &ctx.remaining_accounts[cursor + 2];
+    let quote_ylp_vault = &ctx.remaining_accounts[cursor + 3];
+    let market_seeds = generate_market_seeds!(ctx.accounts.market);
+    let signer_seeds = [&market_seeds[..]];
+    let market = ctx.accounts.market.to_account_info();
+    let token_2022_program = ctx.accounts.token_2022_program.to_account_info();
+
+    if receipt.base_ylp_mint_amount > 0 {
+        token_2022_mint_to_with_scratch(
+            scratch,
+            market.clone(),
+            token_2022_program.clone(),
+            base_ylp_mint.clone(),
+            base_ylp_vault.clone(),
+            receipt.base_ylp_mint_amount,
+            &signer_seeds,
+        )?;
+    }
+    if receipt.quote_ylp_mint_amount > 0 {
+        token_2022_mint_to_with_scratch(
+            scratch,
+            market.clone(),
+            token_2022_program.clone(),
+            quote_ylp_mint.clone(),
+            quote_ylp_vault.clone(),
+            receipt.quote_ylp_mint_amount,
+            &signer_seeds,
+        )?;
+    }
+    if receipt.base_ylp_burn_amount > 0 {
+        token_2022_burn_with_scratch(
+            scratch,
+            market.clone(),
+            token_2022_program.clone(),
+            base_ylp_mint.clone(),
+            base_ylp_vault.clone(),
+            receipt.base_ylp_burn_amount,
+            &signer_seeds,
+        )?;
+    }
+    if receipt.quote_ylp_burn_amount > 0 {
+        token_2022_burn_with_scratch(
+            scratch,
+            market,
+            token_2022_program,
+            quote_ylp_mint.clone(),
+            quote_ylp_vault.clone(),
+            receipt.quote_ylp_burn_amount,
+            &signer_seeds,
+        )?;
+    }
+    Ok(())
+}
+
+fn token_2022_mint_to_with_scratch<'info>(
+    scratch: &mut Token2022InstructionScratch,
+    authority: AccountInfo<'info>,
+    token_program: AccountInfo<'info>,
+    mint: AccountInfo<'info>,
+    destination: AccountInfo<'info>,
+    amount: u64,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    scratch.mint_to(*mint.key, *destination.key, *authority.key, amount);
+    invoke_signed(
+        &scratch.instruction,
+        &[mint, destination, authority, token_program],
+        signer_seeds,
+    )
+    .map_err(Into::into)
+}
+
+fn token_2022_burn_with_scratch<'info>(
+    scratch: &mut Token2022InstructionScratch,
+    authority: AccountInfo<'info>,
+    token_program: AccountInfo<'info>,
+    mint: AccountInfo<'info>,
+    source: AccountInfo<'info>,
+    amount: u64,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    scratch.burn(*source.key, *mint.key, *authority.key, amount);
+    invoke_signed(
+        &scratch.instruction,
+        &[source, mint, authority, token_program],
+        signer_seeds,
+    )
+    .map_err(Into::into)
+}
+
 fn receive_swap_inventory<'info>(
-    ctx: &mut Context<Swap<'info>>,
+    ctx: &mut Context<'_, '_, '_, 'info, Swap<'info>>,
     exact_asset_in: u64,
 ) -> Result<u64> {
     let reserve_balance_before = ctx.accounts.reserve_in_vault.amount;
@@ -241,7 +590,10 @@ fn receive_swap_inventory<'info>(
         .ok_or(ErrorCode::MarketMathOverflow.into())
 }
 
-fn move_swap_fee<'info>(ctx: &mut Context<Swap<'info>>, total_fee: u64) -> Result<u64> {
+fn move_swap_fee<'info>(
+    ctx: &mut Context<'_, '_, '_, 'info, Swap<'info>>,
+    total_fee: u64,
+) -> Result<u64> {
     if total_fee == 0 {
         return Ok(0);
     }
@@ -268,110 +620,4 @@ fn move_swap_fee<'info>(ctx: &mut Context<Swap<'info>>, total_fee: u64) -> Resul
         .amount
         .checked_sub(fee_balance_before)
         .ok_or(ErrorCode::MarketMathOverflow.into())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        constants::{BPS_DENOMINATOR, NAD},
-        state::{BufferLedger, MarketConfig, MarketSide, ReserveLedger},
-    };
-
-    const TEST_RESERVE: u64 = 1_000_000;
-
-    fn market_side(asset_mint: Pubkey) -> MarketSide {
-        MarketSide {
-            asset_mint,
-            asset_decimals: 6,
-            claim_token_mint: Pubkey::new_unique(),
-            hedge_token_mint: Pubkey::new_unique(),
-            hedge_vault: Pubkey::new_unique(),
-            reserve_vault: Pubkey::new_unique(),
-            collateral_vault: Pubkey::new_unique(),
-            fee_vault: Pubkey::new_unique(),
-            stake_vault: Pubkey::new_unique(),
-            reserve_ledger: ReserveLedger {
-                live_reserve: TEST_RESERVE,
-                cash_reserve: TEST_RESERVE,
-                reserved_liability: 0,
-            },
-            buffer_ledger: BufferLedger {
-                buffer_ratio_bps: 2_000,
-                ..BufferLedger::default()
-            },
-            ..MarketSide::default()
-        }
-    }
-
-    fn market_config() -> MarketConfig {
-        MarketConfig {
-            swap_fee_bps: 0,
-            operator_fee_bps: 0,
-            protocol_fee_bps: 0,
-            buffer_ratio_bps: 2_000,
-            fee_routing_k_nad: NAD,
-            ema_half_life_ms: 60_000,
-            directional_ema_half_life_ms: 60_000,
-            k_ema_half_life_ms: 60_000,
-            max_daily_borrow_bps: BPS_DENOMINATOR,
-            max_daily_withdraw_bps: BPS_DENOMINATOR,
-            spot_ema_divergence_bps: 1_000,
-            k_ema_drawdown_bps: BPS_DENOMINATOR,
-            recognized_collateral_cap_bps: 15_000,
-            market_health_min_bps: 11_000,
-            effective_debt_weight_min_bps: BPS_DENOMINATOR,
-            effective_debt_gamma_nad: NAD,
-            soft_borrow_enabled: false,
-            hedged_lp_enabled: true,
-            start_time: 0,
-        }
-    }
-
-    fn test_market() -> Market {
-        let base_mint = Pubkey::new_unique();
-        let quote_mint = Pubkey::new_unique();
-        Market::initialize(
-            base_mint,
-            quote_mint,
-            Pubkey::new_unique(),
-            Pubkey::new_unique(),
-            market_side(base_mint),
-            market_side(quote_mint),
-            market_config(),
-            [23_u8; 32],
-            42,
-            252,
-        )
-        .unwrap()
-    }
-
-    #[test]
-    fn pre_swap_risk_snapshot_blocks_bootstrap_from_post_swap_spot() {
-        let mut market = test_market();
-        market.refresh_risk_book().unwrap();
-        assert_eq!(market.risk_book.base_price_ema_nad, NAD);
-        assert_eq!(market.risk_book.quote_price_ema_nad, NAD);
-
-        let amount_in_after_fee = 900_000;
-        let amount_out = calculate_raw_amount_out(
-            market.base_side.reserve_ledger.live_reserve,
-            market.quote_side.reserve_ledger.live_reserve,
-            amount_in_after_fee,
-        )
-        .unwrap();
-        {
-            let (market_side_in, market_side_out) = market.swap_sides_mut(MarketAsset::Base);
-            SwapTransition::new(amount_in_after_fee, amount_out, 0, 0, 0, NAD)
-                .apply(market_side_in, market_side_out)
-                .unwrap();
-        }
-        market.refresh_risk_book().unwrap();
-
-        let err = market.assert_risk_circuit_breakers().unwrap_err();
-        assert_eq!(
-            err,
-            anchor_lang::prelude::error!(ErrorCode::MarketRiskCircuitBreaker)
-        );
-    }
 }

@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
-use super::{BufferLedger, ClaimTokenLedger, DailyLimitBook, FeeLedger, ReserveLedger};
-use crate::{errors::ErrorCode, utils::market_math::required_buffer_for_claims};
+use super::{DailyLimits, Fees, ReserveShares, Reserves};
+use crate::errors::ErrorCode;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MarketAsset {
@@ -10,6 +10,21 @@ pub enum MarketAsset {
 }
 
 impl MarketAsset {
+    pub fn code(self) -> u8 {
+        match self {
+            Self::Base => 0,
+            Self::Quote => 1,
+        }
+    }
+
+    pub fn try_from_code(code: u8) -> Result<Self> {
+        match code {
+            0 => Ok(Self::Base),
+            1 => Ok(Self::Quote),
+            _ => err!(ErrorCode::InvalidArgument),
+        }
+    }
+
     pub fn opposite(self) -> Self {
         match self {
             Self::Base => Self::Quote,
@@ -26,71 +41,38 @@ impl MarketAsset {
 pub struct MarketSide {
     pub asset_mint: Pubkey,
     pub asset_decimals: u8,
-    pub claim_token_mint: Pubkey,
-    pub hedge_token_mint: Pubkey,
-    pub hedge_vault: Pubkey,
+    pub ylp_mint: Pubkey,
+    pub hlp_mint: Pubkey,
     pub reserve_vault: Pubkey,
     pub collateral_vault: Pubkey,
     pub fee_vault: Pubkey,
-    pub stake_vault: Pubkey,
-    pub reserve_ledger: ReserveLedger,
-    pub claim_token_ledger: ClaimTokenLedger,
-    pub buffer_ledger: BufferLedger,
-    pub fee_ledger: FeeLedger,
-    pub daily_limit_book: DailyLimitBook,
+    pub interest_vault: Pubkey,
+    pub reserves: Reserves,
+    pub shares: ReserveShares,
+    pub fees: Fees,
+    pub daily_limits: DailyLimits,
 }
 
 impl MarketSide {
-    pub fn claim_floor(&self) -> Result<u64> {
-        self.claim_token_ledger
-            .protected_claim_token_supply
-            .checked_add(self.buffer_ledger.required_buffer)
-            .ok_or(ErrorCode::MarketMathOverflow.into())
-    }
-
-    pub fn free_buffer(&self) -> Result<u64> {
-        self.reserve_ledger
-            .live_reserve
-            .checked_sub(self.claim_token_ledger.protected_claim_token_supply)
-            .ok_or(ErrorCode::InsufficientMarketClaimCoverage.into())
-    }
-
-    pub fn assert_claim_coverage(&self) -> Result<()> {
+    pub fn assert_share_backing(&self) -> Result<()> {
+        if self.shares.ylp_supply == 0 {
+            require_eq!(self.reserves.live_reserve, 0, ErrorCode::BrokenInvariant);
+        }
         require_gte!(
-            self.reserve_ledger.live_reserve,
-            self.claim_floor()?,
-            ErrorCode::InsufficientMarketClaimCoverage
+            self.reserves.live_reserve,
+            self.reserves.reserved_liability,
+            ErrorCode::InsufficientLiquidity
         );
         Ok(())
     }
 
-    pub fn required_buffer_for_ratio(&self, buffer_ratio_bps: u16) -> Result<u64> {
-        required_buffer_for_claims(
-            self.claim_token_ledger.protected_claim_token_supply,
-            buffer_ratio_bps,
-        )
-    }
-
-    pub fn assert_buffer_floor_for_ratio(&self, buffer_ratio_bps: u16) -> Result<u64> {
-        let required_buffer = self.required_buffer_for_ratio(buffer_ratio_bps)?;
-        require_gte!(
-            self.buffer_ledger.buffer_share_supply,
-            required_buffer,
-            ErrorCode::InsufficientBufferShares
-        );
-        require_gte!(
-            self.reserve_ledger.live_reserve,
-            self.claim_token_ledger
-                .protected_claim_token_supply
-                .checked_add(required_buffer)
-                .ok_or(ErrorCode::MarketMathOverflow)?,
-            ErrorCode::InsufficientMarketClaimCoverage
-        );
-        Ok(required_buffer)
-    }
-
-    pub fn apply_buffer_ratio(&mut self, buffer_ratio_bps: u16, required_buffer: u64) {
-        self.buffer_ledger.buffer_ratio_bps = buffer_ratio_bps;
-        self.buffer_ledger.required_buffer = required_buffer;
+    pub fn ylp_exchange_rate_nad(&self) -> Result<u128> {
+        if self.shares.ylp_supply == 0 {
+            return Ok(0);
+        }
+        (self.reserves.live_reserve as u128)
+            .checked_mul(crate::constants::NAD as u128)
+            .and_then(|value| value.checked_div(self.shares.ylp_supply as u128))
+            .ok_or(ErrorCode::MarketMathOverflow.into())
     }
 }

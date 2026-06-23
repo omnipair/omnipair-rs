@@ -2406,6 +2406,7 @@ dependencies = [
  "spl-math",
  "spl-token 4.0.2",
  "spl-token-2022",
+ "spl-transfer-hook-interface",
  "uint 0.9.5",
 ]
 

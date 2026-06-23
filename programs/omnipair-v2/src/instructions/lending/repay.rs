@@ -130,7 +130,7 @@ impl<'info> Repay<'info> {
             quote_debt_health_bps: debt_receipt.quote_debt_health_bps,
             metadata: MarketEventMetadata::new(owner_key, market_key)?,
         });
-        emit_cpi!(MarketHealthUpdated {
+        emit!(MarketHealthUpdated {
             market: market_key,
             recognized_base_collateral_for_quote_debt: ctx
                 .accounts

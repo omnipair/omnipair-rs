@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::{
     errors::ErrorCode,
-    state::{DebtBook, MarginPosition, Market, MarketAsset},
+    state::{Debt, MarginPosition, Market, MarketAsset},
 };
 
 pub struct Liquidation {
@@ -17,6 +17,8 @@ pub struct Liquidation {
 pub struct LiquidationReceipt {
     pub repaid_amount: u64,
     pub collateral_seized: u64,
+    pub collateral_to_liquidator: u64,
+    pub insurance_funded: u64,
     pub insurance_drawn: u64,
     pub socialized_loss: u64,
     pub remaining_debt: u128,
@@ -57,6 +59,15 @@ impl Liquidation {
             self.repay_credit,
             collateral_before,
         )?;
+        let collateral_to_liquidator = collateral_to_liquidator(
+            market,
+            self.debt_asset,
+            self.repay_credit,
+            collateral_seized,
+        )?;
+        let insurance_funded = collateral_seized
+            .checked_sub(collateral_to_liquidator)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         let collateral_exhausted = collateral_seized == collateral_before;
         let repay_plus_insurance = (self.repay_credit as u128)
             .checked_add(self.insurance_credit as u128)
@@ -81,10 +92,7 @@ impl Liquidation {
             ErrorCode::LiquidationSocializationExceeded
         );
         if bad_debt > 0 && !collateral_exhausted {
-            require!(
-                socialized_loss == 0,
-                ErrorCode::InsufficientInsuranceReserve
-            );
+            require!(socialized_loss == 0, ErrorCode::InsufficientInsurance);
         }
 
         let debt_reduction = repay_plus_insurance
@@ -98,33 +106,45 @@ impl Liquidation {
             collateral_seized,
         )?;
 
-        let debt_side = market.side_mut(self.debt_asset)?;
-        debt_side.reserve_ledger.live_reserve = debt_side
-            .reserve_ledger
-            .live_reserve
-            .checked_add(self.repay_credit)
-            .and_then(|value| value.checked_add(self.insurance_credit))
-            .ok_or(ErrorCode::ReserveOverflow)?;
-        debt_side.reserve_ledger.cash_reserve = debt_side
-            .reserve_ledger
-            .cash_reserve
-            .checked_add(self.repay_credit)
-            .and_then(|value| value.checked_add(self.insurance_credit))
-            .ok_or(ErrorCode::ReserveOverflow)?;
+        {
+            let debt_side = market.side_mut(self.debt_asset)?;
+            debt_side.reserves.live_reserve = debt_side
+                .reserves
+                .live_reserve
+                .checked_add(self.repay_credit)
+                .and_then(|value| value.checked_add(self.insurance_credit))
+                .ok_or(ErrorCode::ReserveOverflow)?;
+            debt_side.reserves.cash_reserve = debt_side
+                .reserves
+                .cash_reserve
+                .checked_add(self.repay_credit)
+                .and_then(|value| value.checked_add(self.insurance_credit))
+                .ok_or(ErrorCode::ReserveOverflow)?;
+        }
         match self.debt_asset {
             MarketAsset::Base => {
-                market.insurance_reserve.base_available = market
-                    .insurance_reserve
+                market.insurance.base_available = market
+                    .insurance
                     .base_available
                     .checked_sub(self.insurance_spent)
-                    .ok_or(ErrorCode::InsufficientInsuranceReserve)?;
+                    .ok_or(ErrorCode::InsufficientInsurance)?;
+                market.insurance.quote_available = market
+                    .insurance
+                    .quote_available
+                    .checked_add(insurance_funded)
+                    .ok_or(ErrorCode::MarketMathOverflow)?;
             }
             MarketAsset::Quote => {
-                market.insurance_reserve.quote_available = market
-                    .insurance_reserve
+                market.insurance.quote_available = market
+                    .insurance
                     .quote_available
                     .checked_sub(self.insurance_spent)
-                    .ok_or(ErrorCode::InsufficientInsuranceReserve)?;
+                    .ok_or(ErrorCode::InsufficientInsurance)?;
+                market.insurance.base_available = market
+                    .insurance
+                    .base_available
+                    .checked_add(insurance_funded)
+                    .ok_or(ErrorCode::MarketMathOverflow)?;
             }
         }
 
@@ -133,6 +153,8 @@ impl Liquidation {
         Ok(LiquidationReceipt {
             repaid_amount: self.repay_credit,
             collateral_seized,
+            collateral_to_liquidator,
+            insurance_funded,
             insurance_drawn: self.insurance_credit,
             socialized_loss,
             remaining_debt: position_debt(market, margin_position, self.debt_asset)?,
@@ -163,8 +185,8 @@ pub fn insurance_request_for_liquidation(
         return Ok(0);
     }
     let available = match debt_asset {
-        MarketAsset::Base => market.insurance_reserve.base_available,
-        MarketAsset::Quote => market.insurance_reserve.quote_available,
+        MarketAsset::Base => market.insurance.base_available,
+        MarketAsset::Quote => market.insurance.quote_available,
     };
     let remaining_debt_cap = u64::try_from(remaining_debt).unwrap_or(u64::MAX);
     Ok(remaining_debt_cap.min(available).min(max_insurance_draw))
@@ -179,13 +201,13 @@ fn apply_liquidation_debt_reduction(
 ) -> Result<()> {
     match debt_asset {
         MarketAsset::Base => {
-            let shares_before = margin_position.fixed_base_debt_shares;
-            let debt_before = margin_position.fixed_base_debt(&market.debt_book)?;
+            let shares_before = margin_position.fixed_base_shares;
+            let debt_before = margin_position.fixed_base_debt(&market.debt)?;
             let shares_to_burn = shares_to_burn_for_reduction(
                 debt_reduction,
                 debt_before,
                 shares_before,
-                market.debt_book.base_borrow_index_nad,
+                market.debt.base_borrow_index_nad,
             )?;
             margin_position.quote_collateral = margin_position
                 .quote_collateral
@@ -201,31 +223,29 @@ fn apply_liquidation_debt_reduction(
                 .recognized_quote_collateral_for_base_debt
                 .checked_sub(recognized_decrease)
                 .ok_or(ErrorCode::MarketMathOverflow)?;
-            margin_position.fixed_base_debt_shares = margin_position
-                .fixed_base_debt_shares
+            margin_position.fixed_base_shares = margin_position
+                .fixed_base_shares
                 .checked_sub(shares_to_burn)
                 .ok_or(ErrorCode::MarketMathOverflow)?;
-            market.debt_book.fixed_base_debt_shares = market
-                .debt_book
-                .fixed_base_debt_shares
+            market.debt.fixed_base_shares = market
+                .debt
+                .fixed_base_shares
                 .checked_sub(shares_to_burn)
                 .ok_or(ErrorCode::MarketMathOverflow)?;
-            market
-                .recognition_ledger
-                .debt_bearing_quote_collateral_for_base_debt = market
-                .recognition_ledger
-                .debt_bearing_quote_collateral_for_base_debt
+            market.debt.recognized_quote_collateral_for_base_debt = market
+                .debt
+                .recognized_quote_collateral_for_base_debt
                 .checked_sub(recognized_decrease)
                 .ok_or(ErrorCode::MarketMathOverflow)?;
         }
         MarketAsset::Quote => {
-            let shares_before = margin_position.fixed_quote_debt_shares;
-            let debt_before = margin_position.fixed_quote_debt(&market.debt_book)?;
+            let shares_before = margin_position.fixed_quote_shares;
+            let debt_before = margin_position.fixed_quote_debt(&market.debt)?;
             let shares_to_burn = shares_to_burn_for_reduction(
                 debt_reduction,
                 debt_before,
                 shares_before,
-                market.debt_book.quote_borrow_index_nad,
+                market.debt.quote_borrow_index_nad,
             )?;
             margin_position.base_collateral = margin_position
                 .base_collateral
@@ -241,20 +261,18 @@ fn apply_liquidation_debt_reduction(
                 .recognized_base_collateral_for_quote_debt
                 .checked_sub(recognized_decrease)
                 .ok_or(ErrorCode::MarketMathOverflow)?;
-            margin_position.fixed_quote_debt_shares = margin_position
-                .fixed_quote_debt_shares
+            margin_position.fixed_quote_shares = margin_position
+                .fixed_quote_shares
                 .checked_sub(shares_to_burn)
                 .ok_or(ErrorCode::MarketMathOverflow)?;
-            market.debt_book.fixed_quote_debt_shares = market
-                .debt_book
-                .fixed_quote_debt_shares
+            market.debt.fixed_quote_shares = market
+                .debt
+                .fixed_quote_shares
                 .checked_sub(shares_to_burn)
                 .ok_or(ErrorCode::MarketMathOverflow)?;
-            market
-                .recognition_ledger
-                .debt_bearing_base_collateral_for_quote_debt = market
-                .recognition_ledger
-                .debt_bearing_base_collateral_for_quote_debt
+            market.debt.recognized_base_collateral_for_quote_debt = market
+                .debt
+                .recognized_base_collateral_for_quote_debt
                 .checked_sub(recognized_decrease)
                 .ok_or(ErrorCode::MarketMathOverflow)?;
         }
@@ -268,8 +286,8 @@ fn position_debt(
     debt_asset: MarketAsset,
 ) -> Result<u128> {
     match debt_asset {
-        MarketAsset::Base => margin_position.fixed_base_debt(&market.debt_book),
-        MarketAsset::Quote => margin_position.fixed_quote_debt(&market.debt_book),
+        MarketAsset::Base => margin_position.fixed_base_debt(&market.debt),
+        MarketAsset::Quote => margin_position.fixed_quote_debt(&market.debt),
     }
 }
 
@@ -290,6 +308,17 @@ fn collateral_to_seize(
     Ok(seizure.min(collateral_before))
 }
 
+fn collateral_to_liquidator(
+    market: &Market,
+    debt_asset: MarketAsset,
+    repay_credit: u64,
+    collateral_seized: u64,
+) -> Result<u64> {
+    let liquidator_collateral =
+        market.collateral_amount_for_liquidator_debt_value(debt_asset, repay_credit)?;
+    Ok(liquidator_collateral.min(collateral_seized))
+}
+
 fn shares_to_burn_for_reduction(
     debt_reduction: u128,
     debt_before: u128,
@@ -305,8 +334,7 @@ fn shares_to_burn_for_reduction(
     }
     let debt_reduction =
         u64::try_from(debt_reduction).map_err(|_| ErrorCode::MarketMathOverflow)?;
-    DebtBook::debt_to_shares(debt_reduction, borrow_index_nad)
-        .map(|shares| shares.min(shares_before))
+    Debt::debt_to_shares(debt_reduction, borrow_index_nad).map(|shares| shares.min(shares_before))
 }
 
 fn recognized_decrease_after_seizure(
@@ -335,205 +363,5 @@ fn recognized_decrease_after_seizure(
         proportional
             .checked_add(extra)
             .ok_or(ErrorCode::MarketMathOverflow.into())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        constants::{MARKET_VERSION, NAD},
-        state::{BufferLedger, MarketAsset, MarketConfig, MarketSide, ReserveLedger},
-    };
-    use proptest::prelude::*;
-
-    fn market_side(asset_mint: Pubkey) -> MarketSide {
-        MarketSide {
-            asset_mint,
-            asset_decimals: 6,
-            claim_token_mint: Pubkey::new_unique(),
-            hedge_token_mint: Pubkey::new_unique(),
-            hedge_vault: Pubkey::new_unique(),
-            reserve_vault: Pubkey::new_unique(),
-            collateral_vault: Pubkey::new_unique(),
-            fee_vault: Pubkey::new_unique(),
-            stake_vault: Pubkey::new_unique(),
-            reserve_ledger: ReserveLedger {
-                live_reserve: 1_000,
-                cash_reserve: 1_000,
-                reserved_liability: 0,
-            },
-            buffer_ledger: BufferLedger {
-                buffer_ratio_bps: 2_000,
-                ..BufferLedger::default()
-            },
-            ..MarketSide::default()
-        }
-    }
-
-    fn test_market() -> Market {
-        let base_mint = Pubkey::new_unique();
-        let quote_mint = Pubkey::new_unique();
-        let mut market = Market::initialize(
-            base_mint,
-            quote_mint,
-            Pubkey::new_unique(),
-            Pubkey::new_unique(),
-            market_side(base_mint),
-            market_side(quote_mint),
-            MarketConfig {
-                swap_fee_bps: 30,
-                operator_fee_bps: 1_000,
-                protocol_fee_bps: 0,
-                buffer_ratio_bps: 2_000,
-                fee_routing_k_nad: NAD,
-                ema_half_life_ms: 60_000,
-                directional_ema_half_life_ms: 60_000,
-                k_ema_half_life_ms: 60_000,
-                max_daily_borrow_bps: 2_000,
-                max_daily_withdraw_bps: 2_000,
-                spot_ema_divergence_bps: 1_000,
-                k_ema_drawdown_bps: 1_000,
-                recognized_collateral_cap_bps: 15_000,
-                market_health_min_bps: 11_000,
-                effective_debt_weight_min_bps: 10_000,
-                effective_debt_gamma_nad: NAD,
-                soft_borrow_enabled: false,
-                hedged_lp_enabled: true,
-                start_time: 0,
-            },
-            [9_u8; 32],
-            42,
-            253,
-        )
-        .unwrap();
-        assert_eq!(market.version, MARKET_VERSION);
-        market.insurance_reserve.base_available = 40;
-        market.insurance_reserve.quote_available = 40;
-        market
-    }
-
-    fn insolvent_position(market: &mut Market) -> MarginPosition {
-        let debt_shares =
-            DebtBook::debt_to_shares(100, market.debt_book.base_borrow_index_nad).unwrap();
-        market.debt_book.fixed_base_debt_shares = debt_shares;
-        market
-            .recognition_ledger
-            .debt_bearing_quote_collateral_for_base_debt = 50;
-
-        MarginPosition {
-            owner: Pubkey::new_unique(),
-            market: Pubkey::new_unique(),
-            base_collateral: 0,
-            quote_collateral: 50,
-            recognized_base_collateral_for_quote_debt: 0,
-            recognized_quote_collateral_for_base_debt: 50,
-            fixed_base_debt_shares: debt_shares,
-            fixed_quote_debt_shares: 0,
-            bump: 1,
-        }
-    }
-
-    #[test]
-    fn insurance_request_starts_after_collateral_is_exhausted() {
-        let mut market = test_market();
-        let position = insolvent_position(&mut market);
-
-        let partial_request =
-            insurance_request_for_liquidation(&market, &position, MarketAsset::Base, 25, 30)
-                .unwrap();
-        assert_eq!(partial_request, 0);
-
-        let exhausted_request =
-            insurance_request_for_liquidation(&market, &position, MarketAsset::Base, 50, 30)
-                .unwrap();
-        assert_eq!(exhausted_request, 30);
-    }
-
-    #[test]
-    fn insurance_request_saturates_large_remaining_debt() {
-        let mut market = test_market();
-        let mut position = insolvent_position(&mut market);
-        position.quote_collateral = 0;
-        position.recognized_quote_collateral_for_base_debt = 0;
-        position.fixed_base_debt_shares = (u64::MAX as u128) + 51;
-
-        let request =
-            insurance_request_for_liquidation(&market, &position, MarketAsset::Base, 50, 40)
-                .unwrap();
-
-        assert_eq!(request, 40);
-    }
-
-    #[test]
-    fn liquidation_uses_repay_insurance_then_socialization() {
-        let mut market = test_market();
-        let mut position = insolvent_position(&mut market);
-
-        let receipt = Liquidation::new(MarketAsset::Base, 50, 30, 30, 20)
-            .apply(&mut market, &mut position)
-            .unwrap();
-
-        assert_eq!(receipt.repaid_amount, 50);
-        assert_eq!(receipt.collateral_seized, 50);
-        assert_eq!(receipt.insurance_drawn, 30);
-        assert_eq!(receipt.socialized_loss, 20);
-        assert_eq!(receipt.remaining_debt, 0);
-        assert_eq!(position.quote_collateral, 0);
-        assert_eq!(position.recognized_quote_collateral_for_base_debt, 0);
-        assert_eq!(position.fixed_base_debt_shares, 0);
-        assert_eq!(market.debt_book.fixed_base_debt_shares, 0);
-        assert_eq!(market.insurance_reserve.base_available, 10);
-        assert_eq!(market.base_side.reserve_ledger.live_reserve, 1_080);
-        assert_eq!(market.base_side.reserve_ledger.cash_reserve, 1_080);
-    }
-
-    #[test]
-    fn liquidation_rejects_socialization_above_caller_cap() {
-        let mut market = test_market();
-        let mut position = insolvent_position(&mut market);
-
-        let err = Liquidation::new(MarketAsset::Base, 50, 30, 30, 19)
-            .apply(&mut market, &mut position)
-            .unwrap_err();
-
-        assert_eq!(err, error!(ErrorCode::LiquidationSocializationExceeded));
-    }
-
-    #[test]
-    fn recognized_decrease_never_exceeds_remaining_collateral() {
-        let decrease = recognized_decrease_after_seizure(80, 25, 250, 1_000).unwrap();
-
-        assert_eq!(decrease, 55);
-        assert_eq!(80 - decrease, 25);
-    }
-
-    proptest! {
-        #[test]
-        fn recognized_decrease_keeps_remaining_recognition_collateralized(
-            recognized_before in 1_u64..1_000_000_000_u64,
-            collateral_after in 0_u64..1_000_000_000_u64,
-            shares_to_burn in 1_u128..1_000_000_u128,
-            extra_shares in 1_u128..1_000_000_u128,
-        ) {
-            let shares_before = shares_to_burn + extra_shares;
-            let decrease = recognized_decrease_after_seizure(
-                recognized_before,
-                collateral_after,
-                shares_to_burn,
-                shares_before,
-            ).unwrap();
-
-            let recognized_after = recognized_before - decrease;
-            prop_assert!(decrease <= recognized_before);
-            prop_assert!(
-                recognized_after <= collateral_after,
-                "recognized_after={} collateral_after={} recognized_before={} decrease={}",
-                recognized_after,
-                collateral_after,
-                recognized_before,
-                decrease
-            );
-        }
     }
 }

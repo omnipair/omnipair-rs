@@ -28,9 +28,9 @@ Allowed status values: `Pending`, `Approved`, `Blocked`, `N/A`.
 - Review the cached-spot EMA flow and pre-action risk snapshots for swap and
   liquidity-add paths.
 - Review liquidity-EMA daily limits and spot/K circuit breakers.
-- Review claim-minus-buffer liquidity, fixed-principal redemption, and retained
-  buffer-share accounting.
-- Review fee liabilities and settlement paths for staker, hedge, operator,
+- Review floating yLP liquidity, matched yLP redemption, and Token-2022
+  transfer checkpointing.
+- Review fee liabilities and settlement paths for yLP, hLP, operator,
   protocol, and unallocated buckets.
 - Review fixed debt, recognized collateral, normalized valuation, and
   liquidation/insurance/socialization accounting.
@@ -44,13 +44,14 @@ Allowed status values: `Pending`, `Approved`, `Blocked`, `N/A`.
 
 ## App / Front-End
 
-- Route new V2 market creation, liquidity, swap, staking, lending,
-  liquidation, insurance, fee, and hedge flows to `OMNIPAIR_V2_PROGRAM_ID`.
+- Route new V2 market creation, liquidity, swap, lending, liquidation,
+  insurance, yield, protocol-fee, and hedge flows to `OMNIPAIR_V2_PROGRAM_ID`.
 - Keep legacy V1 routes available for existing pair positions.
 - Do not sort V2 market mints client-side; creator-chosen base/quote order
   defines the market and displayed price direction.
-- Display claim tokens as fixed-principal `omLP`, not as rebasing LP shares.
-- Display staking as the source of fee rights and buffer-share matching.
+- Display yLP as floating reserve-side yield LP shares.
+- Display hLP as aggregate hedged LP vault shares with underlying borrowed
+  debt, not as wrapped yLP.
 - Surface reduce-only behavior and emergency reduce-only expectations.
 
 ## SDK / Package Interface
@@ -68,12 +69,12 @@ Allowed status values: `Pending`, `Approved`, `Blocked`, `N/A`.
 - Subscribe to the standalone V2 program ID and V2 IDL events.
 - Use `MarketEventMetadata.market` as the V2 market key.
 - Store V1 pair metrics and V2 market metrics separately at the source level.
-- Track claim-token principal, staked claims, buffer shares, hedge supply,
-  debt, recognized collateral, insurance, fee liabilities, and market health as
-  separate V2 metrics.
+- Track yLP supply, hLP vault-owned yLP, hLP supply, hLP debt, recognized
+  collateral, insurance, fee liabilities, and market health as separate V2
+  metrics.
 - Decode `LiquidityAdded`, `LiquidityRemoved`, `SwapExecuted`,
-  `MarketDebtUpdated`, `PositionLiquidated`, fee, stake, hedge, and insurance
-  events from the V2 IDL.
+  `MarketDebtUpdated`, `PositionLiquidated`, yield, protocol-fee, hedge, and
+  insurance events from the V2 IDL.
 - Confirm analytics labels use V2 market terminology and do not present V2 as a
   renamed V1 pair.
 
@@ -81,7 +82,7 @@ Allowed status values: `Pending`, `Approved`, `Blocked`, `N/A`.
 
 - Treat V2 `swap` as a distinct venue/source from V1 `swap`.
 - Always pass `min_asset_out` and quote with the V2 reserve floor in mind.
-- Do not assume claim tokens represent a dynamic LP exchange rate.
+- Do not assume V2 yLP behaves like a fixed-principal protected LP token.
 - Respect reduce-only mode and risk/circuit-breaker failures.
 - Confirm Token-2022 transfer-fee assets are quoted against measured inventory
   behavior where relevant.
@@ -91,8 +92,8 @@ Allowed status values: `Pending`, `Approved`, `Blocked`, `N/A`.
 - Confirm `programs/omnipair-v2/src/lib.rs` declares the intended program ID.
 - Build the verifiable binary with production features and embedded
   `GIT_REV`/`GIT_RELEASE` metadata.
-- Deploy the buffer through the documented workflow with `program=v2`.
-- Transfer buffer authority to the configured Squads vault.
+- Deploy the upgrade buffer through the documented workflow with `program=v2`.
+- Transfer upgrade buffer authority to the configured Squads vault.
 - Create, approve, and execute the Squads upgrade proposal.
 - Verify the deployed binary with `solana-verify` using trailing cargo args for
   `--features production` and the release metadata config.
@@ -104,11 +105,11 @@ Record target-cluster transaction signatures for:
 
 - market initialization;
 - add liquidity and remove liquidity;
-- stake, unstake, and claim fees;
+- claim yLP and hLP yield;
 - swap with slippage protection;
 - deposit collateral, borrow, repay, and withdraw idle collateral;
 - healthy liquidation rejection;
 - unhealthy liquidation on a controlled test market;
-- insurance deposit and insurance-backed liquidation path;
-- open hedge, claim hedge fees, and close hedge;
+- insurance-backed liquidation path;
+- open hedge and close hedge;
 - reduce-only mode rejection for risk-increasing paths.

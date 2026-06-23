@@ -14,11 +14,11 @@ pub(crate) fn market_spot_price_nad(
     debt_side: &MarketSide,
 ) -> Result<u64> {
     let collateral_reserve = normalize_to_nad(
-        collateral_side.reserve_ledger.live_reserve as u128,
+        collateral_side.reserves.live_reserve as u128,
         collateral_side.asset_decimals,
     )?;
     let debt_reserve = normalize_to_nad(
-        debt_side.reserve_ledger.live_reserve as u128,
+        debt_side.reserves.live_reserve as u128,
         debt_side.asset_decimals,
     )?;
     if collateral_reserve == 0 {
@@ -33,11 +33,11 @@ pub(crate) fn market_spot_price_nad(
 
 pub(crate) fn market_k_nad(base_side: &MarketSide, quote_side: &MarketSide) -> Result<u128> {
     normalize_to_nad(
-        base_side.reserve_ledger.live_reserve as u128,
+        base_side.reserves.live_reserve as u128,
         base_side.asset_decimals,
     )?
     .checked_mul(normalize_to_nad(
-        quote_side.reserve_ledger.live_reserve as u128,
+        quote_side.reserves.live_reserve as u128,
         quote_side.asset_decimals,
     )?)
     .ok_or(ErrorCode::MarketMathOverflow.into())

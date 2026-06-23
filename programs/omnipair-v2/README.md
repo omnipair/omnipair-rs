@@ -1,226 +1,121 @@
 # Omnipair V2
 
-Omnipair V2 is a separate market architecture program. V1 remains the legacy GAMM pair program in `programs/omnipair`; V2 owns its own market accounts, claim tokens, hedge tokens, risk books, instructions, events, and IDL surface.
+Omnipair V2 is a standalone market program that lives beside the legacy V1 pair program in `programs/omnipair`. V1 compatibility stays unchanged. V2 uses market terminology, floating yield LP shares, and aggregate hedged LP vault accounting.
 
 ## Source Boundaries
 
-- `instructions/`: Anchor account validation, token movement, slippage checks, and event emission.
-- `transitions/`: atomic accounting mutations that return receipts for events and tests.
-- `state/`: account layouts, local invariants, and market/state methods.
-- `tokens/`: protocol meaning and validation for externally transferable claim-token (`omLP`) and hedge-token (`h-omLP`) mints.
-- `math/`: fixed-point, AMM, EMA, valuation, and circuit-breaker helpers.
-- `utils/`: remaining shared accounting helpers used across transitions.
+- `instructions/`: Anchor account validation, inventory movement, slippage checks, and events.
+- `transitions/`: atomic accounting mutations with small receipts for events and tests.
+- `state/`: account layouts, embedded market books, and invariants.
+- `tokens/`: validation for Token-2022 yLP and hLP mints.
+- `math/`: fixed-point, GAMM, EMA, valuation, and circuit-breaker helpers.
+- `utils/`: shared accounting helpers used by transitions.
 
-Instruction modules are split by market domain: `market`, `reserve`, `staking`,
-`spot`, `lending`, `liquidation`, and `hedge`.
+Instruction modules are split by domain: `market`, `reserve`, `yielding`, `spot`, `lending`, `liquidation`, `hedge`, and `futarchy`.
 
-Instruction names are clean in the V2 namespace: `initialize`, `update_config`, `set_reduce_only`, `swap`, `add_liquidity`, `remove_liquidity`, `stake`, `unstake`, `claim_fees`, `claim_market_fees`, `open_hedge`, `claim_hedge_fees`, `close_hedge`, `deposit_collateral`, `withdraw_collateral`, `borrow`, `repay`, `deposit_insurance`, and `liquidate`.
+## Public Instructions
 
-`set_reduce_only` may be signed by the market operator or by the configured
-emergency reduce-only authority.
+V2 exposes the current market instruction set:
 
-## Integration Surface
+- `initialize`, `update_config`, `set_reduce_only`
+- `add_liquidity`, `remove_liquidity`
+- `set_yield_recipient`, `claim_yield`
+- `swap`
+- `deposit_collateral`, `withdraw_collateral`, `borrow`, `repay`, `liquidate`
+- `open_hedge`, `close_hedge`
+- V1-style futarchy/revenue administration: `init_futarchy_authority`, `update_futarchy_authority`, `update_protocol_revenue`, `update_revenue_recipients`, `set_global_reduce_only`, `claim_protocol_fees`
 
-V2 is integrated as its own program, not as a versioned instruction set inside
-the legacy V1 program.
+## Token Model
 
-- Program crate: `programs/omnipair-v2`
-- Program name: `omnipair_v2`
-- Mainnet/devnet/localnet ID: `oMNi2XGwWxDbEvhS2pWRQ6dtw8GkNBV42hfLZD6WmMF`
-- IDL: `target/idl/omnipair_v2.json`
-- TypeScript bindings: `packages/program-interface/src/types_v2.ts`
-- SDK PDA helpers: `packages/program-interface/src/constants.ts`
+Each market records four Token-2022 mints:
 
-The SDK exports both generations. Use `OMNIPAIR_PROGRAM_ID` for V1 pair flows
-and `OMNIPAIR_V2_PROGRAM_ID` for V2 market flows.
+- `yLP_base`: yield LP shares for the base reserve side.
+- `yLP_quote`: yield LP shares for the quote reserve side.
+- `hLP_base`: aggregate 2x LP vault shares targeting base exposure.
+- `hLP_quote`: aggregate 2x LP vault shares targeting quote exposure.
 
-## Integrator Handoff
+yLP and hLP mints must be fee-free Token-2022 mints with a transfer hook configured to the V2 program and mint authority set to the market PDA. Underlying asset mints may be SPL Token or Token-2022 mints accepted by the shared mint validator.
 
-Treat V2 as a new venue/source under the Omnipair brand. It is not a V1 pair
-account with renamed fields.
+## yLP Liquidity
 
-SDK consumers:
+`add_liquidity` is the normal LP entry. Users deposit both market assets at the current market ratio and receive `yLP_base + yLP_quote`.
 
-- instantiate V2 with `IDL_V2`, `OmnipairV2`, and
-  `OMNIPAIR_V2_PROGRAM_ID`;
-- derive markets and vaults through the V2 PDA helpers in
-  `packages/program-interface/src/constants.ts`;
-- keep V1 calls on `IDL`, `OMNIPAIR_PROGRAM_ID`, and V1 pair PDA helpers.
+yLP shares are floating reserve-side shares:
 
-Apps:
+```text
+asset_claim = user_ylp_shares * live_reserve / total_ylp_supply
+```
 
-- route new market creation, liquidity, swap, borrow, repay, liquidation, fee,
-  and hedge flows to the V2 program ID;
-- keep legacy V1 routes available for existing pair positions;
-- never sort V2 market mints client-side, because creator-chosen base/quote
-  order defines the market and price direction.
+There is no fixed 1:1 protected-principal LP, no separate public fee-eligibility step, and no retained junior-capital account. `remove_liquidity` burns matched yLP proportions and returns pro-rata principal reserves subject to cash availability and user slippage bounds.
 
-Indexers:
+Swap fees and borrow interest are non-compounding liabilities. They are held outside principal reserves in side-specific fee and interest vaults and distributed through side-specific growth indexes. `YieldAccount` stores owner checkpoints, accrued revenue, and an optional external revenue recipient for treasury or protocol-owned liquidity flows.
 
-- subscribe to the standalone V2 program ID and V2 IDL events;
-- use `MarketEventMetadata.market` as the primary market key for V2 events;
-- read `Market`, `StakePosition`, `MarginPosition`, and `HedgePosition`
-  accounts from the V2 IDL rather than V1 pair decoders;
-- keep claim-token principal, hedge-token supply, debt, insurance, fee
-  liabilities, and buffer shares as separate V2 metrics.
+## hLP Vaults
 
-Aggregators and routers:
+Each market has two aggregate hLP vault records embedded in the `Market` account:
 
-- treat V2 `swap` as a separate source from V1 `swap`;
-- quote with the V2 market reserve floor in mind and always pass
-  `min_asset_out`;
-- do not assume claim tokens represent an LP exchange rate. Claim tokens are
-  fixed-principal assets; fee rights require staking matched claim tokens and
-  buffer shares.
+- `hLP_base`: user deposits base, the vault borrows quote, and the vault owns both yLP sides.
+- `hLP_quote`: user deposits quote, the vault borrows base, and the vault owns both yLP sides.
+
+Opening hLP:
+
+```text
+user target asset
+  -> hLP vault borrows opposite asset
+  -> vault adds balanced liquidity
+  -> vault receives yLP_base + yLP_quote
+  -> user receives hLP_target
+```
+
+Closing hLP burns hLP shares, burns the vault's proportional yLP shares, repays the borrowed-side vault debt, and returns remaining target-side inventory to the user. hLP debt is denominated in the borrowed underlying asset and tracked on the aggregate hLP vault, not as borrower margin debt.
+
+## Swaps And Rebalancing
+
+`swap` is the V2 swap entry. It transfers inventory, routes swap fees to the fee vault, applies GAMM reserve movement, and checkpoints both aggregate hLP vaults in O(1).
+
+hLP checkpointing computes NAV, attempts the spot-based leverage adjustment, records any unexecuted amount in `pending_rebalance`, and refreshes a cached settlement reference. The adjustment mints or burns balanced yLP legs, so the quoted post-swap spot is preserved within rounding and there is no hidden second price move after the user output. Leverage-up is capped by borrowed-side cash headroom; when cash is unavailable, ordinary swaps remain live and the gap is carried forward as pending rebalance. hLP open/close uses the cached reference to block settlement when spot has moved beyond `settlement_divergence_bps`.
 
 ## PDA Map
-
-The public SDK helper names are the preferred integration entry points:
 
 | Account | Seeds | SDK helper |
 | --- | --- | --- |
 | `Market` | `market_v2`, `base_mint`, `quote_mint`, `params_hash` | `deriveMarketAddress` / `deriveMarketV2Address` |
 | Reserve vault | `market_reserve`, `market`, `asset_mint` | `deriveMarketReserveVaultAddress` |
 | Collateral vault | `market_collateral`, `market`, `asset_mint` | `deriveMarketCollateralVaultAddress` |
-| Fee vault | `market_fee`, `market`, `asset_mint` | `deriveMarketFeeVaultAddress` |
-| Stake vault | `market_stake`, `market`, `claim_token_mint` | `deriveMarketStakeVaultAddress` |
-| Stake position | `stake`, `market`, `owner`, `asset_mint` | `deriveStakePositionAddress` |
+| Swap fee vault | `market_fee`, `market`, `asset_mint` | `deriveMarketFeeVaultAddress` |
+| Interest vault | `market_interest`, `market`, `asset_mint` | `deriveMarketInterestVaultAddress` |
 | Margin position | `margin`, `market`, `owner` | `deriveMarginPositionAddress` |
-| Hedge vault | `hedged`, `market`, `claim_token_mint` | `deriveHedgeVaultAddress` |
-| Hedge position | `hedge_position`, `market`, `owner`, `asset_mint` | `deriveHedgePositionAddress` |
-| Insurance reserve vault | `insurance`, `market`, `asset_mint` | `deriveInsuranceReserveAddress` |
+| Yield account | `yield`, `market`, `owner`, `asset_mint`, `token_kind` | `deriveYieldAccountAddress` |
+| Insurance vault | `insurance`, `market`, `asset_mint` | `deriveInsuranceAddress` |
 
-Market creators choose `base_mint` and `quote_mint`; V2 does not sort or
-canonicalize mint order. Price displays should read as quote per base.
-
-## Integration Flows
-
-### Market Creation
-
-`initialize` creates a fresh isolated market. The caller supplies base/quote
-asset mints, base/quote claim-token mints, base/quote hedge-token mints, and all
-market vault PDAs. Claim and hedge mints must be fee-free mints controlled by
-the market authority and use the same decimals as their asset side.
-
-### Liquidity
-
-`add_liquidity` transfers asset inventory into a side's reserve vault. The
-deposit is split into:
-
-- transferable claim tokens minted to the LP;
-- non-transferable junior buffer shares credited on the LP's `StakePosition`.
-
-`remove_liquidity` burns claim tokens and returns fixed 1:1 principal only.
-It does not return fees, does not rebase, and does not release buffer shares.
-Buffer shares remain on the stake position as junior risk-capital accounting
-that can be matched with claim tokens for fee eligibility.
-
-`stake` moves claim tokens into the market stake vault and matches them with
-buffer shares. `unstake` returns claim tokens and moves the matched buffer shares
-back to `available_buffer_share_amount` on the stake position.
-
-### Fees
-
-Swap fees are held in fee vaults and recorded as liabilities:
-
-- staker fees use `fee_growth_index_nad` and are claimed with `claim_fees`;
-- hedge-wrapper fees use `hedged_fee_growth_index_nad` and are claimed with
-  `claim_hedge_fees`;
-- operator/protocol buckets are claimed with `claim_market_fees`.
-
-Unallocated LP fees are carried forward into the next active stake index.
-Claim-token principal never compounds fee income.
-
-### Spot Swaps
-
-`swap` transfers `asset_in` into the reserve vault, moves the configured fee to
-the fee vault, pays `asset_out` from the opposite reserve vault, then enforces
-the post-swap reserve floor. Integrators should provide slippage protection via
-`min_asset_out`.
-
-### Lending
-
-`deposit_collateral` and `withdraw_collateral` manage idle margin inventory.
-`borrow` recognizes only debt-bearing collateral on the opposite side and
-transfers the borrowed asset from the borrowed side's reserve while recording
-fixed debt shares. Idle same-side collateral does not improve market health.
-`repay` reduces fixed debt shares and releases recognized collateral
-proportionally.
-
-`soft_borrow_enabled` is currently rejected by config validation. Soft
-liquidation is intentionally not live.
-
-### Liquidation And Insurance
-
-`deposit_insurance` funds the junior insurance reserve for a side. `liquidate`
-repays insolvent debt, seizes borrower collateral, draws insurance if needed,
-and only then socializes remaining bad debt to LP reserves subject to the
-liquidator's `max_socialized_loss` bound.
-
-### Hedged Claim Wrappers
-
-`open_hedge` escrows the selected side's claim tokens one-to-one and mints hedge tokens.
-`close_hedge` burns hedge tokens and returns the escrowed claim tokens. Hedge
-tokens can receive routed hedge fees, but they do not grant staking rights and
-do not include buffer shares.
+yLP and hLP mints are supplied to `initialize` and validated by mint authority, decimals, Token-2022 owner, transfer hook, and fee-free extension rules.
 
 ## Event Surface
 
 Indexers should consume V2 events from the standalone V2 IDL:
 
-| Event | Emitted by |
-| --- | --- |
-| `MarketCreated` | `initialize` |
-| `MarketUpdated` | `update_config`, `set_reduce_only` |
-| `MarketHealthUpdated` | config, swap, remove_liquidity, withdraw_collateral, borrow, repay, fee claims, hedge open/close, liquidation health refreshes |
-| `LiquidityAdded` | `add_liquidity` |
-| `LiquidityRemoved` | `remove_liquidity` |
-| `MarketStakeUpdated` | `stake`, `unstake` |
-| `MarketFeesClaimed` | `claim_fees` |
-| `MarketFeeLiabilityClaimed` | `claim_market_fees` |
-| `SwapExecuted` | `swap` |
-| `MarketCollateralDeposited` | `deposit_collateral` |
-| `MarketCollateralWithdrawn` | `withdraw_collateral` |
-| `MarketDebtUpdated` | `borrow`, `repay` |
-| `MarketInsuranceFunded` | `deposit_insurance` |
-| `PositionLiquidated` | `liquidate` |
-| `MarketHedgeOpened` | `open_hedge` |
-| `MarketHedgeClosed` | `close_hedge` |
-| `MarketHedgeFeesClaimed` | `claim_hedge_fees` |
+- `MarketCreated`, `MarketUpdated`, `MarketHealthUpdated`
+- `LiquidityAdded`, `LiquidityRemoved`
+- `YieldRecipientUpdated`, `YieldClaimed`, `MarketFeeLiabilityClaimed`, `ProtocolFeesClaimed`
+- `SwapExecuted`, `HlpRebalanced`
+- `MarketCollateralDeposited`, `MarketCollateralWithdrawn`, `MarketDebtUpdated`
+- `PositionLiquidated`
+- `HlpOpened`, `HlpClosed`
 
-Every V2 event carries `MarketEventMetadata` with the signer, market, and slot.
+Every V2 event carries `MarketEventMetadata` with signer, market, and slot.
 
 ## Core Invariants
 
-- Claim tokens are fixed-principal `omLP` assets. They do not rebase, compound fees, or use a dynamic exchange rate.
-- Reserve floors must cover protected claim token supply plus required buffer on each market side.
-- Deposits split into protected claim amount and buffer share amount; only the claim amount is minted as transferable claim tokens.
-- Fee rights require matched staked claim tokens plus buffer shares. Unstaked claim tokens remain principal-only redemption claims.
-- Fees are non-compounding liabilities. They are routed through fee ledgers, fee growth indexes, and explicit claim paths.
-- Buffer-ratio changes are locked while active stake or staker LP fee liabilities exist, including carried-forward no-stake fees.
-- Config updates must preserve the market-health floor for existing effective debt after risk and health are refreshed.
-- Market health uses recognized debt-bearing collateral only. Idle collateral contributes zero to borrow health.
-- Fixed debt is valued in normalized debt units. Hedged overlay debt is gamma-weighted against liquidity EMA, while fixed and soft debt remain fully effective.
-- Hedge opens must preserve the market-health floor after gamma-weighted overlay debt is refreshed.
-- Risk books roll EMA values from cached spot and liquidity observations, then store the current observation for the next refresh.
-- Liquidity add/remove, swap, borrow, repay, liquidation, fee claim, and hedge close paths check risk circuit breakers where they increase or settle risk against market prices.
-- Liquidation reduces only insolvent debt and follows the waterfall: borrower collateral, liquidator repayment and incentive, insurance reserve, then LP socialization.
-- Hedge tokens are `h-omLP` wrappers that escrow claim tokens one-to-one and unwrap back into claim tokens. They do not create staking rights.
-- Inventory-native settlement is used for reserves, collateral, fees, insurance, claims, and hedge vaults.
-
-## Production Caveats
-
-Before V2 should be treated as production-ready:
-
-- run a fresh end-to-end security review against the final standalone V2 program;
-- complete owner signoffs in `programs/omnipair-v2/SIGNOFF_CHECKLIST.md`;
-- finish the V2 deployment and release checklist in
-  `programs/omnipair-v2/RELEASE_CHECKLIST.md`;
-- keep the deferred feature scope disabled until separate reviewed specs are
-  ready: soft borrow/liquidation, LLAMMA-style liquidation, Jupiter or external
-  aggregator conversion routing, explicit hedge premium pricing,
-  user-selectable settlement side, and stale locked collateral-factor
-  machinery.
+- yLP supply is backed by reserve-side principal accounting.
+- No operation mints yLP without corresponding reserve value.
+- yLP principal reserves exclude fee and interest vault balances.
+- Fee liabilities must be backed by fee and interest vault balances.
+- hLP NAV is `collateral_value - debt_value` and must not underflow.
+- hLP debt shares stay matched to aggregate hLP vault debt.
+- hLP operations never use yLP-denominated debt.
+- Market health uses recognized debt-bearing collateral for borrower debt; idle collateral contributes zero.
+- Risk books update EMA values from cached pre-transition observations and store current observations for the next refresh.
+- Liquidation follows the waterfall: borrower collateral, liquidator incentive, insurance, then bounded LP socialization.
 
 ## Verification
 
@@ -230,37 +125,16 @@ Useful focused checks while changing V2:
 cargo fmt -p omnipair-v2 -- --check
 cargo check -p omnipair-v2 --lib
 cargo test -p omnipair-v2 --lib -- --nocapture
-cargo check -p omnipair-v2 --lib --features production
-cargo test -p omnipair-v2 --lib --features production -- --nocapture
-anchor build -p omnipair-v2
-anchor build -p omnipair-v2 -- --features production
+anchor build -p omnipair_v2
 npm run build --prefix packages/program-interface
-cargo test -p omnipair-decoder --lib
-node decoders/omnipair-decoder/scripts/generate-v2-decoder.mjs
 yarn test-litesvm
 ```
 
-Run package interface builds when public IDL, account, event, seed, or instruction shapes change.
-
-The current V2 review gates are:
-
-- `cargo fmt -p omnipair-v2 -- --check`
-- `cargo check -p omnipair-v2 --lib`
-- `cargo test -p omnipair-v2 --lib -- --nocapture`
-- `cargo check -p omnipair-v2 --lib --features production`
-- `cargo test -p omnipair-v2 --lib --features production -- --nocapture`
-- `anchor build -p omnipair-v2`
-- `anchor build -p omnipair-v2 -- --features production`
-- `npm run build --prefix packages/program-interface`
-- `cargo test -p omnipair-decoder --lib`
-- `node decoders/omnipair-decoder/scripts/generate-v2-decoder.mjs`
-- `yarn test-litesvm`
-
-`yarn test-litesvm` reports V2 instruction coverage separately from legacy V1 coverage. V2 is expected to cover all standalone V2 instructions in that report.
+Run program-interface builds whenever public IDL, account, event, seed, or instruction shapes change.
 
 ## Legacy V1 Baseline
 
-V1 remains the legacy program and is not expected to become clean as part of V2 review. As of the current branch baseline, `cargo test -p omnipair --lib` has 5 known failures:
+V1 remains the legacy program and is not expected to become clean as part of V2 review. As of the branch baseline, `cargo test -p omnipair --lib` has 5 known failures:
 
 - `v1::state::rate_model::tests::test_default_matches_original_low_util`
 - `v1::state::rate_model::tests::test_default_matches_original_high_util`

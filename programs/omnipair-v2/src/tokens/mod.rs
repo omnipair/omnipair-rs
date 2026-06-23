@@ -1,2 +1,2 @@
-pub mod claim_token;
-pub mod hedge_token;
+pub mod hlp_token;
+pub mod ylp_token;

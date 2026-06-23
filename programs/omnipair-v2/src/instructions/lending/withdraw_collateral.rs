@@ -10,7 +10,7 @@ use crate::{
     events::{MarketCollateralWithdrawn, MarketEventMetadata, MarketHealthUpdated},
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
-    state::{MarginPosition, Market, MarketAsset},
+    state::{FutarchyAuthority, MarginPosition, Market, MarketAsset},
     transitions::collateral::WithdrawCollateral as WithdrawCollateralTransition,
 };
 
@@ -42,6 +42,12 @@ pub struct WithdrawCollateral<'info> {
         bump = market.bump
     )]
     pub market: Box<Account<'info, Market>>,
+
+    #[account(
+        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
+        bump = futarchy_authority.bump
+    )]
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
 
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -84,6 +90,17 @@ impl<'info> WithdrawCollateral<'info> {
         require_supported_asset_mint(&self.asset_mint)?;
         self.margin_position
             .assert_position(self.owner.key(), self.market.key())?;
+        if self
+            .futarchy_authority
+            .is_reduce_only(self.market.reduce_only)
+        {
+            let debt = self
+                .margin_position
+                .fixed_base_debt(&self.market.debt)?
+                .checked_add(self.margin_position.fixed_quote_debt(&self.market.debt)?)
+                .ok_or(ErrorCode::DebtMathOverflow)?;
+            require!(debt == 0, ErrorCode::ReduceOnlyHasDebt);
+        }
         require_gte!(
             self.collateral_vault.amount,
             args.withdraw_amount,
@@ -156,7 +173,7 @@ impl<'info> WithdrawCollateral<'info> {
             quote_collateral: collateral_receipt.quote_collateral,
             metadata: MarketEventMetadata::new(owner_key, market_key)?,
         });
-        emit_cpi!(MarketHealthUpdated {
+        emit!(MarketHealthUpdated {
             market: market_key,
             recognized_base_collateral_for_quote_debt: ctx
                 .accounts

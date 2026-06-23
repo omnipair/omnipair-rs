@@ -10,8 +10,9 @@ pub struct MarketConfig {
     pub swap_fee_bps: u16,
     pub operator_fee_bps: u16,
     pub protocol_fee_bps: u16,
-    pub buffer_ratio_bps: u16,
-    pub fee_routing_k_nad: u64,
+    pub target_hlp_leverage_bps: u16,
+    pub settlement_divergence_bps: u16,
+    pub emergency_exit_haircut_bps: u16,
     pub ema_half_life_ms: u64,
     pub directional_ema_half_life_ms: u64,
     pub k_ema_half_life_ms: u64,
@@ -21,8 +22,6 @@ pub struct MarketConfig {
     pub k_ema_drawdown_bps: u16,
     pub recognized_collateral_cap_bps: u16,
     pub market_health_min_bps: u16,
-    pub effective_debt_weight_min_bps: u16,
-    pub effective_debt_gamma_nad: u64,
     pub soft_borrow_enabled: bool,
     pub hedged_lp_enabled: bool,
     pub start_time: i64,
@@ -35,33 +34,24 @@ impl MarketConfig {
             self.swap_fee_bps,
             ErrorCode::InvalidSwapFeeBps
         );
-        require_gte!(
-            BPS_DENOMINATOR,
-            self.operator_fee_bps,
+        require!(
+            self.operator_fee_bps == 0 && self.protocol_fee_bps == 0,
             ErrorCode::InvalidMarketConfig
         );
-        require_gte!(
-            BPS_DENOMINATOR,
-            self.protocol_fee_bps,
-            ErrorCode::InvalidMarketConfig
-        );
-        require_gte!(
-            BPS_DENOMINATOR,
-            self.operator_fee_bps
-                .checked_add(self.protocol_fee_bps)
+        require_eq!(
+            self.target_hlp_leverage_bps,
+            BPS_DENOMINATOR
+                .checked_mul(2)
                 .ok_or(ErrorCode::InvalidMarketConfig)?,
             ErrorCode::InvalidMarketConfig
         );
         require!(
-            self.buffer_ratio_bps > 0 && self.buffer_ratio_bps < BPS_DENOMINATOR,
-            ErrorCode::InvalidMarketBufferRatio
-        );
-        require!(self.fee_routing_k_nad > 0, ErrorCode::InvalidMarketConfig);
-        require!(
             self.max_daily_borrow_bps <= BPS_DENOMINATOR
                 && self.max_daily_withdraw_bps <= BPS_DENOMINATOR
                 && self.spot_ema_divergence_bps <= BPS_DENOMINATOR
-                && self.k_ema_drawdown_bps <= BPS_DENOMINATOR,
+                && self.k_ema_drawdown_bps <= BPS_DENOMINATOR
+                && self.settlement_divergence_bps <= BPS_DENOMINATOR
+                && self.emergency_exit_haircut_bps <= BPS_DENOMINATOR,
             ErrorCode::InvalidMarketConfig
         );
         require!(
@@ -73,8 +63,7 @@ impl MarketConfig {
         require!(
             self.recognized_collateral_cap_bps >= BPS_DENOMINATOR
                 && self.market_health_min_bps >= BPS_DENOMINATOR
-                && self.recognized_collateral_cap_bps >= self.market_health_min_bps
-                && self.effective_debt_weight_min_bps <= BPS_DENOMINATOR,
+                && self.recognized_collateral_cap_bps >= self.market_health_min_bps,
             ErrorCode::InvalidMarketConfig
         );
         require!(!self.soft_borrow_enabled, ErrorCode::InvalidMarketConfig);
@@ -89,15 +78,15 @@ fn half_life_in_bounds(half_life_ms: u64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::NAD;
 
     fn valid_config() -> MarketConfig {
         MarketConfig {
             swap_fee_bps: 30,
-            operator_fee_bps: 1_000,
+            operator_fee_bps: 0,
             protocol_fee_bps: 0,
-            buffer_ratio_bps: 2_000,
-            fee_routing_k_nad: NAD,
+            target_hlp_leverage_bps: 20_000,
+            settlement_divergence_bps: 500,
+            emergency_exit_haircut_bps: 250,
             ema_half_life_ms: 60_000,
             directional_ema_half_life_ms: 60_000,
             k_ema_half_life_ms: 60_000,
@@ -107,8 +96,6 @@ mod tests {
             k_ema_drawdown_bps: 1_000,
             recognized_collateral_cap_bps: 15_000,
             market_health_min_bps: 11_000,
-            effective_debt_weight_min_bps: 10_000,
-            effective_debt_gamma_nad: NAD,
             soft_borrow_enabled: false,
             hedged_lp_enabled: true,
             start_time: 0,
@@ -167,9 +154,9 @@ mod tests {
     }
 
     #[test]
-    fn market_config_rejects_inert_fee_routing() {
+    fn market_config_rejects_invalid_hlp_leverage() {
         let mut config = valid_config();
-        config.fee_routing_k_nad = 0;
+        config.target_hlp_leverage_bps = 19_999;
 
         let err = config.validate().unwrap_err();
 

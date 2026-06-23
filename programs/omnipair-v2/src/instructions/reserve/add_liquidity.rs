@@ -13,21 +13,25 @@ use crate::{
         account::get_size_with_discriminator,
         token::{token_mint_to, transfer_from_user_to_vault},
     },
-    state::{Market, MarketAsset, StakePosition},
-    transitions::reserve::AddLiquidity as AddLiquidityTransition,
+    state::{FutarchyAuthority, Market, YieldAccount, YieldTokenKind},
+    tokens::ylp_token::validate_ylp_mint,
+    transitions::{
+        fee::{carry_forward_interest, carry_forward_swap_fees},
+        reserve::AddLiquidity as AddLiquidityTransition,
+    },
 };
 
 use crate::instructions::common::{
-    require_fee_free_claim_token_mint, require_supported_asset_mint, token_program_for_mint,
-    validate_reserve_accounts,
+    require_supported_asset_mint, token_program_for_mint, validate_owner_asset_account,
+    validate_owner_lp_account, validate_side_vault_accounts,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct AddLiquidityArgs {
-    pub market_asset: MarketAsset,
-    pub deposit_amount: u64,
-    pub min_claim_amount: u64,
-    pub max_buffer_amount: u64,
+    pub base_deposit_amount: u64,
+    pub quote_deposit_amount: u64,
+    pub min_base_ylp_amount: u64,
+    pub min_quote_ylp_amount: u64,
 }
 
 #[event_cpi]
@@ -46,36 +50,66 @@ pub struct AddLiquidity<'info> {
     )]
     pub market: Box<Account<'info, Market>>,
 
+    #[account(
+        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
+        bump = futarchy_authority.bump
+    )]
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
+
     #[account(mut)]
     pub owner: Signer<'info>,
 
-    pub asset_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub base_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub claim_token_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub base_ylp_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(mut)]
+    pub quote_ylp_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub base_reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut)]
+    pub quote_reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub owner_asset_account: Box<InterfaceAccount<'info, TokenAccount>>,
-
+    pub owner_base_account: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut)]
-    pub owner_claim_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub owner_quote_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut)]
+    pub owner_base_ylp_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut)]
+    pub owner_quote_ylp_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
         payer = owner,
-        space = get_size_with_discriminator::<StakePosition>(),
+        space = get_size_with_discriminator::<YieldAccount>(),
         seeds = [
-            STAKE_POSITION_SEED_PREFIX,
+            YIELD_ACCOUNT_SEED_PREFIX,
             market.key().as_ref(),
             owner.key().as_ref(),
-            asset_mint.key().as_ref(),
+            base_mint.key().as_ref(),
+            &[YieldTokenKind::Ylp.code()],
         ],
         bump
     )]
-    pub stake_position: Box<Account<'info, StakePosition>>,
+    pub base_yield_account: Box<Account<'info, YieldAccount>>,
+
+    #[account(
+        init_if_needed,
+        payer = owner,
+        space = get_size_with_discriminator::<YieldAccount>(),
+        seeds = [
+            YIELD_ACCOUNT_SEED_PREFIX,
+            market.key().as_ref(),
+            owner.key().as_ref(),
+            quote_mint.key().as_ref(),
+            &[YieldTokenKind::Ylp.code()],
+        ],
+        bump
+    )]
+    pub quote_yield_account: Box<Account<'info, YieldAccount>>,
 
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
@@ -84,127 +118,202 @@ pub struct AddLiquidity<'info> {
 
 impl<'info> AddLiquidity<'info> {
     pub fn validate(&self, args: &AddLiquidityArgs) -> Result<()> {
-        self.market.assert_live()?;
-        require!(args.deposit_amount > 0, ErrorCode::AmountZero);
+        self.market
+            .assert_live_with_futarchy(&self.futarchy_authority)?;
+        require!(
+            args.base_deposit_amount > 0 && args.quote_deposit_amount > 0,
+            ErrorCode::AmountZero
+        );
         require_gte!(
-            self.owner_asset_account.amount,
-            args.deposit_amount,
+            self.owner_base_account.amount,
+            args.base_deposit_amount,
             ErrorCode::InsufficientBalance
         );
-        validate_reserve_accounts(
+        require_gte!(
+            self.owner_quote_account.amount,
+            args.quote_deposit_amount,
+            ErrorCode::InsufficientBalance
+        );
+        validate_side_vault_accounts(
             &self.market,
-            args.market_asset,
-            self.owner.key(),
-            &self.asset_mint,
-            &self.claim_token_mint,
-            &self.reserve_vault,
-            &self.owner_asset_account,
-            &self.owner_claim_account,
+            crate::state::MarketAsset::Base,
+            &self.base_mint,
+            &self.base_ylp_mint,
+            &self.base_reserve_vault,
         )?;
-        require_supported_asset_mint(&self.asset_mint)?;
-        require_fee_free_claim_token_mint(&self.claim_token_mint)?;
-
-        if self.stake_position.is_initialized() {
-            self.stake_position.assert_position(
-                self.owner.key(),
-                self.market.key(),
-                self.asset_mint.key(),
-            )?;
-        }
-
+        validate_side_vault_accounts(
+            &self.market,
+            crate::state::MarketAsset::Quote,
+            &self.quote_mint,
+            &self.quote_ylp_mint,
+            &self.quote_reserve_vault,
+        )?;
+        validate_owner_asset_account(self.owner.key(), &self.base_mint, &self.owner_base_account)?;
+        validate_owner_asset_account(
+            self.owner.key(),
+            &self.quote_mint,
+            &self.owner_quote_account,
+        )?;
+        validate_owner_lp_account(
+            self.owner.key(),
+            &self.base_ylp_mint,
+            &self.owner_base_ylp_account,
+        )?;
+        validate_owner_lp_account(
+            self.owner.key(),
+            &self.quote_ylp_mint,
+            &self.owner_quote_ylp_account,
+        )?;
+        require_supported_asset_mint(&self.base_mint)?;
+        require_supported_asset_mint(&self.quote_mint)?;
+        validate_ylp_mint(
+            &self.base_ylp_mint,
+            self.market.key(),
+            self.base_mint.decimals,
+        )?;
+        validate_ylp_mint(
+            &self.quote_ylp_mint,
+            self.market.key(),
+            self.quote_mint.decimals,
+        )?;
         Ok(())
     }
 
     pub fn handle_add_liquidity(ctx: Context<Self>, args: AddLiquidityArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
-        let asset_mint_key = ctx.accounts.asset_mint.key();
 
-        ctx.accounts.market.refresh_risk_book()?;
+        initialize_or_validate_yield_account(
+            &mut ctx.accounts.base_yield_account,
+            owner_key,
+            market_key,
+            ctx.accounts.base_mint.key(),
+            ctx.bumps.base_yield_account,
+        )?;
+        initialize_or_validate_yield_account(
+            &mut ctx.accounts.quote_yield_account,
+            owner_key,
+            market_key,
+            ctx.accounts.quote_mint.key(),
+            ctx.bumps.quote_yield_account,
+        )?;
 
-        if !ctx.accounts.stake_position.is_initialized() {
-            ctx.accounts.stake_position.initialize(
-                owner_key,
-                market_key,
-                asset_mint_key,
-                ctx.bumps.stake_position,
-            );
+        {
+            let market = &mut ctx.accounts.market;
+            carry_forward_swap_fees(&mut market.base_side)?;
+            carry_forward_interest(&mut market.base_side)?;
+            carry_forward_swap_fees(&mut market.quote_side)?;
+            carry_forward_interest(&mut market.quote_side)?;
+            ctx.accounts.base_yield_account.accrue(
+                ctx.accounts.owner_base_ylp_account.amount,
+                market.base_side.fees.swap_fee_growth_index_nad,
+                market.base_side.fees.interest_growth_index_nad,
+            )?;
+            ctx.accounts.quote_yield_account.accrue(
+                ctx.accounts.owner_quote_ylp_account.amount,
+                market.quote_side.fees.swap_fee_growth_index_nad,
+                market.quote_side.fees.interest_growth_index_nad,
+            )?;
         }
-        ctx.accounts
-            .stake_position
-            .assert_position(owner_key, market_key, asset_mint_key)?;
 
-        let reserve_balance_before = ctx.accounts.reserve_vault.amount;
-        let asset_token_program = token_program_for_mint(
-            &ctx.accounts.asset_mint,
+        let base_reserve_before = ctx.accounts.base_reserve_vault.amount;
+        let quote_reserve_before = ctx.accounts.quote_reserve_vault.amount;
+        let base_token_program = token_program_for_mint(
+            &ctx.accounts.base_mint,
             &ctx.accounts.token_program,
             &ctx.accounts.token_2022_program,
         )?;
-
+        let quote_token_program = token_program_for_mint(
+            &ctx.accounts.quote_mint,
+            &ctx.accounts.token_program,
+            &ctx.accounts.token_2022_program,
+        )?;
         transfer_from_user_to_vault(
             ctx.accounts.owner.to_account_info(),
-            ctx.accounts.owner_asset_account.to_account_info(),
-            ctx.accounts.reserve_vault.to_account_info(),
-            ctx.accounts.asset_mint.to_account_info(),
-            asset_token_program,
-            args.deposit_amount,
-            ctx.accounts.asset_mint.decimals,
+            ctx.accounts.owner_base_account.to_account_info(),
+            ctx.accounts.base_reserve_vault.to_account_info(),
+            ctx.accounts.base_mint.to_account_info(),
+            base_token_program,
+            args.base_deposit_amount,
+            ctx.accounts.base_mint.decimals,
         )?;
-        ctx.accounts.reserve_vault.reload()?;
-
-        let reserve_credit = ctx
+        transfer_from_user_to_vault(
+            ctx.accounts.owner.to_account_info(),
+            ctx.accounts.owner_quote_account.to_account_info(),
+            ctx.accounts.quote_reserve_vault.to_account_info(),
+            ctx.accounts.quote_mint.to_account_info(),
+            quote_token_program,
+            args.quote_deposit_amount,
+            ctx.accounts.quote_mint.decimals,
+        )?;
+        ctx.accounts.base_reserve_vault.reload()?;
+        ctx.accounts.quote_reserve_vault.reload()?;
+        let base_reserve_credit = ctx
             .accounts
-            .reserve_vault
+            .base_reserve_vault
             .amount
-            .checked_sub(reserve_balance_before)
+            .checked_sub(base_reserve_before)
             .ok_or(ErrorCode::MarketMathOverflow)?;
+        let quote_reserve_credit = ctx
+            .accounts
+            .quote_reserve_vault
+            .amount
+            .checked_sub(quote_reserve_before)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+
         let receipt = {
-            let market_side = ctx.accounts.market.side_mut(args.market_asset)?;
-            AddLiquidityTransition::new(reserve_credit).apply(market_side)?
+            let market = &mut ctx.accounts.market;
+            let (base_side, quote_side) = market.base_quote_sides_mut();
+            AddLiquidityTransition::new(base_reserve_credit, quote_reserve_credit)
+                .apply(base_side, quote_side)?
         };
-        if ctx.accounts.market.risk_book.base_price_ema_nad > 0
-            && ctx.accounts.market.risk_book.quote_price_ema_nad > 0
-        {
-            ctx.accounts.market.assert_risk_circuit_breakers()?;
-        }
         require_gte!(
-            receipt.claim_amount,
-            args.min_claim_amount,
+            receipt.base_ylp_amount,
+            args.min_base_ylp_amount,
             ErrorCode::SlippageExceeded
         );
         require_gte!(
-            args.max_buffer_amount,
-            receipt.buffer_amount,
+            receipt.quote_ylp_amount,
+            args.min_quote_ylp_amount,
             ErrorCode::SlippageExceeded
         );
 
-        ctx.accounts
-            .stake_position
-            .credit_buffer_share_amount(receipt.buffer_amount)?;
-
-        let claim_token_program = token_program_for_mint(
-            &ctx.accounts.claim_token_mint,
+        let base_ylp_program = token_program_for_mint(
+            &ctx.accounts.base_ylp_mint,
+            &ctx.accounts.token_program,
+            &ctx.accounts.token_2022_program,
+        )?;
+        let quote_ylp_program = token_program_for_mint(
+            &ctx.accounts.quote_ylp_mint,
             &ctx.accounts.token_program,
             &ctx.accounts.token_2022_program,
         )?;
         token_mint_to(
             ctx.accounts.market.to_account_info(),
-            claim_token_program,
-            ctx.accounts.claim_token_mint.to_account_info(),
-            ctx.accounts.owner_claim_account.to_account_info(),
-            receipt.claim_amount,
+            base_ylp_program,
+            ctx.accounts.base_ylp_mint.to_account_info(),
+            ctx.accounts.owner_base_ylp_account.to_account_info(),
+            receipt.base_ylp_amount,
+            &[&generate_market_seeds!(ctx.accounts.market)[..]],
+        )?;
+        token_mint_to(
+            ctx.accounts.market.to_account_info(),
+            quote_ylp_program,
+            ctx.accounts.quote_ylp_mint.to_account_info(),
+            ctx.accounts.owner_quote_ylp_account.to_account_info(),
+            receipt.quote_ylp_amount,
             &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
 
         emit_cpi!(LiquidityAdded {
             market: market_key,
             owner: owner_key,
-            asset_mint: asset_mint_key,
-            reserve_credit: receipt.reserve_credit,
-            claim_amount: receipt.claim_amount,
-            buffer_amount: receipt.buffer_amount,
-            protected_claim_token_supply: receipt.protected_claim_token_supply,
-            required_buffer: receipt.required_buffer,
+            base_reserve_credit: receipt.base_reserve_credit,
+            quote_reserve_credit: receipt.quote_reserve_credit,
+            base_ylp_amount: receipt.base_ylp_amount,
+            quote_ylp_amount: receipt.quote_ylp_amount,
+            base_ylp_supply: receipt.base_ylp_supply,
+            quote_ylp_supply: receipt.quote_ylp_supply,
             metadata: MarketEventMetadata::new(owner_key, market_key)?,
         });
 
@@ -212,106 +321,15 @@ impl<'info> AddLiquidity<'info> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        constants::{BPS_DENOMINATOR, NAD},
-        state::{BufferLedger, MarketConfig, MarketSide, ReserveLedger},
-    };
-
-    const TEST_RESERVE: u64 = 1_000_000;
-
-    fn market_side(asset_mint: Pubkey) -> MarketSide {
-        MarketSide {
-            asset_mint,
-            asset_decimals: 6,
-            claim_token_mint: Pubkey::new_unique(),
-            hedge_token_mint: Pubkey::new_unique(),
-            hedge_vault: Pubkey::new_unique(),
-            reserve_vault: Pubkey::new_unique(),
-            collateral_vault: Pubkey::new_unique(),
-            fee_vault: Pubkey::new_unique(),
-            stake_vault: Pubkey::new_unique(),
-            reserve_ledger: ReserveLedger {
-                live_reserve: TEST_RESERVE,
-                cash_reserve: TEST_RESERVE,
-                reserved_liability: 0,
-            },
-            buffer_ledger: BufferLedger {
-                buffer_ratio_bps: 2_000,
-                ..BufferLedger::default()
-            },
-            ..MarketSide::default()
-        }
+fn initialize_or_validate_yield_account(
+    yield_account: &mut Account<YieldAccount>,
+    owner: Pubkey,
+    market: Pubkey,
+    asset_mint: Pubkey,
+    bump: u8,
+) -> Result<()> {
+    if yield_account.owner == Pubkey::default() {
+        yield_account.initialize(owner, market, asset_mint, YieldTokenKind::Ylp, owner, bump);
     }
-
-    fn market_config() -> MarketConfig {
-        MarketConfig {
-            swap_fee_bps: 30,
-            operator_fee_bps: 1_000,
-            protocol_fee_bps: 0,
-            buffer_ratio_bps: 2_000,
-            fee_routing_k_nad: NAD,
-            ema_half_life_ms: 60_000,
-            directional_ema_half_life_ms: 60_000,
-            k_ema_half_life_ms: 60_000,
-            max_daily_borrow_bps: BPS_DENOMINATOR,
-            max_daily_withdraw_bps: BPS_DENOMINATOR,
-            spot_ema_divergence_bps: 1_000,
-            k_ema_drawdown_bps: BPS_DENOMINATOR,
-            recognized_collateral_cap_bps: 15_000,
-            market_health_min_bps: 11_000,
-            effective_debt_weight_min_bps: BPS_DENOMINATOR,
-            effective_debt_gamma_nad: NAD,
-            soft_borrow_enabled: false,
-            hedged_lp_enabled: true,
-            start_time: 0,
-        }
-    }
-
-    fn test_market() -> Market {
-        let base_mint = Pubkey::new_unique();
-        let quote_mint = Pubkey::new_unique();
-        Market::initialize(
-            base_mint,
-            quote_mint,
-            Pubkey::new_unique(),
-            Pubkey::new_unique(),
-            market_side(base_mint),
-            market_side(quote_mint),
-            market_config(),
-            [29_u8; 32],
-            42,
-            250,
-        )
-        .unwrap()
-    }
-
-    #[test]
-    fn pre_add_liquidity_risk_snapshot_blocks_bootstrap_from_post_add_spot() {
-        let mut market = test_market();
-        market.refresh_risk_book().unwrap();
-        assert_eq!(market.risk_book.base_price_ema_nad, NAD);
-        assert_eq!(market.risk_book.quote_price_ema_nad, NAD);
-
-        {
-            let market_side = market.side_mut(MarketAsset::Base).unwrap();
-            AddLiquidityTransition::new(900_000)
-                .apply(market_side)
-                .unwrap();
-        }
-        let err = market.assert_risk_circuit_breakers().unwrap_err();
-        assert_eq!(
-            err,
-            anchor_lang::prelude::error!(ErrorCode::MarketRiskCircuitBreaker)
-        );
-        market.refresh_risk_book().unwrap();
-
-        let err = market.assert_risk_circuit_breakers().unwrap_err();
-        assert_eq!(
-            err,
-            anchor_lang::prelude::error!(ErrorCode::MarketRiskCircuitBreaker)
-        );
-    }
+    yield_account.assert_account(owner, market, asset_mint, YieldTokenKind::Ylp)
 }

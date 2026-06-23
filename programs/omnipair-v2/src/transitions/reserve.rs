@@ -1,306 +1,220 @@
 use anchor_lang::prelude::*;
 
-use crate::{
-    errors::ErrorCode,
-    state::MarketSide,
-    utils::market_math::{required_buffer_for_claims, split_claim_minus_buffer},
-};
+use crate::{errors::ErrorCode, state::MarketSide};
 
 pub struct AddLiquidity {
-    pub reserve_credit: u64,
+    pub base_reserve_credit: u64,
+    pub quote_reserve_credit: u64,
 }
 
 pub struct AddLiquidityReceipt {
-    pub reserve_credit: u64,
-    pub claim_amount: u64,
-    pub buffer_amount: u64,
-    pub protected_claim_token_supply: u64,
-    pub required_buffer: u64,
-}
-
-impl AddLiquidity {
-    pub fn new(reserve_credit: u64) -> Self {
-        Self { reserve_credit }
-    }
-
-    pub fn apply(self, market_side: &mut MarketSide) -> Result<AddLiquidityReceipt> {
-        require!(self.reserve_credit > 0, ErrorCode::AmountZero);
-        let (claim_amount, buffer_amount) = split_claim_minus_buffer(
-            self.reserve_credit,
-            market_side.buffer_ledger.buffer_ratio_bps,
-        )?;
-        require!(claim_amount > 0 && buffer_amount > 0, ErrorCode::AmountZero);
-
-        let next_claim_supply = market_side
-            .claim_token_ledger
-            .protected_claim_token_supply
-            .checked_add(claim_amount)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        let next_buffer_share_supply = market_side
-            .buffer_ledger
-            .buffer_share_supply
-            .checked_add(buffer_amount)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        let next_required_buffer = required_buffer_for_claims(
-            next_claim_supply,
-            market_side.buffer_ledger.buffer_ratio_bps,
-        )?;
-        require_gte!(
-            next_buffer_share_supply,
-            next_required_buffer,
-            ErrorCode::InsufficientBufferShares
-        );
-
-        market_side.reserve_ledger.live_reserve = market_side
-            .reserve_ledger
-            .live_reserve
-            .checked_add(self.reserve_credit)
-            .ok_or(ErrorCode::ReserveOverflow)?;
-        market_side.reserve_ledger.cash_reserve = market_side
-            .reserve_ledger
-            .cash_reserve
-            .checked_add(self.reserve_credit)
-            .ok_or(ErrorCode::ReserveOverflow)?;
-        market_side.claim_token_ledger.protected_claim_token_supply = next_claim_supply;
-        market_side.buffer_ledger.buffer_share_supply = next_buffer_share_supply;
-        market_side.buffer_ledger.required_buffer = next_required_buffer;
-        market_side.assert_claim_coverage()?;
-
-        Ok(AddLiquidityReceipt {
-            reserve_credit: self.reserve_credit,
-            claim_amount,
-            buffer_amount,
-            protected_claim_token_supply: market_side
-                .claim_token_ledger
-                .protected_claim_token_supply,
-            required_buffer: market_side.buffer_ledger.required_buffer,
-        })
-    }
+    pub base_reserve_credit: u64,
+    pub quote_reserve_credit: u64,
+    pub base_ylp_amount: u64,
+    pub quote_ylp_amount: u64,
+    pub base_ylp_supply: u64,
+    pub quote_ylp_supply: u64,
 }
 
 pub struct RemoveLiquidity {
-    pub claim_amount: u64,
+    pub base_ylp_amount: u64,
+    pub quote_ylp_amount: u64,
 }
 
 pub struct RemoveLiquidityReceipt {
-    pub claim_amount: u64,
-    pub protected_claim_token_supply: u64,
-    pub required_buffer: u64,
+    pub base_ylp_amount: u64,
+    pub quote_ylp_amount: u64,
+    pub base_amount_out: u64,
+    pub quote_amount_out: u64,
+    pub base_ylp_supply: u64,
+    pub quote_ylp_supply: u64,
+}
+
+impl AddLiquidity {
+    pub fn new(base_reserve_credit: u64, quote_reserve_credit: u64) -> Self {
+        Self {
+            base_reserve_credit,
+            quote_reserve_credit,
+        }
+    }
+
+    pub fn apply(
+        self,
+        base_side: &mut MarketSide,
+        quote_side: &mut MarketSide,
+    ) -> Result<AddLiquidityReceipt> {
+        require!(
+            self.base_reserve_credit > 0 && self.quote_reserve_credit > 0,
+            ErrorCode::AmountZero
+        );
+        let base_reserve_before = base_side.reserves.live_reserve;
+        let quote_reserve_before = quote_side.reserves.live_reserve;
+        if base_reserve_before > 0 || quote_reserve_before > 0 {
+            require!(
+                base_reserve_before > 0 && quote_reserve_before > 0,
+                ErrorCode::InsufficientLiquidity
+            );
+            let lhs = (self.base_reserve_credit as u128)
+                .checked_mul(quote_reserve_before as u128)
+                .ok_or(ErrorCode::MarketMathOverflow)?;
+            let rhs = (self.quote_reserve_credit as u128)
+                .checked_mul(base_reserve_before as u128)
+                .ok_or(ErrorCode::MarketMathOverflow)?;
+            require_eq!(lhs, rhs, ErrorCode::SlippageExceeded);
+        }
+
+        let base_ylp_amount = base_side
+            .shares
+            .shares_for_deposit(base_reserve_before, self.base_reserve_credit)?;
+        let quote_ylp_amount = quote_side
+            .shares
+            .shares_for_deposit(quote_reserve_before, self.quote_reserve_credit)?;
+
+        credit_reserve(base_side, self.base_reserve_credit, true)?;
+        credit_reserve(quote_side, self.quote_reserve_credit, true)?;
+        base_side.shares.mint(base_ylp_amount)?;
+        quote_side.shares.mint(quote_ylp_amount)?;
+        base_side.assert_share_backing()?;
+        quote_side.assert_share_backing()?;
+
+        Ok(AddLiquidityReceipt {
+            base_reserve_credit: self.base_reserve_credit,
+            quote_reserve_credit: self.quote_reserve_credit,
+            base_ylp_amount,
+            quote_ylp_amount,
+            base_ylp_supply: base_side.shares.ylp_supply,
+            quote_ylp_supply: quote_side.shares.ylp_supply,
+        })
+    }
 }
 
 impl RemoveLiquidity {
-    pub fn new(claim_amount: u64) -> Self {
-        Self { claim_amount }
+    pub fn new(base_ylp_amount: u64, quote_ylp_amount: u64) -> Self {
+        Self {
+            base_ylp_amount,
+            quote_ylp_amount,
+        }
     }
 
-    pub fn apply(self, market_side: &mut MarketSide) -> Result<RemoveLiquidityReceipt> {
-        require!(self.claim_amount > 0, ErrorCode::AmountZero);
+    pub fn apply(
+        self,
+        base_side: &mut MarketSide,
+        quote_side: &mut MarketSide,
+    ) -> Result<RemoveLiquidityReceipt> {
+        require!(
+            self.base_ylp_amount > 0 && self.quote_ylp_amount > 0,
+            ErrorCode::AmountZero
+        );
+        let lhs = (self.base_ylp_amount as u128)
+            .checked_mul(quote_side.shares.ylp_supply as u128)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        let rhs = (self.quote_ylp_amount as u128)
+            .checked_mul(base_side.shares.ylp_supply as u128)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        require_eq!(lhs, rhs, ErrorCode::SlippageExceeded);
+
+        let base_amount_out = base_side
+            .shares
+            .reserve_for_burn(base_side.reserves.live_reserve, self.base_ylp_amount)?;
+        let quote_amount_out = quote_side
+            .shares
+            .reserve_for_burn(quote_side.reserves.live_reserve, self.quote_ylp_amount)?;
         require_gte!(
-            market_side.claim_token_ledger.protected_claim_token_supply,
-            self.claim_amount,
-            ErrorCode::InsufficientMarketClaimCoverage
+            base_side.reserves.cash_reserve,
+            base_amount_out,
+            ErrorCode::InsufficientLiquidity
         );
         require_gte!(
-            market_side.reserve_ledger.cash_reserve,
-            self.claim_amount,
-            ErrorCode::InsufficientMarketClaimCoverage
+            quote_side.reserves.cash_reserve,
+            quote_amount_out,
+            ErrorCode::InsufficientLiquidity
         );
 
-        let next_claim_supply = market_side
-            .claim_token_ledger
-            .protected_claim_token_supply
-            .checked_sub(self.claim_amount)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        let next_required_buffer = required_buffer_for_claims(
-            next_claim_supply,
-            market_side.buffer_ledger.buffer_ratio_bps,
-        )?;
-        let next_live_reserve = market_side
-            .reserve_ledger
-            .live_reserve
-            .checked_sub(self.claim_amount)
-            .ok_or(ErrorCode::ReserveUnderflow)?;
-        let reserve_floor = next_claim_supply
-            .checked_add(next_required_buffer)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        require_gte!(
-            next_live_reserve,
-            reserve_floor,
-            ErrorCode::InsufficientMarketClaimCoverage
-        );
-
-        market_side.reserve_ledger.live_reserve = next_live_reserve;
-        market_side.reserve_ledger.cash_reserve = market_side
-            .reserve_ledger
-            .cash_reserve
-            .checked_sub(self.claim_amount)
-            .ok_or(ErrorCode::CashReserveUnderflow)?;
-        market_side.claim_token_ledger.protected_claim_token_supply = next_claim_supply;
-        market_side.buffer_ledger.required_buffer = next_required_buffer;
+        debit_reserve(base_side, base_amount_out, true)?;
+        debit_reserve(quote_side, quote_amount_out, true)?;
+        base_side.shares.burn(self.base_ylp_amount)?;
+        quote_side.shares.burn(self.quote_ylp_amount)?;
+        base_side.assert_share_backing()?;
+        quote_side.assert_share_backing()?;
 
         Ok(RemoveLiquidityReceipt {
-            claim_amount: self.claim_amount,
-            protected_claim_token_supply: market_side
-                .claim_token_ledger
-                .protected_claim_token_supply,
-            required_buffer: market_side.buffer_ledger.required_buffer,
+            base_ylp_amount: self.base_ylp_amount,
+            quote_ylp_amount: self.quote_ylp_amount,
+            base_amount_out,
+            quote_amount_out,
+            base_ylp_supply: base_side.shares.ylp_supply,
+            quote_ylp_supply: quote_side.shares.ylp_supply,
         })
     }
+}
+
+pub fn credit_reserve(market_side: &mut MarketSide, amount: u64, credit_cash: bool) -> Result<()> {
+    market_side.reserves.live_reserve = market_side
+        .reserves
+        .live_reserve
+        .checked_add(amount)
+        .ok_or(ErrorCode::ReserveOverflow)?;
+    if credit_cash {
+        market_side.reserves.cash_reserve = market_side
+            .reserves
+            .cash_reserve
+            .checked_add(amount)
+            .ok_or(ErrorCode::ReserveOverflow)?;
+    }
+    Ok(())
+}
+
+pub fn debit_reserve(market_side: &mut MarketSide, amount: u64, debit_cash: bool) -> Result<()> {
+    market_side.reserves.live_reserve = market_side
+        .reserves
+        .live_reserve
+        .checked_sub(amount)
+        .ok_or(ErrorCode::ReserveUnderflow)?;
+    if debit_cash {
+        market_side.reserves.cash_reserve = market_side
+            .reserves
+            .cash_reserve
+            .checked_sub(amount)
+            .ok_or(ErrorCode::CashReserveUnderflow)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        constants::{BPS_DENOMINATOR, NAD},
-        state::{BufferLedger, MarketSide},
-        transitions::fee::RecordFeeCredit,
-    };
-    use proptest::prelude::*;
+    use crate::state::MarketSide;
 
-    fn market_side(buffer_ratio_bps: u16) -> MarketSide {
-        MarketSide {
-            buffer_ledger: BufferLedger {
-                buffer_ratio_bps,
-                ..BufferLedger::default()
-            },
-            ..MarketSide::default()
-        }
+    #[test]
+    fn add_liquidity_mints_floating_ylp_shares() {
+        let mut base_side = MarketSide::default();
+        let mut quote_side = MarketSide::default();
+
+        let receipt = AddLiquidity::new(1_000_000, 2_000_000)
+            .apply(&mut base_side, &mut quote_side)
+            .unwrap();
+
+        assert_eq!(receipt.base_ylp_amount, 1_000_000);
+        assert_eq!(receipt.quote_ylp_amount, 2_000_000);
+        assert_eq!(base_side.shares.ylp_supply, 1_000_000);
+        assert_eq!(quote_side.shares.ylp_supply, 2_000_000);
     }
 
     #[test]
-    fn add_liquidity_mints_claim_minus_buffer() {
-        let mut market_side = market_side(2_000);
-
-        let receipt = AddLiquidity::new(1_000_000)
-            .apply(&mut market_side)
+    fn remove_liquidity_burns_matched_proportions() {
+        let mut base_side = MarketSide::default();
+        let mut quote_side = MarketSide::default();
+        AddLiquidity::new(1_000_000, 2_000_000)
+            .apply(&mut base_side, &mut quote_side)
             .unwrap();
 
-        assert_eq!(receipt.claim_amount, 800_000);
-        assert_eq!(receipt.buffer_amount, 200_000);
-        assert_eq!(market_side.reserve_ledger.live_reserve, 1_000_000);
-        assert_eq!(market_side.reserve_ledger.cash_reserve, 1_000_000);
-        assert_eq!(
-            market_side.claim_token_ledger.protected_claim_token_supply,
-            800_000
-        );
-        assert_eq!(market_side.buffer_ledger.buffer_share_supply, 200_000);
-        assert_eq!(market_side.buffer_ledger.required_buffer, 200_000);
-        assert_eq!(market_side.claim_floor().unwrap(), 1_000_000);
-        market_side.assert_claim_coverage().unwrap();
-    }
-
-    #[test]
-    fn remove_liquidity_redeems_fixed_one_to_one_principal() {
-        let mut market_side = market_side(2_000);
-        AddLiquidity::new(1_000_000)
-            .apply(&mut market_side)
-            .unwrap();
-        RecordFeeCredit::new(10_000, 0, 0, NAD)
-            .apply(&mut market_side)
+        let receipt = RemoveLiquidity::new(250_000, 500_000)
+            .apply(&mut base_side, &mut quote_side)
             .unwrap();
 
-        RemoveLiquidity::new(100_000)
-            .apply(&mut market_side)
-            .unwrap();
-
-        assert_eq!(market_side.reserve_ledger.live_reserve, 900_000);
-        assert_eq!(market_side.reserve_ledger.cash_reserve, 900_000);
-        assert_eq!(
-            market_side.claim_token_ledger.protected_claim_token_supply,
-            700_000
-        );
-        assert_eq!(market_side.buffer_ledger.required_buffer, 175_000);
-        assert_eq!(market_side.fee_ledger.fee_vault_balance, 10_000);
-        assert_eq!(market_side.fee_ledger.unallocated_fee_liability, 10_000);
-        market_side.assert_claim_coverage().unwrap();
-    }
-
-    proptest! {
-        #[test]
-        fn add_liquidity_preserves_principal_and_claim_floor(
-            reserve_credit in 10_000_u64..1_000_000_000_u64,
-            buffer_ratio_bps in 1_u16..BPS_DENOMINATOR,
-        ) {
-            let mut market_side = market_side(buffer_ratio_bps);
-
-            let receipt = AddLiquidity::new(reserve_credit)
-                .apply(&mut market_side)
-                .unwrap();
-
-            prop_assert_eq!(
-                receipt.claim_amount
-                    .checked_add(receipt.buffer_amount)
-                    .unwrap(),
-                reserve_credit
-            );
-            prop_assert_eq!(receipt.reserve_credit, reserve_credit);
-            prop_assert_eq!(market_side.reserve_ledger.live_reserve, reserve_credit);
-            prop_assert_eq!(market_side.reserve_ledger.cash_reserve, reserve_credit);
-            prop_assert_eq!(
-                market_side.claim_token_ledger.protected_claim_token_supply,
-                receipt.claim_amount
-            );
-            prop_assert_eq!(
-                market_side.buffer_ledger.buffer_share_supply,
-                receipt.buffer_amount
-            );
-            prop_assert_eq!(market_side.buffer_ledger.required_buffer, receipt.required_buffer);
-            prop_assert!(market_side.buffer_ledger.buffer_share_supply >= receipt.required_buffer);
-            market_side.assert_claim_coverage().unwrap();
-        }
-
-        #[test]
-        fn remove_liquidity_preserves_floor_and_buffer_shares(
-            reserve_credit in 10_000_u64..1_000_000_000_u64,
-            buffer_ratio_bps in 1_u16..BPS_DENOMINATOR,
-            redeem_bps in 1_u16..=BPS_DENOMINATOR,
-        ) {
-            let mut market_side = market_side(buffer_ratio_bps);
-            let add_receipt = AddLiquidity::new(reserve_credit)
-                .apply(&mut market_side)
-                .unwrap();
-            let claim_supply_before = market_side
-                .claim_token_ledger
-                .protected_claim_token_supply;
-            let buffer_share_supply_before = market_side.buffer_ledger.buffer_share_supply;
-            let live_reserve_before = market_side.reserve_ledger.live_reserve;
-            let cash_reserve_before = market_side.reserve_ledger.cash_reserve;
-            let redeem_amount = ((add_receipt.claim_amount as u128)
-                .checked_mul(redeem_bps as u128)
-                .unwrap()
-                .checked_div(BPS_DENOMINATOR as u128)
-                .unwrap())
-                .max(1) as u64;
-            let redeem_amount = redeem_amount.min(add_receipt.claim_amount);
-
-            let remove_receipt = RemoveLiquidity::new(redeem_amount)
-                .apply(&mut market_side)
-                .unwrap();
-
-            prop_assert_eq!(remove_receipt.claim_amount, redeem_amount);
-            prop_assert_eq!(
-                market_side.claim_token_ledger.protected_claim_token_supply,
-                claim_supply_before.checked_sub(redeem_amount).unwrap()
-            );
-            prop_assert_eq!(
-                market_side.reserve_ledger.live_reserve,
-                live_reserve_before.checked_sub(redeem_amount).unwrap()
-            );
-            prop_assert_eq!(
-                market_side.reserve_ledger.cash_reserve,
-                cash_reserve_before.checked_sub(redeem_amount).unwrap()
-            );
-            prop_assert_eq!(
-                market_side.buffer_ledger.buffer_share_supply,
-                buffer_share_supply_before
-            );
-            prop_assert_eq!(
-                market_side.buffer_ledger.required_buffer,
-                remove_receipt.required_buffer
-            );
-            prop_assert!(market_side.buffer_ledger.buffer_share_supply >= remove_receipt.required_buffer);
-            market_side.assert_claim_coverage().unwrap();
-        }
+        assert_eq!(receipt.base_amount_out, 250_000);
+        assert_eq!(receipt.quote_amount_out, 500_000);
+        assert_eq!(receipt.base_ylp_supply, 750_000);
+        assert_eq!(receipt.quote_ylp_supply, 1_500_000);
     }
 }

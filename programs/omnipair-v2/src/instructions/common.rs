@@ -10,8 +10,6 @@ use crate::{
     state::{Market, MarketAsset},
 };
 
-pub use crate::tokens::claim_token::require_fee_free_claim_token_mint;
-
 pub fn token_program_for_mint<'info>(
     mint: &InterfaceAccount<'info, Mint>,
     token_program: &Program<'info, Token>,
@@ -51,15 +49,12 @@ pub fn token_account_debit(
         .ok_or(ErrorCode::MarketMathOverflow.into())
 }
 
-pub fn validate_reserve_accounts<'info>(
+pub fn validate_side_vault_accounts<'info>(
     market: &Account<'info, Market>,
     market_asset: MarketAsset,
-    owner: Pubkey,
     asset_mint: &InterfaceAccount<'info, Mint>,
-    claim_token_mint: &InterfaceAccount<'info, Mint>,
+    ylp_mint: &InterfaceAccount<'info, Mint>,
     reserve_vault: &InterfaceAccount<'info, TokenAccount>,
-    owner_asset_account: &InterfaceAccount<'info, TokenAccount>,
-    owner_claim_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
     let market_side = market.side(market_asset)?;
     require_keys_eq!(
@@ -68,9 +63,9 @@ pub fn validate_reserve_accounts<'info>(
         ErrorCode::InvalidMint
     );
     require_keys_eq!(
-        market_side.claim_token_mint,
-        claim_token_mint.key(),
-        ErrorCode::InvalidClaimMint
+        market_side.ylp_mint,
+        ylp_mint.key(),
+        ErrorCode::InvalidLpMintKey
     );
     require_keys_eq!(
         market_side.reserve_vault,
@@ -83,6 +78,18 @@ pub fn validate_reserve_accounts<'info>(
         ErrorCode::InvalidVault
     );
     require_keys_eq!(reserve_vault.owner, market.key(), ErrorCode::InvalidVault);
+    require!(
+        ylp_mint.mint_authority == COption::Some(market.key()),
+        ErrorCode::InvalidMintAuthority
+    );
+    Ok(())
+}
+
+pub fn validate_owner_asset_account(
+    owner: Pubkey,
+    asset_mint: &InterfaceAccount<Mint>,
+    owner_asset_account: &InterfaceAccount<TokenAccount>,
+) -> Result<()> {
     require_keys_eq!(
         owner_asset_account.mint,
         asset_mint.key(),
@@ -93,67 +100,23 @@ pub fn validate_reserve_accounts<'info>(
         owner,
         ErrorCode::InvalidTokenAccount
     );
-    require_keys_eq!(
-        owner_claim_account.mint,
-        claim_token_mint.key(),
-        ErrorCode::InvalidTokenAccount
-    );
-    require_keys_eq!(
-        owner_claim_account.owner,
-        owner,
-        ErrorCode::InvalidTokenAccount
-    );
-    require!(
-        claim_token_mint.mint_authority == COption::Some(market.key()),
-        ErrorCode::InvalidClaimMint
-    );
     Ok(())
 }
 
-pub fn validate_stake_accounts<'info>(
-    market: &Account<'info, Market>,
-    market_asset: MarketAsset,
+pub fn validate_owner_lp_account(
     owner: Pubkey,
-    asset_mint: &InterfaceAccount<'info, Mint>,
-    claim_token_mint: &InterfaceAccount<'info, Mint>,
-    stake_vault: &InterfaceAccount<'info, TokenAccount>,
-    owner_claim_account: &InterfaceAccount<'info, TokenAccount>,
+    lp_mint: &InterfaceAccount<Mint>,
+    owner_lp_account: &InterfaceAccount<TokenAccount>,
 ) -> Result<()> {
-    let market_side = market.side(market_asset)?;
     require_keys_eq!(
-        market_side.asset_mint,
-        asset_mint.key(),
-        ErrorCode::InvalidMint
-    );
-    require_keys_eq!(
-        market_side.claim_token_mint,
-        claim_token_mint.key(),
-        ErrorCode::InvalidClaimMint
-    );
-    require_keys_eq!(
-        market_side.stake_vault,
-        stake_vault.key(),
-        ErrorCode::InvalidVault
-    );
-    require_keys_eq!(
-        stake_vault.mint,
-        claim_token_mint.key(),
-        ErrorCode::InvalidVault
-    );
-    require_keys_eq!(stake_vault.owner, market.key(), ErrorCode::InvalidVault);
-    require_keys_eq!(
-        owner_claim_account.mint,
-        claim_token_mint.key(),
+        owner_lp_account.mint,
+        lp_mint.key(),
         ErrorCode::InvalidTokenAccount
     );
     require_keys_eq!(
-        owner_claim_account.owner,
+        owner_lp_account.owner,
         owner,
         ErrorCode::InvalidTokenAccount
-    );
-    require!(
-        claim_token_mint.mint_authority == COption::Some(market.key()),
-        ErrorCode::InvalidClaimMint
     );
     Ok(())
 }
@@ -161,10 +124,8 @@ pub fn validate_stake_accounts<'info>(
 pub fn validate_fee_accounts<'info>(
     market: &Account<'info, Market>,
     market_asset: MarketAsset,
-    owner: Pubkey,
     asset_mint: &InterfaceAccount<'info, Mint>,
     fee_vault: &InterfaceAccount<'info, TokenAccount>,
-    owner_fee_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
     let market_side = market.side(market_asset)?;
     require_keys_eq!(
@@ -179,16 +140,32 @@ pub fn validate_fee_accounts<'info>(
     );
     require_keys_eq!(fee_vault.mint, asset_mint.key(), ErrorCode::InvalidVault);
     require_keys_eq!(fee_vault.owner, market.key(), ErrorCode::InvalidVault);
+    Ok(())
+}
+
+pub fn validate_interest_accounts<'info>(
+    market: &Account<'info, Market>,
+    market_asset: MarketAsset,
+    asset_mint: &InterfaceAccount<'info, Mint>,
+    interest_vault: &InterfaceAccount<'info, TokenAccount>,
+) -> Result<()> {
+    let market_side = market.side(market_asset)?;
     require_keys_eq!(
-        owner_fee_account.mint,
+        market_side.asset_mint,
         asset_mint.key(),
-        ErrorCode::InvalidTokenAccount
+        ErrorCode::InvalidMint
     );
     require_keys_eq!(
-        owner_fee_account.owner,
-        owner,
-        ErrorCode::InvalidTokenAccount
+        market_side.interest_vault,
+        interest_vault.key(),
+        ErrorCode::InvalidVault
     );
+    require_keys_eq!(
+        interest_vault.mint,
+        asset_mint.key(),
+        ErrorCode::InvalidVault
+    );
+    require_keys_eq!(interest_vault.owner, market.key(), ErrorCode::InvalidVault);
     Ok(())
 }
 
@@ -256,25 +233,6 @@ pub fn validate_swap_accounts<'info>(
         ErrorCode::InvalidVault
     );
     require_keys_eq!(fee_in_vault.owner, market.key(), ErrorCode::InvalidVault);
-    require_keys_eq!(
-        trader_asset_in_account.mint,
-        asset_in_mint.key(),
-        ErrorCode::InvalidTokenAccount
-    );
-    require_keys_eq!(
-        trader_asset_in_account.owner,
-        trader,
-        ErrorCode::InvalidTokenAccount
-    );
-    require_keys_eq!(
-        trader_asset_out_account.mint,
-        asset_out_mint.key(),
-        ErrorCode::InvalidTokenAccount
-    );
-    require_keys_eq!(
-        trader_asset_out_account.owner,
-        trader,
-        ErrorCode::InvalidTokenAccount
-    );
-    Ok(())
+    validate_owner_asset_account(trader, asset_in_mint, trader_asset_in_account)?;
+    validate_owner_asset_account(trader, asset_out_mint, trader_asset_out_account)
 }

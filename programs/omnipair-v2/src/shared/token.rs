@@ -2,7 +2,11 @@
 /// https://github.com/raydium-io/raydium-cp-swap/blob/master/programs/cp-swap/src/utils/token.rs
 /// Handles token transfers and minting with support for old token program and spl_token_2022
 use crate::errors::ErrorCode;
-use anchor_lang::{prelude::*, solana_program::program::invoke, system_program};
+use anchor_lang::{
+    prelude::*,
+    solana_program::program::{invoke, invoke_signed},
+    system_program,
+};
 use anchor_spl::{
     token::{self, Token, TokenAccount},
     token_2022::{
@@ -11,7 +15,7 @@ use anchor_spl::{
             self,
             extension::{
                 transfer_fee::{TransferFeeConfig, MAX_FEE_BASIS_POINTS},
-                ExtensionType, StateWithExtensions,
+                transfer_hook, ExtensionType, StateWithExtensions,
             },
         },
         Token2022,
@@ -209,31 +213,33 @@ pub fn token_mint_to<'a>(
         return Ok(());
     }
     if *token_program.key == Token2022::id() {
-        token_2022::mint_to(
-            CpiContext::new_with_signer(
-                token_program.to_account_info(),
-                token_2022::MintTo {
-                    to: destination,
-                    authority,
-                    mint,
-                },
-                signer_seeds,
-            ),
-            amount,
+        invoke_signed(
+            &spl_token_2022::instruction::mint_to(
+                token_program.key,
+                mint.key,
+                destination.key,
+                authority.key,
+                &[],
+                amount,
+            )?,
+            &[mint, destination, authority, token_program],
+            signer_seeds,
         )
+        .map_err(Into::into)
     } else if *token_program.key == Token::id() {
-        token::mint_to(
-            CpiContext::new_with_signer(
-                token_program.to_account_info(),
-                token::MintTo {
-                    to: destination,
-                    authority,
-                    mint,
-                },
-                signer_seeds,
-            ),
-            amount,
+        invoke_signed(
+            &spl_token::instruction::mint_to(
+                token_program.key,
+                mint.key,
+                destination.key,
+                authority.key,
+                &[],
+                amount,
+            )?,
+            &[mint, destination, authority, token_program],
+            signer_seeds,
         )
+        .map_err(Into::into)
     } else {
         err!(ErrorCode::InvalidTokenProgram)
     }
@@ -251,31 +257,33 @@ pub fn token_burn<'a>(
         return Ok(());
     }
     if *token_program.key == Token2022::id() {
-        token_2022::burn(
-            CpiContext::new_with_signer(
-                token_program.to_account_info(),
-                token_2022::Burn {
-                    from,
-                    authority,
-                    mint,
-                },
-                signer_seeds,
-            ),
-            amount,
+        invoke_signed(
+            &spl_token_2022::instruction::burn(
+                token_program.key,
+                from.key,
+                mint.key,
+                authority.key,
+                &[],
+                amount,
+            )?,
+            &[from, mint, authority, token_program],
+            signer_seeds,
         )
+        .map_err(Into::into)
     } else if *token_program.key == Token::id() {
-        token::burn(
-            CpiContext::new_with_signer(
-                token_program.to_account_info(),
-                token::Burn {
-                    from,
-                    authority,
-                    mint,
-                },
-                signer_seeds,
-            ),
-            amount,
+        invoke_signed(
+            &spl_token::instruction::burn(
+                token_program.key,
+                from.key,
+                mint.key,
+                authority.key,
+                &[],
+                amount,
+            )?,
+            &[from, mint, authority, token_program],
+            signer_seeds,
         )
+        .map_err(Into::into)
     } else {
         err!(ErrorCode::InvalidTokenProgram)
     }
@@ -340,6 +348,7 @@ pub fn is_supported_mint(mint_account: &InterfaceAccount<Mint>) -> Result<bool> 
         if e != ExtensionType::TransferFeeConfig
             && e != ExtensionType::MetadataPointer
             && e != ExtensionType::TokenMetadata
+            && e != ExtensionType::TransferHook
         {
             return Ok(false);
         }
@@ -360,11 +369,29 @@ pub fn is_fee_free_mint(mint_account: &InterfaceAccount<Mint>) -> Result<bool> {
         if e == ExtensionType::TransferFeeConfig {
             return Ok(false);
         }
-        if e != ExtensionType::MetadataPointer && e != ExtensionType::TokenMetadata {
+        if e != ExtensionType::MetadataPointer
+            && e != ExtensionType::TokenMetadata
+            && e != ExtensionType::TransferHook
+        {
             return Ok(false);
         }
     }
     Ok(true)
+}
+
+pub fn is_token_2022_mint(mint_account: &InterfaceAccount<Mint>) -> Result<bool> {
+    Ok(*mint_account.to_account_info().owner == token_2022::Token2022::id())
+}
+
+pub fn transfer_hook_program_id(mint_account: &InterfaceAccount<Mint>) -> Result<Option<Pubkey>> {
+    let mint_info = mint_account.to_account_info();
+    if *mint_info.owner != token_2022::Token2022::id() {
+        return Ok(None);
+    }
+
+    let mint_data = mint_info.try_borrow_data()?;
+    let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
+    Ok(transfer_hook::get_program_id(&mint))
 }
 
 pub fn create_token_account<'a>(

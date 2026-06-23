@@ -62,6 +62,9 @@ pub struct Liquidate<'info> {
     pub insurance_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
+    pub collateral_insurance_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(mut)]
     pub liquidator_debt_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
@@ -100,6 +103,7 @@ impl<'info> Liquidate<'info> {
             &self.reserve_vault,
             &self.collateral_vault,
             &self.insurance_vault,
+            &self.collateral_insurance_vault,
             &self.liquidator_debt_account,
             &self.liquidator_collateral_account,
         )?;
@@ -196,21 +200,21 @@ impl<'info> Liquidate<'info> {
             args.max_socialized_loss,
         )
         .apply(&mut ctx.accounts.market, &mut ctx.accounts.margin_position)?;
-        let collateral_credit = if liquidation_receipt.collateral_seized > 0 {
+        let collateral_token_program = token_program_for_mint(
+            &ctx.accounts.collateral_asset_mint,
+            &ctx.accounts.token_program,
+            &ctx.accounts.token_2022_program,
+        )?;
+        let collateral_credit = if liquidation_receipt.collateral_to_liquidator > 0 {
             let liquidator_collateral_balance_before =
                 ctx.accounts.liquidator_collateral_account.amount;
-            let collateral_token_program = token_program_for_mint(
-                &ctx.accounts.collateral_asset_mint,
-                &ctx.accounts.token_program,
-                &ctx.accounts.token_2022_program,
-            )?;
             transfer_from_vault_to_user(
                 ctx.accounts.market.to_account_info(),
                 ctx.accounts.collateral_vault.to_account_info(),
                 ctx.accounts.liquidator_collateral_account.to_account_info(),
                 ctx.accounts.collateral_asset_mint.to_account_info(),
-                collateral_token_program,
-                liquidation_receipt.collateral_seized,
+                collateral_token_program.clone(),
+                liquidation_receipt.collateral_to_liquidator,
                 ctx.accounts.collateral_asset_mint.decimals,
                 &[&generate_market_seeds!(ctx.accounts.market)[..]],
             )?;
@@ -227,6 +231,30 @@ impl<'info> Liquidate<'info> {
             args.min_collateral_out,
             ErrorCode::SlippageExceeded
         );
+        if liquidation_receipt.insurance_funded > 0 {
+            let collateral_insurance_balance_before =
+                ctx.accounts.collateral_insurance_vault.amount;
+            transfer_from_vault_to_vault(
+                ctx.accounts.market.to_account_info(),
+                ctx.accounts.collateral_vault.to_account_info(),
+                ctx.accounts.collateral_insurance_vault.to_account_info(),
+                ctx.accounts.collateral_asset_mint.to_account_info(),
+                collateral_token_program,
+                liquidation_receipt.insurance_funded,
+                ctx.accounts.collateral_asset_mint.decimals,
+                &[&generate_market_seeds!(ctx.accounts.market)[..]],
+            )?;
+            ctx.accounts.collateral_insurance_vault.reload()?;
+            let insurance_credit = token_account_credit(
+                collateral_insurance_balance_before,
+                &ctx.accounts.collateral_insurance_vault,
+            )?;
+            require_eq!(
+                insurance_credit,
+                liquidation_receipt.insurance_funded,
+                ErrorCode::MarketMathOverflow
+            );
+        }
 
         emit_cpi!(PositionLiquidated {
             market: market_key,
@@ -236,6 +264,8 @@ impl<'info> Liquidate<'info> {
             collateral_asset_mint: collateral_asset_mint_key,
             repaid_amount: liquidation_receipt.repaid_amount,
             collateral_seized: liquidation_receipt.collateral_seized,
+            collateral_to_liquidator: liquidation_receipt.collateral_to_liquidator,
+            insurance_funded: liquidation_receipt.insurance_funded,
             insurance_drawn: liquidation_receipt.insurance_drawn,
             socialized_loss: liquidation_receipt.socialized_loss,
             remaining_debt: liquidation_receipt.remaining_debt,
@@ -273,21 +303,25 @@ fn validate_liquidation_accounts<'info>(
     reserve_vault: &InterfaceAccount<'info, TokenAccount>,
     collateral_vault: &InterfaceAccount<'info, TokenAccount>,
     insurance_vault: &InterfaceAccount<'info, TokenAccount>,
+    collateral_insurance_vault: &InterfaceAccount<'info, TokenAccount>,
     liquidator_debt_account: &InterfaceAccount<'info, TokenAccount>,
     liquidator_collateral_account: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
-    let (debt_side, collateral_side, insurance_vault_key) = match debt_asset {
-        MarketAsset::Base => (
-            &market.base_side,
-            &market.quote_side,
-            market.insurance_reserve.base_vault,
-        ),
-        MarketAsset::Quote => (
-            &market.quote_side,
-            &market.base_side,
-            market.insurance_reserve.quote_vault,
-        ),
-    };
+    let (debt_side, collateral_side, insurance_vault_key, collateral_insurance_vault_key) =
+        match debt_asset {
+            MarketAsset::Base => (
+                &market.base_side,
+                &market.quote_side,
+                market.insurance.base_vault,
+                market.insurance.quote_vault,
+            ),
+            MarketAsset::Quote => (
+                &market.quote_side,
+                &market.base_side,
+                market.insurance.quote_vault,
+                market.insurance.base_vault,
+            ),
+        };
     require_keys_eq!(
         debt_side.asset_mint,
         debt_asset_mint.key(),
@@ -314,6 +348,11 @@ fn validate_liquidation_accounts<'info>(
         ErrorCode::InvalidVault
     );
     require_keys_eq!(
+        collateral_insurance_vault_key,
+        collateral_insurance_vault.key(),
+        ErrorCode::InvalidVault
+    );
+    require_keys_eq!(
         reserve_vault.mint,
         debt_asset_mint.key(),
         ErrorCode::InvalidVault
@@ -324,12 +363,22 @@ fn validate_liquidation_accounts<'info>(
         ErrorCode::InvalidVault
     );
     require_keys_eq!(
+        collateral_insurance_vault.mint,
+        collateral_asset_mint.key(),
+        ErrorCode::InvalidVault
+    );
+    require_keys_eq!(
         collateral_vault.mint,
         collateral_asset_mint.key(),
         ErrorCode::InvalidVault
     );
     require_keys_eq!(reserve_vault.owner, market.key(), ErrorCode::InvalidVault);
     require_keys_eq!(insurance_vault.owner, market.key(), ErrorCode::InvalidVault);
+    require_keys_eq!(
+        collateral_insurance_vault.owner,
+        market.key(),
+        ErrorCode::InvalidVault
+    );
     require_keys_eq!(
         collateral_vault.owner,
         market.key(),

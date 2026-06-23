@@ -239,23 +239,26 @@ pub enum ErrorCode {
     #[msg("Invalid market config")]
     InvalidMarketConfig,
 
-    #[msg("Invalid market buffer ratio")]
-    InvalidMarketBufferRatio,
+    #[msg("Invalid settlement price")]
+    InvalidSettlementPrice,
 
-    #[msg("Market claim coverage is insufficient")]
-    InsufficientMarketClaimCoverage,
+    #[msg("Market reserve share backing is insufficient")]
+    InsufficientMarketShareBacking,
 
     #[msg("Invalid market side")]
     InvalidMarketSide,
 
-    #[msg("Invalid stake position")]
-    InvalidStakePosition,
+    #[msg("Invalid yield account")]
+    InvalidYieldAccount,
 
-    #[msg("Invalid hedge position")]
-    InvalidHedgePosition,
+    #[msg("Invalid hLP vault")]
+    InvalidHlpVault,
 
-    #[msg("Buffer shares are insufficient")]
-    InsufficientBufferShares,
+    #[msg("Not enough remaining accounts")]
+    NotEnoughAccounts,
+
+    #[msg("hLP settlement is unavailable")]
+    HlpSettlementUnavailable,
 
     #[msg("Borrow headroom is insufficient")]
     InsufficientBorrowHeadroom,
@@ -272,8 +275,8 @@ pub enum ErrorCode {
     #[msg("Position is not liquidatable")]
     PositionNotLiquidatable,
 
-    #[msg("Insurance reserve is insufficient")]
-    InsufficientInsuranceReserve,
+    #[msg("Insurance coverage is insufficient")]
+    InsufficientInsurance,
 
     #[msg("Socialized liquidation loss exceeds caller cap")]
     LiquidationSocializationExceeded,

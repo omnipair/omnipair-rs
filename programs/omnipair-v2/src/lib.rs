@@ -29,11 +29,51 @@ security_txt! {
     policy: "https://omnipair.fi/security"
 }
 
-declare_id!("oMNi2XGwWxDbEvhS2pWRQ6dtw8GkNBV42hfLZD6WmMF");
+declare_id!("358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv");
 
 #[program]
 pub mod omnipair_v2 {
     use super::*;
+
+    pub fn init_futarchy_authority(
+        ctx: Context<InitFutarchyAuthority>,
+        args: InitFutarchyAuthorityArgs,
+    ) -> Result<()> {
+        InitFutarchyAuthority::handle_init(ctx, args)
+    }
+
+    pub fn update_futarchy_authority(
+        ctx: Context<UpdateFutarchyAuthority>,
+        args: UpdateFutarchyAuthorityArgs,
+    ) -> Result<()> {
+        UpdateFutarchyAuthority::handle_update(ctx, args)
+    }
+
+    pub fn update_protocol_revenue(
+        ctx: Context<UpdateProtocolRevenue>,
+        args: UpdateProtocolRevenueArgs,
+    ) -> Result<()> {
+        UpdateProtocolRevenue::handle_update(ctx, args)
+    }
+
+    pub fn update_revenue_recipients(
+        ctx: Context<UpdateRevenueRecipients>,
+        args: UpdateRevenueRecipientsArgs,
+    ) -> Result<()> {
+        UpdateRevenueRecipients::handle_update(ctx, args)
+    }
+
+    pub fn set_global_reduce_only(
+        ctx: Context<SetGlobalReduceOnly>,
+        args: SetGlobalReduceOnlyArgs,
+    ) -> Result<()> {
+        SetGlobalReduceOnly::handle_set_global_reduce_only(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.validate())]
+    pub fn claim_protocol_fees(ctx: Context<ClaimProtocolFees>) -> Result<()> {
+        ClaimProtocolFees::handle_claim(ctx)
+    }
 
     #[access_control(ctx.accounts.validate(&args))]
     pub fn initialize(ctx: Context<InitializeMarket>, args: InitializeMarketArgs) -> Result<()> {
@@ -69,30 +109,20 @@ pub mod omnipair_v2 {
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn stake(ctx: Context<Stake>, args: StakeArgs) -> Result<()> {
-        Stake::handle_stake(ctx, args)
-    }
-
-    #[access_control(ctx.accounts.validate(&args))]
-    pub fn unstake(ctx: Context<Unstake>, args: UnstakeArgs) -> Result<()> {
-        Unstake::handle_unstake(ctx, args)
-    }
-
-    #[access_control(ctx.accounts.validate(&args))]
-    pub fn claim_fees(ctx: Context<ClaimFees>, args: ClaimFeesArgs) -> Result<()> {
-        ClaimFees::handle_claim(ctx, args)
-    }
-
-    #[access_control(ctx.accounts.validate(&args))]
-    pub fn claim_market_fees(
-        ctx: Context<ClaimMarketFees>,
-        args: ClaimMarketFeesArgs,
+    pub fn set_yield_recipient(
+        ctx: Context<SetYieldRecipient>,
+        args: SetYieldRecipientArgs,
     ) -> Result<()> {
-        ClaimMarketFees::handle_claim(ctx, args)
+        SetYieldRecipient::handle_set(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn swap(ctx: Context<Swap>, args: SwapArgs) -> Result<()> {
+    pub fn claim_yield(ctx: Context<ClaimYield>, args: ClaimYieldArgs) -> Result<()> {
+        ClaimYield::handle_claim(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn swap<'info>(ctx: Context<'_, '_, '_, 'info, Swap<'info>>, args: SwapArgs) -> Result<()> {
         Swap::handle_swap(ctx, args)
     }
 
@@ -123,14 +153,6 @@ pub mod omnipair_v2 {
     }
 
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn deposit_insurance(
-        ctx: Context<DepositInsurance>,
-        args: DepositInsuranceArgs,
-    ) -> Result<()> {
-        DepositInsurance::handle_deposit(ctx, args)
-    }
-
-    #[access_control(ctx.accounts.validate(&args))]
     pub fn liquidate(ctx: Context<Liquidate>, args: LiquidateArgs) -> Result<()> {
         Liquidate::handle_liquidate(ctx, args)
     }
@@ -145,8 +167,11 @@ pub mod omnipair_v2 {
         CloseHedge::handle_close(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate(&args))]
-    pub fn claim_hedge_fees(ctx: Context<ClaimHedgeFees>, args: ClaimHedgeFeesArgs) -> Result<()> {
-        ClaimHedgeFees::handle_claim(ctx, args)
+    pub fn fallback<'info>(
+        program_id: &Pubkey,
+        accounts: &'info [AccountInfo<'info>],
+        data: &[u8],
+    ) -> Result<()> {
+        crate::instructions::transfer_hook::handle_transfer_hook(program_id, accounts, data)
     }
 }

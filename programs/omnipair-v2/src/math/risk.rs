@@ -29,42 +29,6 @@ pub(crate) fn health_bps(
     u64::try_from(health).map_err(|_| ErrorCode::MarketMathOverflow.into())
 }
 
-pub(crate) fn effective_hedged_debt_nad(
-    hedged_debt_nad: u128,
-    liquidity_ema: u128,
-    min_weight_bps: u16,
-    gamma_nad: u64,
-) -> Result<u128> {
-    if hedged_debt_nad == 0 {
-        return Ok(0);
-    }
-    let min_weight = min_weight_bps as u128;
-    let variable_weight = (BPS_DENOMINATOR as u128)
-        .checked_sub(min_weight)
-        .ok_or(ErrorCode::MarketMathOverflow)?;
-    let gamma_pressure_nad = if liquidity_ema == 0 {
-        NAD as u128
-    } else {
-        (gamma_nad as u128)
-            .checked_mul(hedged_debt_nad)
-            .and_then(|value| value.checked_div(liquidity_ema))
-            .ok_or(ErrorCode::MarketMathOverflow)?
-            .min(NAD as u128)
-    };
-    let weight_bps = min_weight
-        .checked_add(
-            variable_weight
-                .checked_mul(gamma_pressure_nad)
-                .and_then(|value| value.checked_div(NAD as u128))
-                .ok_or(ErrorCode::MarketMathOverflow)?,
-        )
-        .ok_or(ErrorCode::MarketMathOverflow)?;
-    hedged_debt_nad
-        .checked_mul(weight_bps)
-        .and_then(|value| value.checked_div(BPS_DENOMINATOR as u128))
-        .ok_or(ErrorCode::MarketMathOverflow.into())
-}
-
 pub(crate) fn collateral_value_from_pessimistic_reserves_nad(
     collateral_reserve_amount: u64,
     collateral_decimals: u8,
@@ -266,9 +230,8 @@ pub(crate) fn assert_price_divergence(
         .checked_mul(BPS_DENOMINATOR as u128)
         .and_then(|value| value.checked_div(ema_price_nad as u128))
         .ok_or(ErrorCode::MarketMathOverflow)?;
-    require_gte!(
-        max_divergence_bps as u128,
-        divergence_bps,
+    require!(
+        divergence_bps <= max_divergence_bps as u128,
         ErrorCode::MarketRiskCircuitBreaker
     );
     Ok(())
@@ -288,9 +251,8 @@ pub(crate) fn assert_k_drawdown(
         .and_then(|value| value.checked_mul(BPS_DENOMINATOR as u128))
         .and_then(|value| value.checked_div(k_ema_nad))
         .ok_or(ErrorCode::MarketMathOverflow)?;
-    require_gte!(
-        max_drawdown_bps as u128,
-        drawdown_bps,
+    require!(
+        drawdown_bps <= max_drawdown_bps as u128,
         ErrorCode::MarketRiskCircuitBreaker
     );
     Ok(())

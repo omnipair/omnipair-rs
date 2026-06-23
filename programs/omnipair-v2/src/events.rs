@@ -22,21 +22,17 @@ pub struct MarketCreated {
     pub market: Pubkey,
     pub base_mint: Pubkey,
     pub quote_mint: Pubkey,
-    pub base_claim_token_mint: Pubkey,
-    pub quote_claim_token_mint: Pubkey,
-    pub base_stake_vault: Pubkey,
-    pub quote_stake_vault: Pubkey,
+    pub base_ylp_mint: Pubkey,
+    pub quote_ylp_mint: Pubkey,
     pub base_collateral_vault: Pubkey,
     pub quote_collateral_vault: Pubkey,
     pub base_insurance_vault: Pubkey,
     pub quote_insurance_vault: Pubkey,
-    pub base_hedge_token_mint: Pubkey,
-    pub quote_hedge_token_mint: Pubkey,
-    pub base_hedge_vault: Pubkey,
-    pub quote_hedge_vault: Pubkey,
+    pub base_hlp_mint: Pubkey,
+    pub quote_hlp_mint: Pubkey,
     pub operator: Pubkey,
     pub manager: Pubkey,
-    pub buffer_ratio_bps: u16,
+    pub target_hlp_leverage_bps: u16,
     pub swap_fee_bps: u16,
     pub protocol_fee_bps: u16,
     pub params_hash: [u8; 32],
@@ -48,7 +44,7 @@ pub struct MarketCreated {
 pub struct MarketUpdated {
     pub market: Pubkey,
     pub reduce_only: bool,
-    pub buffer_ratio_bps: u16,
+    pub target_hlp_leverage_bps: u16,
     pub swap_fee_bps: u16,
     pub operator_fee_bps: u16,
     pub protocol_fee_bps: u16,
@@ -71,12 +67,12 @@ pub struct MarketHealthUpdated {
 pub struct LiquidityAdded {
     pub market: Pubkey,
     pub owner: Pubkey,
-    pub asset_mint: Pubkey,
-    pub reserve_credit: u64,
-    pub claim_amount: u64,
-    pub buffer_amount: u64,
-    pub protected_claim_token_supply: u64,
-    pub required_buffer: u64,
+    pub base_reserve_credit: u64,
+    pub quote_reserve_credit: u64,
+    pub base_ylp_amount: u64,
+    pub quote_ylp_amount: u64,
+    pub base_ylp_supply: u64,
+    pub quote_ylp_supply: u64,
     pub metadata: MarketEventMetadata,
 }
 
@@ -84,32 +80,34 @@ pub struct LiquidityAdded {
 pub struct LiquidityRemoved {
     pub market: Pubkey,
     pub owner: Pubkey,
-    pub asset_mint: Pubkey,
-    pub claim_amount: u64,
-    pub protected_claim_token_supply: u64,
-    pub required_buffer: u64,
+    pub base_ylp_amount: u64,
+    pub quote_ylp_amount: u64,
+    pub base_amount_out: u64,
+    pub quote_amount_out: u64,
+    pub base_ylp_supply: u64,
+    pub quote_ylp_supply: u64,
     pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketStakeUpdated {
+pub struct YieldRecipientUpdated {
     pub market: Pubkey,
     pub owner: Pubkey,
     pub asset_mint: Pubkey,
-    pub staked_claim_token_amount: u64,
-    pub staked_buffer_share_amount: u64,
-    pub active_stake_units: u64,
-    pub accrued_fee_amount: u64,
+    pub token_kind: u8,
+    pub recipient: Pubkey,
     pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketFeesClaimed {
+pub struct YieldClaimed {
     pub market: Pubkey,
     pub owner: Pubkey,
     pub asset_mint: Pubkey,
-    pub fee_amount: u64,
-    pub remaining_fee_liability: u64,
+    pub token_kind: u8,
+    pub recipient: Pubkey,
+    pub swap_fee_amount: u64,
+    pub interest_amount: u64,
     pub metadata: MarketEventMetadata,
 }
 
@@ -125,6 +123,20 @@ pub struct MarketFeeLiabilityClaimed {
 }
 
 #[event]
+pub struct ProtocolFeesClaimed {
+    pub market: Pubkey,
+    pub base_mint: Pubkey,
+    pub quote_mint: Pubkey,
+    pub futarchy_treasury_base_amount: u64,
+    pub futarchy_treasury_quote_amount: u64,
+    pub buybacks_vault_base_amount: u64,
+    pub buybacks_vault_quote_amount: u64,
+    pub team_treasury_base_amount: u64,
+    pub team_treasury_quote_amount: u64,
+    pub metadata: MarketEventMetadata,
+}
+
+#[event]
 pub struct SwapExecuted {
     pub market: Pubkey,
     pub trader: Pubkey,
@@ -134,7 +146,22 @@ pub struct SwapExecuted {
     pub amount_in_after_fee: u64,
     pub amount_out: u64,
     pub fee_credit: u64,
+    pub base_hlp_pending_rebalance: i128,
+    pub quote_hlp_pending_rebalance: i128,
     pub metadata: MarketEventMetadata,
+}
+
+#[event]
+pub struct SwapSettled {
+    pub market: Pubkey,
+    pub trader: Pubkey,
+    pub asset_in_side: u8,
+    pub reserve_credit: u64,
+    pub amount_in_after_fee: u64,
+    pub amount_out: u64,
+    pub fee_credit: u64,
+    pub base_hlp_pending_rebalance: i128,
+    pub quote_hlp_pending_rebalance: i128,
 }
 
 #[event]
@@ -174,17 +201,6 @@ pub struct MarketDebtUpdated {
 }
 
 #[event]
-pub struct MarketInsuranceFunded {
-    pub market: Pubkey,
-    pub sponsor: Pubkey,
-    pub asset_mint: Pubkey,
-    pub insurance_credit: u64,
-    pub base_available: u64,
-    pub quote_available: u64,
-    pub metadata: MarketEventMetadata,
-}
-
-#[event]
 pub struct PositionLiquidated {
     pub market: Pubkey,
     pub borrower: Pubkey,
@@ -193,6 +209,8 @@ pub struct PositionLiquidated {
     pub collateral_asset_mint: Pubkey,
     pub repaid_amount: u64,
     pub collateral_seized: u64,
+    pub collateral_to_liquidator: u64,
+    pub insurance_funded: u64,
     pub insurance_drawn: u64,
     pub socialized_loss: u64,
     pub remaining_debt: u128,
@@ -200,33 +218,40 @@ pub struct PositionLiquidated {
 }
 
 #[event]
-pub struct MarketHedgeOpened {
+pub struct HlpOpened {
     pub market: Pubkey,
     pub owner: Pubkey,
     pub asset_mint: Pubkey,
-    pub claim_amount: u64,
-    pub hedge_amount: u64,
-    pub hedged_claim_token_supply: u64,
+    pub deposit_amount: u64,
+    pub borrowed_amount: u64,
+    pub base_ylp_amount: u64,
+    pub quote_ylp_amount: u64,
+    pub hlp_amount: u64,
+    pub hlp_supply: u64,
     pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketHedgeClosed {
+pub struct HlpClosed {
     pub market: Pubkey,
     pub owner: Pubkey,
     pub asset_mint: Pubkey,
-    pub hedge_amount: u64,
-    pub claim_amount: u64,
-    pub hedged_claim_token_supply: u64,
+    pub hlp_amount: u64,
+    pub base_ylp_amount: u64,
+    pub quote_ylp_amount: u64,
+    pub target_amount_out: u64,
+    pub debt_repaid: u64,
+    pub hlp_supply: u64,
     pub metadata: MarketEventMetadata,
 }
 
 #[event]
-pub struct MarketHedgeFeesClaimed {
+pub struct HlpRebalanced {
     pub market: Pubkey,
-    pub owner: Pubkey,
-    pub asset_mint: Pubkey,
-    pub fee_amount: u64,
-    pub remaining_fee_liability: u64,
+    pub target_side: u8,
+    pub ideal_delta: i128,
+    pub executed_delta: i128,
+    pub pending_rebalance: i128,
+    pub nav_nad: u128,
     pub metadata: MarketEventMetadata,
 }

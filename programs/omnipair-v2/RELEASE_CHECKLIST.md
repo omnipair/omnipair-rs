@@ -27,11 +27,11 @@ mainnet launch or upgrade.
   mixed V1/V2 implementation.
 - Re-check the V2 invariants in `programs/omnipair-v2/README.md`.
 - Re-check the cached-spot EMA flow for same-slot manipulation resistance.
-- Re-check daily-limit enforcement against liquidity EMA for borrow, collateral
-  withdrawal, and claim redemption.
+- Re-check daily-limit enforcement against liquidity EMA for borrow,
+  collateral withdrawal, and yLP/hLP settlement paths.
 - Re-check liquidation accounting for collateral seizure, insurance draw, and
   LP socialization.
-- Re-check fee liabilities: staker, hedge, operator, protocol, and no-stake
+- Re-check fee liabilities: yLP, hLP, operator, protocol, and unallocated
   carry-forward buckets.
 - Re-check Token-2022 mint constraints and transfer-fee inventory accounting.
 
@@ -45,8 +45,8 @@ cargo check -p omnipair-v2 --lib
 cargo test -p omnipair-v2 --lib -- --nocapture
 cargo check -p omnipair-v2 --lib --features production
 cargo test -p omnipair-v2 --lib --features production -- --nocapture
-anchor build -p omnipair-v2
-anchor build -p omnipair-v2 -- --features production
+anchor build -p omnipair_v2
+anchor build -p omnipair_v2 -- --features production
 npm run build --prefix packages/program-interface
 cargo test -p omnipair-decoder --lib
 node decoders/omnipair-decoder/scripts/generate-v2-decoder.mjs
@@ -70,7 +70,7 @@ cargo test -p omnipair --lib
   if any public IDL shape changed.
 - Confirm `packages/program-interface/src/constants.ts` exports the intended V2
   program ID and PDA helpers.
-- Confirm claim and hedge token mint constraints remain represented in both
+- Confirm yLP and hLP Token-2022 mint constraints remain represented in both
   code and IDL-visible account flows.
 
 ## 5. Integration Readiness
@@ -85,8 +85,8 @@ cargo test -p omnipair --lib
   pair event decoders.
 - App routing points new market flows at V2 while keeping legacy V1 access
   available.
-- Analytics distinguish V1 pair liquidity from V2 market claim, hedge, debt,
-  insurance, and fee ledgers.
+- Analytics distinguish V1 pair liquidity from V2 market yLP, hLP, debt,
+  insurance, and fee state.
 
 ## 6. Mainnet Deployment
 
@@ -97,7 +97,7 @@ cargo test -p omnipair --lib
 export GIT_REV=$(git rev-parse HEAD)
 export GIT_RELEASE=$(git describe --tags --abbrev=0 2>/dev/null || echo "dev")
 
-anchor build --verifiable -p omnipair-v2 \
+anchor build --verifiable -p omnipair_v2 \
   -e GIT_REV=$GIT_REV \
   -e GIT_RELEASE=$GIT_RELEASE \
   -- --features "production"
@@ -111,8 +111,8 @@ target/idl/omnipair_v2.json
 target/types/omnipair_v2.ts
 ```
 
-- Deploy the buffer through the documented workflow with `program=v2`.
-- Transfer buffer authority to the configured Squads vault.
+- Deploy the upgrade buffer through the documented workflow with `program=v2`.
+- Transfer upgrade buffer authority to the configured Squads vault.
 - Create and approve the Squads upgrade proposal for the V2 program ID.
 
 ## 7. Post-Deploy Verification
@@ -125,5 +125,5 @@ target/types/omnipair_v2.ts
   match the deployed binary.
 - Confirm the app, SDK, and indexers are using the deployed V2 program ID.
 - Smoke-test market initialization, add/remove liquidity, swap, borrow/repay,
-  liquidation rejection while healthy, fee claims, and hedge open/close on the
-  target cluster.
+  liquidation rejection while healthy, yield claims, protocol fee claims, and
+  hLP open/close on the target cluster.
