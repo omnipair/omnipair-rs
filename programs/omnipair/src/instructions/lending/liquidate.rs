@@ -262,7 +262,10 @@ impl<'info> Liquidate<'info> {
         };
         
         // Calculate base collateral to seize with price impact: Δx = Δy * x / (y - Δy)
-        let collateral_base = CPCurve::calculate_amount_in(collateral_ema_reserve, debt_ema_reserve, debt_to_writeoff)?;
+        let collateral_base = match is_insolvent {
+            true => user_collateral,
+            false => CPCurve::calculate_amount_in(collateral_ema_reserve, debt_ema_reserve, debt_to_writeoff)?,
+        };
 
         // Add liquidation penalty on top (paid by borrower, benefits LPs)
         // total_seized = base * (1 + LIQUIDATION_PENALTY_BPS / BPS)
