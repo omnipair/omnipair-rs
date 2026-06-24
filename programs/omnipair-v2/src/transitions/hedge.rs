@@ -1448,8 +1448,8 @@ mod tests {
             0,
             crate::state::ProtocolAuctionSplit::default(),
         )
-            .apply(market_side_in, market_side_out)
-            .unwrap();
+        .apply(market_side_in, market_side_out)
+        .unwrap();
 
         let quoted_post_swap_price =
             market_spot_price_nad(&market.base_side, &market.quote_side).unwrap();

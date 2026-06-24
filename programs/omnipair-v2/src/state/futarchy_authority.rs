@@ -77,7 +77,9 @@ impl ProtocolAuctionSplit {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace,
+)]
 pub struct ProtocolAuctionParams {
     pub start_multiplier_bps: u16,
     pub floor_multiplier_bps: u16,
@@ -96,8 +98,14 @@ impl ProtocolAuctionParams {
     }
 
     pub fn validate(&self) -> Result<()> {
-        require!(self.start_multiplier_bps > 0, ErrorCode::InvalidAuctionConfig);
-        require!(self.floor_multiplier_bps > 0, ErrorCode::InvalidAuctionConfig);
+        require!(
+            self.start_multiplier_bps > 0,
+            ErrorCode::InvalidAuctionConfig
+        );
+        require!(
+            self.floor_multiplier_bps > 0,
+            ErrorCode::InvalidAuctionConfig
+        );
         require_gte!(
             self.start_multiplier_bps,
             self.floor_multiplier_bps,
@@ -112,7 +120,9 @@ impl ProtocolAuctionParams {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace,
+)]
 pub struct ProtocolAuctionRecipients {
     pub treasury: Pubkey,
     pub staking_vault: Pubkey,
@@ -131,13 +141,13 @@ impl ProtocolAuctionRecipients {
     }
 
     pub fn is_valid(&self) -> bool {
-        self.treasury_bps
-            .saturating_add(self.staking_vault_bps)
-            == BPS_DENOMINATOR
+        self.treasury_bps.saturating_add(self.staking_vault_bps) == BPS_DENOMINATOR
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace,
+)]
 pub struct ProtocolAuctionConfig {
     pub accepted_mint: Pubkey,
     pub recipients: ProtocolAuctionRecipients,
@@ -276,10 +286,7 @@ impl FutarchyAuthority {
         }
     }
 
-    pub fn auction_config_mut(
-        &mut self,
-        lane: ProtocolAuctionLane,
-    ) -> &mut ProtocolAuctionConfig {
+    pub fn auction_config_mut(&mut self, lane: ProtocolAuctionLane) -> &mut ProtocolAuctionConfig {
         match lane {
             ProtocolAuctionLane::Fee => &mut self.fee_auction,
             ProtocolAuctionLane::Buyback => &mut self.buyback_auction,

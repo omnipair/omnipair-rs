@@ -123,20 +123,6 @@ pub struct MarketFeeLiabilityClaimed {
 }
 
 #[event]
-pub struct ProtocolFeesClaimed {
-    pub market: Pubkey,
-    pub base_mint: Pubkey,
-    pub quote_mint: Pubkey,
-    pub futarchy_treasury_base_amount: u64,
-    pub futarchy_treasury_quote_amount: u64,
-    pub buybacks_vault_base_amount: u64,
-    pub buybacks_vault_quote_amount: u64,
-    pub team_treasury_base_amount: u64,
-    pub team_treasury_quote_amount: u64,
-    pub metadata: MarketEventMetadata,
-}
-
-#[event]
 pub struct ProtocolAuctionConfigUpdated {
     pub authority: Pubkey,
     pub lane: u8,

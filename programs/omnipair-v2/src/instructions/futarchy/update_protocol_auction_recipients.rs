@@ -51,7 +51,11 @@ impl<'info> UpdateProtocolAuctionRecipients<'info> {
             auction.recipients.staking_vault = staking_vault;
         }
         if let Some(treasury_bps) = args.treasury_bps {
-            require_gte!(BPS_DENOMINATOR, treasury_bps, ErrorCode::InvalidDistribution);
+            require_gte!(
+                BPS_DENOMINATOR,
+                treasury_bps,
+                ErrorCode::InvalidDistribution
+            );
             auction.recipients.treasury_bps = treasury_bps;
         }
         if let Some(staking_vault_bps) = args.staking_vault_bps {

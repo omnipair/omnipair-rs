@@ -84,9 +84,12 @@ pub mod omnipair_v2 {
         SetGlobalReduceOnly::handle_set_global_reduce_only(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate())]
-    pub fn claim_protocol_fees(ctx: Context<ClaimProtocolFees>) -> Result<()> {
-        ClaimProtocolFees::handle_claim(ctx)
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn settle_protocol_auction<'info>(
+        ctx: Context<'_, '_, '_, 'info, SettleProtocolAuction<'info>>,
+        args: SettleProtocolAuctionArgs,
+    ) -> Result<()> {
+        SettleProtocolAuction::handle_settle(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]
