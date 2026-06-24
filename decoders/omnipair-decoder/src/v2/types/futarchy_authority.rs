@@ -12,6 +12,9 @@ pub struct FutarchyAuthority {
     pub recipients: RevenueRecipients,
     pub revenue_share: RevenueShare,
     pub revenue_distribution: RevenueDistribution,
+    pub protocol_auction_split: ProtocolAuctionSplit,
+    pub fee_auction: ProtocolAuctionConfig,
+    pub buyback_auction: ProtocolAuctionConfig,
     pub global_reduce_only: bool,
     pub bump: u8,
 }

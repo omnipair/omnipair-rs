@@ -1,14 +1,10 @@
 // This V2 decoder code is generated from packages/program-interface/src/idl_v2.json.
-use super::*;
-
 use carbon_core::{borsh, CarbonDeserialize};
 
 #[derive(
     CarbonDeserialize, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Hash,
 )]
-pub struct UpdateProtocolRevenueArgs {
-    pub swap_bps: Option<u16>,
-    pub interest_bps: Option<u16>,
-    pub revenue_distribution: Option<RevenueDistribution>,
-    pub protocol_auction_split: Option<ProtocolAuctionSplit>,
+pub struct ProtocolAuctionSplit {
+    pub fee_auction_bps: u16,
+    pub buyback_auction_bps: u16,
 }

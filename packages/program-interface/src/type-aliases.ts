@@ -25,7 +25,12 @@ export type MarketFeeLiabilityClaimed = IdlEvents<OmnipairV2>["marketFeeLiabilit
 export type MarketHealthUpdated = IdlEvents<OmnipairV2>["marketHealthUpdated"];
 export type MarketUpdated = IdlEvents<OmnipairV2>["marketUpdated"];
 export type PositionLiquidated = IdlEvents<OmnipairV2>["positionLiquidated"];
-export type ProtocolFeesClaimed = IdlEvents<OmnipairV2>["protocolFeesClaimed"];
+export type ProtocolAuctionConfigUpdated =
+  IdlEvents<OmnipairV2>["protocolAuctionConfigUpdated"];
+export type ProtocolAuctionRecipientsUpdated =
+  IdlEvents<OmnipairV2>["protocolAuctionRecipientsUpdated"];
+export type ProtocolAuctionSettled = IdlEvents<OmnipairV2>["protocolAuctionSettled"];
+export type ProtocolAuctionSplitUpdated = IdlEvents<OmnipairV2>["protocolAuctionSplitUpdated"];
 export type SwapExecuted = IdlEvents<OmnipairV2>["swapExecuted"];
 export type YieldClaimed = IdlEvents<OmnipairV2>["yieldClaimed"];
 export type YieldRecipientUpdated = IdlEvents<OmnipairV2>["yieldRecipientUpdated"];

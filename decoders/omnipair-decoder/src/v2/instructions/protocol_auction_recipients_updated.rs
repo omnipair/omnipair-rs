@@ -1,0 +1,16 @@
+// This V2 decoder code is generated from packages/program-interface/src/idl_v2.json.
+use carbon_core::{borsh, CarbonDeserialize};
+
+#[derive(
+    CarbonDeserialize, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Hash,
+)]
+#[carbon(discriminator = "0xaeb237789bf10578")]
+pub struct ProtocolAuctionRecipientsUpdated {
+    pub authority: solana_pubkey::Pubkey,
+    pub lane: u8,
+    pub treasury: solana_pubkey::Pubkey,
+    pub staking_vault: solana_pubkey::Pubkey,
+    pub treasury_bps: u16,
+    pub staking_vault_bps: u16,
+    pub signer: solana_pubkey::Pubkey,
+}

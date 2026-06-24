@@ -14,5 +14,6 @@ pub struct Fees {
     pub unallocated_swap_fee_liability: u64,
     pub unallocated_interest_liability: u64,
     pub protocol_fee_liability: u64,
+    pub buyback_fee_liability: u64,
     pub operator_fee_liability: u64,
 }

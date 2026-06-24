@@ -6,9 +6,8 @@ use carbon_core::{borsh, CarbonDeserialize};
 #[derive(
     CarbonDeserialize, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Hash,
 )]
-pub struct UpdateProtocolRevenueArgs {
-    pub swap_bps: Option<u16>,
-    pub interest_bps: Option<u16>,
-    pub revenue_distribution: Option<RevenueDistribution>,
-    pub protocol_auction_split: Option<ProtocolAuctionSplit>,
+pub struct UpdateProtocolAuctionConfigArgs {
+    pub lane: ProtocolAuctionLane,
+    pub accepted_mint: Option<solana_pubkey::Pubkey>,
+    pub params: Option<ProtocolAuctionParams>,
 }

@@ -5,7 +5,6 @@ use super::{OmnipairV2Decoder, PROGRAM_ID};
 
 pub mod add_liquidity;
 pub mod borrow;
-pub mod claim_protocol_fees;
 pub mod claim_yield;
 pub mod close_hedge;
 pub mod deposit_collateral;
@@ -26,17 +25,23 @@ pub mod market_health_updated;
 pub mod market_updated;
 pub mod open_hedge;
 pub mod position_liquidated;
-pub mod protocol_fees_claimed;
+pub mod protocol_auction_config_updated;
+pub mod protocol_auction_recipients_updated;
+pub mod protocol_auction_settled;
+pub mod protocol_auction_split_updated;
 pub mod remove_liquidity;
 pub mod repay;
 pub mod set_global_reduce_only;
 pub mod set_reduce_only;
 pub mod set_yield_recipient;
+pub mod settle_protocol_auction;
 pub mod swap;
 pub mod swap_executed;
 pub mod swap_settled;
 pub mod update_config;
 pub mod update_futarchy_authority;
+pub mod update_protocol_auction_config;
+pub mod update_protocol_auction_recipients;
 pub mod update_protocol_revenue;
 pub mod update_revenue_recipients;
 pub mod withdraw_collateral;
@@ -56,7 +61,6 @@ pub mod yield_recipient_updated;
 pub enum OmnipairV2Instruction {
     AddLiquidity(add_liquidity::AddLiquidity),
     Borrow(borrow::Borrow),
-    ClaimProtocolFees(claim_protocol_fees::ClaimProtocolFees),
     ClaimYield(claim_yield::ClaimYield),
     CloseHedge(close_hedge::CloseHedge),
     DepositCollateral(deposit_collateral::DepositCollateral),
@@ -69,9 +73,14 @@ pub enum OmnipairV2Instruction {
     SetGlobalReduceOnly(set_global_reduce_only::SetGlobalReduceOnly),
     SetReduceOnly(set_reduce_only::SetReduceOnly),
     SetYieldRecipient(set_yield_recipient::SetYieldRecipient),
+    SettleProtocolAuction(settle_protocol_auction::SettleProtocolAuction),
     Swap(swap::Swap),
     UpdateConfig(update_config::UpdateConfig),
     UpdateFutarchyAuthority(update_futarchy_authority::UpdateFutarchyAuthority),
+    UpdateProtocolAuctionConfig(update_protocol_auction_config::UpdateProtocolAuctionConfig),
+    UpdateProtocolAuctionRecipients(
+        update_protocol_auction_recipients::UpdateProtocolAuctionRecipients,
+    ),
     UpdateProtocolRevenue(update_protocol_revenue::UpdateProtocolRevenue),
     UpdateRevenueRecipients(update_revenue_recipients::UpdateRevenueRecipients),
     WithdrawCollateral(withdraw_collateral::WithdrawCollateral),
@@ -88,7 +97,12 @@ pub enum OmnipairV2Instruction {
     MarketHealthUpdated(market_health_updated::MarketHealthUpdated),
     MarketUpdated(market_updated::MarketUpdated),
     PositionLiquidated(position_liquidated::PositionLiquidated),
-    ProtocolFeesClaimed(protocol_fees_claimed::ProtocolFeesClaimed),
+    ProtocolAuctionConfigUpdated(protocol_auction_config_updated::ProtocolAuctionConfigUpdated),
+    ProtocolAuctionRecipientsUpdated(
+        protocol_auction_recipients_updated::ProtocolAuctionRecipientsUpdated,
+    ),
+    ProtocolAuctionSettled(protocol_auction_settled::ProtocolAuctionSettled),
+    ProtocolAuctionSplitUpdated(protocol_auction_split_updated::ProtocolAuctionSplitUpdated),
     SwapExecuted(swap_executed::SwapExecuted),
     SwapSettled(swap_settled::SwapSettled),
     YieldClaimed(yield_claimed::YieldClaimed),
@@ -120,16 +134,6 @@ impl<'a> carbon_core::instruction::InstructionDecoder<'a> for OmnipairV2Decoder 
                 program_id: instruction.program_id,
                 accounts: instruction.accounts.clone(),
                 data: OmnipairV2Instruction::Borrow(decoded),
-            });
-        }
-
-        if let Some(decoded) =
-            claim_protocol_fees::ClaimProtocolFees::deserialize(instruction.data.as_slice())
-        {
-            return Some(carbon_core::instruction::DecodedInstruction {
-                program_id: instruction.program_id,
-                accounts: instruction.accounts.clone(),
-                data: OmnipairV2Instruction::ClaimProtocolFees(decoded),
             });
         }
 
@@ -241,6 +245,16 @@ impl<'a> carbon_core::instruction::InstructionDecoder<'a> for OmnipairV2Decoder 
             });
         }
 
+        if let Some(decoded) =
+            settle_protocol_auction::SettleProtocolAuction::deserialize(instruction.data.as_slice())
+        {
+            return Some(carbon_core::instruction::DecodedInstruction {
+                program_id: instruction.program_id,
+                accounts: instruction.accounts.clone(),
+                data: OmnipairV2Instruction::SettleProtocolAuction(decoded),
+            });
+        }
+
         if let Some(decoded) = swap::Swap::deserialize(instruction.data.as_slice()) {
             return Some(carbon_core::instruction::DecodedInstruction {
                 program_id: instruction.program_id,
@@ -265,6 +279,30 @@ impl<'a> carbon_core::instruction::InstructionDecoder<'a> for OmnipairV2Decoder 
                 program_id: instruction.program_id,
                 accounts: instruction.accounts.clone(),
                 data: OmnipairV2Instruction::UpdateFutarchyAuthority(decoded),
+            });
+        }
+
+        if let Some(decoded) =
+            update_protocol_auction_config::UpdateProtocolAuctionConfig::deserialize(
+                instruction.data.as_slice(),
+            )
+        {
+            return Some(carbon_core::instruction::DecodedInstruction {
+                program_id: instruction.program_id,
+                accounts: instruction.accounts.clone(),
+                data: OmnipairV2Instruction::UpdateProtocolAuctionConfig(decoded),
+            });
+        }
+
+        if let Some(decoded) =
+            update_protocol_auction_recipients::UpdateProtocolAuctionRecipients::deserialize(
+                instruction.data.as_slice(),
+            )
+        {
+            return Some(carbon_core::instruction::DecodedInstruction {
+                program_id: instruction.program_id,
+                accounts: instruction.accounts.clone(),
+                data: OmnipairV2Instruction::UpdateProtocolAuctionRecipients(decoded),
             });
         }
 
@@ -425,12 +463,48 @@ impl<'a> carbon_core::instruction::InstructionDecoder<'a> for OmnipairV2Decoder 
         }
 
         if let Some(decoded) =
-            protocol_fees_claimed::ProtocolFeesClaimed::deserialize(instruction.data.as_slice())
+            protocol_auction_config_updated::ProtocolAuctionConfigUpdated::deserialize(
+                instruction.data.as_slice(),
+            )
         {
             return Some(carbon_core::instruction::DecodedInstruction {
                 program_id: instruction.program_id,
                 accounts: instruction.accounts.clone(),
-                data: OmnipairV2Instruction::ProtocolFeesClaimed(decoded),
+                data: OmnipairV2Instruction::ProtocolAuctionConfigUpdated(decoded),
+            });
+        }
+
+        if let Some(decoded) =
+            protocol_auction_recipients_updated::ProtocolAuctionRecipientsUpdated::deserialize(
+                instruction.data.as_slice(),
+            )
+        {
+            return Some(carbon_core::instruction::DecodedInstruction {
+                program_id: instruction.program_id,
+                accounts: instruction.accounts.clone(),
+                data: OmnipairV2Instruction::ProtocolAuctionRecipientsUpdated(decoded),
+            });
+        }
+
+        if let Some(decoded) = protocol_auction_settled::ProtocolAuctionSettled::deserialize(
+            instruction.data.as_slice(),
+        ) {
+            return Some(carbon_core::instruction::DecodedInstruction {
+                program_id: instruction.program_id,
+                accounts: instruction.accounts.clone(),
+                data: OmnipairV2Instruction::ProtocolAuctionSettled(decoded),
+            });
+        }
+
+        if let Some(decoded) =
+            protocol_auction_split_updated::ProtocolAuctionSplitUpdated::deserialize(
+                instruction.data.as_slice(),
+            )
+        {
+            return Some(carbon_core::instruction::DecodedInstruction {
+                program_id: instruction.program_id,
+                accounts: instruction.accounts.clone(),
+                data: OmnipairV2Instruction::ProtocolAuctionSplitUpdated(decoded),
             });
         }
 

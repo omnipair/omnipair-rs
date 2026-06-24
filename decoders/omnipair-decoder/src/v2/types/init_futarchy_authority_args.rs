@@ -14,4 +14,7 @@ pub struct InitFutarchyAuthorityArgs {
     pub buybacks_vault_bps: u16,
     pub team_treasury: solana_pubkey::Pubkey,
     pub team_treasury_bps: u16,
+    pub staking_vault: solana_pubkey::Pubkey,
+    pub fee_auction_accepted_mint: solana_pubkey::Pubkey,
+    pub buyback_auction_accepted_mint: solana_pubkey::Pubkey,
 }

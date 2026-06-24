@@ -379,181 +379,6 @@ export type OmnipairV2 = {
       ]
     },
     {
-      "name": "claimProtocolFees",
-      "discriminator": [
-        34,
-        142,
-        219,
-        112,
-        109,
-        54,
-        133,
-        23
-      ],
-      "accounts": [
-        {
-          "name": "caller",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "market",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  97,
-                  114,
-                  107,
-                  101,
-                  116,
-                  95,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market.base_mint",
-                "account": "market"
-              },
-              {
-                "kind": "account",
-                "path": "market.quote_mint",
-                "account": "market"
-              },
-              {
-                "kind": "account",
-                "path": "market.params_hash",
-                "account": "market"
-              }
-            ]
-          }
-        },
-        {
-          "name": "futarchyAuthority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  102,
-                  117,
-                  116,
-                  97,
-                  114,
-                  99,
-                  104,
-                  121,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "baseMint"
-        },
-        {
-          "name": "quoteMint"
-        },
-        {
-          "name": "baseFeeVault",
-          "writable": true
-        },
-        {
-          "name": "quoteFeeVault",
-          "writable": true
-        },
-        {
-          "name": "futarchyTreasury"
-        },
-        {
-          "name": "buybacksVault"
-        },
-        {
-          "name": "teamTreasury"
-        },
-        {
-          "name": "futarchyTreasuryBaseAccount",
-          "writable": true
-        },
-        {
-          "name": "futarchyTreasuryQuoteAccount",
-          "writable": true
-        },
-        {
-          "name": "buybacksVaultBaseAccount",
-          "writable": true
-        },
-        {
-          "name": "buybacksVaultQuoteAccount",
-          "writable": true
-        },
-        {
-          "name": "teamTreasuryBaseAccount",
-          "writable": true
-        },
-        {
-          "name": "teamTreasuryQuoteAccount",
-          "writable": true
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "token2022Program",
-          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
-        },
-        {
-          "name": "eventAuthority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  95,
-                  95,
-                  101,
-                  118,
-                  101,
-                  110,
-                  116,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "program"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "claimYield",
       "discriminator": [
         49,
@@ -2558,6 +2383,173 @@ export type OmnipairV2 = {
       ]
     },
     {
+      "name": "settleProtocolAuction",
+      "discriminator": [
+        206,
+        204,
+        32,
+        135,
+        8,
+        22,
+        72,
+        80
+      ],
+      "accounts": [
+        {
+          "name": "bidder",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.base_mint",
+                "account": "market"
+              },
+              {
+                "kind": "account",
+                "path": "market.quote_mint",
+                "account": "market"
+              },
+              {
+                "kind": "account",
+                "path": "market.params_hash",
+                "account": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "futarchyAuthority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "soldMint"
+        },
+        {
+          "name": "acceptedMint"
+        },
+        {
+          "name": "soldFeeVault",
+          "writable": true
+        },
+        {
+          "name": "bidderPaymentAccount",
+          "writable": true
+        },
+        {
+          "name": "bidderReceiveAccount",
+          "writable": true
+        },
+        {
+          "name": "treasuryPaymentAccount",
+          "writable": true
+        },
+        {
+          "name": "stakingVaultPaymentAccount",
+          "writable": true
+        },
+        {
+          "name": "referenceMarket"
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "token2022Program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "eventAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "settleProtocolAuctionArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "swap",
       "discriminator": [
         248,
@@ -2908,6 +2900,136 @@ export type OmnipairV2 = {
           "type": {
             "defined": {
               "name": "updateFutarchyAuthorityArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "updateProtocolAuctionConfig",
+      "discriminator": [
+        4,
+        202,
+        113,
+        194,
+        208,
+        122,
+        212,
+        73
+      ],
+      "accounts": [
+        {
+          "name": "authoritySigner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "futarchyAuthority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "updateProtocolAuctionConfigArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "updateProtocolAuctionRecipients",
+      "discriminator": [
+        210,
+        210,
+        94,
+        83,
+        188,
+        14,
+        38,
+        247
+      ],
+      "accounts": [
+        {
+          "name": "authoritySigner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "futarchyAuthority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "updateProtocolAuctionRecipientsArgs"
             }
           }
         }
@@ -3444,16 +3566,55 @@ export type OmnipairV2 = {
       ]
     },
     {
-      "name": "protocolFeesClaimed",
+      "name": "protocolAuctionConfigUpdated",
       "discriminator": [
-        22,
-        228,
-        205,
-        252,
-        57,
+        178,
+        169,
+        215,
+        69,
+        170,
+        59,
+        80,
+        160
+      ]
+    },
+    {
+      "name": "protocolAuctionRecipientsUpdated",
+      "discriminator": [
+        174,
+        178,
+        55,
+        120,
+        155,
+        241,
+        5,
+        120
+      ]
+    },
+    {
+      "name": "protocolAuctionSettled",
+      "discriminator": [
+        11,
+        230,
+        199,
+        245,
+        28,
+        133,
+        107,
+        3
+      ]
+    },
+    {
+      "name": "protocolAuctionSplitUpdated",
+      "discriminator": [
         17,
-        156,
-        252
+        255,
+        78,
+        242,
+        127,
+        110,
+        234,
+        249
       ]
     },
     {
@@ -3772,251 +3933,266 @@ export type OmnipairV2 = {
     },
     {
       "code": 6052,
+      "name": "invalidAuctionConfig",
+      "msg": "Invalid protocol auction config"
+    },
+    {
+      "code": 6053,
+      "name": "staleAuctionReference",
+      "msg": "Protocol auction reference price is stale"
+    },
+    {
+      "code": 6054,
+      "name": "insufficientAuctionPayment",
+      "msg": "Protocol auction payment is insufficient"
+    },
+    {
+      "code": 6055,
       "name": "invalidLpMintKey",
       "msg": "Invalid LP mint key"
     },
     {
-      "code": 6053,
+      "code": 6056,
       "name": "invalidLpName",
       "msg": "Invalid LP name"
     },
     {
-      "code": 6054,
+      "code": 6057,
       "name": "invalidLpSymbol",
       "msg": "Invalid LP symbol"
     },
     {
-      "code": 6055,
+      "code": 6058,
       "name": "invalidLpUri",
       "msg": "Invalid LP URI"
     },
     {
-      "code": 6056,
+      "code": 6059,
       "name": "accountNotEmpty",
       "msg": "Account not empty"
     },
     {
-      "code": 6057,
+      "code": 6060,
       "name": "invalidMintAuthority",
       "msg": "Invalid mint authority"
     },
     {
-      "code": 6058,
+      "code": 6061,
       "name": "frozenLpMint",
       "msg": "Frozen LP mint"
     },
     {
-      "code": 6059,
+      "code": 6062,
       "name": "nonZeroSupply",
       "msg": "Non-zero supply"
     },
     {
-      "code": 6060,
+      "code": 6063,
       "name": "wrongLpDecimals",
       "msg": "Wrong LP decimals"
     },
     {
-      "code": 6061,
+      "code": 6064,
       "name": "invalidVaultSameAccount",
       "msg": "Invalid vault - token_in_vault and token_out_vault must be different"
     },
     {
-      "code": 6062,
+      "code": 6065,
       "name": "invalidVault",
       "msg": "Invalid vault"
     },
     {
-      "code": 6063,
+      "code": 6066,
       "name": "invalidParamsHash",
       "msg": "Invalid params hash - hash does not match computed parameters"
     },
     {
-      "code": 6064,
+      "code": 6067,
       "name": "invalidVersion",
       "msg": "Invalid version"
     },
     {
-      "code": 6065,
+      "code": 6068,
       "name": "invalidTokenOrder",
       "msg": "Invalid token order"
     },
     {
-      "code": 6066,
+      "code": 6069,
       "name": "invalidRateModel",
       "msg": "Invalid rate model - rate_model does not match market configuration"
     },
     {
-      "code": 6067,
+      "code": 6070,
       "name": "invalidPositionMarket",
       "msg": "Invalid position market - position does not match market"
     },
     {
-      "code": 6068,
+      "code": 6071,
       "name": "invalidUtilBounds",
       "msg": "Invalid utilization bounds - must satisfy: MIN <= start < end <= MAX"
     },
     {
-      "code": 6069,
+      "code": 6072,
       "name": "invalidRateParams",
       "msg": "Invalid rate parameters - check half_life_ms, min_rate_bps, max_rate_bps, initial_rate_bps bounds"
     },
     {
-      "code": 6070,
+      "code": 6073,
       "name": "reduceOnlyMode",
       "msg": "Operation blocked: reduce-only mode is active"
     },
     {
-      "code": 6071,
+      "code": 6074,
       "name": "reduceOnlyHasDebt",
       "msg": "Cannot remove collateral in reduce-only mode while debt exists"
     },
     {
-      "code": 6072,
+      "code": 6075,
       "name": "liquidityDeltaCircuitBreaker",
       "msg": "Operation blocked: same-transaction liquidity delta detected"
     },
     {
-      "code": 6073,
+      "code": 6076,
       "name": "liquidityDeltaCircuitBreakerCpi",
       "msg": "Operation blocked: liquidity delta instruction must be top-level"
     },
     {
-      "code": 6074,
+      "code": 6077,
       "name": "invalidInstructionsSysvar",
       "msg": "Invalid instructions sysvar"
     },
     {
-      "code": 6075,
+      "code": 6078,
       "name": "insufficientPostWithdrawDebtCoverage",
       "msg": "Insufficient post-withdraw debt coverage"
     },
     {
-      "code": 6076,
+      "code": 6079,
       "name": "invalidRecipient",
       "msg": "Invalid recipient - address does not match configured revenue recipient"
     },
     {
-      "code": 6077,
+      "code": 6080,
       "name": "invalidMarket",
       "msg": "Invalid market"
     },
     {
-      "code": 6078,
+      "code": 6081,
       "name": "invalidMarketConfig",
       "msg": "Invalid market config"
     },
     {
-      "code": 6079,
+      "code": 6082,
       "name": "invalidSettlementPrice",
       "msg": "Invalid settlement price"
     },
     {
-      "code": 6080,
+      "code": 6083,
       "name": "insufficientMarketShareBacking",
       "msg": "Market reserve share backing is insufficient"
     },
     {
-      "code": 6081,
+      "code": 6084,
       "name": "invalidMarketSide",
       "msg": "Invalid market side"
     },
     {
-      "code": 6082,
+      "code": 6085,
       "name": "invalidYieldAccount",
       "msg": "Invalid yield account"
     },
     {
-      "code": 6083,
+      "code": 6086,
       "name": "invalidHlpVault",
       "msg": "Invalid hLP vault"
     },
     {
-      "code": 6084,
+      "code": 6087,
       "name": "notEnoughAccounts",
       "msg": "Not enough remaining accounts"
     },
     {
-      "code": 6085,
+      "code": 6088,
       "name": "hlpSettlementUnavailable",
       "msg": "hLP settlement is unavailable"
     },
     {
-      "code": 6086,
+      "code": 6089,
       "name": "insufficientBorrowHeadroom",
       "msg": "Borrow headroom is insufficient"
     },
     {
-      "code": 6087,
+      "code": 6090,
       "name": "insufficientMarketHealth",
       "msg": "Market health is insufficient"
     },
     {
-      "code": 6088,
+      "code": 6091,
       "name": "invalidMarginPosition",
       "msg": "Invalid margin position"
     },
     {
-      "code": 6089,
+      "code": 6092,
       "name": "insufficientRecognizedCollateral",
       "msg": "Recognized collateral is insufficient"
     },
     {
-      "code": 6090,
+      "code": 6093,
       "name": "positionNotLiquidatable",
       "msg": "Position is not liquidatable"
     },
     {
-      "code": 6091,
+      "code": 6094,
       "name": "insufficientInsurance",
       "msg": "Insurance coverage is insufficient"
     },
     {
-      "code": 6092,
+      "code": 6095,
       "name": "liquidationSocializationExceeded",
       "msg": "Socialized liquidation loss exceeds caller cap"
     },
     {
-      "code": 6093,
+      "code": 6096,
       "name": "invalidClaimMint",
       "msg": "Claim mint must not charge transfer fees"
     },
     {
-      "code": 6094,
+      "code": 6097,
       "name": "unbackedFeeLiability",
       "msg": "Fee liability is not backed by fee vault balance"
     },
     {
-      "code": 6095,
+      "code": 6098,
       "name": "invalidMarketFeeAuthority",
       "msg": "Invalid market fee authority"
     },
     {
-      "code": 6096,
+      "code": 6099,
       "name": "marketReduceOnly",
       "msg": "Market is reduce-only"
     },
     {
-      "code": 6097,
+      "code": 6100,
       "name": "marketNotStarted",
       "msg": "Market has not started"
     },
     {
-      "code": 6098,
+      "code": 6101,
       "name": "marketMathOverflow",
       "msg": "Market math overflow"
     },
     {
-      "code": 6099,
+      "code": 6102,
       "name": "dailyLimitExceeded",
       "msg": "Daily liquidity limit exceeded"
     },
     {
-      "code": 6100,
+      "code": 6103,
       "name": "marketRiskCircuitBreaker",
       "msg": "Market risk circuit breaker triggered"
     },
     {
-      "code": 6101,
+      "code": 6104,
       "name": "instructionNotLive",
       "msg": "Instruction is intentionally not live yet"
     }
@@ -4248,6 +4424,10 @@ export type OmnipairV2 = {
             "type": "u64"
           },
           {
+            "name": "buybackFeeLiability",
+            "type": "u64"
+          },
+          {
             "name": "operatorFeeLiability",
             "type": "u64"
           }
@@ -4288,6 +4468,30 @@ export type OmnipairV2 = {
             "type": {
               "defined": {
                 "name": "revenueDistribution"
+              }
+            }
+          },
+          {
+            "name": "protocolAuctionSplit",
+            "type": {
+              "defined": {
+                "name": "protocolAuctionSplit"
+              }
+            }
+          },
+          {
+            "name": "feeAuction",
+            "type": {
+              "defined": {
+                "name": "protocolAuctionConfig"
+              }
+            }
+          },
+          {
+            "name": "buybackAuction",
+            "type": {
+              "defined": {
+                "name": "protocolAuctionConfig"
               }
             }
           },
@@ -4586,6 +4790,18 @@ export type OmnipairV2 = {
           {
             "name": "teamTreasuryBps",
             "type": "u16"
+          },
+          {
+            "name": "stakingVault",
+            "type": "pubkey"
+          },
+          {
+            "name": "feeAuctionAcceptedMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "buybackAuctionAcceptedMint",
+            "type": "pubkey"
           }
         ]
       }
@@ -5596,7 +5812,181 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "protocolFeesClaimed",
+      "name": "protocolAuctionConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "acceptedMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipients",
+            "type": {
+              "defined": {
+                "name": "protocolAuctionRecipients"
+              }
+            }
+          },
+          {
+            "name": "params",
+            "type": {
+              "defined": {
+                "name": "protocolAuctionParams"
+              }
+            }
+          },
+          {
+            "name": "lastSettlementSlot",
+            "type": "u64"
+          },
+          {
+            "name": "lastSettlementPriceNad",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "protocolAuctionConfigUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "lane",
+            "type": "u8"
+          },
+          {
+            "name": "acceptedMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "startMultiplierBps",
+            "type": "u16"
+          },
+          {
+            "name": "floorMultiplierBps",
+            "type": "u16"
+          },
+          {
+            "name": "durationSlots",
+            "type": "u64"
+          },
+          {
+            "name": "maxReferenceAgeSlots",
+            "type": "u64"
+          },
+          {
+            "name": "signer",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "protocolAuctionLane",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "fee"
+          },
+          {
+            "name": "buyback"
+          }
+        ]
+      }
+    },
+    {
+      "name": "protocolAuctionParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "startMultiplierBps",
+            "type": "u16"
+          },
+          {
+            "name": "floorMultiplierBps",
+            "type": "u16"
+          },
+          {
+            "name": "durationSlots",
+            "type": "u64"
+          },
+          {
+            "name": "maxReferenceAgeSlots",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "protocolAuctionRecipients",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "stakingVault",
+            "type": "pubkey"
+          },
+          {
+            "name": "treasuryBps",
+            "type": "u16"
+          },
+          {
+            "name": "stakingVaultBps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "protocolAuctionRecipientsUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "lane",
+            "type": "u8"
+          },
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "stakingVault",
+            "type": "pubkey"
+          },
+          {
+            "name": "treasuryBps",
+            "type": "u16"
+          },
+          {
+            "name": "stakingVaultBps",
+            "type": "u16"
+          },
+          {
+            "name": "signer",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "protocolAuctionSettled",
       "type": {
         "kind": "struct",
         "fields": [
@@ -5605,35 +5995,59 @@ export type OmnipairV2 = {
             "type": "pubkey"
           },
           {
-            "name": "baseMint",
+            "name": "referenceMarket",
             "type": "pubkey"
           },
           {
-            "name": "quoteMint",
+            "name": "lane",
+            "type": "u8"
+          },
+          {
+            "name": "side",
+            "type": "u8"
+          },
+          {
+            "name": "bidder",
             "type": "pubkey"
           },
           {
-            "name": "futarchyTreasuryBaseAmount",
+            "name": "soldMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "acceptedMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "soldAmount",
             "type": "u64"
           },
           {
-            "name": "futarchyTreasuryQuoteAmount",
+            "name": "paymentAmount",
             "type": "u64"
           },
           {
-            "name": "buybacksVaultBaseAmount",
+            "name": "treasuryAmount",
             "type": "u64"
           },
           {
-            "name": "buybacksVaultQuoteAmount",
+            "name": "stakingVaultAmount",
             "type": "u64"
           },
           {
-            "name": "teamTreasuryBaseAmount",
+            "name": "referencePriceNad",
             "type": "u64"
           },
           {
-            "name": "teamTreasuryQuoteAmount",
+            "name": "auctionPriceNad",
+            "type": "u64"
+          },
+          {
+            "name": "remainingFeeLiability",
+            "type": "u64"
+          },
+          {
+            "name": "remainingBuybackLiability",
             "type": "u64"
           },
           {
@@ -5643,6 +6057,46 @@ export type OmnipairV2 = {
                 "name": "marketEventMetadata"
               }
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "protocolAuctionSplit",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "feeAuctionBps",
+            "type": "u16"
+          },
+          {
+            "name": "buybackAuctionBps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "protocolAuctionSplitUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "feeAuctionBps",
+            "type": "u16"
+          },
+          {
+            "name": "buybackAuctionBps",
+            "type": "u16"
+          },
+          {
+            "name": "signer",
+            "type": "pubkey"
           }
         ]
       }
@@ -5896,6 +6350,38 @@ export type OmnipairV2 = {
       }
     },
     {
+      "name": "settleProtocolAuctionArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "lane",
+            "type": {
+              "defined": {
+                "name": "protocolAuctionLane"
+              }
+            }
+          },
+          {
+            "name": "side",
+            "type": {
+              "defined": {
+                "name": "marketAsset"
+              }
+            }
+          },
+          {
+            "name": "soldAmount",
+            "type": "u64"
+          },
+          {
+            "name": "maxPaymentAmount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "swapArgs",
       "type": {
         "kind": "struct",
@@ -6048,6 +6534,78 @@ export type OmnipairV2 = {
       }
     },
     {
+      "name": "updateProtocolAuctionConfigArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "lane",
+            "type": {
+              "defined": {
+                "name": "protocolAuctionLane"
+              }
+            }
+          },
+          {
+            "name": "acceptedMint",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "params",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "protocolAuctionParams"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "updateProtocolAuctionRecipientsArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "lane",
+            "type": {
+              "defined": {
+                "name": "protocolAuctionLane"
+              }
+            }
+          },
+          {
+            "name": "treasury",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "stakingVault",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "treasuryBps",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "stakingVaultBps",
+            "type": {
+              "option": "u16"
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "updateProtocolRevenueArgs",
       "type": {
         "kind": "struct",
@@ -6070,6 +6628,16 @@ export type OmnipairV2 = {
               "option": {
                 "defined": {
                   "name": "revenueDistribution"
+                }
+              }
+            }
+          },
+          {
+            "name": "protocolAuctionSplit",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "protocolAuctionSplit"
                 }
               }
             }
