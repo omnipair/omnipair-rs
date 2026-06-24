@@ -158,6 +158,15 @@ pub enum ErrorCode {
     #[msg("Invalid distribution - percentages must sum to 100%")]
     InvalidDistribution,
 
+    #[msg("Invalid protocol auction config")]
+    InvalidAuctionConfig,
+
+    #[msg("Protocol auction reference price is stale")]
+    StaleAuctionReference,
+
+    #[msg("Protocol auction payment is insufficient")]
+    InsufficientAuctionPayment,
+
     #[msg("Invalid LP mint key")]
     InvalidLpMintKey,
 

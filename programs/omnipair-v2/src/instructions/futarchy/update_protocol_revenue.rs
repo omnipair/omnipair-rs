@@ -3,7 +3,8 @@ use anchor_lang::prelude::*;
 use crate::{
     constants::{BPS_DENOMINATOR, FUTARCHY_AUTHORITY_SEED_PREFIX},
     errors::ErrorCode,
-    state::{FutarchyAuthority, RevenueDistribution},
+    events::ProtocolAuctionSplitUpdated,
+    state::{FutarchyAuthority, ProtocolAuctionSplit, RevenueDistribution},
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -11,6 +12,7 @@ pub struct UpdateProtocolRevenueArgs {
     pub swap_bps: Option<u16>,
     pub interest_bps: Option<u16>,
     pub revenue_distribution: Option<RevenueDistribution>,
+    pub protocol_auction_split: Option<ProtocolAuctionSplit>,
 }
 
 #[derive(Accounts)]
@@ -51,6 +53,19 @@ impl<'info> UpdateProtocolRevenue<'info> {
                 ErrorCode::InvalidDistribution
             );
             ctx.accounts.futarchy_authority.revenue_distribution = revenue_distribution;
+        }
+        if let Some(protocol_auction_split) = args.protocol_auction_split {
+            require!(
+                protocol_auction_split.is_valid(),
+                ErrorCode::InvalidDistribution
+            );
+            ctx.accounts.futarchy_authority.protocol_auction_split = protocol_auction_split;
+            emit!(ProtocolAuctionSplitUpdated {
+                authority: ctx.accounts.futarchy_authority.key(),
+                fee_auction_bps: protocol_auction_split.fee_auction_bps,
+                buyback_auction_bps: protocol_auction_split.buyback_auction_bps,
+                signer: ctx.accounts.authority_signer.key(),
+            });
         }
         Ok(())
     }
