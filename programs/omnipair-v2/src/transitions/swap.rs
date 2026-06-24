@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::{
     errors::ErrorCode,
-    state::MarketSide,
+    state::{MarketSide, ProtocolAuctionSplit},
     transitions::fee::{FeesReceipt, RecordSwapFeeCredit},
 };
 
@@ -12,6 +12,7 @@ pub struct Swap {
     pub fee_credit: u64,
     pub operator_fee_bps: u16,
     pub protocol_fee_bps: u16,
+    pub protocol_auction_split: ProtocolAuctionSplit,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -31,6 +32,7 @@ impl Swap {
         fee_credit: u64,
         operator_fee_bps: u16,
         protocol_fee_bps: u16,
+        protocol_auction_split: ProtocolAuctionSplit,
     ) -> Self {
         Self {
             amount_in_after_fee,
@@ -38,6 +40,7 @@ impl Swap {
             fee_credit,
             operator_fee_bps,
             protocol_fee_bps,
+            protocol_auction_split,
         }
     }
 
@@ -77,6 +80,7 @@ impl Swap {
             self.fee_credit,
             self.operator_fee_bps,
             self.protocol_fee_bps,
+            self.protocol_auction_split,
         )
         .apply(market_side_in)?;
         market_side_in.assert_share_backing()?;

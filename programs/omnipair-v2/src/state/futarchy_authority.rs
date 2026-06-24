@@ -54,10 +54,19 @@ impl RevenueDistribution {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace)]
 pub struct ProtocolAuctionSplit {
     pub fee_auction_bps: u16,
     pub buyback_auction_bps: u16,
+}
+
+impl Default for ProtocolAuctionSplit {
+    fn default() -> Self {
+        Self {
+            fee_auction_bps: BPS_DENOMINATOR,
+            buyback_auction_bps: 0,
+        }
+    }
 }
 
 impl ProtocolAuctionSplit {
@@ -242,10 +251,7 @@ impl FutarchyAuthority {
                 interest_bps,
             },
             revenue_distribution,
-            protocol_auction_split: ProtocolAuctionSplit {
-                fee_auction_bps: BPS_DENOMINATOR,
-                buyback_auction_bps: 0,
-            },
+            protocol_auction_split: ProtocolAuctionSplit::default(),
             fee_auction: ProtocolAuctionConfig::initialize(
                 fee_auction_accepted_mint,
                 futarchy_treasury,

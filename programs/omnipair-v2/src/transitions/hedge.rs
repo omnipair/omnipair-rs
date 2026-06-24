@@ -1440,7 +1440,14 @@ mod tests {
         )
         .unwrap();
         let (market_side_in, market_side_out) = market.swap_sides_mut(MarketAsset::Base);
-        SwapTransition::new(amount_in_after_fee, amount_out, 0, 0, 0)
+        SwapTransition::new(
+            amount_in_after_fee,
+            amount_out,
+            0,
+            0,
+            0,
+            crate::state::ProtocolAuctionSplit::default(),
+        )
             .apply(market_side_in, market_side_out)
             .unwrap();
 
