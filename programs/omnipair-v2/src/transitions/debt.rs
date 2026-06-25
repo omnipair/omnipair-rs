@@ -131,6 +131,15 @@ impl Repay {
         margin_position: &mut MarginPosition,
     ) -> Result<DebtReceipt> {
         let debt_delta = -i64::try_from(self.repay_credit).map_err(|_| ErrorCode::Overflow)?;
+        let debt_before = match self.repay_asset {
+            MarketAsset::Base => margin_position.fixed_base_debt(&market.debt)?,
+            MarketAsset::Quote => margin_position.fixed_quote_debt(&market.debt)?,
+        };
+        require_gte!(
+            debt_before,
+            self.repay_credit as u128,
+            ErrorCode::InsufficientDebt
+        );
         // Split the repaid amount into principal vs accrued interest before
         // shares are reduced. Interest routing to the vault is wired in a later
         // commit; for now interest still compounds (principal tracking only).
@@ -139,12 +148,6 @@ impl Repay {
             .realize_margin_repay(self.repay_asset, self.repay_credit)?;
         match self.repay_asset {
             MarketAsset::Base => {
-                let debt_before = margin_position.fixed_base_debt(&market.debt)?;
-                require_gte!(
-                    debt_before,
-                    self.repay_credit as u128,
-                    ErrorCode::InsufficientDebt
-                );
                 let shares_before = margin_position.fixed_base_shares;
                 let shares_to_burn = if self.repay_credit as u128 == debt_before {
                     shares_before
@@ -189,12 +192,6 @@ impl Repay {
                     .ok_or(ErrorCode::ReserveOverflow)?;
             }
             MarketAsset::Quote => {
-                let debt_before = margin_position.fixed_quote_debt(&market.debt)?;
-                require_gte!(
-                    debt_before,
-                    self.repay_credit as u128,
-                    ErrorCode::InsufficientDebt
-                );
                 let shares_before = margin_position.fixed_quote_shares;
                 let shares_to_burn = if self.repay_credit as u128 == debt_before {
                     shares_before

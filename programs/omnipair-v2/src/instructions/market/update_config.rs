@@ -26,7 +26,7 @@ pub struct UpdateMarketConfig<'info> {
     )]
     pub market: Box<Account<'info, Market>>,
 
-    /// Must be the market manager or its operator (checked in the handler).
+    /// Must be the market manager (checked in the handler).
     pub authority_signer: Signer<'info>,
 }
 

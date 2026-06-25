@@ -135,18 +135,19 @@ impl Market {
         crate::transitions::interest::AccrueInterest::new(current_slot).apply(self)
     }
 
-    /// Manager-only authority: sensitive actions (fee setting, operator/manager
-    /// rotation) require the market manager.
+    /// Manager-only authority: sensitive actions (fee setting, risk parameter
+    /// changes, and role rotation) require the market manager.
     pub fn assert_manager(&self, signer: Pubkey) -> Result<()> {
         require_keys_eq!(signer, self.manager, ErrorCode::InvalidMarketManager);
         Ok(())
     }
 
-    /// Config authority: the manager, or the operator acting on its behalf
-    /// (keepers/bots). Both may mutate market parameters.
+    /// Config authority is manager-only. The operator remains the market's
+    /// operational/economic identity, not a config admin.
     pub fn assert_config_authority(&self, signer: Pubkey) -> Result<()> {
-        require!(
-            signer == self.manager || signer == self.operator,
+        require_keys_eq!(
+            signer,
+            self.manager,
             ErrorCode::InvalidMarketConfigAuthority
         );
         Ok(())
@@ -268,12 +269,12 @@ mod tests {
     }
 
     #[test]
-    fn assert_config_authority_accepts_manager_and_operator() {
+    fn assert_config_authority_accepts_only_manager() {
         let manager = Pubkey::new_unique();
         let operator = Pubkey::new_unique();
         let market = market_with_roles(manager, operator);
         assert!(market.assert_config_authority(manager).is_ok());
-        assert!(market.assert_config_authority(operator).is_ok());
+        assert!(market.assert_config_authority(operator).is_err());
         assert!(market
             .assert_config_authority(Pubkey::new_unique())
             .is_err());

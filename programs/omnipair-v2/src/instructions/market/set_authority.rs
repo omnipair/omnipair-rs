@@ -17,9 +17,8 @@ pub struct SetManagerArgs {
     pub new_manager: Pubkey,
 }
 
-/// Manager-only role management: the manager sets the operator (a keeper/bot
-/// that may change market params on its behalf) and may rotate the manager
-/// role itself.
+/// Manager-only role management: the manager sets the market operator identity
+/// and may rotate the manager role itself.
 #[event_cpi]
 #[derive(Accounts)]
 pub struct SetMarketAuthority<'info> {

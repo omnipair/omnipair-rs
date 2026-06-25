@@ -98,11 +98,16 @@ impl Liquidation {
         let debt_reduction = repay_plus_insurance
             .checked_add(socialized_loss as u128)
             .ok_or(ErrorCode::MarketMathOverflow)?;
-        // Track the principal/interest split for cleared (and written-off) debt.
-        // Interest routing to the vault is wired in a later commit.
-        let _interest_paid = market.debt.realize_margin_repay(
+        let cash_repaid =
+            u64::try_from(repay_plus_insurance).map_err(|_| ErrorCode::MarketMathOverflow)?;
+        let debt_reduction_u64 =
+            u64::try_from(debt_reduction).map_err(|_| ErrorCode::MarketMathOverflow)?;
+        // Track the principal/interest split for cash-backed repayment without
+        // treating socialized loss as received interest.
+        let _interest_paid = market.debt.realize_margin_liquidation(
             self.debt_asset,
-            u64::try_from(debt_reduction).map_err(|_| ErrorCode::MarketMathOverflow)?,
+            cash_repaid,
+            debt_reduction_u64,
         )?;
         apply_liquidation_debt_reduction(
             market,
