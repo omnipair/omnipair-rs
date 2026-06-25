@@ -373,6 +373,128 @@
       ]
     },
     {
+      "name": "claim_manager_fees",
+      "discriminator": [
+        233,
+        62,
+        226,
+        184,
+        103,
+        118,
+        45,
+        141
+      ],
+      "accounts": [
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.base_mint",
+                "account": "Market"
+              },
+              {
+                "kind": "account",
+                "path": "market.quote_mint",
+                "account": "Market"
+              },
+              {
+                "kind": "account",
+                "path": "market.params_hash",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "manager",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "asset_mint"
+        },
+        {
+          "name": "fee_vault",
+          "writable": true
+        },
+        {
+          "name": "interest_vault",
+          "writable": true
+        },
+        {
+          "name": "manager_asset_account",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "ClaimManagerFeesArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "claim_yield",
       "discriminator": [
         49,
@@ -1511,6 +1633,36 @@
           }
         },
         {
+          "name": "futarchy_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "liquidator",
           "writable": true,
           "signer": true
@@ -1523,6 +1675,10 @@
         },
         {
           "name": "reserve_vault",
+          "writable": true
+        },
+        {
+          "name": "interest_vault",
           "writable": true
         },
         {
@@ -2016,6 +2172,36 @@
           }
         },
         {
+          "name": "futarchy_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "owner",
           "writable": true,
           "signer": true
@@ -2025,6 +2211,10 @@
         },
         {
           "name": "reserve_vault",
+          "writable": true
+        },
+        {
+          "name": "interest_vault",
           "writable": true
         },
         {
@@ -2167,6 +2357,208 @@
           "type": {
             "defined": {
               "name": "SetGlobalReduceOnlyArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_manager",
+      "discriminator": [
+        30,
+        197,
+        171,
+        92,
+        121,
+        184,
+        151,
+        165
+      ],
+      "accounts": [
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.base_mint",
+                "account": "Market"
+              },
+              {
+                "kind": "account",
+                "path": "market.quote_mint",
+                "account": "Market"
+              },
+              {
+                "kind": "account",
+                "path": "market.params_hash",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "manager",
+          "docs": [
+            "The current market manager; only the manager may rotate roles."
+          ],
+          "signer": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SetManagerArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_operator",
+      "discriminator": [
+        238,
+        153,
+        101,
+        169,
+        243,
+        131,
+        36,
+        1
+      ],
+      "accounts": [
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.base_mint",
+                "account": "Market"
+              },
+              {
+                "kind": "account",
+                "path": "market.quote_mint",
+                "account": "Market"
+              },
+              {
+                "kind": "account",
+                "path": "market.params_hash",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "manager",
+          "docs": [
+            "The current market manager; only the manager may rotate roles."
+          ],
+          "signer": true
+        },
+        {
+          "name": "event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "SetOperatorArgs"
             }
           }
         }
@@ -2757,37 +3149,10 @@
           }
         },
         {
-          "name": "futarchy_authority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  102,
-                  117,
-                  116,
-                  97,
-                  114,
-                  99,
-                  104,
-                  121,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              }
-            ]
-          }
-        },
-        {
           "name": "authority_signer",
+          "docs": [
+            "Must be the market manager (checked in the handler)."
+          ],
           "signer": true
         },
         {
@@ -3456,6 +3821,32 @@
       ]
     },
     {
+      "name": "ManagerFeesClaimed",
+      "discriminator": [
+        125,
+        121,
+        41,
+        114,
+        99,
+        186,
+        225,
+        194
+      ]
+    },
+    {
+      "name": "MarketAuthorityUpdated",
+      "discriminator": [
+        203,
+        38,
+        24,
+        124,
+        146,
+        103,
+        175,
+        23
+      ]
+    },
+    {
       "name": "MarketCollateralDeposited",
       "discriminator": [
         41,
@@ -3702,491 +4093,501 @@
     },
     {
       "code": 6007,
+      "name": "InvalidMarketManager",
+      "msg": "Invalid market manager"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidMarketConfigAuthority",
+      "msg": "Invalid market config authority"
+    },
+    {
+      "code": 6009,
       "name": "InvalidArgument",
       "msg": "Invalid argument"
     },
     {
-      "code": 6008,
+      "code": 6010,
       "name": "AmountZero",
       "msg": "Amount cannot be zero"
     },
     {
-      "code": 6009,
+      "code": 6011,
       "name": "InsufficientAmount0In",
       "msg": "Insufficient amount0 in"
     },
     {
-      "code": 6010,
+      "code": 6012,
       "name": "InsufficientAmount1In",
       "msg": "Insufficient amount1 in"
     },
     {
-      "code": 6011,
+      "code": 6013,
       "name": "BorrowingPowerExceeded",
       "msg": "Borrowing power exceeded"
     },
     {
-      "code": 6012,
+      "code": 6014,
       "name": "InvalidTokenAccount",
       "msg": "Invalid token account"
     },
     {
-      "code": 6013,
+      "code": 6015,
       "name": "InvalidTokenProgram",
       "msg": "Invalid token program"
     },
     {
-      "code": 6014,
+      "code": 6016,
       "name": "BorrowExceedsReserve",
       "msg": "Borrow exceeds reserve"
     },
     {
-      "code": 6015,
+      "code": 6017,
       "name": "InsufficientAmount0",
       "msg": "Insufficient amount0"
     },
     {
-      "code": 6016,
+      "code": 6018,
       "name": "InsufficientAmount1",
       "msg": "Insufficient amount1"
     },
     {
-      "code": 6017,
+      "code": 6019,
       "name": "InsufficientOutputAmount",
       "msg": "Insufficient output amount"
     },
     {
-      "code": 6018,
+      "code": 6020,
       "name": "SlippageExceeded",
       "msg": "Output amount below minimum requested (slippage exceeded)"
     },
     {
-      "code": 6019,
+      "code": 6021,
       "name": "InsufficientLiquidity",
       "msg": "Insufficient liquidity"
     },
     {
-      "code": 6020,
+      "code": 6022,
       "name": "InsufficientCashReserve0",
       "msg": "Insufficient cash reserve0"
     },
     {
-      "code": 6021,
+      "code": 6023,
       "name": "InsufficientCashReserve1",
       "msg": "Insufficient cash reserve1"
     },
     {
-      "code": 6022,
+      "code": 6024,
       "name": "Overflow",
       "msg": "Arithmetic overflow"
     },
     {
-      "code": 6023,
+      "code": 6025,
       "name": "Undercollateralized",
       "msg": "Undercollateralized"
     },
     {
-      "code": 6024,
+      "code": 6026,
       "name": "InsufficientBalanceForCollateral",
       "msg": "Insufficient balance for collateral"
     },
     {
-      "code": 6025,
+      "code": 6027,
       "name": "InsufficientAmount",
       "msg": "Insufficient amount"
     },
     {
-      "code": 6026,
+      "code": 6028,
       "name": "InsufficientBalance",
       "msg": "User balance insufficient to cover requested amount"
     },
     {
-      "code": 6027,
+      "code": 6029,
       "name": "InsufficientDebt",
       "msg": "Insufficient debt"
     },
     {
-      "code": 6028,
+      "code": 6030,
       "name": "UserPositionNotInitialized",
       "msg": "User position not initialized"
     },
     {
-      "code": 6029,
+      "code": 6031,
       "name": "ZeroDebtAmount",
       "msg": "Zero debt amount"
     },
     {
-      "code": 6030,
+      "code": 6032,
       "name": "NotUndercollateralized",
       "msg": "Not undercollateralized"
     },
     {
-      "code": 6031,
+      "code": 6033,
       "name": "BrokenInvariant",
       "msg": "Broken invariant"
     },
     {
-      "code": 6032,
+      "code": 6034,
       "name": "InvariantOverflow",
       "msg": "Math overflow during invariant calculation"
     },
     {
-      "code": 6033,
+      "code": 6035,
       "name": "FeeMathOverflow",
       "msg": "Math overflow during fee calculation."
     },
     {
-      "code": 6034,
+      "code": 6036,
       "name": "OutputAmountOverflow",
       "msg": "Math overflow during output amount calculation."
     },
     {
-      "code": 6035,
+      "code": 6037,
       "name": "ReserveOverflow",
       "msg": "Math overflow during reserve calculation."
     },
     {
-      "code": 6036,
+      "code": 6038,
       "name": "ReserveUnderflow",
       "msg": "Math underflow during reserve calculation."
     },
     {
-      "code": 6037,
+      "code": 6039,
       "name": "CashReserveUnderflow",
       "msg": "Math underflow during cash reserve calculation."
     },
     {
-      "code": 6038,
+      "code": 6040,
       "name": "DenominatorOverflow",
       "msg": "Math overflow during denominator calculation."
     },
     {
-      "code": 6039,
+      "code": 6041,
       "name": "LiquidityMathOverflow",
       "msg": "Math overflow during liquidity calculation"
     },
     {
-      "code": 6040,
+      "code": 6042,
       "name": "LiquiditySqrtOverflow",
       "msg": "Math overflow during liquidity square root calculation"
     },
     {
-      "code": 6041,
+      "code": 6043,
       "name": "LiquidityUnderflow",
       "msg": "Math underflow during liquidity calculation"
     },
     {
-      "code": 6042,
+      "code": 6044,
       "name": "LiquidityConversionOverflow",
       "msg": "Math overflow during liquidity conversion"
     },
     {
-      "code": 6043,
+      "code": 6045,
       "name": "SupplyOverflow",
       "msg": "Math overflow during supply calculation"
     },
     {
-      "code": 6044,
+      "code": 6046,
       "name": "SupplyUnderflow",
       "msg": "Math underflow during supply calculation"
     },
     {
-      "code": 6045,
+      "code": 6047,
       "name": "DebtMathOverflow",
       "msg": "Math overflow during debt calculation"
     },
     {
-      "code": 6046,
+      "code": 6048,
       "name": "DebtShareMathOverflow",
       "msg": "Math overflow during debt share calculation"
     },
     {
-      "code": 6047,
+      "code": 6049,
       "name": "DebtShareDivisionOverflow",
       "msg": "Math overflow during debt share division"
     },
     {
-      "code": 6048,
+      "code": 6050,
       "name": "DebtUtilizationOverflow",
       "msg": "Math overflow during debt utilization calculation"
     },
     {
-      "code": 6049,
+      "code": 6051,
       "name": "InvalidMint",
       "msg": "Invalid mint"
     },
     {
-      "code": 6050,
+      "code": 6052,
       "name": "InvalidMintLen",
       "msg": "Invalid mint length"
     },
     {
-      "code": 6051,
+      "code": 6053,
       "name": "InvalidDistribution",
       "msg": "Invalid distribution - percentages must sum to 100%"
     },
     {
-      "code": 6052,
+      "code": 6054,
       "name": "InvalidAuctionConfig",
       "msg": "Invalid protocol auction config"
     },
     {
-      "code": 6053,
+      "code": 6055,
       "name": "StaleAuctionReference",
       "msg": "Protocol auction reference price is stale"
     },
     {
-      "code": 6054,
+      "code": 6056,
       "name": "InsufficientAuctionPayment",
       "msg": "Protocol auction payment is insufficient"
     },
     {
-      "code": 6055,
+      "code": 6057,
       "name": "InvalidLpMintKey",
       "msg": "Invalid LP mint key"
     },
     {
-      "code": 6056,
+      "code": 6058,
       "name": "InvalidLpName",
       "msg": "Invalid LP name"
     },
     {
-      "code": 6057,
+      "code": 6059,
       "name": "InvalidLpSymbol",
       "msg": "Invalid LP symbol"
     },
     {
-      "code": 6058,
+      "code": 6060,
       "name": "InvalidLpUri",
       "msg": "Invalid LP URI"
     },
     {
-      "code": 6059,
+      "code": 6061,
       "name": "AccountNotEmpty",
       "msg": "Account not empty"
     },
     {
-      "code": 6060,
+      "code": 6062,
       "name": "InvalidMintAuthority",
       "msg": "Invalid mint authority"
     },
     {
-      "code": 6061,
+      "code": 6063,
       "name": "FrozenLpMint",
       "msg": "Frozen LP mint"
     },
     {
-      "code": 6062,
+      "code": 6064,
       "name": "NonZeroSupply",
       "msg": "Non-zero supply"
     },
     {
-      "code": 6063,
+      "code": 6065,
       "name": "WrongLpDecimals",
       "msg": "Wrong LP decimals"
     },
     {
-      "code": 6064,
+      "code": 6066,
       "name": "InvalidVaultSameAccount",
       "msg": "Invalid vault - token_in_vault and token_out_vault must be different"
     },
     {
-      "code": 6065,
+      "code": 6067,
       "name": "InvalidVault",
       "msg": "Invalid vault"
     },
     {
-      "code": 6066,
+      "code": 6068,
       "name": "InvalidParamsHash",
       "msg": "Invalid params hash - hash does not match computed parameters"
     },
     {
-      "code": 6067,
+      "code": 6069,
       "name": "InvalidVersion",
       "msg": "Invalid version"
     },
     {
-      "code": 6068,
+      "code": 6070,
       "name": "InvalidTokenOrder",
       "msg": "Invalid token order"
     },
     {
-      "code": 6069,
+      "code": 6071,
       "name": "InvalidRateModel",
       "msg": "Invalid rate model - rate_model does not match market configuration"
     },
     {
-      "code": 6070,
+      "code": 6072,
       "name": "InvalidPositionMarket",
       "msg": "Invalid position market - position does not match market"
     },
     {
-      "code": 6071,
+      "code": 6073,
       "name": "InvalidUtilBounds",
       "msg": "Invalid utilization bounds - must satisfy: MIN <= start < end <= MAX"
     },
     {
-      "code": 6072,
+      "code": 6074,
       "name": "InvalidRateParams",
       "msg": "Invalid rate parameters - check half_life_ms, min_rate_bps, max_rate_bps, initial_rate_bps bounds"
     },
     {
-      "code": 6073,
+      "code": 6075,
       "name": "ReduceOnlyMode",
       "msg": "Operation blocked: reduce-only mode is active"
     },
     {
-      "code": 6074,
+      "code": 6076,
       "name": "ReduceOnlyHasDebt",
       "msg": "Cannot remove collateral in reduce-only mode while debt exists"
     },
     {
-      "code": 6075,
+      "code": 6077,
       "name": "LiquidityDeltaCircuitBreaker",
       "msg": "Operation blocked: same-transaction liquidity delta detected"
     },
     {
-      "code": 6076,
+      "code": 6078,
       "name": "LiquidityDeltaCircuitBreakerCpi",
       "msg": "Operation blocked: liquidity delta instruction must be top-level"
     },
     {
-      "code": 6077,
+      "code": 6079,
       "name": "InvalidInstructionsSysvar",
       "msg": "Invalid instructions sysvar"
     },
     {
-      "code": 6078,
+      "code": 6080,
       "name": "InsufficientPostWithdrawDebtCoverage",
       "msg": "Insufficient post-withdraw debt coverage"
     },
     {
-      "code": 6079,
+      "code": 6081,
       "name": "InvalidRecipient",
       "msg": "Invalid recipient - address does not match configured revenue recipient"
     },
     {
-      "code": 6080,
+      "code": 6082,
       "name": "InvalidMarket",
       "msg": "Invalid market"
     },
     {
-      "code": 6081,
+      "code": 6083,
       "name": "InvalidMarketConfig",
       "msg": "Invalid market config"
     },
     {
-      "code": 6082,
+      "code": 6084,
       "name": "InvalidSettlementPrice",
       "msg": "Invalid settlement price"
     },
     {
-      "code": 6083,
+      "code": 6085,
       "name": "InsufficientMarketShareBacking",
       "msg": "Market reserve share backing is insufficient"
     },
     {
-      "code": 6084,
+      "code": 6086,
       "name": "InvalidMarketSide",
       "msg": "Invalid market side"
     },
     {
-      "code": 6085,
+      "code": 6087,
       "name": "InvalidYieldAccount",
       "msg": "Invalid yield account"
     },
     {
-      "code": 6086,
+      "code": 6088,
       "name": "InvalidHlpVault",
       "msg": "Invalid hLP vault"
     },
     {
-      "code": 6087,
+      "code": 6089,
       "name": "NotEnoughAccounts",
       "msg": "Not enough remaining accounts"
     },
     {
-      "code": 6088,
+      "code": 6090,
       "name": "HlpSettlementUnavailable",
       "msg": "hLP settlement is unavailable"
     },
     {
-      "code": 6089,
+      "code": 6091,
       "name": "InsufficientBorrowHeadroom",
       "msg": "Borrow headroom is insufficient"
     },
     {
-      "code": 6090,
+      "code": 6092,
       "name": "InsufficientMarketHealth",
       "msg": "Market health is insufficient"
     },
     {
-      "code": 6091,
+      "code": 6093,
       "name": "InvalidMarginPosition",
       "msg": "Invalid margin position"
     },
     {
-      "code": 6092,
+      "code": 6094,
       "name": "InsufficientRecognizedCollateral",
       "msg": "Recognized collateral is insufficient"
     },
     {
-      "code": 6093,
+      "code": 6095,
       "name": "PositionNotLiquidatable",
       "msg": "Position is not liquidatable"
     },
     {
-      "code": 6094,
+      "code": 6096,
       "name": "InsufficientInsurance",
       "msg": "Insurance coverage is insufficient"
     },
     {
-      "code": 6095,
+      "code": 6097,
       "name": "LiquidationSocializationExceeded",
       "msg": "Socialized liquidation loss exceeds caller cap"
     },
     {
-      "code": 6096,
+      "code": 6098,
       "name": "InvalidClaimMint",
       "msg": "Claim mint must not charge transfer fees"
     },
     {
-      "code": 6097,
+      "code": 6099,
       "name": "UnbackedFeeLiability",
       "msg": "Fee liability is not backed by fee vault balance"
     },
     {
-      "code": 6098,
+      "code": 6100,
       "name": "InvalidMarketFeeAuthority",
       "msg": "Invalid market fee authority"
     },
     {
-      "code": 6099,
+      "code": 6101,
       "name": "MarketReduceOnly",
       "msg": "Market is reduce-only"
     },
     {
-      "code": 6100,
+      "code": 6102,
       "name": "MarketNotStarted",
       "msg": "Market has not started"
     },
     {
-      "code": 6101,
+      "code": 6103,
       "name": "MarketMathOverflow",
       "msg": "Market math overflow"
     },
     {
-      "code": 6102,
+      "code": 6104,
       "name": "DailyLimitExceeded",
       "msg": "Daily liquidity limit exceeded"
     },
     {
-      "code": 6103,
+      "code": 6105,
       "name": "MarketRiskCircuitBreaker",
       "msg": "Market risk circuit breaker triggered"
     },
     {
-      "code": 6104,
+      "code": 6106,
       "name": "InstructionNotLive",
       "msg": "Instruction is intentionally not live yet"
     }
@@ -4240,6 +4641,22 @@
           {
             "name": "min_health_bps",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClaimManagerFeesArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "side",
+            "type": {
+              "defined": {
+                "name": "MarketAsset"
+              }
+            }
           }
         ]
       }
@@ -4342,6 +4759,14 @@
             "type": "u128"
           },
           {
+            "name": "base_rate_at_target_nad",
+            "type": "u128"
+          },
+          {
+            "name": "quote_rate_at_target_nad",
+            "type": "u128"
+          },
+          {
             "name": "recognized_base_collateral_for_quote_debt",
             "type": "u64"
           },
@@ -4352,6 +4777,25 @@
           {
             "name": "last_recognition_slot",
             "type": "u64"
+          },
+          {
+            "name": "last_accrual_slot",
+            "type": "u64"
+          },
+          {
+            "name": "fixed_base_principal",
+            "docs": [
+              "Aggregate outstanding *principal* (borrowed token amount, excluding",
+              "accrued interest) backing fixed margin debt on each side. Accrued",
+              "interest is `fixed_*_debt - fixed_*_principal`; tracked so interest can",
+              "be routed to the interest vault (non-compounding) instead of",
+              "compounding into reserves."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "fixed_quote_principal",
+            "type": "u128"
           }
         ]
       }
@@ -4422,7 +4866,11 @@
             "type": "u64"
           },
           {
-            "name": "operator_fee_liability",
+            "name": "manager_swap_fee_liability",
+            "type": "u64"
+          },
+          {
+            "name": "manager_interest_fee_liability",
             "type": "u64"
           }
         ]
@@ -4671,6 +5119,10 @@
           },
           {
             "name": "debt_shares",
+            "type": "u128"
+          },
+          {
+            "name": "debt_principal",
             "type": "u128"
           },
           {
@@ -4986,6 +5438,50 @@
       }
     },
     {
+      "name": "ManagerFeesClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "manager",
+            "type": "pubkey"
+          },
+          {
+            "name": "asset_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "swap_fee_amount",
+            "type": "u64"
+          },
+          {
+            "name": "interest_fee_amount",
+            "type": "u64"
+          },
+          {
+            "name": "remaining_manager_swap_fee_liability",
+            "type": "u64"
+          },
+          {
+            "name": "remaining_manager_interest_fee_liability",
+            "type": "u64"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "MarketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "MarginPosition",
       "type": {
         "kind": "struct",
@@ -5165,6 +5661,34 @@
       }
     },
     {
+      "name": "MarketAuthorityUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "manager",
+            "type": "pubkey"
+          },
+          {
+            "name": "operator",
+            "type": "pubkey"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "MarketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "MarketCollateralDeposited",
       "type": {
         "kind": "struct",
@@ -5258,7 +5782,7 @@
             "type": "u16"
           },
           {
-            "name": "operator_fee_bps",
+            "name": "manager_fee_bps",
             "type": "u16"
           },
           {
@@ -5391,6 +5915,10 @@
           },
           {
             "name": "swap_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "manager_fee_bps",
             "type": "u16"
           },
           {
@@ -5699,7 +6227,7 @@
             "type": "u16"
           },
           {
-            "name": "operator_fee_bps",
+            "name": "manager_fee_bps",
             "type": "u16"
           },
           {
@@ -6312,6 +6840,18 @@
       }
     },
     {
+      "name": "SetManagerArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "new_manager",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
       "name": "SetMarketReduceOnlyArgs",
       "type": {
         "kind": "struct",
@@ -6319,6 +6859,18 @@
           {
             "name": "reduce_only",
             "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SetOperatorArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "new_operator",
+            "type": "pubkey"
           }
         ]
       }
@@ -6902,6 +7454,11 @@
       "name": "MARKET_VERSION",
       "type": "u8",
       "value": "2"
+    },
+    {
+      "name": "MAX_MANAGER_FEE_BPS",
+      "type": "u16",
+      "value": "500"
     },
     {
       "name": "NAD",
