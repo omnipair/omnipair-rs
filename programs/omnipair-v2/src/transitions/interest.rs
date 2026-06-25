@@ -186,4 +186,29 @@ mod tests {
             (NAD as u128) * 110 / 100
         );
     }
+
+    #[test]
+    fn accrual_charges_interest_to_outstanding_debt() {
+        // 800 quote borrowed via base-hLP, 200 idle -> 80% util -> 10% APR / yr.
+        let mut market = test_market(1_000_000, 200);
+        market.base_hlp_vault.debt_shares = 800;
+        let debt_before = Debt::shares_to_debt(
+            market.base_hlp_vault.debt_shares,
+            market.debt.quote_borrow_index_nad,
+        )
+        .unwrap();
+
+        AccrueInterest::new(slots_for_ms(MS_PER_YEAR))
+            .apply(&mut market)
+            .unwrap();
+
+        let debt_after = Debt::shares_to_debt(
+            market.base_hlp_vault.debt_shares,
+            market.debt.quote_borrow_index_nad,
+        )
+        .unwrap();
+        // The borrower's outstanding debt grew by the accrued interest (+10%).
+        assert_eq!(debt_before, 800);
+        assert_eq!(debt_after, 880);
+    }
 }

@@ -1166,6 +1166,28 @@ mod tests {
     }
 
     #[test]
+    fn accrued_interest_grows_hlp_debt_and_reduces_nav() {
+        let mut market = seeded_market();
+        OpenHedge::new(MarketAsset::Base, 100, 1)
+            .apply(&mut market)
+            .unwrap();
+        let debt_before = hlp_debt_value_nad(&market, MarketAsset::Base).unwrap();
+        let nav_before = hlp_nav_nad(&market, MarketAsset::Base).unwrap();
+
+        // Simulate 10% borrow-interest accrual on the quote index. The base-hLP
+        // borrows quote, so its debt grows and its NAV falls one-for-one: this is
+        // how interest is charged to the hedged-LP position.
+        market.debt.quote_borrow_index_nad = (NAD as u128) * 110 / 100;
+
+        let debt_after = hlp_debt_value_nad(&market, MarketAsset::Base).unwrap();
+        let nav_after = hlp_nav_nad(&market, MarketAsset::Base).unwrap();
+        assert_eq!(debt_after, debt_before * 110 / 100);
+        assert_eq!(nav_after, nav_before - (debt_after - debt_before));
+        assert_eq!(debt_after, 110 * NAD as u128);
+        assert_eq!(nav_after, 90 * NAD as u128);
+    }
+
+    #[test]
     fn close_hlp_burns_vault_ylp_and_repays_vault_debt() {
         let mut market = seeded_market();
         let open_receipt = OpenHedge::new(MarketAsset::Base, 100, 1)
