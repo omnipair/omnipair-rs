@@ -1,0 +1,493 @@
+/// forked from raydium-cp-swap
+/// https://github.com/raydium-io/raydium-cp-swap/blob/master/programs/cp-swap/src/utils/token.rs
+/// Handles token transfers and minting with support for old token program and spl_token_2022
+use crate::errors::ErrorCode;
+use anchor_lang::{
+    prelude::*,
+    solana_program::program::{invoke, invoke_signed},
+    system_program,
+};
+use anchor_spl::{
+    token::{self, Token, TokenAccount},
+    token_2022::{
+        self,
+        spl_token_2022::{
+            self,
+            extension::{
+                transfer_fee::{TransferFeeConfig, MAX_FEE_BASIS_POINTS},
+                transfer_hook, ExtensionType, StateWithExtensions,
+            },
+        },
+        Token2022,
+    },
+    token_interface::{
+        initialize_account3, spl_token_2022::extension::BaseStateWithExtensions,
+        InitializeAccount3, Mint,
+    },
+};
+
+/// Syncs native SOL balance for a WSOL token account if the mint is the native mint.
+/// This ensures the token account's `amount` field reflects any native SOL that was
+/// sent directly to the account.
+pub fn sync_native_if_wsol<'a>(
+    mint: &Pubkey,
+    token_account: &AccountInfo<'a>,
+    token_program: &AccountInfo<'a>,
+) -> Result<()> {
+    if *mint == spl_token::native_mint::id() {
+        invoke(
+            &spl_token::instruction::sync_native(token_program.key, token_account.key)?,
+            &[token_program.clone(), token_account.clone()],
+        )?;
+    }
+    Ok(())
+}
+
+pub fn transfer_from_user_to_vault<'a>(
+    authority: AccountInfo<'a>,
+    from: AccountInfo<'a>,
+    to_vault: AccountInfo<'a>,
+    mint: AccountInfo<'a>,
+    token_program: AccountInfo<'a>,
+    amount: u64,
+    mint_decimals: u8,
+) -> Result<()> {
+    if amount == 0 {
+        return Ok(());
+    }
+
+    if *token_program.key == Token2022::id() {
+        token_2022::transfer_checked(
+            CpiContext::new(
+                token_program.to_account_info(),
+                token_2022::TransferChecked {
+                    from,
+                    to: to_vault,
+                    authority,
+                    mint,
+                },
+            ),
+            amount,
+            mint_decimals,
+        )
+    } else {
+        token::transfer_checked(
+            CpiContext::new(
+                token_program.to_account_info(),
+                token::TransferChecked {
+                    from,
+                    to: to_vault,
+                    authority,
+                    mint,
+                },
+            ),
+            amount,
+            mint_decimals,
+        )
+    }
+}
+
+pub fn transfer_from_vault<'a>(
+    authority: AccountInfo<'a>,
+    from_vault: AccountInfo<'a>,
+    to: AccountInfo<'a>,
+    mint: AccountInfo<'a>,
+    token_program: AccountInfo<'a>,
+    amount: u64,
+    mint_decimals: u8,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    if amount == 0 {
+        return Ok(());
+    }
+    if *token_program.key == Token2022::id() {
+        token_2022::transfer_checked(
+            CpiContext::new_with_signer(
+                token_program.to_account_info(),
+                token_2022::TransferChecked {
+                    from: from_vault,
+                    to,
+                    authority,
+                    mint,
+                },
+                signer_seeds,
+            ),
+            amount,
+            mint_decimals,
+        )
+    } else {
+        token::transfer_checked(
+            CpiContext::new_with_signer(
+                token_program.to_account_info(),
+                token::TransferChecked {
+                    from: from_vault,
+                    to,
+                    authority,
+                    mint,
+                },
+                signer_seeds,
+            ),
+            amount,
+            mint_decimals,
+        )
+    }
+}
+
+/// Transfers tokens from one vault account to another vault account.
+///
+/// This function is an explicit alias for `transfer_from_vault`, providing clearer intent for vault-to-vault token movement.
+/// Arguments:
+///   - `authority`: The account authorized to sign for the transfer (typically a PDA).
+///   - `from_vault`: The source token account (vault).
+///   - `to_vault`: The destination token account (vault).
+///   - `mint`: The mint for the token being transferred.
+///   - `token_program`: The token program account (can be SPL Token or Token2022).
+pub fn transfer_from_vault_to_vault<'a>(
+    authority: AccountInfo<'a>,
+    from_vault: AccountInfo<'a>,
+    to_vault: AccountInfo<'a>,
+    mint: AccountInfo<'a>,
+    token_program: AccountInfo<'a>,
+    amount: u64,
+    mint_decimals: u8,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    transfer_from_vault(
+        authority,
+        from_vault,
+        to_vault,
+        mint,
+        token_program.to_account_info(),
+        amount,
+        mint_decimals,
+        signer_seeds,
+    )
+}
+
+/// Transfers tokens from one vault account to a user's token account.
+///
+/// This function is an explicit alias for `transfer_from_vault`, providing clearer intent for vault-to-user token movement.
+/// Arguments:
+///   - `authority`: The account authorized to sign for the transfer (typically a PDA).
+///   - `from_vault`: The source token account (vault).
+///   - `to_vault`: The destination token account (vault).
+///   - `mint`: The mint for the token being transferred.
+///   - `token_program`: The token program account (can be SPL Token or Token2022).
+///   - `amount`: Number of tokens to transfer.
+///   - `mint_decimals`: Decimals for the mint (to support checked instruction).
+///   - `signer_seeds`: Seeds used for PDA authority (for cross-program invocation).
+/// Returns:
+///   - Result containing unit on success or an error on failure.
+pub fn transfer_from_vault_to_user<'a>(
+    authority: AccountInfo<'a>,
+    from_vault: AccountInfo<'a>,
+    to: AccountInfo<'a>,
+    mint: AccountInfo<'a>,
+    token_program: AccountInfo<'a>,
+    amount: u64,
+    mint_decimals: u8,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    transfer_from_vault(
+        authority,
+        from_vault,
+        to,
+        mint,
+        token_program.to_account_info(),
+        amount,
+        mint_decimals,
+        signer_seeds,
+    )
+}
+
+/// Issue a token `MintTo` instruction.
+pub fn token_mint_to<'a>(
+    authority: AccountInfo<'a>,
+    token_program: AccountInfo<'a>,
+    mint: AccountInfo<'a>,
+    destination: AccountInfo<'a>,
+    amount: u64,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    if amount == 0 {
+        return Ok(());
+    }
+    if *token_program.key == Token2022::id() {
+        invoke_signed(
+            &spl_token_2022::instruction::mint_to(
+                token_program.key,
+                mint.key,
+                destination.key,
+                authority.key,
+                &[],
+                amount,
+            )?,
+            &[mint, destination, authority, token_program],
+            signer_seeds,
+        )
+        .map_err(Into::into)
+    } else if *token_program.key == Token::id() {
+        invoke_signed(
+            &spl_token::instruction::mint_to(
+                token_program.key,
+                mint.key,
+                destination.key,
+                authority.key,
+                &[],
+                amount,
+            )?,
+            &[mint, destination, authority, token_program],
+            signer_seeds,
+        )
+        .map_err(Into::into)
+    } else {
+        err!(ErrorCode::InvalidTokenProgram)
+    }
+}
+
+pub fn token_burn<'a>(
+    authority: AccountInfo<'a>,
+    token_program: AccountInfo<'a>,
+    mint: AccountInfo<'a>,
+    from: AccountInfo<'a>,
+    amount: u64,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    if amount == 0 {
+        return Ok(());
+    }
+    if *token_program.key == Token2022::id() {
+        invoke_signed(
+            &spl_token_2022::instruction::burn(
+                token_program.key,
+                from.key,
+                mint.key,
+                authority.key,
+                &[],
+                amount,
+            )?,
+            &[from, mint, authority, token_program],
+            signer_seeds,
+        )
+        .map_err(Into::into)
+    } else if *token_program.key == Token::id() {
+        invoke_signed(
+            &spl_token::instruction::burn(
+                token_program.key,
+                from.key,
+                mint.key,
+                authority.key,
+                &[],
+                amount,
+            )?,
+            &[from, mint, authority, token_program],
+            signer_seeds,
+        )
+        .map_err(Into::into)
+    } else {
+        err!(ErrorCode::InvalidTokenProgram)
+    }
+}
+
+/// Calculate the fee for output amount
+pub fn get_transfer_inverse_fee(mint_info: &AccountInfo, post_fee_amount: u64) -> Result<u64> {
+    if *mint_info.owner == Token::id() {
+        return Ok(0);
+    }
+    if post_fee_amount == 0 {
+        return err!(ErrorCode::AmountZero);
+    }
+    let mint_data = mint_info.try_borrow_data()?;
+    let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
+
+    let fee = if let Ok(transfer_fee_config) = mint.get_extension::<TransferFeeConfig>() {
+        let epoch = Clock::get()?.epoch;
+
+        let transfer_fee = transfer_fee_config.get_epoch_fee(epoch);
+        if u16::from(transfer_fee.transfer_fee_basis_points) == MAX_FEE_BASIS_POINTS {
+            u64::from(transfer_fee.maximum_fee)
+        } else {
+            transfer_fee_config
+                .calculate_inverse_epoch_fee(epoch, post_fee_amount)
+                .ok_or(ErrorCode::MarketMathOverflow)?
+        }
+    } else {
+        0
+    };
+    Ok(fee)
+}
+
+/// Calculate the fee for input amount
+pub fn get_transfer_fee(mint_info: &AccountInfo, pre_fee_amount: u64) -> Result<u64> {
+    if *mint_info.owner == Token::id() {
+        return Ok(0);
+    }
+    let mint_data = mint_info.try_borrow_data()?;
+    let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
+
+    let fee = if let Ok(transfer_fee_config) = mint.get_extension::<TransferFeeConfig>() {
+        transfer_fee_config
+            .calculate_epoch_fee(Clock::get()?.epoch, pre_fee_amount)
+            .ok_or(ErrorCode::MarketMathOverflow)?
+    } else {
+        0
+    };
+    Ok(fee)
+}
+
+pub fn is_supported_mint(mint_account: &InterfaceAccount<Mint>) -> Result<bool> {
+    let mint_info = mint_account.to_account_info();
+    if *mint_info.owner == Token::id() {
+        return Ok(true);
+    }
+
+    let mint_data = mint_info.try_borrow_data()?;
+    let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
+    let extensions = mint.get_extension_types()?;
+    for e in extensions {
+        if e != ExtensionType::TransferFeeConfig
+            && e != ExtensionType::MetadataPointer
+            && e != ExtensionType::TokenMetadata
+            && e != ExtensionType::TransferHook
+        {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+pub fn is_fee_free_mint(mint_account: &InterfaceAccount<Mint>) -> Result<bool> {
+    let mint_info = mint_account.to_account_info();
+    if *mint_info.owner == Token::id() {
+        return Ok(true);
+    }
+
+    let mint_data = mint_info.try_borrow_data()?;
+    let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
+    let extensions = mint.get_extension_types()?;
+    for e in extensions {
+        if e == ExtensionType::TransferFeeConfig {
+            return Ok(false);
+        }
+        if e != ExtensionType::MetadataPointer
+            && e != ExtensionType::TokenMetadata
+            && e != ExtensionType::TransferHook
+        {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+pub fn is_token_2022_mint(mint_account: &InterfaceAccount<Mint>) -> Result<bool> {
+    Ok(*mint_account.to_account_info().owner == token_2022::Token2022::id())
+}
+
+pub fn transfer_hook_program_id(mint_account: &InterfaceAccount<Mint>) -> Result<Option<Pubkey>> {
+    let mint_info = mint_account.to_account_info();
+    if *mint_info.owner != token_2022::Token2022::id() {
+        return Ok(None);
+    }
+
+    let mint_data = mint_info.try_borrow_data()?;
+    let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
+    Ok(transfer_hook::get_program_id(&mint))
+}
+
+pub fn create_token_account<'a>(
+    authority: &AccountInfo<'a>,
+    payer: &AccountInfo<'a>,
+    token_account: &AccountInfo<'a>,
+    mint_account: &AccountInfo<'a>,
+    system_program: &AccountInfo<'a>,
+    token_program: &AccountInfo<'a>,
+    signer_seeds: &[&[u8]],
+) -> Result<()> {
+    let space = {
+        let mint_info = mint_account.to_account_info();
+        if *mint_info.owner == token_2022::Token2022::id() {
+            let mint_data = mint_info.try_borrow_data()?;
+            let mint_state =
+                StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
+            let mint_extensions = mint_state.get_extension_types()?;
+            let required_extensions =
+                ExtensionType::get_required_init_account_extensions(&mint_extensions);
+            ExtensionType::try_calculate_account_len::<spl_token_2022::state::Account>(
+                &required_extensions,
+            )?
+        } else {
+            TokenAccount::LEN
+        }
+    };
+    create_or_allocate_account(
+        token_program.key,
+        payer.to_account_info(),
+        system_program.to_account_info(),
+        token_account.to_account_info(),
+        signer_seeds,
+        space,
+    )?;
+    initialize_account3(CpiContext::new(
+        token_program.to_account_info(),
+        InitializeAccount3 {
+            account: token_account.to_account_info(),
+            mint: mint_account.to_account_info(),
+            authority: authority.to_account_info(),
+        },
+    ))
+}
+
+pub fn create_or_allocate_account<'a>(
+    program_id: &Pubkey,
+    payer: AccountInfo<'a>,
+    system_program: AccountInfo<'a>,
+    target_account: AccountInfo<'a>,
+    siger_seed: &[&[u8]],
+    space: usize,
+) -> Result<()> {
+    let rent = Rent::get()?;
+    let current_lamports = target_account.lamports();
+
+    if current_lamports == 0 {
+        let lamports = rent.minimum_balance(space);
+        let cpi_accounts = system_program::CreateAccount {
+            from: payer,
+            to: target_account.clone(),
+        };
+        let cpi_context = CpiContext::new(system_program.clone(), cpi_accounts);
+        system_program::create_account(
+            cpi_context.with_signer(&[siger_seed]),
+            lamports,
+            u64::try_from(space).map_err(|_| ErrorCode::MarketMathOverflow)?,
+            program_id,
+        )?;
+    } else {
+        let required_lamports = rent
+            .minimum_balance(space)
+            .max(1)
+            .saturating_sub(current_lamports);
+        if required_lamports > 0 {
+            let cpi_accounts = system_program::Transfer {
+                from: payer.to_account_info(),
+                to: target_account.clone(),
+            };
+            let cpi_context = CpiContext::new(system_program.clone(), cpi_accounts);
+            system_program::transfer(cpi_context, required_lamports)?;
+        }
+        let cpi_accounts = system_program::Allocate {
+            account_to_allocate: target_account.clone(),
+        };
+        let cpi_context = CpiContext::new(system_program.clone(), cpi_accounts);
+        system_program::allocate(
+            cpi_context.with_signer(&[siger_seed]),
+            u64::try_from(space).map_err(|_| ErrorCode::MarketMathOverflow)?,
+        )?;
+
+        let cpi_accounts = system_program::Assign {
+            account_to_assign: target_account.clone(),
+        };
+        let cpi_context = CpiContext::new(system_program.clone(), cpi_accounts);
+        system_program::assign(cpi_context.with_signer(&[siger_seed]), program_id)?;
+    }
+    Ok(())
+}

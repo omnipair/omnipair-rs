@@ -10,7 +10,30 @@ Lending is **isolated** per pair (each pool’s risk is contained), and **bad de
 
 Beyond the AMM invariant *xy* = *k*, Omnipair enforces a **lending solvency invariant**: virtual reserves = cash + debt (`R_virtual = R_cash + R_debt`) with `R_cash ≥ 0`, and every state change obeys `ΔR_virtual = ΔR_cash + ΔR_debt`. See the [Docs](https://docs.omnipair.fi/technical-breakdown/overview) for reserve types, Impact-aware collateral factor and how liquidation works.
 
-### Key Features
+## Program Generations
+
+This repository now contains two Omnipair program generations:
+
+- `programs/omnipair`: legacy V1 GAMM pair program. Existing pair accounts, instruction names, and integrations remain compatible.
+- `programs/omnipair-v2`: standalone V2 market architecture program with market accounts, claim-token (`omLP`) liquidity, hedge-token (`h-omLP`) wrappers, fixed debt, market health, insurance, and V2-specific events/IDL.
+
+V2 review and integration entry points:
+
+- [V2_PR_BODY.md](V2_PR_BODY.md): pasteable PR summary, verification summary,
+  review notes, and remaining production gates.
+- [V2_PR_REVIEW_GUIDE.md](V2_PR_REVIEW_GUIDE.md): recommended review order,
+  commit grouping, verification gates, and production gates for the V2 branch.
+- [V2_ARCHITECTURE_PLAN.md](V2_ARCHITECTURE_PLAN.md): current architecture
+  status, standalone-program rationale, naming direction, and implementation
+  phase status.
+- [programs/omnipair-v2/README.md](programs/omnipair-v2/README.md): architecture, invariants, integrator handoff, and verification gates.
+- [programs/omnipair-v2/RELEASE_CHECKLIST.md](programs/omnipair-v2/RELEASE_CHECKLIST.md): security, artifact, deployment, and post-deploy checklist.
+- [programs/omnipair-v2/SIGNOFF_CHECKLIST.md](programs/omnipair-v2/SIGNOFF_CHECKLIST.md): owner signoff register for security, app, SDK, indexing, analytics, aggregators, and deployment.
+- [packages/program-interface/README.md](packages/program-interface/README.md): V1/V2 TypeScript IDL, type, and PDA helper usage.
+- [decoders/omnipair-decoder/README.md](decoders/omnipair-decoder/README.md): Carbon decoder usage for legacy V1 and standalone V2.
+- [tests/README.md](tests/README.md): LiteSVM smoke coverage and V2 test flow notes.
+
+### Legacy V1 Key Features
 
 - **Unified Liquidity** - LP deposits serve as both AMM reserves and lending supply, maximizing capital efficiency
 - **Isolated Lending** - Risk is isolated per pair; each pool’s borrows and collateral are independent of other pairs
@@ -20,6 +43,15 @@ Beyond the AMM invariant *xy* = *k*, Omnipair enforces a **lending solvency inva
 - **Flash Loans** - Uncollateralized loans within a single transaction (0.05% fee)
 - **Interest Rate Model** - Adaptive rates based on utilization with configurable target ranges
 - **Liquidation Engine** - Partial liquidations with 3% penalty (0.5% to liquidator, 2.5% to LPs)
+
+### V2 Key Changes
+
+- **Standalone market program** - V2 has its own program ID, IDL, accounts, events, and SDK helpers.
+- **Fixed-principal claim tokens** - LP principal is represented by 1:1 `omLP` claim tokens; fees do not rebase or compound into claim-token exchange rates.
+- **Matched staking for fees** - Fee rights require staking claim tokens with matched junior buffer shares.
+- **Recognized-collateral health** - Borrow health uses debt-bearing recognized collateral, not idle collateral balances.
+- **Cached EMA risk books** - Risk checks roll EMA values from cached observations to avoid same-instruction spot manipulation.
+- **Insurance and hedge overlays** - V2 adds insurance reserves and `h-omLP` claim-token wrappers without giving hedge tokens staking rights.
 
 ### How It Works
 
@@ -68,9 +100,13 @@ Beyond the AMM invariant *xy* = *k*, Omnipair enforces a **lending solvency inva
 
 ### Audits
 
-Omnipair has been audited by:
+Legacy Omnipair V1 code and shared protocol components have been audited by:
 - **Offside Labs**
 - **Ackee**
+
+V2 is a standalone market program and needs a fresh final security review before
+it is treated as production-ready. Track that release gate in
+[programs/omnipair-v2/SIGNOFF_CHECKLIST.md](programs/omnipair-v2/SIGNOFF_CHECKLIST.md).
 
 See [security policy](https://omnipair.fi/security) for details.
 
@@ -78,10 +114,12 @@ See [security policy](https://omnipair.fi/security) for details.
 
 ## Program Addresses
 
-| Network | Program ID |
-|---------|------------|
-| Mainnet | `omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE` |
-| Devnet | `omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE` |
+| Program | Network | Program ID |
+|---------|---------|------------|
+| Omnipair V1 | Mainnet | `omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE` |
+| Omnipair V1 | Devnet | `omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE` |
+| Omnipair V2 | Mainnet | `358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv` |
+| Omnipair V2 | Devnet | `358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv` |
 
 ## Quick Start
 
@@ -152,7 +190,7 @@ This project uses automated CI/CD with GitHub Actions for releases and program u
 │                        AUTOMATIC (PR Merge)                         │
 ├─────────────────────────────────────────────────────────────────────┤
 │  1. Version Bump      →  Based on conventional commits              │
-│  2. Verifiable Build  →  anchor build --verifiable --features prod  │
+│  2. Verifiable Build  →  production-feature Anchor build             │
 │  3. Create Release    →  GitHub release with .so and IDL artifacts  │
 └─────────────────────────────────────────────────────────────────────┘
                                    │
@@ -160,7 +198,7 @@ This project uses automated CI/CD with GitHub Actions for releases and program u
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    MANUAL: Deploy Buffer (~8 SOL)                   │
 ├─────────────────────────────────────────────────────────────────────┤
-│  4. Download from Release  →  Gets omnipair.so from GitHub          │
+│  4. Download from Release  →  Gets omnipair*.so from GitHub         │
 │  5. Deploy Buffer          →  solana program write-buffer           │
 │  6. Transfer to Squads     →  Buffer authority → multisig           │
 └─────────────────────────────────────────────────────────────────────┘
@@ -200,11 +238,10 @@ Version bumps are automatic based on commit messages:
 |----------|---------|---------|
 | `release-build.yaml` | PR merge / Manual | Build, release, deploy, verify, publish |
 | `anchor-buffer.yaml` | Manual | Standalone buffer deployment (edge cases) |
-| `verify-build.yaml` | Manual | Verify on-chain program against source |
 
 ### Manual Workflow Triggers
 
-All manual triggers: **Actions → release-build → Run workflow**
+Release, deploy, verify, and publish triggers: **Actions → release-build → Run workflow**
 
 | Input | Purpose |
 |-------|---------|
@@ -213,6 +250,9 @@ All manual triggers: **Actions → release-build → Run workflow**
 | `deploy_buffer` ✅ | Deploy buffer to Solana mainnet (~8 SOL) |
 | `verify_only` ✅ | Only verify on-chain program |
 | `publish_packages` ✅ | Verify + publish npm/crates.io |
+| `program` | Select V1 or V2 for manual deploy/verify jobs |
+
+Standalone buffer redeploys use **Actions → Manual Buffer Deploy → Run workflow**.
 
 **Typical Upgrade Flow:**
 ```
@@ -226,6 +266,7 @@ All manual triggers: **Actions → release-build → Run workflow**
 ```
 Actions → Manual Buffer Deploy → Run workflow
   ├── source: release (from GitHub release)
+  ├── program: v1 or v2
   └── release_tag: v0.4.0 (optional, defaults to latest)
 ```
 
@@ -247,6 +288,12 @@ anchor build --verifiable -p omnipair \
   -e GIT_REV=$GIT_REV \
   -e GIT_RELEASE=$GIT_RELEASE \
   -- --features "production"
+
+# Build V2 verifiable
+anchor build --verifiable -p omnipair-v2 \
+  -e GIT_REV=$GIT_REV \
+  -e GIT_RELEASE=$GIT_RELEASE \
+  -- --features "production"
 ```
 
 ### Verify On-Chain Program
@@ -255,25 +302,50 @@ anchor build --verifiable -p omnipair \
 # Install solana-verify
 cargo install solana-verify
 
+COMMIT_SHA=<COMMIT_SHA>
+RELEASE_TAG=<RELEASE_TAG>
+
 # Verify from repository
 solana-verify verify-from-repo \
-  --remote \
+  --skip-prompt \
+  --base-image solanafoundation/anchor:v0.31.1 \
   --program-id omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE \
   https://github.com/omnipair/omnipair-rs \
-  --commit-hash <COMMIT_SHA> \
+  --commit-hash "$COMMIT_SHA" \
   --library-name omnipair \
-  --bpf-flag "features=production"
+  -u mainnet-beta \
+  -- --features production \
+     --config "env.GIT_REV=\"$COMMIT_SHA\"" \
+     --config "env.GIT_RELEASE=\"$RELEASE_TAG\""
+
+# Verify V2 from repository
+solana-verify verify-from-repo \
+  --skip-prompt \
+  --base-image solanafoundation/anchor:v0.31.1 \
+  --program-id 358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv \
+  https://github.com/omnipair/omnipair-rs \
+  --commit-hash "$COMMIT_SHA" \
+  --library-name omnipair_v2 \
+  -u mainnet-beta \
+  -- --features production \
+     --config "env.GIT_REV=\"$COMMIT_SHA\"" \
+     --config "env.GIT_RELEASE=\"$RELEASE_TAG\""
 ```
 
 ### Submit to OtterSec Registry
 
 ```bash
+SQUADS_VAULT=<SQUADS_VAULT_ADDRESS>
+
+# Export the verification PDA transaction, submit it through Squads, then:
 solana-verify remote submit-job \
   --program-id omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE \
-  https://github.com/omnipair/omnipair-rs \
-  --commit-hash <COMMIT_SHA> \
-  --library-name omnipair \
-  --bpf-flag "features=production"
+  --uploader "$SQUADS_VAULT"
+
+# Submit V2 to OtterSec Registry
+solana-verify remote submit-job \
+  --program-id 358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv \
+  --uploader "$SQUADS_VAULT"
 ```
 
 ---
@@ -295,39 +367,58 @@ The program upgrade authority is a Squads multisig. Upgrades require team approv
 If you need to upgrade manually:
 
 ```bash
-# 1. Build verifiable binary
+# 1. Pick program generation
+# V1:
+PROGRAM_CRATE=omnipair
+PROGRAM_LIBRARY=omnipair
+PROGRAM_SO=omnipair.so
+PROGRAM_ID=omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE
+
+# V2:
+# PROGRAM_CRATE=omnipair-v2
+# PROGRAM_LIBRARY=omnipair_v2
+# PROGRAM_SO=omnipair_v2.so
+# PROGRAM_ID=358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv
+
+# 2. Build verifiable binary
 export GIT_REV=$(git rev-parse HEAD)
-export GIT_RELEASE=$(git describe --tags)
-anchor build --verifiable -p omnipair \
+export GIT_RELEASE=$(git describe --tags --abbrev=0 2>/dev/null || echo "dev")
+anchor build --verifiable -p $PROGRAM_CRATE \
   -e GIT_REV=$GIT_REV \
   -e GIT_RELEASE=$GIT_RELEASE \
   -- --features "production"
 
-# 2. Deploy buffer
+# 3. Deploy buffer
 solana program write-buffer \
   --keypair deployer-keypair.json \
-  target/verifiable/omnipair.so \
+  target/verifiable/$PROGRAM_SO \
   -u mainnet-beta
 
-# 3. Transfer authority to Squads vault
+# 4. Transfer authority to Squads vault
 solana program set-buffer-authority <BUFFER_ADDRESS> \
   --new-buffer-authority <SQUADS_VAULT_ADDRESS> \
   --keypair deployer-keypair.json \
   -u mainnet-beta
 
-# 4. Create upgrade proposal on Squads UI
+# 5. Create upgrade proposal on Squads UI
 # https://app.squads.so/squads/<MULTISIG_ADDRESS>/developer/programs/<PROGRAM_ID>
 
-# 5. Team signs and executes
+# 6. Team signs and executes
 
-# 6. Verify
+# 7. Verify
+COMMIT_SHA=$(git rev-parse HEAD)
+RELEASE_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "dev")
 solana-verify verify-from-repo \
-  --remote \
-  -um \
-  --program-id <PROGRAM_ID> \
+  --skip-prompt \
+  --base-image solanafoundation/anchor:v0.31.1 \
+  --program-id $PROGRAM_ID \
   https://github.com/omnipair/omnipair-rs \
-  --library-name omnipair \
-  --bpf-flag "features=production"
+  --commit-hash "$COMMIT_SHA" \
+  --library-name $PROGRAM_LIBRARY \
+  -u mainnet-beta \
+  -- --features production \
+     --config "env.GIT_REV=\"$COMMIT_SHA\"" \
+     --config "env.GIT_RELEASE=\"$RELEASE_TAG\""
 ```
 
 ### Extend Program Size (if needed)
@@ -336,10 +427,10 @@ If the new binary is larger than allocated space:
 
 ```bash
 # Check current size
-solana program show omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE
+solana program show <PROGRAM_ID>
 
 # Extend (requires upgrade authority - do via Squads)
-solana program extend omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE <ADDITIONAL_BYTES>
+solana program extend <PROGRAM_ID> <ADDITIONAL_BYTES>
 ```
 
 ---
@@ -363,7 +454,7 @@ solana program extend omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE <ADDITIONAL_BY
 | `SQUADS_VAULT_ADDRESS` | Squads vault PDA (buffer authority recipient) |
 | `MAINNET_RPC_URL` | (Optional) Custom RPC URL |
 
-> **Note:** `PROGRAM_ID` is automatically extracted from `programs/omnipair/src/lib.rs` (`declare_id!` macro).
+> **Note:** CI extracts the selected program ID from the matching `declare_id!` macro: `programs/omnipair/src/lib.rs` for V1 and `programs/omnipair-v2/src/lib.rs` for V2.
 
 ### Finding Squads Vault Address
 
@@ -384,12 +475,15 @@ console.log("Vault:", vault.toBase58());
 ```
 omnipair-rs/
 ├── programs/
-│   └── omnipair/           # Main program
+│   ├── omnipair/           # Legacy V1 pair program
+│   │   ├── src/
+│   │   │   ├── lib.rs
+│   │   │   ├── instructions/
+│   │   │   ├── state/
+│   │   │   └── utils/
+│   │   └── Cargo.toml
+│   └── omnipair-v2/        # Standalone V2 market program
 │       ├── src/
-│       │   ├── lib.rs
-│       │   ├── instructions/
-│       │   ├── state/
-│       │   └── utils/
 │       └── Cargo.toml
 ├── scripts/                # TypeScript helper scripts
 ├── tests/                  # Integration tests

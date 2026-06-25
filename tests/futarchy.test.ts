@@ -25,7 +25,7 @@ describe("Omnipair Program - Futarchy Authority Tests", () => {
   let program;
   let payer;
 
-  const OMNIPAIR_PROGRAM_ID = new PublicKey("Bd9Uhf5S8yzfop8cG9oqRs6jVcLtu8B4cb2gvRmtbNzk");
+  const OMNIPAIR_PROGRAM_ID = new PublicKey("omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE");
 
   before(async () => {
     svm = new LiteSVM();

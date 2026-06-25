@@ -39,6 +39,13 @@ on:
         description: 'Publish npm & crates.io packages (run after upgrade is live)'
         type: boolean
         default: false
+      program:
+        description: 'Program for manual deploy/verify jobs'
+        type: choice
+        options:
+          - v1
+          - v2
+        default: v1
 
 env:
   ANCHOR_VERSION: '0.31.1'
@@ -101,12 +108,12 @@ jobs:
               fi
             fi
           else
-            # PR merge - skip release if no program changes (we build/release from programs/omnipair/)
-            echo "Checking for changes in programs/omnipair/..."
+            # PR merge - skip release if no program changes.
+            echo "Checking for changes in Omnipair program crates..."
             CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} 2>/dev/null || true)
-            PROGRAM_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^programs/omnipair/' || true)
+            PROGRAM_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^(programs/omnipair/|programs/omnipair-v2/)' || true)
             if [ -z "$PROGRAM_CHANGED" ]; then
-              echo "No changes in programs/omnipair/ - skipping release (no new program binary)"
+              echo "No changes in Omnipair program crates - skipping release (no new program binary)"
               SHOULD_RELEASE="false"
             fi
             
@@ -196,10 +203,16 @@ jobs:
           token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Extract Program ID from source
+        id: program-ids
         run: |
           PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+          PROGRAM_ID_V2=$(grep 'declare_id!' programs/omnipair-v2/src/lib.rs | sed 's/declare_id!("//;s/");$//')
           echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
+          echo "PROGRAM_ID_V2=$PROGRAM_ID_V2" >> $GITHUB_ENV
+          echo "program_id=$PROGRAM_ID" >> $GITHUB_OUTPUT
+          echo "program_id_v2=$PROGRAM_ID_V2" >> $GITHUB_OUTPUT
           echo "Extracted Program ID: $PROGRAM_ID"
+          echo "Extracted V2 Program ID: $PROGRAM_ID_V2"
 
       - name: Bump version in Cargo.toml
         id: bump-version
@@ -209,6 +222,7 @@ jobs:
           
           # Update omnipair Cargo.toml
           sed -i "s/^version = \".*\"/version = \"$VERSION\"/" programs/omnipair/Cargo.toml
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" programs/omnipair-v2/Cargo.toml
           
           # Update package.json if exists
           if [ -f "packages/program-interface/package.json" ]; then
@@ -218,7 +232,7 @@ jobs:
           # Commit version bump
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add programs/omnipair/Cargo.toml packages/program-interface/package.json 2>/dev/null || true
+          git add programs/omnipair/Cargo.toml programs/omnipair-v2/Cargo.toml packages/program-interface/package.json 2>/dev/null || true
           git commit -m "chore: bump version to $VERSION [skip ci]" || echo "No changes to commit"
           git push origin HEAD:main
           
@@ -250,6 +264,10 @@ jobs:
             -e GIT_REV=${{ steps.bump-version.outputs.sha }} \
             -e GIT_RELEASE=${{ needs.prepare-release.outputs.tag }} \
             -- --features "production"
+          anchor build --verifiable -p omnipair-v2 \
+            -e GIT_REV=${{ steps.bump-version.outputs.sha }} \
+            -e GIT_RELEASE=${{ needs.prepare-release.outputs.tag }} \
+            -- --features "production"
 
       - name: List build artifacts
         run: |
@@ -257,11 +275,38 @@ jobs:
           ls -la target/verifiable/ || echo "target/verifiable does not exist"
           ls -la target/idl/ || echo "target/idl does not exist"
 
-      - name: Verify security.txt
+      - name: Verify release artifacts
         run: |
-          echo "Checking security.txt in binary..."
-          SO_FILE=$(find target -name "omnipair.so" | head -1)
-          strings "$SO_FILE" | grep -E "(source_release|source_revision)" || true
+          echo "Checking required release artifacts..."
+          for artifact in \
+            target/verifiable/omnipair.so \
+            target/verifiable/omnipair_v2.so \
+            target/idl/omnipair.json \
+            target/idl/omnipair_v2.json \
+            target/types/omnipair.ts \
+            target/types/omnipair_v2.ts
+          do
+            if [ ! -f "$artifact" ]; then
+              echo "Missing required release artifact: $artifact"
+              exit 1
+            fi
+            echo "Found required release artifact: $artifact"
+          done
+
+          echo "Checking security.txt metadata in verifiable binaries..."
+          for binary in \
+            target/verifiable/omnipair.so \
+            target/verifiable/omnipair_v2.so
+          do
+            for field in source_release source_revision
+            do
+              if ! strings "$binary" | grep -q "$field"; then
+                echo "Missing security.txt field '$field' in $binary"
+                exit 1
+              fi
+              echo "Found security.txt field '$field' in $binary"
+            done
+          done
 
       - name: Create and push tag
         run: |
@@ -276,8 +321,12 @@ jobs:
           name: omnipair-build-${{ needs.prepare-release.outputs.tag }}
           path: |
             target/verifiable/omnipair.so
+            target/verifiable/omnipair_v2.so
             target/idl/omnipair.json
+            target/idl/omnipair_v2.json
             target/types/omnipair.ts
+            target/types/omnipair_v2.ts
+          if-no-files-found: error
           retention-days: 90
 
       - name: Create GitHub Release
@@ -301,16 +350,31 @@ jobs:
             ```bash
             solana-verify verify-from-repo \
               --remote \
-              --program-id ${{ env.PROGRAM_ID }} \
+              --program-id ${{ steps.program-ids.outputs.program_id }} \
               https://github.com/${{ github.repository }} \
               --commit-hash ${{ steps.bump-version.outputs.sha }} \
               --library-name omnipair \
-              -- --features production
+              -- --features production \
+                 --config "env.GIT_REV=\"${{ steps.bump-version.outputs.sha }}\"" \
+                 --config "env.GIT_RELEASE=\"${{ needs.prepare-release.outputs.tag }}\""
+
+            solana-verify verify-from-repo \
+              --remote \
+              --program-id ${{ steps.program-ids.outputs.program_id_v2 }} \
+              https://github.com/${{ github.repository }} \
+              --commit-hash ${{ steps.bump-version.outputs.sha }} \
+              --library-name omnipair_v2 \
+              -- --features production \
+                 --config "env.GIT_REV=\"${{ steps.bump-version.outputs.sha }}\"" \
+                 --config "env.GIT_RELEASE=\"${{ needs.prepare-release.outputs.tag }}\""
             ```
           files: |
             target/verifiable/omnipair.so
+            target/verifiable/omnipair_v2.so
             target/idl/omnipair.json
+            target/idl/omnipair_v2.json
             target/types/omnipair.ts
+            target/types/omnipair_v2.ts
           generate_release_notes: true
           make_latest: true
 
@@ -330,9 +394,21 @@ jobs:
 
       - name: Extract Program ID from source
         run: |
-          PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+          PROGRAM_CHOICE="${{ github.event.inputs.program || 'v1' }}"
+          if [ "$PROGRAM_CHOICE" = "v2" ]; then
+            PROGRAM_ID=$(grep 'declare_id!' programs/omnipair-v2/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+            PROGRAM_LIBRARY="omnipair_v2"
+            PROGRAM_SO="omnipair_v2.so"
+          else
+            PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+            PROGRAM_LIBRARY="omnipair"
+            PROGRAM_SO="omnipair.so"
+          fi
           echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
+          echo "PROGRAM_LIBRARY=$PROGRAM_LIBRARY" >> $GITHUB_ENV
+          echo "PROGRAM_SO=$PROGRAM_SO" >> $GITHUB_ENV
           echo "Extracted Program ID: $PROGRAM_ID"
+          echo "Selected program: $PROGRAM_LIBRARY"
 
       - name: Get latest release info
         id: release-info
@@ -361,7 +437,7 @@ jobs:
         run: |
           mkdir -p ./artifacts
           gh release download ${{ steps.release-info.outputs.tag }} \
-            --pattern "omnipair.so" \
+            --pattern "$PROGRAM_SO" \
             --dir ./artifacts
         env:
           GH_TOKEN: ${{ github.token }}
@@ -369,9 +445,9 @@ jobs:
       - name: Locate binary
         id: locate
         run: |
-          SO_FILE=$(find ./artifacts -name "omnipair.so" | head -1)
+          SO_FILE=$(find ./artifacts -name "$PROGRAM_SO" | head -1)
           if [ -z "$SO_FILE" ]; then
-            echo "Error: omnipair.so not found in release"
+            echo "Error: $PROGRAM_SO not found in release"
             ls -laR ./artifacts/
             exit 1
           fi
@@ -450,7 +526,6 @@ jobs:
       - name: Output upgrade instructions
         run: |
           BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
-          PROGRAM_ID="${{ env.PROGRAM_ID }}"
           SQUADS_MULTISIG="${{ vars.SQUADS_MULTISIG_ADDRESS }}"
           
           echo "============================================"
@@ -495,9 +570,21 @@ jobs:
 
       - name: Extract Program ID from source
         run: |
-          PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+          PROGRAM_CHOICE="${{ github.event.inputs.program || 'v1' }}"
+          if [ "$PROGRAM_CHOICE" = "v2" ]; then
+            PROGRAM_ID=$(grep 'declare_id!' programs/omnipair-v2/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+            PROGRAM_LIBRARY="omnipair_v2"
+            PROGRAM_IDL="omnipair_v2.json"
+          else
+            PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+            PROGRAM_LIBRARY="omnipair"
+            PROGRAM_IDL="omnipair.json"
+          fi
           echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
+          echo "PROGRAM_LIBRARY=$PROGRAM_LIBRARY" >> $GITHUB_ENV
+          echo "PROGRAM_IDL=$PROGRAM_IDL" >> $GITHUB_ENV
           echo "Extracted Program ID: $PROGRAM_ID"
+          echo "Selected program: $PROGRAM_LIBRARY"
 
       - name: Get verification parameters
         id: params
@@ -520,7 +607,6 @@ jobs:
         id: check-verified
         run: |
           # Check OtterSec API for existing verification (no dependencies needed, just curl)
-          PROGRAM_ID="${{ env.PROGRAM_ID }}"
           RESPONSE=$(curl -s "https://verify.osec.io/status/${PROGRAM_ID}" || echo "{}")
           
           if echo "$RESPONSE" | grep -q '"is_verified":true'; then
@@ -581,10 +667,10 @@ jobs:
           solana-verify verify-from-repo \
             --skip-prompt \
             --base-image solanafoundation/anchor:v0.31.1 \
-            --program-id ${{ env.PROGRAM_ID }} \
+            --program-id "$PROGRAM_ID" \
             https://github.com/${{ github.repository }} \
             --commit-hash "$COMMIT_HASH" \
-            --library-name omnipair \
+            --library-name "$PROGRAM_LIBRARY" \
             -u "$RPC_URL" \
             -- --features production \
                --config "env.GIT_REV=\"${COMMIT_HASH}\"" \
@@ -609,7 +695,7 @@ jobs:
           fi
           
           echo "Exporting PDA transaction for OtterSec verification..."
-          echo "Program ID: ${{ env.PROGRAM_ID }}"
+          echo "Program ID: $PROGRAM_ID"
           echo "Uploader (Squads Vault): $SQUADS_VAULT"
           echo "Commit: $COMMIT_HASH"
           echo "Version: $VERSION"
@@ -618,10 +704,10 @@ jobs:
           PDA_TX=$(solana-verify export-pda-tx \
             https://github.com/${{ github.repository }} \
             --base-image solanafoundation/anchor:v0.31.1 \
-            --program-id ${{ env.PROGRAM_ID }} \
+            --program-id "$PROGRAM_ID" \
             --uploader "$SQUADS_VAULT" \
             --commit-hash "$COMMIT_HASH" \
-            --library-name omnipair \
+            --library-name "$PROGRAM_LIBRARY" \
             --encoding base58 \
             -- --features production \
                --config "env.GIT_REV=\"${COMMIT_HASH}\"" \
@@ -645,7 +731,7 @@ jobs:
           echo "4. After approval, run:"
           echo ""
           echo "   solana-verify remote submit-job \\"
-          echo "     --program-id ${{ env.PROGRAM_ID }} \\"
+          echo "     --program-id $PROGRAM_ID \\"
           echo "     --uploader $SQUADS_VAULT"
           echo ""
           echo "=================================================="
@@ -662,7 +748,7 @@ jobs:
           echo "### After Squads Approval" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "solana-verify remote submit-job --program-id ${{ env.PROGRAM_ID }} --uploader $SQUADS_VAULT" >> $GITHUB_STEP_SUMMARY
+          echo "solana-verify remote submit-job --program-id $PROGRAM_ID --uploader $SQUADS_VAULT" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
       
       - name: Install Anchor CLI
@@ -675,7 +761,7 @@ jobs:
         run: |
           mkdir -p target/idl
           gh release download ${{ steps.params.outputs.tag }} \
-            --pattern "omnipair.json" \
+            --pattern "$PROGRAM_IDL" \
             --dir target/idl
         env:
           GH_TOKEN: ${{ github.token }}
@@ -688,17 +774,17 @@ jobs:
             RPC_URL="https://api.mainnet-beta.solana.com"
           fi
 
-          echo "Publishing IDL on-chain for ${{ env.PROGRAM_ID }}..."
+          echo "Publishing IDL on-chain for $PROGRAM_ID..."
 
           # Try upgrade first (IDL account already exists), fall back to init
           anchor idl upgrade \
             --provider.cluster "$RPC_URL" \
-            --filepath target/idl/omnipair.json \
-            ${{ env.PROGRAM_ID }} || \
+            --filepath "target/idl/$PROGRAM_IDL" \
+            "$PROGRAM_ID" || \
           anchor idl init \
             --provider.cluster "$RPC_URL" \
-            --filepath target/idl/omnipair.json \
-            ${{ env.PROGRAM_ID }}
+            --filepath "target/idl/$PROGRAM_IDL" \
+            "$PROGRAM_ID"
 
           echo "IDL published successfully"
 
@@ -722,7 +808,6 @@ jobs:
       github.event_name == 'workflow_dispatch' && 
       github.event.inputs.publish_packages == 'true'
     runs-on: ubuntu-22.04
-    continue-on-error: true
     permissions:
       id-token: write
       contents: read
@@ -733,8 +818,11 @@ jobs:
       - name: Extract Program ID from source
         run: |
           PROGRAM_ID=$(grep 'declare_id!' programs/omnipair/src/lib.rs | sed 's/declare_id!("//;s/");$//')
+          PROGRAM_ID_V2=$(grep 'declare_id!' programs/omnipair-v2/src/lib.rs | sed 's/declare_id!("//;s/");$//')
           echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
+          echo "PROGRAM_ID_V2=$PROGRAM_ID_V2" >> $GITHUB_ENV
           echo "Extracted Program ID: $PROGRAM_ID"
+          echo "Extracted V2 Program ID: $PROGRAM_ID_V2"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -749,7 +837,13 @@ jobs:
             --pattern "omnipair.json" \
             --dir target/idl
           gh release download ${{ needs.verify-release.outputs.tag }} \
+            --pattern "omnipair_v2.json" \
+            --dir target/idl
+          gh release download ${{ needs.verify-release.outputs.tag }} \
             --pattern "omnipair.ts" \
+            --dir target/types
+          gh release download ${{ needs.verify-release.outputs.tag }} \
+            --pattern "omnipair_v2.ts" \
             --dir target/types
         env:
           GH_TOKEN: ${{ github.token }}
@@ -758,7 +852,18 @@ jobs:
         run: |
           echo "Downloaded artifacts:"
           ls -laR target/
-          test -f target/idl/omnipair.json && echo "IDL found!" || echo "IDL NOT found!"
+          for artifact in \
+            target/idl/omnipair.json \
+            target/idl/omnipair_v2.json \
+            target/types/omnipair.ts \
+            target/types/omnipair_v2.ts
+          do
+            if [ ! -f "$artifact" ]; then
+              echo "Missing required release artifact: $artifact"
+              exit 1
+            fi
+            echo "Found required release artifact: $artifact"
+          done
 
       - name: Install dependencies
         working-directory: packages/program-interface
@@ -771,9 +876,6 @@ jobs:
       - name: Build package
         working-directory: packages/program-interface
         run: npm run build
-        env:
-          PROGRAM_ID: ${{ env.PROGRAM_ID }}
-          OMNIPAIR_PROGRAM_ID: ${{ env.PROGRAM_ID }}
 
       - name: Check if version already published
         id: check-npm
@@ -809,7 +911,6 @@ jobs:
       github.event_name == 'workflow_dispatch' && 
       github.event.inputs.publish_packages == 'true'
     runs-on: ubuntu-22.04
-    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -845,6 +946,9 @@ jobs:
           gh release download ${{ needs.verify-release.outputs.tag }} \
             --pattern "omnipair.json" \
             --dir target/idl
+          gh release download ${{ needs.verify-release.outputs.tag }} \
+            --pattern "omnipair_v2.json" \
+            --dir target/idl
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -853,7 +957,16 @@ jobs:
         run: |
           echo "Downloaded artifacts:"
           ls -laR target/
-          test -f target/idl/omnipair.json && echo "IDL found!" || echo "IDL NOT found!"
+          for artifact in \
+            target/idl/omnipair.json \
+            target/idl/omnipair_v2.json
+          do
+            if [ ! -f "$artifact" ]; then
+              echo "Missing required release artifact: $artifact"
+              exit 1
+            fi
+            echo "Found required release artifact: $artifact"
+          done
 
       - name: Install carbon-cli
         if: steps.check-crate.outputs.skip != 'true'
@@ -904,8 +1017,25 @@ jobs:
               cp -r "$DECODER_SRC/$dir" "$DEST_SRC/"
             fi
           done
+
+          if ! grep -q "pub mod v2;" "$DEST_SRC/lib.rs"; then
+            printf "\npub mod v2;\n" >> "$DEST_SRC/lib.rs"
+          fi
+
+          if grep -q "pub mod graphql;" "$DEST_SRC/lib.rs" && [ ! -e "$DEST_SRC/graphql.rs" ] && [ ! -d "$DEST_SRC/graphql" ]; then
+            printf '%s\n' \
+              '//! Placeholder for optional GraphQL integration hooks generated by Carbon.' \
+              '//!' \
+              '//! The published decoder keeps this module so the `graphql` feature resolves' \
+              '//! even when the current generated IDL surface does not emit concrete schema' \
+              '//! helpers.' \
+              > "$DEST_SRC/graphql.rs"
+          fi
           
           rm -rf temp-decoder
+
+          cp target/idl/omnipair_v2.json packages/program-interface/src/idl_v2.json
+          node decoders/omnipair-decoder/scripts/generate-v2-decoder.mjs
 
       - name: Update crate version
         if: steps.check-crate.outputs.skip != 'true'

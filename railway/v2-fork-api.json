@@ -1,0 +1,25 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile.v2-fork-api",
+    "watchPatterns": [
+      "Dockerfile.v2-fork-api",
+      "package.json",
+      "package-lock.json",
+      "tsconfig.json",
+      "railway/v2-fork-api.json",
+      "packages/program-interface/src/idl_v2.json",
+      "scripts/v2-fork-lab/api.ts",
+      "scripts/v2-fork-lab/api_core.ts",
+      "scripts/v2-fork-lab/surfpool_v2_e2e.ts"
+    ]
+  },
+  "deploy": {
+    "startCommand": "node dist/v2-fork-lab/api.js",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 180,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  }
+}

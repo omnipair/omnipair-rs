@@ -21,6 +21,14 @@ const files = [
     src: resolve(repoRoot, "target/types/omnipair.ts"),
     dest: resolve(rootDir, "src/types.ts"),
   },
+  {
+    src: resolve(repoRoot, "target/idl/omnipair_v2.json"),
+    dest: resolve(rootDir, "src/idl_v2.json"),
+  },
+  {
+    src: resolve(repoRoot, "target/types/omnipair_v2.ts"),
+    dest: resolve(rootDir, "src/types_v2.ts"),
+  },
 ];
 
 console.log("Preparing @omnipair/program-interface...\n");

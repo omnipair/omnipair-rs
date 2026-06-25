@@ -1,6 +1,6 @@
 {
   "name": "@omnipair/program-interface",
-  "version": "0.10.4",
+  "version": "0.10.2",
   "description": "Omnipair program IDL, TypeScript types, and constants",
   "license": "MIT",
   "author": "Omnipair <security@omnipair.fi>",
@@ -33,6 +33,10 @@
     "./idl": {
       "import": "./dist/idl.js",
       "types": "./dist/idl.d.ts"
+    },
+    "./idl-v2": {
+      "import": "./dist/idl_v2.js",
+      "types": "./dist/idl_v2.d.ts"
     }
   },
   "files": [

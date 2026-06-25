@@ -45,6 +45,12 @@ Run tests matching a pattern:
 yarn test-litesvm -- --grep "Futarchy"
 ```
 
+## Instruction Smoke Coverage
+
+`yarn test-litesvm` prints an instruction smoke coverage report. This report only tracks whether each instruction appears in at least one LiteSVM test flow. It is useful as a checklist for missing instruction-level flows, but it is not statement coverage, branch coverage, invariant coverage, or proof that an instruction's full behavior is covered.
+
+For V2 review, keep using this report alongside focused unit tests for transitions, compact state modules, risk math, fee accounting, liquidation edge cases, and token supply invariants.
+
 ## Test Structure
 
 ### Basic Test File: `basic.test.ts`
@@ -74,6 +80,20 @@ Tests for futarchy authority initialization:
 - PDA derivation verification
 - IDL loading and inspection
 - Account setup validation
+
+### V2 Final Smoke Tests: `v2-final-smoke.test.ts`
+
+The V2 suite loads the standalone `omnipair_v2` program into LiteSVM and exercises the final yLP / hLP market architecture end to end. It is the main integration smoke suite for the V2 PR.
+
+Covered flows include:
+- Market initialization with Token-2022 yLP and hLP mints
+- Balanced liquidity add/remove with floating yLP shares
+- Non-compounding yLP fee accrual, yield recipient routing, and claiming
+- Swaps, including active hLP vault checkpointing through canonical vault accounts
+- Collateral deposit/withdraw and fixed debt borrow/repay
+- hLP open/close with aggregate vault-owned yLP and underlying borrowed debt
+
+The V2 smoke coverage report currently highlights the remaining unexercised administration and liquidation instructions. When adding or removing a V2 instruction, update both the LiteSVM flow and the coverage tracker in `tests/utils/instruction-coverage.ts`.
 
 ## Test Helpers
 
