@@ -8,12 +8,15 @@ use crate::{
     constants::*,
     errors::ErrorCode,
     events::{MarketDebtUpdated, MarketEventMetadata, MarketHealthUpdated},
-    shared::token::transfer_from_user_to_vault,
-    state::{MarginPosition, Market, MarketAsset},
-    transitions::debt::Repay as RepayTransition,
+    generate_market_seeds,
+    shared::token::{transfer_from_user_to_vault, transfer_from_vault_to_vault},
+    state::{FutarchyAuthority, MarginPosition, Market, MarketAsset},
+    transitions::{debt::Repay as RepayTransition, fee::RecordInterestCredit},
 };
 
-use crate::instructions::common::{require_supported_asset_mint, token_program_for_mint};
+use crate::instructions::common::{
+    require_supported_asset_mint, token_program_for_mint, validate_interest_accounts,
+};
 
 use super::common::validate_repay_accounts;
 
@@ -39,6 +42,12 @@ pub struct Repay<'info> {
     )]
     pub market: Box<Account<'info, Market>>,
 
+    #[account(
+        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
+        bump = futarchy_authority.bump
+    )]
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
+
     #[account(mut)]
     pub owner: Signer<'info>,
 
@@ -46,6 +55,9 @@ pub struct Repay<'info> {
 
     #[account(mut)]
     pub reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub interest_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
     pub owner_debt_account: Box<InterfaceAccount<'info, TokenAccount>>,
@@ -82,6 +94,12 @@ impl<'info> Repay<'info> {
             &self.reserve_vault,
             &self.owner_debt_account,
         )?;
+        validate_interest_accounts(
+            &self.market,
+            args.repay_asset,
+            &self.debt_asset_mint,
+            &self.interest_vault,
+        )?;
         require_supported_asset_mint(&self.debt_asset_mint)?;
         self.margin_position
             .assert_position(self.owner.key(), self.market.key())?;
@@ -104,7 +122,7 @@ impl<'info> Repay<'info> {
             ctx.accounts.owner_debt_account.to_account_info(),
             ctx.accounts.reserve_vault.to_account_info(),
             ctx.accounts.debt_asset_mint.to_account_info(),
-            debt_token_program,
+            debt_token_program.clone(),
             args.repay_amount,
             ctx.accounts.debt_asset_mint.decimals,
         )?;
@@ -119,6 +137,25 @@ impl<'info> Repay<'info> {
 
         let debt_receipt = RepayTransition::new(args.repay_asset, repay_credit)
             .apply(&mut ctx.accounts.market, &mut ctx.accounts.margin_position)?;
+        if debt_receipt.interest_paid > 0 {
+            transfer_from_vault_to_vault(
+                ctx.accounts.market.to_account_info(),
+                ctx.accounts.reserve_vault.to_account_info(),
+                ctx.accounts.interest_vault.to_account_info(),
+                ctx.accounts.debt_asset_mint.to_account_info(),
+                debt_token_program,
+                debt_receipt.interest_paid,
+                ctx.accounts.debt_asset_mint.decimals,
+                &[&generate_market_seeds!(ctx.accounts.market)[..]],
+            )?;
+            ctx.accounts.interest_vault.reload()?;
+            RecordInterestCredit::new(
+                debt_receipt.interest_paid,
+                ctx.accounts.futarchy_authority.revenue_share.interest_bps,
+                ctx.accounts.futarchy_authority.protocol_auction_split,
+            )
+            .apply(ctx.accounts.market.side_mut(args.repay_asset)?)?;
+        }
 
         emit_cpi!(MarketDebtUpdated {
             market: market_key,

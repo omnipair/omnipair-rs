@@ -16,6 +16,7 @@ pub struct Liquidation {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct LiquidationReceipt {
     pub repaid_amount: u64,
+    pub interest_paid: u64,
     pub collateral_seized: u64,
     pub collateral_to_liquidator: u64,
     pub insurance_funded: u64,
@@ -104,11 +105,14 @@ impl Liquidation {
             u64::try_from(debt_reduction).map_err(|_| ErrorCode::MarketMathOverflow)?;
         // Track the principal/interest split for cash-backed repayment without
         // treating socialized loss as received interest.
-        let _interest_paid = market.debt.realize_margin_liquidation(
+        let interest_paid = market.debt.realize_margin_liquidation(
             self.debt_asset,
             cash_repaid,
             debt_reduction_u64,
         )?;
+        let principal_credit = cash_repaid
+            .checked_sub(interest_paid)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         apply_liquidation_debt_reduction(
             market,
             margin_position,
@@ -122,14 +126,12 @@ impl Liquidation {
             debt_side.reserves.live_reserve = debt_side
                 .reserves
                 .live_reserve
-                .checked_add(self.repay_credit)
-                .and_then(|value| value.checked_add(self.insurance_credit))
+                .checked_add(principal_credit)
                 .ok_or(ErrorCode::ReserveOverflow)?;
             debt_side.reserves.cash_reserve = debt_side
                 .reserves
                 .cash_reserve
-                .checked_add(self.repay_credit)
-                .and_then(|value| value.checked_add(self.insurance_credit))
+                .checked_add(principal_credit)
                 .ok_or(ErrorCode::ReserveOverflow)?;
         }
         match self.debt_asset {
@@ -163,6 +165,7 @@ impl Liquidation {
         market.assert_risk_circuit_breakers()?;
         Ok(LiquidationReceipt {
             repaid_amount: self.repay_credit,
+            interest_paid,
             collateral_seized,
             collateral_to_liquidator,
             insurance_funded,

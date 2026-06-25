@@ -8,6 +8,7 @@ use crate::{
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct DebtReceipt {
     pub debt_delta: i64,
+    pub interest_paid: u64,
     pub fixed_base_debt: u128,
     pub fixed_quote_debt: u128,
     pub base_debt_health_bps: u64,
@@ -26,9 +27,10 @@ pub struct Repay {
 }
 
 impl DebtReceipt {
-    fn from_market(market: &Market, debt_delta: i64) -> Result<Self> {
+    fn from_market(market: &Market, debt_delta: i64, interest_paid: u64) -> Result<Self> {
         Ok(Self {
             debt_delta,
+            interest_paid,
             fixed_base_debt: market.debt.fixed_base_debt()?,
             fixed_quote_debt: market.debt.fixed_quote_debt()?,
             base_debt_health_bps: market.health.base_debt_health_bps,
@@ -113,7 +115,7 @@ impl Borrow {
             self.min_health_bps,
             ErrorCode::InsufficientMarketHealth
         );
-        DebtReceipt::from_market(market, debt_delta)
+        DebtReceipt::from_market(market, debt_delta, 0)
     }
 }
 
@@ -143,9 +145,13 @@ impl Repay {
         // Split the repaid amount into principal vs accrued interest before
         // shares are reduced. Interest routing to the vault is wired in a later
         // commit; for now interest still compounds (principal tracking only).
-        let _interest_paid = market
+        let interest_paid = market
             .debt
             .realize_margin_repay(self.repay_asset, self.repay_credit)?;
+        let principal_credit = self
+            .repay_credit
+            .checked_sub(interest_paid)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
         match self.repay_asset {
             MarketAsset::Base => {
                 let shares_before = margin_position.fixed_base_shares;
@@ -182,13 +188,13 @@ impl Repay {
                     .base_side
                     .reserves
                     .live_reserve
-                    .checked_add(self.repay_credit)
+                    .checked_add(principal_credit)
                     .ok_or(ErrorCode::ReserveOverflow)?;
                 market.base_side.reserves.cash_reserve = market
                     .base_side
                     .reserves
                     .cash_reserve
-                    .checked_add(self.repay_credit)
+                    .checked_add(principal_credit)
                     .ok_or(ErrorCode::ReserveOverflow)?;
             }
             MarketAsset::Quote => {
@@ -226,19 +232,19 @@ impl Repay {
                     .quote_side
                     .reserves
                     .live_reserve
-                    .checked_add(self.repay_credit)
+                    .checked_add(principal_credit)
                     .ok_or(ErrorCode::ReserveOverflow)?;
                 market.quote_side.reserves.cash_reserve = market
                     .quote_side
                     .reserves
                     .cash_reserve
-                    .checked_add(self.repay_credit)
+                    .checked_add(principal_credit)
                     .ok_or(ErrorCode::ReserveOverflow)?;
             }
         }
         market.refresh_market_health()?;
         market.assert_risk_circuit_breakers()?;
-        DebtReceipt::from_market(market, debt_delta)
+        DebtReceipt::from_market(market, debt_delta, interest_paid)
     }
 }
 

@@ -12,12 +12,16 @@ use crate::{
     shared::token::{
         transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault,
     },
-    state::{MarginPosition, Market, MarketAsset},
-    transitions::liquidation::{insurance_request_for_liquidation, Liquidation},
+    state::{FutarchyAuthority, MarginPosition, Market, MarketAsset},
+    transitions::{
+        fee::RecordInterestCredit,
+        liquidation::{insurance_request_for_liquidation, Liquidation},
+    },
 };
 
 use crate::instructions::common::{
     require_supported_asset_mint, token_account_credit, token_program_for_mint,
+    validate_interest_accounts,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -45,6 +49,12 @@ pub struct Liquidate<'info> {
     )]
     pub market: Box<Account<'info, Market>>,
 
+    #[account(
+        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
+        bump = futarchy_authority.bump
+    )]
+    pub futarchy_authority: Account<'info, FutarchyAuthority>,
+
     #[account(mut)]
     pub liquidator: Signer<'info>,
 
@@ -54,6 +64,9 @@ pub struct Liquidate<'info> {
 
     #[account(mut)]
     pub reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub interest_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
     pub collateral_vault: Box<InterfaceAccount<'info, TokenAccount>>,
@@ -106,6 +119,12 @@ impl<'info> Liquidate<'info> {
             &self.collateral_insurance_vault,
             &self.liquidator_debt_account,
             &self.liquidator_collateral_account,
+        )?;
+        validate_interest_accounts(
+            &self.market,
+            args.debt_asset,
+            &self.debt_asset_mint,
+            &self.interest_vault,
         )?;
         require_supported_asset_mint(&self.debt_asset_mint)?;
         require_supported_asset_mint(&self.collateral_asset_mint)?;
@@ -173,7 +192,7 @@ impl<'info> Liquidate<'info> {
                 ctx.accounts.insurance_vault.to_account_info(),
                 ctx.accounts.reserve_vault.to_account_info(),
                 ctx.accounts.debt_asset_mint.to_account_info(),
-                debt_token_program,
+                debt_token_program.clone(),
                 insurance_request,
                 ctx.accounts.debt_asset_mint.decimals,
                 &[&generate_market_seeds!(ctx.accounts.market)[..]],
@@ -202,6 +221,25 @@ impl<'info> Liquidate<'info> {
             args.max_socialized_loss,
         )
         .apply(&mut ctx.accounts.market, &mut ctx.accounts.margin_position)?;
+        if liquidation_receipt.interest_paid > 0 {
+            transfer_from_vault_to_vault(
+                ctx.accounts.market.to_account_info(),
+                ctx.accounts.reserve_vault.to_account_info(),
+                ctx.accounts.interest_vault.to_account_info(),
+                ctx.accounts.debt_asset_mint.to_account_info(),
+                debt_token_program,
+                liquidation_receipt.interest_paid,
+                ctx.accounts.debt_asset_mint.decimals,
+                &[&generate_market_seeds!(ctx.accounts.market)[..]],
+            )?;
+            ctx.accounts.interest_vault.reload()?;
+            RecordInterestCredit::new(
+                liquidation_receipt.interest_paid,
+                ctx.accounts.futarchy_authority.revenue_share.interest_bps,
+                ctx.accounts.futarchy_authority.protocol_auction_split,
+            )
+            .apply(ctx.accounts.market.side_mut(args.debt_asset)?)?;
+        }
         let collateral_token_program = token_program_for_mint(
             &ctx.accounts.collateral_asset_mint,
             &ctx.accounts.token_program,
