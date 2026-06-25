@@ -37,7 +37,7 @@ pub struct InitFutarchyAuthority<'info> {
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
         bump
     )]
-    pub futarchy_authority: Account<'info, FutarchyAuthority>,
+    pub futarchy_authority: Box<Account<'info, FutarchyAuthority>>,
 
     /// CHECK: PDA derivation is enforced by seeds and owner is validated below.
     #[account(

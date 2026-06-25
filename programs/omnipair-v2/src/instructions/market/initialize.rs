@@ -54,7 +54,7 @@ pub struct InitializeMarket<'info> {
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
         bump = futarchy_authority.bump
     )]
-    pub futarchy_authority: Account<'info, FutarchyAuthority>,
+    pub futarchy_authority: Box<Account<'info, FutarchyAuthority>>,
 
     pub base_ylp_mint: Box<InterfaceAccount<'info, Mint>>,
     pub quote_ylp_mint: Box<InterfaceAccount<'info, Mint>>,

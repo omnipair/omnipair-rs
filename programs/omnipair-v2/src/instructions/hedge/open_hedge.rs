@@ -50,7 +50,7 @@ pub struct OpenHedge<'info> {
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
         bump = futarchy_authority.bump
     )]
-    pub futarchy_authority: Account<'info, FutarchyAuthority>,
+    pub futarchy_authority: Box<Account<'info, FutarchyAuthority>>,
 
     #[account(mut)]
     pub owner: Signer<'info>,

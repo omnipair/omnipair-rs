@@ -50,7 +50,7 @@ pub struct SettleProtocolAuction<'info> {
         seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
         bump = futarchy_authority.bump
     )]
-    pub futarchy_authority: Account<'info, FutarchyAuthority>,
+    pub futarchy_authority: Box<Account<'info, FutarchyAuthority>>,
 
     pub sold_mint: Box<InterfaceAccount<'info, Mint>>,
     pub accepted_mint: Box<InterfaceAccount<'info, Mint>>,
