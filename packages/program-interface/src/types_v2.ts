@@ -684,6 +684,36 @@ export type OmnipairV2 = {
           }
         },
         {
+          "name": "futarchyAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "owner",
           "writable": true,
           "signer": true
@@ -712,6 +742,10 @@ export type OmnipairV2 = {
         },
         {
           "name": "quoteReserveVault",
+          "writable": true
+        },
+        {
+          "name": "borrowedInterestVault",
           "writable": true
         },
         {
@@ -5020,6 +5054,10 @@ export type OmnipairV2 = {
           },
           {
             "name": "debtRepaid",
+            "type": "u64"
+          },
+          {
+            "name": "interestPaid",
             "type": "u64"
           },
           {

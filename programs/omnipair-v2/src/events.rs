@@ -319,6 +319,7 @@ pub struct HlpClosed {
     pub quote_ylp_amount: u64,
     pub target_amount_out: u64,
     pub debt_repaid: u64,
+    pub interest_paid: u64,
     pub hlp_supply: u64,
     pub metadata: MarketEventMetadata,
 }

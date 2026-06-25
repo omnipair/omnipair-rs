@@ -36,6 +36,7 @@ pub struct HedgeReceipt {
     pub hlp_supply: u64,
     pub target_amount_out: u64,
     pub debt_repaid: u64,
+    pub interest_paid: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -106,6 +107,7 @@ impl OpenHedge {
             hlp_supply,
             target_amount_out: 0,
             debt_repaid: 0,
+            interest_paid: 0,
         })
     }
 }
@@ -287,9 +289,10 @@ fn close_base_hlp(market: &mut Market, hlp_amount: u64) -> Result<HedgeReceipt> 
     market.base_side.assert_share_backing()?;
     market.quote_side.assert_share_backing()?;
     market.base_hlp_vault.debit_ylp(base_ylp, quote_ylp)?;
-    let _interest_paid = market
+    let interest_paid = market
         .base_hlp_vault
         .realize_debt_repay(debt_repaid, market.debt.quote_borrow_index_nad)?;
+    debit_cash_for_hlp_interest(&mut market.quote_side, interest_paid)?;
     market
         .base_hlp_vault
         .remove_debt_shares(quote_debt_shares)?;
@@ -304,6 +307,7 @@ fn close_base_hlp(market: &mut Market, hlp_amount: u64) -> Result<HedgeReceipt> 
         hlp_supply: market.base_hlp_vault.hlp_supply,
         target_amount_out: base_out,
         debt_repaid,
+        interest_paid,
         ..HedgeReceipt::default()
     })
 }
@@ -339,9 +343,10 @@ fn close_quote_hlp(market: &mut Market, hlp_amount: u64) -> Result<HedgeReceipt>
     market.base_side.assert_share_backing()?;
     market.quote_side.assert_share_backing()?;
     market.quote_hlp_vault.debit_ylp(base_ylp, quote_ylp)?;
-    let _interest_paid = market
+    let interest_paid = market
         .quote_hlp_vault
         .realize_debt_repay(debt_repaid, market.debt.base_borrow_index_nad)?;
+    debit_cash_for_hlp_interest(&mut market.base_side, interest_paid)?;
     market
         .quote_hlp_vault
         .remove_debt_shares(base_debt_shares)?;
@@ -356,8 +361,24 @@ fn close_quote_hlp(market: &mut Market, hlp_amount: u64) -> Result<HedgeReceipt>
         hlp_supply: market.quote_hlp_vault.hlp_supply,
         target_amount_out: quote_out,
         debt_repaid,
+        interest_paid,
         ..HedgeReceipt::default()
     })
+}
+
+fn debit_cash_for_hlp_interest(
+    borrowed_side: &mut crate::state::MarketSide,
+    interest_paid: u64,
+) -> Result<()> {
+    if interest_paid == 0 {
+        return Ok(());
+    }
+    borrowed_side.reserves.cash_reserve = borrowed_side
+        .reserves
+        .cash_reserve
+        .checked_sub(interest_paid)
+        .ok_or(ErrorCode::CashReserveUnderflow)?;
+    Ok(())
 }
 
 fn settled_close_target_amount(
@@ -1238,6 +1259,24 @@ mod tests {
         assert_eq!(market.quote_side.reserves.cash_reserve, 2_000);
         assert_eq!(market.base_side.shares.ylp_supply, 1_000);
         assert_eq!(market.quote_side.shares.ylp_supply, 2_000);
+    }
+
+    #[test]
+    fn close_hlp_realizes_interest_from_borrowed_side_cash() {
+        let mut market = seeded_market();
+        let open_receipt = OpenHedge::new(MarketAsset::Base, 100, 1)
+            .apply(&mut market)
+            .unwrap();
+        market.debt.quote_borrow_index_nad = (NAD as u128) * 110 / 100;
+
+        let close_receipt = CloseHedge::new(MarketAsset::Base, open_receipt.hlp_amount)
+            .apply(&mut market)
+            .unwrap();
+
+        assert_eq!(close_receipt.debt_repaid, 220);
+        assert_eq!(close_receipt.interest_paid, 20);
+        assert_eq!(market.base_hlp_vault.debt_principal, 0);
+        assert_eq!(market.quote_side.reserves.cash_reserve, 1_980);
     }
 
     #[test]

@@ -11,16 +11,20 @@ use crate::{
     generate_market_seeds,
     shared::{
         account::get_size_with_discriminator,
-        token::{token_burn, transfer_from_vault_to_user},
+        token::{token_burn, transfer_from_vault_to_user, transfer_from_vault_to_vault},
     },
-    state::{Market, MarketAsset, YieldAccount, YieldTokenKind},
+    state::{FutarchyAuthority, Market, MarketAsset, YieldAccount, YieldTokenKind},
     tokens::{hlp_token::validate_hlp_mint, ylp_token::validate_ylp_mint},
-    transitions::hedge::{checkpoint_hlp_yield_from_ylp, CloseHedge as CloseHedgeTransition},
+    transitions::{
+        fee::RecordInterestCredit,
+        hedge::{checkpoint_hlp_yield_from_ylp, CloseHedge as CloseHedgeTransition},
+    },
 };
 
 use crate::instructions::common::{
     require_supported_asset_mint, token_account_credit, token_program_for_mint,
-    validate_owner_asset_account, validate_owner_lp_account, validate_side_vault_accounts,
+    validate_interest_accounts, validate_owner_asset_account, validate_owner_lp_account,
+    validate_side_vault_accounts,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -46,6 +50,12 @@ pub struct CloseHedge<'info> {
     )]
     pub market: Box<Account<'info, Market>>,
 
+    #[account(
+        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
+        bump = futarchy_authority.bump
+    )]
+    pub futarchy_authority: Box<Account<'info, FutarchyAuthority>>,
+
     #[account(mut)]
     pub owner: Signer<'info>,
 
@@ -62,6 +72,9 @@ pub struct CloseHedge<'info> {
     pub base_reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut)]
     pub quote_reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub borrowed_interest_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
     pub owner_target_account: Box<InterfaceAccount<'info, TokenAccount>>,
@@ -139,11 +152,22 @@ impl<'info> CloseHedge<'info> {
             MarketAsset::Base => &self.base_mint,
             MarketAsset::Quote => &self.quote_mint,
         };
+        let borrowed_asset = args.target_asset.opposite();
+        let borrowed_mint = match borrowed_asset {
+            MarketAsset::Base => &self.base_mint,
+            MarketAsset::Quote => &self.quote_mint,
+        };
         require_keys_eq!(
             self.market.side(args.target_asset)?.hlp_mint,
             self.target_hlp_mint.key(),
             ErrorCode::InvalidMint
         );
+        validate_interest_accounts(
+            &self.market,
+            borrowed_asset,
+            borrowed_mint,
+            &self.borrowed_interest_vault,
+        )?;
         validate_owner_asset_account(self.owner.key(), target_mint, &self.owner_target_account)?;
         validate_owner_lp_account(
             self.owner.key(),
@@ -236,6 +260,47 @@ impl<'info> CloseHedge<'info> {
 
         let receipt = CloseHedgeTransition::new(args.target_asset, args.hlp_amount)
             .apply(&mut ctx.accounts.market)?;
+        if receipt.interest_paid > 0 {
+            let borrowed_asset = args.target_asset.opposite();
+            let (borrowed_reserve_vault, borrowed_mint, borrowed_decimals) = match borrowed_asset {
+                MarketAsset::Base => (
+                    ctx.accounts.base_reserve_vault.to_account_info(),
+                    ctx.accounts.base_mint.to_account_info(),
+                    ctx.accounts.base_mint.decimals,
+                ),
+                MarketAsset::Quote => (
+                    ctx.accounts.quote_reserve_vault.to_account_info(),
+                    ctx.accounts.quote_mint.to_account_info(),
+                    ctx.accounts.quote_mint.decimals,
+                ),
+            };
+            let borrowed_token_program = token_program_for_mint(
+                match borrowed_asset {
+                    MarketAsset::Base => &ctx.accounts.base_mint,
+                    MarketAsset::Quote => &ctx.accounts.quote_mint,
+                },
+                &ctx.accounts.token_program,
+                &ctx.accounts.token_2022_program,
+            )?;
+            transfer_from_vault_to_vault(
+                ctx.accounts.market.to_account_info(),
+                borrowed_reserve_vault,
+                ctx.accounts.borrowed_interest_vault.to_account_info(),
+                borrowed_mint,
+                borrowed_token_program,
+                receipt.interest_paid,
+                borrowed_decimals,
+                &[&generate_market_seeds!(ctx.accounts.market)[..]],
+            )?;
+            ctx.accounts.borrowed_interest_vault.reload()?;
+            RecordInterestCredit::new(
+                receipt.interest_paid,
+                ctx.accounts.market.config.manager_fee_bps,
+                ctx.accounts.futarchy_authority.revenue_share.interest_bps,
+                ctx.accounts.futarchy_authority.protocol_auction_split,
+            )
+            .apply(ctx.accounts.market.side_mut(borrowed_asset)?)?;
+        }
 
         let base_ylp_program = token_program_for_mint(
             &ctx.accounts.base_ylp_mint,
@@ -313,6 +378,7 @@ impl<'info> CloseHedge<'info> {
             quote_ylp_amount: receipt.quote_ylp_amount,
             target_amount_out: receipt.target_amount_out,
             debt_repaid: receipt.debt_repaid,
+            interest_paid: receipt.interest_paid,
             hlp_supply: receipt.hlp_supply,
             metadata: MarketEventMetadata::new(owner_key, market_key)?,
         });
