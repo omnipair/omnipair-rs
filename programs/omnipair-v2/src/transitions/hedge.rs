@@ -1440,9 +1440,16 @@ mod tests {
         )
         .unwrap();
         let (market_side_in, market_side_out) = market.swap_sides_mut(MarketAsset::Base);
-        SwapTransition::new(amount_in_after_fee, amount_out, 0, 0, 0)
-            .apply(market_side_in, market_side_out)
-            .unwrap();
+        SwapTransition::new(
+            amount_in_after_fee,
+            amount_out,
+            0,
+            0,
+            0,
+            crate::state::ProtocolAuctionSplit::default(),
+        )
+        .apply(market_side_in, market_side_out)
+        .unwrap();
 
         let quoted_post_swap_price =
             market_spot_price_nad(&market.base_side, &market.quote_side).unwrap();

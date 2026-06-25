@@ -20,6 +20,9 @@ pub struct InitFutarchyAuthorityArgs {
     pub buybacks_vault_bps: u16,
     pub team_treasury: Pubkey,
     pub team_treasury_bps: u16,
+    pub staking_vault: Pubkey,
+    pub fee_auction_accepted_mint: Pubkey,
+    pub buyback_auction_accepted_mint: Pubkey,
 }
 
 #[derive(Accounts)]
@@ -92,6 +95,7 @@ impl<'info> InitFutarchyAuthority<'info> {
             ErrorCode::InvalidDistribution
         );
 
+        let current_slot = Clock::get()?.slot;
         ctx.accounts
             .futarchy_authority
             .set_inner(FutarchyAuthority::initialize(
@@ -101,9 +105,13 @@ impl<'info> InitFutarchyAuthority<'info> {
                 args.futarchy_treasury,
                 args.buybacks_vault,
                 args.team_treasury,
+                args.staking_vault,
+                args.fee_auction_accepted_mint,
+                args.buyback_auction_accepted_mint,
                 args.futarchy_treasury_bps,
                 args.buybacks_vault_bps,
                 args.team_treasury_bps,
+                current_slot,
                 ctx.bumps.futarchy_authority,
             )?);
         Ok(())

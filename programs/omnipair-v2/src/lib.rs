@@ -63,6 +63,20 @@ pub mod omnipair_v2 {
         UpdateRevenueRecipients::handle_update(ctx, args)
     }
 
+    pub fn update_protocol_auction_config(
+        ctx: Context<UpdateProtocolAuctionConfig>,
+        args: UpdateProtocolAuctionConfigArgs,
+    ) -> Result<()> {
+        UpdateProtocolAuctionConfig::handle_update(ctx, args)
+    }
+
+    pub fn update_protocol_auction_recipients(
+        ctx: Context<UpdateProtocolAuctionRecipients>,
+        args: UpdateProtocolAuctionRecipientsArgs,
+    ) -> Result<()> {
+        UpdateProtocolAuctionRecipients::handle_update(ctx, args)
+    }
+
     pub fn set_global_reduce_only(
         ctx: Context<SetGlobalReduceOnly>,
         args: SetGlobalReduceOnlyArgs,
@@ -70,9 +84,12 @@ pub mod omnipair_v2 {
         SetGlobalReduceOnly::handle_set_global_reduce_only(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate())]
-    pub fn claim_protocol_fees(ctx: Context<ClaimProtocolFees>) -> Result<()> {
-        ClaimProtocolFees::handle_claim(ctx)
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn settle_protocol_auction<'info>(
+        ctx: Context<'_, '_, '_, 'info, SettleProtocolAuction<'info>>,
+        args: SettleProtocolAuctionArgs,
+    ) -> Result<()> {
+        SettleProtocolAuction::handle_settle(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]

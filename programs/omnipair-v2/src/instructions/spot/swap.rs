@@ -122,6 +122,7 @@ impl<'info> Swap<'info> {
         let asset_out_mint_key = ctx.accounts.asset_out_mint.key();
         let operator_fee_bps = 0;
         let protocol_fee_bps = ctx.accounts.futarchy_authority.revenue_share.swap_bps;
+        let protocol_auction_split = ctx.accounts.futarchy_authority.protocol_auction_split;
 
         validate_hlp_rebalance_accounts(&ctx.accounts.market, ctx.remaining_accounts)?;
         ctx.accounts.market.refresh_risk()?;
@@ -188,6 +189,7 @@ impl<'info> Swap<'info> {
                 fee_credit,
                 operator_fee_bps,
                 protocol_fee_bps,
+                protocol_auction_split,
             )
             .apply(market_side_in, market_side_out)?
         };

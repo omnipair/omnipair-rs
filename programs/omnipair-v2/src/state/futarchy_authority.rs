@@ -8,6 +8,27 @@ pub struct RevenueShare {
     pub interest_bps: u16,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace)]
+pub enum ProtocolAuctionLane {
+    Fee,
+    Buyback,
+}
+
+impl Default for ProtocolAuctionLane {
+    fn default() -> Self {
+        Self::Fee
+    }
+}
+
+impl ProtocolAuctionLane {
+    pub fn code(self) -> u8 {
+        match self {
+            Self::Fee => 0,
+            Self::Buyback => 1,
+        }
+    }
+}
+
 /// Revenue recipient wallet addresses. Recipient token accounts are derived or
 /// validated against these owners when protocol fees are claimed.
 #[derive(Clone, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace)]
@@ -33,6 +54,137 @@ impl RevenueDistribution {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace)]
+pub struct ProtocolAuctionSplit {
+    pub fee_auction_bps: u16,
+    pub buyback_auction_bps: u16,
+}
+
+impl Default for ProtocolAuctionSplit {
+    fn default() -> Self {
+        Self {
+            fee_auction_bps: BPS_DENOMINATOR,
+            buyback_auction_bps: 0,
+        }
+    }
+}
+
+impl ProtocolAuctionSplit {
+    pub fn is_valid(&self) -> bool {
+        self.fee_auction_bps
+            .saturating_add(self.buyback_auction_bps)
+            == BPS_DENOMINATOR
+    }
+}
+
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace,
+)]
+pub struct ProtocolAuctionParams {
+    pub start_multiplier_bps: u16,
+    pub floor_multiplier_bps: u16,
+    pub duration_slots: u64,
+    pub max_reference_age_slots: u64,
+}
+
+impl ProtocolAuctionParams {
+    pub fn default_epoch() -> Self {
+        Self {
+            start_multiplier_bps: 12_000,
+            floor_multiplier_bps: 8_000,
+            duration_slots: 216_000,
+            max_reference_age_slots: 21_600,
+        }
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        require!(
+            self.start_multiplier_bps > 0,
+            ErrorCode::InvalidAuctionConfig
+        );
+        require!(
+            self.floor_multiplier_bps > 0,
+            ErrorCode::InvalidAuctionConfig
+        );
+        require_gte!(
+            self.start_multiplier_bps,
+            self.floor_multiplier_bps,
+            ErrorCode::InvalidAuctionConfig
+        );
+        require!(self.duration_slots > 0, ErrorCode::InvalidAuctionConfig);
+        require!(
+            self.max_reference_age_slots > 0,
+            ErrorCode::InvalidAuctionConfig
+        );
+        Ok(())
+    }
+}
+
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace,
+)]
+pub struct ProtocolAuctionRecipients {
+    pub treasury: Pubkey,
+    pub staking_vault: Pubkey,
+    pub treasury_bps: u16,
+    pub staking_vault_bps: u16,
+}
+
+impl ProtocolAuctionRecipients {
+    pub fn treasury_only(treasury: Pubkey, staking_vault: Pubkey) -> Self {
+        Self {
+            treasury,
+            staking_vault,
+            treasury_bps: BPS_DENOMINATOR,
+            staking_vault_bps: 0,
+        }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.treasury_bps.saturating_add(self.staking_vault_bps) == BPS_DENOMINATOR
+    }
+}
+
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, AnchorSerialize, AnchorDeserialize, InitSpace,
+)]
+pub struct ProtocolAuctionConfig {
+    pub accepted_mint: Pubkey,
+    pub recipients: ProtocolAuctionRecipients,
+    pub params: ProtocolAuctionParams,
+    pub last_settlement_slot: u64,
+    pub last_settlement_price_nad: u64,
+}
+
+impl ProtocolAuctionConfig {
+    pub fn initialize(
+        accepted_mint: Pubkey,
+        treasury: Pubkey,
+        staking_vault: Pubkey,
+        current_slot: u64,
+    ) -> Result<Self> {
+        let params = ProtocolAuctionParams::default_epoch();
+        params.validate()?;
+        Ok(Self {
+            accepted_mint,
+            recipients: ProtocolAuctionRecipients::treasury_only(treasury, staking_vault),
+            params,
+            last_settlement_slot: current_slot,
+            last_settlement_price_nad: 0,
+        })
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        require_keys_neq!(
+            self.accepted_mint,
+            Pubkey::default(),
+            ErrorCode::InvalidMint
+        );
+        require!(self.recipients.is_valid(), ErrorCode::InvalidDistribution);
+        self.params.validate()
+    }
+}
+
 #[account]
 #[derive(Debug, InitSpace)]
 pub struct FutarchyAuthority {
@@ -41,6 +193,9 @@ pub struct FutarchyAuthority {
     pub recipients: RevenueRecipients,
     pub revenue_share: RevenueShare,
     pub revenue_distribution: RevenueDistribution,
+    pub protocol_auction_split: ProtocolAuctionSplit,
+    pub fee_auction: ProtocolAuctionConfig,
+    pub buyback_auction: ProtocolAuctionConfig,
     pub global_reduce_only: bool,
     pub bump: u8,
 }
@@ -53,6 +208,12 @@ impl FutarchyAuthority {
             self.revenue_distribution.is_valid(),
             ErrorCode::InvalidDistribution
         );
+        require!(
+            self.protocol_auction_split.is_valid(),
+            ErrorCode::InvalidDistribution
+        );
+        self.fee_auction.validate()?;
+        self.buyback_auction.validate()?;
         Ok(())
     }
 
@@ -68,9 +229,13 @@ impl FutarchyAuthority {
         futarchy_treasury: Pubkey,
         buybacks_vault: Pubkey,
         team_treasury: Pubkey,
+        staking_vault: Pubkey,
+        fee_auction_accepted_mint: Pubkey,
+        buyback_auction_accepted_mint: Pubkey,
         futarchy_treasury_bps: u16,
         buybacks_vault_bps: u16,
         team_treasury_bps: u16,
+        current_slot: u64,
         bump: u8,
     ) -> Result<Self> {
         let revenue_distribution = RevenueDistribution {
@@ -96,9 +261,36 @@ impl FutarchyAuthority {
                 interest_bps,
             },
             revenue_distribution,
+            protocol_auction_split: ProtocolAuctionSplit::default(),
+            fee_auction: ProtocolAuctionConfig::initialize(
+                fee_auction_accepted_mint,
+                futarchy_treasury,
+                staking_vault,
+                current_slot,
+            )?,
+            buyback_auction: ProtocolAuctionConfig::initialize(
+                buyback_auction_accepted_mint,
+                futarchy_treasury,
+                staking_vault,
+                current_slot,
+            )?,
             global_reduce_only: false,
             bump,
         })
+    }
+
+    pub fn auction_config(&self, lane: ProtocolAuctionLane) -> &ProtocolAuctionConfig {
+        match lane {
+            ProtocolAuctionLane::Fee => &self.fee_auction,
+            ProtocolAuctionLane::Buyback => &self.buyback_auction,
+        }
+    }
+
+    pub fn auction_config_mut(&mut self, lane: ProtocolAuctionLane) -> &mut ProtocolAuctionConfig {
+        match lane {
+            ProtocolAuctionLane::Fee => &mut self.fee_auction,
+            ProtocolAuctionLane::Buyback => &mut self.buyback_auction,
+        }
     }
 }
 
@@ -107,4 +299,81 @@ macro_rules! generate_futarchy_authority_seeds {
     ($futarchy_authority:expr) => {
         [FUTARCHY_AUTHORITY_SEED_PREFIX, &[$futarchy_authority.bump]]
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_auction_split_routes_all_protocol_revenue_to_fee_lane() {
+        let split = ProtocolAuctionSplit::default();
+
+        assert_eq!(split.fee_auction_bps, BPS_DENOMINATOR);
+        assert_eq!(split.buyback_auction_bps, 0);
+        assert!(split.is_valid());
+    }
+
+    #[test]
+    fn auction_params_reject_invalid_curve_shapes() {
+        let mut params = ProtocolAuctionParams::default_epoch();
+        params.validate().unwrap();
+
+        params.floor_multiplier_bps = params.start_multiplier_bps + 1;
+        assert_eq!(
+            params.validate().unwrap_err(),
+            error!(ErrorCode::InvalidAuctionConfig)
+        );
+
+        params = ProtocolAuctionParams::default_epoch();
+        params.duration_slots = 0;
+        assert_eq!(
+            params.validate().unwrap_err(),
+            error!(ErrorCode::InvalidAuctionConfig)
+        );
+    }
+
+    #[test]
+    fn initialized_authority_uses_treasury_only_auction_recipients() {
+        let authority = Pubkey::new_unique();
+        let treasury = Pubkey::new_unique();
+        let buybacks_vault = Pubkey::new_unique();
+        let team_treasury = Pubkey::new_unique();
+        let staking_vault = Pubkey::new_unique();
+        let fee_accepted_mint = Pubkey::new_unique();
+        let buyback_accepted_mint = Pubkey::new_unique();
+
+        let futarchy = FutarchyAuthority::initialize(
+            authority,
+            100,
+            200,
+            treasury,
+            buybacks_vault,
+            team_treasury,
+            staking_vault,
+            fee_accepted_mint,
+            buyback_accepted_mint,
+            BPS_DENOMINATOR,
+            0,
+            0,
+            123,
+            42,
+        )
+        .unwrap();
+
+        assert_eq!(futarchy.fee_auction.accepted_mint, fee_accepted_mint);
+        assert_eq!(
+            futarchy.buyback_auction.accepted_mint,
+            buyback_accepted_mint
+        );
+        assert_eq!(futarchy.fee_auction.recipients.treasury, treasury);
+        assert_eq!(futarchy.fee_auction.recipients.staking_vault, staking_vault);
+        assert_eq!(
+            futarchy.fee_auction.recipients.treasury_bps,
+            BPS_DENOMINATOR
+        );
+        assert_eq!(futarchy.fee_auction.recipients.staking_vault_bps, 0);
+        assert_eq!(futarchy.fee_auction.last_settlement_slot, 123);
+        futarchy.validate().unwrap();
+    }
 }

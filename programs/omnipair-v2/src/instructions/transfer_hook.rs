@@ -68,7 +68,7 @@ fn handle_execute<'info>(
     require_keys_eq!(destination_token.mint, lp_mint, ErrorCode::InvalidMint);
 
     let balances = pre_transfer_balances(source_token.amount, destination_token.amount, amount)?;
-    let (market_index, market, yield_context) = find_market_context(program_id, accounts, lp_mint)?;
+    let (market_index, yield_context) = find_market_context(program_id, accounts, lp_mint)?;
     let market_key = *accounts[market_index].key;
 
     let source_yield_index = find_yield_account_index(
@@ -119,10 +119,6 @@ fn handle_execute<'info>(
             balances.destination_pre_balance,
         )?;
     }
-
-    // Keep the borrow checker honest that the deserialized market was consumed
-    // only for validation and index selection.
-    drop(market);
     Ok(())
 }
 
@@ -166,7 +162,7 @@ fn find_market_context<'info>(
     program_id: &Pubkey,
     accounts: &'info [AccountInfo<'info>],
     lp_mint: Pubkey,
-) -> Result<(usize, Market, YieldContext)> {
+) -> Result<(usize, YieldContext)> {
     for (index, account_info) in accounts
         .iter()
         .enumerate()
@@ -175,25 +171,21 @@ fn find_market_context<'info>(
         if account_info.owner != program_id {
             continue;
         }
-        let Ok((market, yield_context)) = load_market_context(account_info, lp_mint) else {
+        let Ok(yield_context) = load_market_context(account_info, lp_mint) else {
             continue;
         };
-        return Ok((index, market, yield_context));
+        return Ok((index, yield_context));
     }
     err!(ErrorCode::InvalidMarket)
 }
 
-fn load_market_context(
-    account_info: &AccountInfo,
-    lp_mint: Pubkey,
-) -> Result<(Market, YieldContext)> {
+#[inline(never)]
+fn load_market_context(account_info: &AccountInfo, lp_mint: Pubkey) -> Result<YieldContext> {
     let data = account_info.try_borrow_data()?;
     let mut data_cursor: &[u8] = &data;
     let market =
         Market::try_deserialize(&mut data_cursor).map_err(|_| error!(ErrorCode::InvalidMarket))?;
-    let yield_context =
-        infer_yield_context(&market, lp_mint).ok_or(error!(ErrorCode::InvalidMint))?;
-    Ok((market, yield_context))
+    infer_yield_context(&market, lp_mint).ok_or(error!(ErrorCode::InvalidMint))
 }
 
 fn infer_yield_context(market: &Market, lp_mint: Pubkey) -> Option<YieldContext> {

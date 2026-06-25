@@ -123,16 +123,53 @@ pub struct MarketFeeLiabilityClaimed {
 }
 
 #[event]
-pub struct ProtocolFeesClaimed {
+pub struct ProtocolAuctionConfigUpdated {
+    pub authority: Pubkey,
+    pub lane: u8,
+    pub accepted_mint: Pubkey,
+    pub start_multiplier_bps: u16,
+    pub floor_multiplier_bps: u16,
+    pub duration_slots: u64,
+    pub max_reference_age_slots: u64,
+    pub signer: Pubkey,
+}
+
+#[event]
+pub struct ProtocolAuctionRecipientsUpdated {
+    pub authority: Pubkey,
+    pub lane: u8,
+    pub treasury: Pubkey,
+    pub staking_vault: Pubkey,
+    pub treasury_bps: u16,
+    pub staking_vault_bps: u16,
+    pub signer: Pubkey,
+}
+
+#[event]
+pub struct ProtocolAuctionSplitUpdated {
+    pub authority: Pubkey,
+    pub fee_auction_bps: u16,
+    pub buyback_auction_bps: u16,
+    pub signer: Pubkey,
+}
+
+#[event]
+pub struct ProtocolAuctionSettled {
     pub market: Pubkey,
-    pub base_mint: Pubkey,
-    pub quote_mint: Pubkey,
-    pub futarchy_treasury_base_amount: u64,
-    pub futarchy_treasury_quote_amount: u64,
-    pub buybacks_vault_base_amount: u64,
-    pub buybacks_vault_quote_amount: u64,
-    pub team_treasury_base_amount: u64,
-    pub team_treasury_quote_amount: u64,
+    pub reference_market: Pubkey,
+    pub lane: u8,
+    pub side: u8,
+    pub bidder: Pubkey,
+    pub sold_mint: Pubkey,
+    pub accepted_mint: Pubkey,
+    pub sold_amount: u64,
+    pub payment_amount: u64,
+    pub treasury_amount: u64,
+    pub staking_vault_amount: u64,
+    pub reference_price_nad: u64,
+    pub auction_price_nad: u64,
+    pub remaining_fee_liability: u64,
+    pub remaining_buyback_liability: u64,
     pub metadata: MarketEventMetadata,
 }
 
