@@ -49,8 +49,11 @@ impl AccrueInterest {
         let quote_util =
             utilization_bps(borrowed_quote, market.quote_side.reserves.cash_reserve as u128)?;
 
-        market.debt.base_borrow_index_nad = accrued_index_nad(base_index, base_util, dt_ms)?;
-        market.debt.quote_borrow_index_nad = accrued_index_nad(quote_index, quote_util, dt_ms)?;
+        let params = market.config.interest_rate_params();
+        market.debt.base_borrow_index_nad =
+            accrued_index_nad(base_index, &params, base_util, dt_ms)?;
+        market.debt.quote_borrow_index_nad =
+            accrued_index_nad(quote_index, &params, quote_util, dt_ms)?;
         market.debt.last_accrual_slot = self.current_slot;
         Ok(())
     }
@@ -84,7 +87,10 @@ fn total_borrowed(market: &Market, asset: MarketAsset, index_nad: u128) -> Resul
 mod tests {
     use super::*;
     use crate::{
-        constants::{MS_PER_YEAR, NAD, TARGET_MS_PER_SLOT},
+        constants::{
+            INTEREST_BASE_RATE_BPS, INTEREST_OPTIMAL_UTILIZATION_BPS, INTEREST_SLOPE1_BPS,
+            INTEREST_SLOPE2_BPS, MS_PER_YEAR, NAD, TARGET_MS_PER_SLOT,
+        },
         state::{
             Debt, HlpVault, Insurance, MarketConfig, MarketHealth, MarketSide, Reserves, Risk,
         },
@@ -115,7 +121,13 @@ mod tests {
             manager: Pubkey::new_unique(),
             base_side,
             quote_side,
-            config: MarketConfig::default(),
+            config: MarketConfig {
+                interest_base_rate_bps: INTEREST_BASE_RATE_BPS as u16,
+                interest_slope1_bps: INTEREST_SLOPE1_BPS as u16,
+                interest_optimal_utilization_bps: INTEREST_OPTIMAL_UTILIZATION_BPS as u16,
+                interest_slope2_bps: INTEREST_SLOPE2_BPS as u16,
+                ..MarketConfig::default()
+            },
             debt: Debt {
                 base_borrow_index_nad: NAD as u128,
                 quote_borrow_index_nad: NAD as u128,
