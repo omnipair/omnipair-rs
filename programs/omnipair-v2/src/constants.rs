@@ -40,6 +40,19 @@ pub const INTEREST_SLOPE2_BPS: u64 = 30_000; // +300% APR from kink to 100%
 /// index growth (and therefore overflow / abuse) for very stale markets.
 pub const MAX_INTEREST_ACCRUAL_MS: u64 = MS_PER_YEAR;
 
+// HEDGED-LP PRE/POST TRACKING SOLVER (Phase 2)
+// Compile-time gate for the swap-time pre-adjustment solve. Kept `false` until
+// the hot-path orchestration has CU profiling and off-chain/on-chain quote
+// parity validated on a validator; when `false` the swap path is unchanged.
+pub const HLP_PRE_SOLVE_ENABLED: bool = false;
+/// Only run the (expensive) pre/post solve when the estimated within-swap
+/// tracking loss exceeds this NAD threshold; below it the cheap post-swap
+/// rebalance is sufficient.
+pub const HLP_PRE_SOLVE_LOSS_THRESHOLD_NAD: u128 = NAD as u128;
+/// Fixed bisection iteration budget for the pre-adjustment solve (bounded so
+/// the on-chain solve has a deterministic, CU-bounded cost).
+pub const HLP_PRE_SOLVE_MAX_ITERS: u32 = 24;
+
 #[constant]
 pub const MARKET_V2_SEED_PREFIX: &[u8] = b"market_v2";
 #[constant]

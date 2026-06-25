@@ -1,5 +1,6 @@
 pub mod fixed_point;
 pub mod gamm;
+pub mod hlp_solver;
 pub mod interest;
 pub mod risk;
 
