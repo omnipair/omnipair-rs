@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use super::{MarketAsset, MarketSide};
+use super::{Debt, MarketAsset, MarketSide};
 use crate::{constants::NAD, errors::ErrorCode, utils::market_math::accrue_fee_liability};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
@@ -11,6 +11,7 @@ pub struct HlpVault {
     pub ylp_base_shares: u64,
     pub ylp_quote_shares: u64,
     pub debt_shares: u128,
+    pub debt_principal: u128,
     pub hlp_supply: u64,
     pub pending_rebalance: i128,
     pub base_swap_fee_growth_index_nad: u128,
@@ -96,6 +97,23 @@ impl HlpVault {
             .checked_add(shares)
             .ok_or(ErrorCode::DebtShareMathOverflow)?;
         Ok(())
+    }
+
+    pub fn add_debt_principal(&mut self, amount: u64) -> Result<()> {
+        self.debt_principal = self
+            .debt_principal
+            .checked_add(amount as u128)
+            .ok_or(ErrorCode::DebtMathOverflow)?;
+        Ok(())
+    }
+
+    pub fn realize_debt_repay(&mut self, repaid: u64, borrow_index_nad: u128) -> Result<u64> {
+        let total_debt = Debt::shares_to_debt(self.debt_shares, borrow_index_nad)?;
+        let principal = self.debt_principal.min(total_debt);
+        let (principal_repaid, interest_paid) =
+            crate::math::realized_interest_split(repaid, total_debt, principal)?;
+        self.debt_principal = self.debt_principal.saturating_sub(principal_repaid as u128);
+        Ok(interest_paid)
     }
 
     pub fn remove_debt_shares(&mut self, shares: u128) -> Result<()> {
@@ -242,5 +260,19 @@ mod tests {
             vault.base_interest_checkpoint_nad,
             base_side.fees.interest_growth_index_nad
         );
+    }
+
+    #[test]
+    fn hlp_debt_principal_tracks_realized_interest_separately() {
+        let mut vault = HlpVault::default();
+        vault.add_debt_shares(1_000).unwrap();
+        vault.add_debt_principal(1_000).unwrap();
+
+        let interest = vault
+            .realize_debt_repay(550, (NAD as u128) * 11 / 10)
+            .unwrap();
+
+        assert_eq!(interest, 50);
+        assert_eq!(vault.debt_principal, 500);
     }
 }

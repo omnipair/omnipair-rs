@@ -174,6 +174,7 @@ fn open_base_hlp(
     market.quote_side.shares.mint(quote_ylp)?;
     let debt_shares = Debt::debt_to_shares(quote_borrow, market.debt.quote_borrow_index_nad)?;
     market.base_hlp_vault.add_debt_shares(debt_shares)?;
+    market.base_hlp_vault.add_debt_principal(quote_borrow)?;
     market.base_hlp_vault.credit_ylp(base_ylp, quote_ylp)?;
     let current_nav_nad = hlp_nav_nad(market, MarketAsset::Base)?;
     let hlp_amount = if hlp_supply_before == 0 {
@@ -228,6 +229,7 @@ fn open_quote_hlp(
     market.quote_side.shares.mint(quote_ylp)?;
     let debt_shares = Debt::debt_to_shares(base_borrow, market.debt.base_borrow_index_nad)?;
     market.quote_hlp_vault.add_debt_shares(debt_shares)?;
+    market.quote_hlp_vault.add_debt_principal(base_borrow)?;
     market.quote_hlp_vault.credit_ylp(base_ylp, quote_ylp)?;
     let current_nav_nad = hlp_nav_nad(market, MarketAsset::Quote)?;
     let hlp_amount = if hlp_supply_before == 0 {
@@ -285,6 +287,9 @@ fn close_base_hlp(market: &mut Market, hlp_amount: u64) -> Result<HedgeReceipt> 
     market.base_side.assert_share_backing()?;
     market.quote_side.assert_share_backing()?;
     market.base_hlp_vault.debit_ylp(base_ylp, quote_ylp)?;
+    let _interest_paid = market
+        .base_hlp_vault
+        .realize_debt_repay(debt_repaid, market.debt.quote_borrow_index_nad)?;
     market
         .base_hlp_vault
         .remove_debt_shares(quote_debt_shares)?;
@@ -334,6 +339,9 @@ fn close_quote_hlp(market: &mut Market, hlp_amount: u64) -> Result<HedgeReceipt>
     market.base_side.assert_share_backing()?;
     market.quote_side.assert_share_backing()?;
     market.quote_hlp_vault.debit_ylp(base_ylp, quote_ylp)?;
+    let _interest_paid = market
+        .quote_hlp_vault
+        .realize_debt_repay(debt_repaid, market.debt.base_borrow_index_nad)?;
     market
         .quote_hlp_vault
         .remove_debt_shares(base_debt_shares)?;
@@ -503,10 +511,16 @@ fn leverage_up_balanced(
             market.base_hlp_vault.add_debt_shares(debt_shares)?;
             market
                 .base_hlp_vault
+                .add_debt_principal(amounts.debt_amount)?;
+            market
+                .base_hlp_vault
                 .credit_ylp(target_ylp_amount, ylp_amount)?;
         }
         MarketAsset::Quote => {
             market.quote_hlp_vault.add_debt_shares(debt_shares)?;
+            market
+                .quote_hlp_vault
+                .add_debt_principal(amounts.debt_amount)?;
             market
                 .quote_hlp_vault
                 .credit_ylp(ylp_amount, target_ylp_amount)?;
@@ -627,12 +641,18 @@ fn deleverage_balanced(
     let debt_shares_to_remove = Debt::debt_to_shares(repay_amount, borrow_index)?.min(debt_shares);
     match target_asset {
         MarketAsset::Base => {
+            let _interest_paid = market
+                .base_hlp_vault
+                .realize_debt_repay(repay_amount, borrow_index)?;
             market
                 .base_hlp_vault
                 .remove_debt_shares(debt_shares_to_remove)?;
             market.base_hlp_vault.debit_ylp(target_ylp_burn, ylp_burn)?;
         }
         MarketAsset::Quote => {
+            let _interest_paid = market
+                .quote_hlp_vault
+                .realize_debt_repay(repay_amount, borrow_index)?;
             market
                 .quote_hlp_vault
                 .remove_debt_shares(debt_shares_to_remove)?;
@@ -1105,6 +1125,7 @@ mod tests {
         assert_eq!(receipt.hlp_amount, 100);
         assert_eq!(market.debt.fixed_quote_shares, 0);
         assert!(market.base_hlp_vault.debt_shares > 0);
+        assert_eq!(market.base_hlp_vault.debt_principal, 200);
         assert_eq!(market.base_hlp_vault.ylp_base_shares, 100);
         assert_eq!(market.base_hlp_vault.ylp_quote_shares, 200);
         assert_eq!(market.base_side.reserves.cash_reserve, 1_100);
@@ -1183,6 +1204,7 @@ mod tests {
         let nav_after = hlp_nav_nad(&market, MarketAsset::Base).unwrap();
         assert_eq!(debt_after, debt_before * 110 / 100);
         assert_eq!(nav_after, nav_before - (debt_after - debt_before));
+        assert_eq!(market.base_hlp_vault.debt_principal, 200);
         assert_eq!(debt_after, 110 * NAD as u128);
         assert_eq!(nav_after, 90 * NAD as u128);
     }
@@ -1202,6 +1224,7 @@ mod tests {
         assert_eq!(close_receipt.debt_repaid, 200);
         assert_eq!(market.base_hlp_vault.hlp_supply, 0);
         assert_eq!(market.base_hlp_vault.debt_shares, 0);
+        assert_eq!(market.base_hlp_vault.debt_principal, 0);
         assert_eq!(market.base_hlp_vault.ylp_base_shares, 0);
         assert_eq!(market.base_hlp_vault.ylp_quote_shares, 0);
         assert_eq!(market.debt.fixed_quote_shares, 0);
@@ -1319,6 +1342,7 @@ mod tests {
         let base_ylp_before = market.base_hlp_vault.ylp_base_shares;
         let quote_ylp_before = market.base_hlp_vault.ylp_quote_shares;
         let debt_before = market.base_hlp_vault.debt_shares;
+        let principal_before = market.base_hlp_vault.debt_principal;
 
         let (base_receipt, _) = rebalance_hlp_vaults(&mut market, 43).unwrap();
 
@@ -1332,6 +1356,7 @@ mod tests {
         assert!(market.base_hlp_vault.ylp_quote_shares > 200);
         assert!(market.base_hlp_vault.ylp_quote_shares > quote_ylp_before);
         assert!(market.base_hlp_vault.debt_shares > debt_before);
+        assert!(market.base_hlp_vault.debt_principal > principal_before);
         assert_eq!(market.base_hlp_vault.last_rebalance_slot, 43);
         assert_eq!(
             market.base_hlp_vault.pending_rebalance,
@@ -1393,6 +1418,7 @@ mod tests {
         let base_ylp_before = market.base_hlp_vault.ylp_base_shares;
         let quote_ylp_before = market.base_hlp_vault.ylp_quote_shares;
         let debt_before = market.base_hlp_vault.debt_shares;
+        let principal_before = market.base_hlp_vault.debt_principal;
 
         let (base_receipt, _) = rebalance_hlp_vaults(&mut market, 44).unwrap();
 
@@ -1405,6 +1431,7 @@ mod tests {
         assert!(market.base_hlp_vault.ylp_base_shares < base_ylp_before);
         assert!(market.base_hlp_vault.ylp_quote_shares < quote_ylp_before);
         assert!(market.base_hlp_vault.debt_shares < debt_before);
+        assert!(market.base_hlp_vault.debt_principal < principal_before);
         assert_eq!(market.base_hlp_vault.last_rebalance_slot, 44);
         assert_eq!(
             market.base_hlp_vault.pending_rebalance,
@@ -1423,6 +1450,7 @@ mod tests {
         let base_ylp_before = market.quote_hlp_vault.ylp_base_shares;
         let quote_ylp_before = market.quote_hlp_vault.ylp_quote_shares;
         let debt_before = market.quote_hlp_vault.debt_shares;
+        let principal_before = market.quote_hlp_vault.debt_principal;
 
         let (_, quote_receipt) = rebalance_hlp_vaults(&mut market, 45).unwrap();
 
@@ -1433,6 +1461,7 @@ mod tests {
         assert!(market.quote_hlp_vault.ylp_base_shares > base_ylp_before);
         assert!(market.quote_hlp_vault.ylp_quote_shares > quote_ylp_before);
         assert!(market.quote_hlp_vault.debt_shares > debt_before);
+        assert!(market.quote_hlp_vault.debt_principal > principal_before);
         assert_eq!(market.quote_hlp_vault.last_rebalance_slot, 45);
         assert_hlp_near_target(&market, MarketAsset::Quote, 5 * NAD as u128);
     }
