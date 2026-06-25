@@ -12,6 +12,46 @@ use anchor_lang::prelude::*;
 use crate::constants::{BPS_DENOMINATOR, MAX_INTEREST_ACCRUAL_MS, MS_PER_YEAR, NAD};
 use crate::errors::ErrorCode;
 
+/// Split a debt repayment into the principal returned to the reserve and the
+/// interest owed to suppliers, proportional to the outstanding debt.
+///
+/// `total_debt = shares * index >= principal`, `repaid <= total_debt`. This is
+/// the reusable primitive for non-compounding interest routing: the interest
+/// portion is what a repay/close/liquidate path should move into the interest
+/// vault instead of leaving in the reserve. Principal is rounded **down** (so
+/// interest rounds up), ensuring the interest vault is never under-funded.
+///
+/// Note: wiring this into the live repay/close/liquidate token flows is a
+/// separate, review-gated change (it adds interest-vault accounts and touches
+/// the liquidation path); this function only encodes the arithmetic.
+pub fn realized_interest_split(
+    repaid: u64,
+    total_debt: u128,
+    principal: u128,
+) -> Result<(u64, u64)> {
+    require!(total_debt >= principal, ErrorCode::MarketMathOverflow);
+    let repaid_u = repaid as u128;
+    require!(repaid_u <= total_debt, ErrorCode::InsufficientDebt);
+    if repaid_u == 0 {
+        return Ok((0, 0));
+    }
+    let principal_paid = if repaid_u == total_debt {
+        // Full repayment returns exactly the outstanding principal.
+        principal
+    } else {
+        principal
+            .checked_mul(repaid_u)
+            .and_then(|value| value.checked_div(total_debt))
+            .ok_or(ErrorCode::MarketMathOverflow)?
+    };
+    let interest_paid = repaid_u
+        .checked_sub(principal_paid)
+        .ok_or(ErrorCode::MarketMathOverflow)?;
+    let principal_paid = u64::try_from(principal_paid).map_err(|_| ErrorCode::MarketMathOverflow)?;
+    let interest_paid = u64::try_from(interest_paid).map_err(|_| ErrorCode::MarketMathOverflow)?;
+    Ok((principal_paid, interest_paid))
+}
+
 /// Per-market parameters of the kinked borrow-rate curve, all APRs in bps:
 ///
 /// ```text
@@ -248,5 +288,44 @@ mod tests {
         let capped = accrued_index_nad(NAD as u128, &params, 10_000, MS_PER_YEAR * 100).unwrap();
         let one_year = accrued_index_nad(NAD as u128, &params, 10_000, MS_PER_YEAR).unwrap();
         assert_eq!(capped, one_year);
+    }
+
+    #[test]
+    fn full_repay_splits_exactly_principal_and_interest() {
+        // 100 principal, 10 accrued interest, full 110 repay.
+        assert_eq!(realized_interest_split(110, 110, 100).unwrap(), (100, 10));
+    }
+
+    #[test]
+    fn partial_repay_splits_proportionally() {
+        // Repaying half of a 110 debt (principal 100) -> 50 principal, 5 interest.
+        assert_eq!(realized_interest_split(55, 110, 100).unwrap(), (50, 5));
+    }
+
+    #[test]
+    fn no_accrued_interest_routes_nothing() {
+        // principal == total_debt -> every repay is pure principal.
+        assert_eq!(realized_interest_split(100, 100, 100).unwrap(), (100, 0));
+        assert_eq!(realized_interest_split(40, 100, 100).unwrap(), (40, 0));
+    }
+
+    #[test]
+    fn zero_repay_is_zero_split() {
+        assert_eq!(realized_interest_split(0, 110, 100).unwrap(), (0, 0));
+    }
+
+    #[test]
+    fn repay_above_debt_is_rejected() {
+        assert_eq!(
+            realized_interest_split(120, 110, 100).unwrap_err(),
+            error!(ErrorCode::InsufficientDebt)
+        );
+    }
+
+    #[test]
+    fn principal_rounds_down_so_interest_is_never_underfunded() {
+        // total_debt = 3, principal = 2, repay 1 -> principal_paid = floor(2/3) = 0,
+        // interest = 1 (rounded toward the vault, never under-funding it).
+        assert_eq!(realized_interest_split(1, 3, 2).unwrap(), (0, 1));
     }
 }
