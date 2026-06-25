@@ -3,7 +3,6 @@ use anchor_lang::prelude::*;
 use crate::{
     constants::{BPS_DENOMINATOR, MAX_HALF_LIFE_MS, MIN_HALF_LIFE_MS},
     errors::ErrorCode,
-    math::interest::InterestRateParams,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
@@ -23,11 +22,6 @@ pub struct MarketConfig {
     pub k_ema_drawdown_bps: u16,
     pub recognized_collateral_cap_bps: u16,
     pub market_health_min_bps: u16,
-    // Kinked borrow-interest curve (APR in bps). See `math::interest`.
-    pub interest_base_rate_bps: u16,
-    pub interest_slope1_bps: u16,
-    pub interest_optimal_utilization_bps: u16,
-    pub interest_slope2_bps: u16,
     pub soft_borrow_enabled: bool,
     pub hedged_lp_enabled: bool,
     pub start_time: i64,
@@ -72,24 +66,8 @@ impl MarketConfig {
                 && self.recognized_collateral_cap_bps >= self.market_health_min_bps,
             ErrorCode::InvalidMarketConfig
         );
-        // The kink must be a strict interior point so the curve is well-defined
-        // on both sides; rate magnitudes are bounded by their u16 width.
-        require!(
-            self.interest_optimal_utilization_bps > 0
-                && self.interest_optimal_utilization_bps < BPS_DENOMINATOR,
-            ErrorCode::InvalidMarketConfig
-        );
         require!(!self.soft_borrow_enabled, ErrorCode::InvalidMarketConfig);
         Ok(())
-    }
-
-    pub fn interest_rate_params(&self) -> InterestRateParams {
-        InterestRateParams {
-            base_rate_bps: self.interest_base_rate_bps as u64,
-            slope1_bps: self.interest_slope1_bps as u64,
-            optimal_utilization_bps: self.interest_optimal_utilization_bps as u64,
-            slope2_bps: self.interest_slope2_bps as u64,
-        }
     }
 }
 
@@ -118,10 +96,6 @@ mod tests {
             k_ema_drawdown_bps: 1_000,
             recognized_collateral_cap_bps: 15_000,
             market_health_min_bps: 11_000,
-            interest_base_rate_bps: 0,
-            interest_slope1_bps: 1_000,
-            interest_optimal_utilization_bps: 8_000,
-            interest_slope2_bps: 30_000,
             soft_borrow_enabled: false,
             hedged_lp_enabled: true,
             start_time: 0,
@@ -205,21 +179,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn market_config_rejects_degenerate_interest_kink() {
-        // The kink must be a strict interior point of (0, 100%).
-        let mut config = valid_config();
-        config.interest_optimal_utilization_bps = 0;
-        assert_eq!(
-            config.validate().unwrap_err(),
-            anchor_lang::prelude::error!(ErrorCode::InvalidMarketConfig)
-        );
-
-        let mut config = valid_config();
-        config.interest_optimal_utilization_bps = BPS_DENOMINATOR;
-        assert_eq!(
-            config.validate().unwrap_err(),
-            anchor_lang::prelude::error!(ErrorCode::InvalidMarketConfig)
-        );
-    }
 }

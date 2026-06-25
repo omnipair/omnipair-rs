@@ -1,20 +1,28 @@
-//! Borrow-index accrual transition.
+//! Borrow-index accrual transition (adaptive-curve model).
 //!
-//! Advances both per-asset borrow indices forward to the current slot using the
-//! kinked utilization rate model. Utilization is measured over *all* borrowing
-//! against a side — margin debt and the opposite-direction hLP vault's debt leg
-//! — since both are denominated in that side's asset and share its index.
+//! For each side: measure utilization over *all* borrowing against it (margin
+//! debt plus the opposite-direction hLP vault's leg, both denominated in that
+//! side's asset), price the instantaneous borrow rate off the curve anchored at
+//! the side's `rate_at_target`, accrue the borrow index over the elapsed time,
+//! and then drift `rate_at_target` toward the target utilization.
 //!
-//! Advancing the index is what charges interest: outstanding debt is valued as
-//! `shares * index`, so borrowers owe more over time. The matching credit is
-//! realized when that debt is repaid back into the reserve.
+//! Advancing the index charges interest (debt is `shares * index`); the anchor
+//! drift makes the rate *level* market-driven. Both are stored state, so the
+//! result is fully reproducible.
 
 use anchor_lang::prelude::*;
 
 use crate::{
-    constants::TARGET_MS_PER_SLOT,
+    constants::{
+        INTEREST_ADJUSTMENT_SPEED_PER_YEAR, INTEREST_CURVE_STEEPNESS_NAD,
+        INTEREST_MAX_ADAPTATION_STEP_NAD, INTEREST_MAX_RATE_AT_TARGET_NAD,
+        INTEREST_MIN_RATE_AT_TARGET_NAD, INTEREST_TARGET_UTILIZATION_BPS, TARGET_MS_PER_SLOT,
+    },
     errors::ErrorCode,
-    math::{accrued_index_nad, utilization_bps},
+    math::{
+        accrued_index_nad, adapt_rate_at_target_nad, instantaneous_rate_apr_nad, utilization_bps,
+        utilization_error_nad,
+    },
     state::{Debt, Market, MarketAsset},
 };
 
@@ -39,24 +47,58 @@ impl AccrueInterest {
             .ok_or(ErrorCode::MarketMathOverflow)?
             .saturating_mul(TARGET_MS_PER_SLOT);
 
-        let base_index = market.debt.base_borrow_index_nad;
-        let quote_index = market.debt.quote_borrow_index_nad;
-
-        let borrowed_base = total_borrowed(market, MarketAsset::Base, base_index)?;
-        let borrowed_quote = total_borrowed(market, MarketAsset::Quote, quote_index)?;
-        let base_util =
-            utilization_bps(borrowed_base, market.base_side.reserves.cash_reserve as u128)?;
-        let quote_util =
-            utilization_bps(borrowed_quote, market.quote_side.reserves.cash_reserve as u128)?;
-
-        let params = market.config.interest_rate_params();
-        market.debt.base_borrow_index_nad =
-            accrued_index_nad(base_index, &params, base_util, dt_ms)?;
-        market.debt.quote_borrow_index_nad =
-            accrued_index_nad(quote_index, &params, quote_util, dt_ms)?;
+        accrue_side(market, MarketAsset::Base, dt_ms)?;
+        accrue_side(market, MarketAsset::Quote, dt_ms)?;
         market.debt.last_accrual_slot = self.current_slot;
         Ok(())
     }
+}
+
+fn accrue_side(market: &mut Market, asset: MarketAsset, dt_ms: u64) -> Result<()> {
+    let (index, rate_at_target) = match asset {
+        MarketAsset::Base => (
+            market.debt.base_borrow_index_nad,
+            market.debt.base_rate_at_target_nad,
+        ),
+        MarketAsset::Quote => (
+            market.debt.quote_borrow_index_nad,
+            market.debt.quote_rate_at_target_nad,
+        ),
+    };
+    let cash = match asset {
+        MarketAsset::Base => market.base_side.reserves.cash_reserve,
+        MarketAsset::Quote => market.quote_side.reserves.cash_reserve,
+    } as u128;
+
+    let borrowed = total_borrowed(market, asset, index)?;
+    let util = utilization_bps(borrowed, cash)?;
+    let error = utilization_error_nad(util, INTEREST_TARGET_UTILIZATION_BPS)?;
+
+    // Accrue the index at the rate that prevailed over the elapsed window
+    // (using the anchor as it stood during that window), then drift the anchor.
+    let rate = instantaneous_rate_apr_nad(rate_at_target, error, INTEREST_CURVE_STEEPNESS_NAD)?;
+    let next_index = accrued_index_nad(index, rate, dt_ms)?;
+    let next_rate_at_target = adapt_rate_at_target_nad(
+        rate_at_target,
+        error,
+        dt_ms,
+        INTEREST_ADJUSTMENT_SPEED_PER_YEAR,
+        INTEREST_MIN_RATE_AT_TARGET_NAD,
+        INTEREST_MAX_RATE_AT_TARGET_NAD,
+        INTEREST_MAX_ADAPTATION_STEP_NAD,
+    )?;
+
+    match asset {
+        MarketAsset::Base => {
+            market.debt.base_borrow_index_nad = next_index;
+            market.debt.base_rate_at_target_nad = next_rate_at_target;
+        }
+        MarketAsset::Quote => {
+            market.debt.quote_borrow_index_nad = next_index;
+            market.debt.quote_rate_at_target_nad = next_rate_at_target;
+        }
+    }
+    Ok(())
 }
 
 /// Total outstanding debt denominated in `asset` (margin fixed + soft debt plus
@@ -88,8 +130,8 @@ mod tests {
     use super::*;
     use crate::{
         constants::{
-            INTEREST_BASE_RATE_BPS, INTEREST_OPTIMAL_UTILIZATION_BPS, INTEREST_SLOPE1_BPS,
-            INTEREST_SLOPE2_BPS, MS_PER_YEAR, NAD, TARGET_MS_PER_SLOT,
+            INTEREST_INITIAL_RATE_AT_TARGET_NAD, INTEREST_MAX_RATE_AT_TARGET_NAD,
+            INTEREST_MIN_RATE_AT_TARGET_NAD, MS_PER_YEAR, NAD, TARGET_MS_PER_SLOT,
         },
         state::{
             Debt, HlpVault, Insurance, MarketConfig, MarketHealth, MarketSide, Reserves, Risk,
@@ -121,16 +163,12 @@ mod tests {
             manager: Pubkey::new_unique(),
             base_side,
             quote_side,
-            config: MarketConfig {
-                interest_base_rate_bps: INTEREST_BASE_RATE_BPS as u16,
-                interest_slope1_bps: INTEREST_SLOPE1_BPS as u16,
-                interest_optimal_utilization_bps: INTEREST_OPTIMAL_UTILIZATION_BPS as u16,
-                interest_slope2_bps: INTEREST_SLOPE2_BPS as u16,
-                ..MarketConfig::default()
-            },
+            config: MarketConfig::default(),
             debt: Debt {
                 base_borrow_index_nad: NAD as u128,
                 quote_borrow_index_nad: NAD as u128,
+                base_rate_at_target_nad: INTEREST_INITIAL_RATE_AT_TARGET_NAD,
+                quote_rate_at_target_nad: INTEREST_INITIAL_RATE_AT_TARGET_NAD,
                 last_accrual_slot: 0,
                 ..Debt::default()
             },
@@ -151,76 +189,69 @@ mod tests {
         let mut market = test_market(1_000, 1_000);
         market.debt.last_accrual_slot = 100;
         AccrueInterest::new(100).apply(&mut market).unwrap();
-        assert_eq!(market.debt.base_borrow_index_nad, NAD as u128);
         assert_eq!(market.debt.quote_borrow_index_nad, NAD as u128);
+        assert_eq!(
+            market.debt.quote_rate_at_target_nad,
+            INTEREST_INITIAL_RATE_AT_TARGET_NAD
+        );
         assert_eq!(market.debt.last_accrual_slot, 100);
     }
 
     #[test]
-    fn idle_market_does_not_accrue() {
-        // Cash present but zero debt -> 0% utilization -> base (0) rate.
+    fn idle_side_drifts_anchor_down_toward_min() {
+        // Cash present, zero debt -> utilization 0 -> error -1 -> anchor falls.
         let mut market = test_market(1_000_000, 1_000_000);
         AccrueInterest::new(slots_for_ms(MS_PER_YEAR))
             .apply(&mut market)
             .unwrap();
-        assert_eq!(market.debt.base_borrow_index_nad, NAD as u128);
-        assert_eq!(market.debt.quote_borrow_index_nad, NAD as u128);
+        assert!(market.debt.quote_rate_at_target_nad < INTEREST_INITIAL_RATE_AT_TARGET_NAD);
+        assert!(market.debt.quote_rate_at_target_nad >= INTEREST_MIN_RATE_AT_TARGET_NAD);
     }
 
     #[test]
-    fn quote_borrowing_accrues_quote_index_only() {
-        // Quote side: 800 borrowed via base-hLP, 200 idle cash -> 80% util (kink),
-        // 10% APR over a year -> quote index *1.10. Base side has no debt.
-        let mut market = test_market(1_000_000, 200);
-        market.base_hlp_vault.debt_shares = 800; // quote-denominated debt
+    fn high_utilization_raises_anchor_and_accrues_index() {
+        // Quote borrowed 950 via base-hLP, 50 cash -> util 95% (above 90% target).
+        // error = +0.5 -> curve mult 2.5x -> rate = 4% * 2.5 = 10% APR.
+        let mut market = test_market(1_000_000, 50);
+        market.base_hlp_vault.debt_shares = 950;
         AccrueInterest::new(slots_for_ms(MS_PER_YEAR))
             .apply(&mut market)
             .unwrap();
-        assert_eq!(market.debt.base_borrow_index_nad, NAD as u128);
-        assert_eq!(
-            market.debt.quote_borrow_index_nad,
-            (NAD as u128) * 110 / 100
-        );
-        assert_eq!(market.debt.last_accrual_slot, slots_for_ms(MS_PER_YEAR));
+        // 10% APR over one year compounds the index to 1.10.
+        assert_eq!(market.debt.quote_borrow_index_nad, (NAD as u128) * 110 / 100);
+        // Anchor drifted up (util above target).
+        assert!(market.debt.quote_rate_at_target_nad > INTEREST_INITIAL_RATE_AT_TARGET_NAD);
+        assert!(market.debt.quote_rate_at_target_nad <= INTEREST_MAX_RATE_AT_TARGET_NAD);
     }
 
     #[test]
     fn margin_and_hlp_debt_both_count_toward_utilization() {
-        // Quote debt = 400 margin + 400 base-hLP = 800 borrowed, 200 cash -> 80%.
-        let mut market = test_market(1_000_000, 200);
-        market.debt.fixed_quote_shares = 400;
-        market.base_hlp_vault.debt_shares = 400;
+        // Quote debt = 480 margin + 480 base-hLP = 960 borrowed, 40 cash -> 96%
+        // (> target), so the anchor must rise. If either leg were ignored, util
+        // would fall below target and the anchor would instead drop.
+        let mut market = test_market(1_000_000, 40);
+        market.debt.fixed_quote_shares = 480;
+        market.base_hlp_vault.debt_shares = 480;
         AccrueInterest::new(slots_for_ms(MS_PER_YEAR))
             .apply(&mut market)
             .unwrap();
-        assert_eq!(
-            market.debt.quote_borrow_index_nad,
-            (NAD as u128) * 110 / 100
-        );
+        assert!(market.debt.quote_rate_at_target_nad > INTEREST_INITIAL_RATE_AT_TARGET_NAD);
     }
 
     #[test]
-    fn accrual_charges_interest_to_outstanding_debt() {
-        // 800 quote borrowed via base-hLP, 200 idle -> 80% util -> 10% APR / yr.
-        let mut market = test_market(1_000_000, 200);
-        market.base_hlp_vault.debt_shares = 800;
-        let debt_before = Debt::shares_to_debt(
-            market.base_hlp_vault.debt_shares,
-            market.debt.quote_borrow_index_nad,
-        )
-        .unwrap();
-
-        AccrueInterest::new(slots_for_ms(MS_PER_YEAR))
-            .apply(&mut market)
-            .unwrap();
-
-        let debt_after = Debt::shares_to_debt(
-            market.base_hlp_vault.debt_shares,
-            market.debt.quote_borrow_index_nad,
-        )
-        .unwrap();
-        // The borrower's outstanding debt grew by the accrued interest (+10%).
-        assert_eq!(debt_before, 800);
-        assert_eq!(debt_after, 880);
+    fn anchor_saturates_at_max_under_sustained_pressure() {
+        // ~100% utilization held for years: the anchor ramps up (capped per
+        // step) and clamps at the max, never exceeding it.
+        let mut market = test_market(1_000_000, 1);
+        market.base_hlp_vault.debt_shares = 10_000;
+        for year in 1..=15u64 {
+            AccrueInterest::new(slots_for_ms(MS_PER_YEAR * year))
+                .apply(&mut market)
+                .unwrap();
+        }
+        assert_eq!(
+            market.debt.quote_rate_at_target_nad,
+            INTEREST_MAX_RATE_AT_TARGET_NAD
+        );
     }
 }

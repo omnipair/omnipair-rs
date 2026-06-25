@@ -10,6 +10,8 @@ pub struct Debt {
     pub soft_quote_shares: u128,
     pub base_borrow_index_nad: u128,
     pub quote_borrow_index_nad: u128,
+    pub base_rate_at_target_nad: u128,
+    pub quote_rate_at_target_nad: u128,
     pub recognized_base_collateral_for_quote_debt: u64,
     pub recognized_quote_collateral_for_base_debt: u64,
     pub last_recognition_slot: u64,

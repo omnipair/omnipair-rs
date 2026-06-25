@@ -25,17 +25,33 @@ pub const MS_PER_DAY: u64 = 86_400_000;
 pub const MS_PER_YEAR: u64 = 365 * MS_PER_DAY;
 pub const MIN_LIQUIDITY: u64 = 1_000;
 
-// INTEREST RATE MODEL (kinked utilization curve, fixed APR in bps)
-// rate(u) = base + slope1 * min(u, u*)/u*           for u <= u*
-//         = base + slope1 + slope2 * (u - u*)/(1-u*) for u >  u*
-/// Borrow APR at 0% utilization.
-pub const INTEREST_BASE_RATE_BPS: u64 = 0;
-/// Additional APR accrued linearly between 0% and optimal utilization.
-pub const INTEREST_SLOPE1_BPS: u64 = 1_000; // +10% APR at the kink
-/// Utilization kink (optimal point), in bps of total supplied liquidity.
-pub const INTEREST_OPTIMAL_UTILIZATION_BPS: u64 = 8_000; // 80%
-/// Steep APR slope applied between optimal and full utilization.
-pub const INTEREST_SLOPE2_BPS: u64 = 30_000; // +300% APR from kink to 100%
+// ADAPTIVE-CURVE INTEREST RATE MODEL
+// A fixed-shape curve anchored at the target utilization, multiplied by a
+// per-market `rate_at_target` that drifts toward the target over time:
+//
+//   instantaneous_rate(u) = rate_at_target * curve(error(u))
+//   error(u) in [-1, 1], 0 at target; curve in [1/steepness, steepness]
+//   rate_at_target_next = rate_at_target * e^(speed * error * dt/year)  (clamped)
+//
+// The curve gives an immediate, graded response to utilization; the anchor
+// makes the *level* market-driven (no hardcoded ceiling), so the protocol
+// never has to know the "right" rate in advance.
+/// Target utilization the controller steers toward (bps of supplied liquidity).
+pub const INTEREST_TARGET_UTILIZATION_BPS: u64 = 9_000; // 90%
+/// Curve multiplier at full utilization (and its reciprocal at 0%), NAD-scaled.
+/// 4x means the instantaneous rate ranges [rate_at_target/4, rate_at_target*4].
+pub const INTEREST_CURVE_STEEPNESS_NAD: u128 = (NAD as u128) * 4;
+/// Controller speed: e-folding rate per year of `rate_at_target` at full error.
+/// Tuned gentle (level ~doubles in ~2 weeks at full error) since the curve
+/// already provides the fast response.
+pub const INTEREST_ADJUSTMENT_SPEED_PER_YEAR: u128 = 20;
+/// Lower/upper bounds and initial value for the adaptive anchor (APR in NAD).
+pub const INTEREST_MIN_RATE_AT_TARGET_NAD: u128 = (NAD as u128) / 1_000; // 0.1% APR
+pub const INTEREST_MAX_RATE_AT_TARGET_NAD: u128 = (NAD as u128) * 2; // 200% APR
+pub const INTEREST_INITIAL_RATE_AT_TARGET_NAD: u128 = (NAD as u128) * 4 / 100; // 4% APR
+/// Cap on the per-accrual exponent (NAD), bounding the anchor's move in a single
+/// step so a stale market can't jump violently (clamped further by min/max).
+pub const INTEREST_MAX_ADAPTATION_STEP_NAD: i128 = (NAD as i128) / 2;
 /// Upper bound on the elapsed time charged in a single accrual, to bound
 /// index growth (and therefore overflow / abuse) for very stale markets.
 pub const MAX_INTEREST_ACCRUAL_MS: u64 = MS_PER_YEAR;
