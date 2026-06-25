@@ -135,6 +135,23 @@ impl Market {
         crate::transitions::interest::AccrueInterest::new(current_slot).apply(self)
     }
 
+    /// Manager-only authority: sensitive actions (fee setting, operator/manager
+    /// rotation) require the market manager.
+    pub fn assert_manager(&self, signer: Pubkey) -> Result<()> {
+        require_keys_eq!(signer, self.manager, ErrorCode::InvalidMarketManager);
+        Ok(())
+    }
+
+    /// Config authority: the manager, or the operator acting on its behalf
+    /// (keepers/bots). Both may mutate market parameters.
+    pub fn assert_config_authority(&self, signer: Pubkey) -> Result<()> {
+        require!(
+            signer == self.manager || signer == self.operator,
+            ErrorCode::InvalidMarketConfigAuthority
+        );
+        Ok(())
+    }
+
     pub fn side(&self, market_asset: MarketAsset) -> Result<&MarketSide> {
         match market_asset {
             MarketAsset::Base => Ok(&self.base_side),
@@ -210,4 +227,55 @@ macro_rules! generate_market_seeds {
             &[$market.bump],
         ]
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn market_with_roles(manager: Pubkey, operator: Pubkey) -> Market {
+        Market {
+            version: MARKET_VERSION,
+            base_mint: Pubkey::new_unique(),
+            quote_mint: Pubkey::new_unique(),
+            operator,
+            manager,
+            base_side: MarketSide::default(),
+            quote_side: MarketSide::default(),
+            config: MarketConfig::default(),
+            debt: Debt::default(),
+            base_hlp_vault: HlpVault::default(),
+            quote_hlp_vault: HlpVault::default(),
+            risk: Risk::default(),
+            health: MarketHealth::default(),
+            insurance: Insurance::default(),
+            params_hash: [0u8; 32],
+            last_update_slot: 0,
+            reduce_only: false,
+            bump: 255,
+        }
+    }
+
+    #[test]
+    fn assert_manager_accepts_only_the_manager() {
+        let manager = Pubkey::new_unique();
+        let operator = Pubkey::new_unique();
+        let market = market_with_roles(manager, operator);
+        assert!(market.assert_manager(manager).is_ok());
+        // The operator is NOT the manager for sensitive (manager-only) actions.
+        assert!(market.assert_manager(operator).is_err());
+        assert!(market.assert_manager(Pubkey::new_unique()).is_err());
+    }
+
+    #[test]
+    fn assert_config_authority_accepts_manager_and_operator() {
+        let manager = Pubkey::new_unique();
+        let operator = Pubkey::new_unique();
+        let market = market_with_roles(manager, operator);
+        assert!(market.assert_config_authority(manager).is_ok());
+        assert!(market.assert_config_authority(operator).is_ok());
+        assert!(market
+            .assert_config_authority(Pubkey::new_unique())
+            .is_err());
+    }
 }

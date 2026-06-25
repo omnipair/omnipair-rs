@@ -112,6 +112,14 @@ pub mod omnipair_v2 {
         SetMarketReduceOnly::handle_set(ctx, args)
     }
 
+    pub fn set_operator(ctx: Context<SetMarketAuthority>, args: SetOperatorArgs) -> Result<()> {
+        SetMarketAuthority::handle_set_operator(ctx, args)
+    }
+
+    pub fn set_manager(ctx: Context<SetMarketAuthority>, args: SetManagerArgs) -> Result<()> {
+        SetMarketAuthority::handle_set_manager(ctx, args)
+    }
+
     #[access_control(ctx.accounts.validate(&args))]
     pub fn add_liquidity(ctx: Context<AddLiquidity>, args: AddLiquidityArgs) -> Result<()> {
         AddLiquidity::handle_add_liquidity(ctx, args)

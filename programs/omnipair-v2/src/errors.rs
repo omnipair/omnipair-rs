@@ -23,6 +23,12 @@ pub enum ErrorCode {
     #[msg("Invalid reduce-only authority")]
     InvalidReduceOnlyAuthority,
 
+    #[msg("Invalid market manager")]
+    InvalidMarketManager,
+
+    #[msg("Invalid market config authority")]
+    InvalidMarketConfigAuthority,
+
     #[msg("Invalid argument")]
     InvalidArgument,
 

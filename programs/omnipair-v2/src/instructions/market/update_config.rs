@@ -2,9 +2,8 @@ use anchor_lang::prelude::*;
 
 use crate::{
     constants::*,
-    errors::ErrorCode,
     events::{MarketEventMetadata, MarketHealthUpdated, MarketUpdated},
-    state::{FutarchyAuthority, Market, MarketConfig},
+    state::{Market, MarketConfig},
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -27,18 +26,15 @@ pub struct UpdateMarketConfig<'info> {
     )]
     pub market: Box<Account<'info, Market>>,
 
-    #[account(
-        seeds = [FUTARCHY_AUTHORITY_SEED_PREFIX],
-        bump = futarchy_authority.bump
-    )]
-    pub futarchy_authority: Account<'info, FutarchyAuthority>,
-
-    #[account(address = futarchy_authority.authority @ ErrorCode::InvalidFutarchyAuthority)]
+    /// Must be the market manager or its operator (checked in the handler).
     pub authority_signer: Signer<'info>,
 }
 
 impl<'info> UpdateMarketConfig<'info> {
     pub fn handle_update(ctx: Context<Self>, args: UpdateMarketConfigArgs) -> Result<()> {
+        ctx.accounts
+            .market
+            .assert_config_authority(ctx.accounts.authority_signer.key())?;
         let market = &mut ctx.accounts.market;
         apply_config_update(market, args.config)?;
 

@@ -196,21 +196,6 @@ impl<'info> InitializeMarket<'info> {
             self.quote_mint.key(),
             ErrorCode::InvalidMint
         );
-        require_keys_neq!(
-            args.operator,
-            Pubkey::default(),
-            ErrorCode::InvalidMarketConfig
-        );
-        require_keys_neq!(
-            args.manager,
-            Pubkey::default(),
-            ErrorCode::InvalidMarketConfig
-        );
-        require_keys_eq!(
-            args.manager,
-            self.futarchy_authority.authority,
-            ErrorCode::InvalidFutarchyAuthority
-        );
         require_supported_asset_mint(&self.base_mint)?;
         require_supported_asset_mint(&self.quote_mint)?;
         let market = self.market.key();
@@ -232,8 +217,21 @@ impl<'info> InitializeMarket<'info> {
         market.version = MARKET_VERSION;
         market.base_mint = ctx.accounts.base_mint.key();
         market.quote_mint = ctx.accounts.quote_mint.key();
-        market.operator = args.operator;
-        market.manager = args.manager;
+        // Default both roles to the deployer; an explicit non-default value in
+        // args lets a deployer hand control to a multisig/operator at creation.
+        let payer_key = ctx.accounts.payer.key();
+        let resolved_operator = if args.operator == Pubkey::default() {
+            payer_key
+        } else {
+            args.operator
+        };
+        let resolved_manager = if args.manager == Pubkey::default() {
+            payer_key
+        } else {
+            args.manager
+        };
+        market.operator = resolved_operator;
+        market.manager = resolved_manager;
         market.base_side = MarketSide {
             asset_mint: ctx.accounts.base_mint.key(),
             asset_decimals: ctx.accounts.base_mint.decimals,
@@ -322,8 +320,8 @@ impl<'info> InitializeMarket<'info> {
             quote_insurance_vault: ctx.accounts.quote_insurance_vault.key(),
             base_hlp_mint: ctx.accounts.base_hlp_mint.key(),
             quote_hlp_mint: ctx.accounts.quote_hlp_mint.key(),
-            operator: args.operator,
-            manager: args.manager,
+            operator: resolved_operator,
+            manager: resolved_manager,
             target_hlp_leverage_bps: args.config.target_hlp_leverage_bps,
             swap_fee_bps: args.config.swap_fee_bps,
             protocol_fee_bps: args.config.protocol_fee_bps,

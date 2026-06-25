@@ -52,6 +52,14 @@ pub struct MarketUpdated {
 }
 
 #[event]
+pub struct MarketAuthorityUpdated {
+    pub market: Pubkey,
+    pub manager: Pubkey,
+    pub operator: Pubkey,
+    pub metadata: MarketEventMetadata,
+}
+
+#[event]
 pub struct MarketHealthUpdated {
     pub market: Pubkey,
     pub recognized_base_collateral_for_quote_debt: u64,
