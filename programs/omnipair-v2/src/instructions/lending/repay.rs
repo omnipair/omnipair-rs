@@ -151,6 +151,7 @@ impl<'info> Repay<'info> {
             ctx.accounts.interest_vault.reload()?;
             RecordInterestCredit::new(
                 debt_receipt.interest_paid,
+                ctx.accounts.market.config.manager_fee_bps,
                 ctx.accounts.futarchy_authority.revenue_share.interest_bps,
                 ctx.accounts.futarchy_authority.protocol_auction_split,
             )

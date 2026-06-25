@@ -34,6 +34,7 @@ pub struct MarketCreated {
     pub manager: Pubkey,
     pub target_hlp_leverage_bps: u16,
     pub swap_fee_bps: u16,
+    pub manager_fee_bps: u16,
     pub protocol_fee_bps: u16,
     pub params_hash: [u8; 32],
     pub version: u8,
@@ -46,7 +47,7 @@ pub struct MarketUpdated {
     pub reduce_only: bool,
     pub target_hlp_leverage_bps: u16,
     pub swap_fee_bps: u16,
-    pub operator_fee_bps: u16,
+    pub manager_fee_bps: u16,
     pub protocol_fee_bps: u16,
     pub metadata: MarketEventMetadata,
 }
@@ -127,6 +128,18 @@ pub struct MarketFeeLiabilityClaimed {
     pub claim_kind: u8,
     pub fee_amount: u64,
     pub remaining_fee_liability: u64,
+    pub metadata: MarketEventMetadata,
+}
+
+#[event]
+pub struct ManagerFeesClaimed {
+    pub market: Pubkey,
+    pub manager: Pubkey,
+    pub asset_mint: Pubkey,
+    pub swap_fee_amount: u64,
+    pub interest_fee_amount: u64,
+    pub remaining_manager_swap_fee_liability: u64,
+    pub remaining_manager_interest_fee_liability: u64,
     pub metadata: MarketEventMetadata,
 }
 

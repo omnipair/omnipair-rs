@@ -324,6 +324,7 @@ impl<'info> InitializeMarket<'info> {
             manager: resolved_manager,
             target_hlp_leverage_bps: args.config.target_hlp_leverage_bps,
             swap_fee_bps: args.config.swap_fee_bps,
+            manager_fee_bps: args.config.manager_fee_bps,
             protocol_fee_bps: args.config.protocol_fee_bps,
             params_hash: args.params_hash,
             version: MARKET_VERSION,

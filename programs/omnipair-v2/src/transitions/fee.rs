@@ -3,18 +3,19 @@ use anchor_lang::prelude::*;
 use crate::{
     constants::{BPS_DENOMINATOR, NAD},
     errors::ErrorCode,
-    state::{MarketFeeClaimKind, MarketSide, ProtocolAuctionSplit, YieldAccount},
+    state::{MarketSide, ProtocolAuctionSplit, YieldAccount},
 };
 
 pub struct RecordSwapFeeCredit {
     pub fee_credit: u64,
-    pub operator_fee_bps: u16,
+    pub manager_fee_bps: u16,
     pub protocol_fee_bps: u16,
     pub protocol_auction_split: ProtocolAuctionSplit,
 }
 
 pub struct RecordInterestCredit {
     pub interest_credit: u64,
+    pub manager_fee_bps: u16,
     pub protocol_fee_bps: u16,
     pub protocol_auction_split: ProtocolAuctionSplit,
 }
@@ -32,17 +33,6 @@ pub struct SettleYieldClaim {
     pub interest_vault_balance: u64,
 }
 
-pub struct PrepareMarketFeeClaim {
-    pub claim_kind: MarketFeeClaimKind,
-    pub fee_vault_balance: u64,
-}
-
-pub struct SettleMarketFeeClaim {
-    pub claim_kind: MarketFeeClaimKind,
-    pub fee_amount: u64,
-    pub fee_vault_balance: u64,
-}
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FeesReceipt {
     pub swap_fee_growth_index_nad: u128,
@@ -51,7 +41,8 @@ pub struct FeesReceipt {
     pub interest_liability: u64,
     pub unallocated_swap_fee_liability: u64,
     pub unallocated_interest_liability: u64,
-    pub operator_fee_liability: u64,
+    pub manager_swap_fee_liability: u64,
+    pub manager_interest_fee_liability: u64,
     pub protocol_fee_liability: u64,
     pub buyback_fee_liability: u64,
     pub swap_fee_vault_balance: u64,
@@ -67,13 +58,6 @@ pub struct YieldClaimReceipt {
     pub remaining_interest_liability: u64,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct MarketFeeClaimReceipt {
-    pub fee_amount: u64,
-    pub remaining_fee_liability: u64,
-    pub fee_vault_balance: u64,
-}
-
 impl FeesReceipt {
     pub fn from_side(market_side: &MarketSide) -> Self {
         let fees = &market_side.fees;
@@ -84,7 +68,8 @@ impl FeesReceipt {
             interest_liability: fees.interest_liability,
             unallocated_swap_fee_liability: fees.unallocated_swap_fee_liability,
             unallocated_interest_liability: fees.unallocated_interest_liability,
-            operator_fee_liability: fees.operator_fee_liability,
+            manager_swap_fee_liability: fees.manager_swap_fee_liability,
+            manager_interest_fee_liability: fees.manager_interest_fee_liability,
             protocol_fee_liability: fees.protocol_fee_liability,
             buyback_fee_liability: fees.buyback_fee_liability,
             swap_fee_vault_balance: fees.swap_fee_vault_balance,
@@ -96,13 +81,13 @@ impl FeesReceipt {
 impl RecordSwapFeeCredit {
     pub fn new(
         fee_credit: u64,
-        operator_fee_bps: u16,
+        manager_fee_bps: u16,
         protocol_fee_bps: u16,
         protocol_auction_split: ProtocolAuctionSplit,
     ) -> Self {
         Self {
             fee_credit,
-            operator_fee_bps,
+            manager_fee_bps,
             protocol_fee_bps,
             protocol_auction_split,
         }
@@ -112,11 +97,8 @@ impl RecordSwapFeeCredit {
         if self.fee_credit == 0 {
             return Ok(FeesReceipt::from_side(market_side));
         }
-        let (operator_fee, protocol_fee, lp_fee) = split_revenue(
-            self.fee_credit,
-            self.operator_fee_bps,
-            self.protocol_fee_bps,
-        )?;
+        let (manager_fee, protocol_fee, lp_fee) =
+            split_revenue(self.fee_credit, self.manager_fee_bps, self.protocol_fee_bps)?;
         let (fee_auction_amount, buyback_auction_amount) =
             split_protocol_auction_fee(protocol_fee, &self.protocol_auction_split)?;
         market_side.fees.swap_fee_vault_balance = market_side
@@ -124,10 +106,10 @@ impl RecordSwapFeeCredit {
             .swap_fee_vault_balance
             .checked_add(self.fee_credit)
             .ok_or(ErrorCode::MarketMathOverflow)?;
-        market_side.fees.operator_fee_liability = market_side
+        market_side.fees.manager_swap_fee_liability = market_side
             .fees
-            .operator_fee_liability
-            .checked_add(operator_fee)
+            .manager_swap_fee_liability
+            .checked_add(manager_fee)
             .ok_or(ErrorCode::MarketMathOverflow)?;
         market_side.fees.protocol_fee_liability = market_side
             .fees
@@ -153,11 +135,13 @@ impl RecordSwapFeeCredit {
 impl RecordInterestCredit {
     pub fn new(
         interest_credit: u64,
+        manager_fee_bps: u16,
         protocol_fee_bps: u16,
         protocol_auction_split: ProtocolAuctionSplit,
     ) -> Self {
         Self {
             interest_credit,
+            manager_fee_bps,
             protocol_fee_bps,
             protocol_auction_split,
         }
@@ -167,14 +151,22 @@ impl RecordInterestCredit {
         if self.interest_credit == 0 {
             return Ok(FeesReceipt::from_side(market_side));
         }
-        let (_, protocol_fee, lp_interest) =
-            split_revenue(self.interest_credit, 0, self.protocol_fee_bps)?;
+        let (manager_fee, protocol_fee, lp_interest) = split_revenue(
+            self.interest_credit,
+            self.manager_fee_bps,
+            self.protocol_fee_bps,
+        )?;
         let (fee_auction_amount, buyback_auction_amount) =
             split_protocol_auction_fee(protocol_fee, &self.protocol_auction_split)?;
         market_side.fees.interest_vault_balance = market_side
             .fees
             .interest_vault_balance
             .checked_add(self.interest_credit)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        market_side.fees.manager_interest_fee_liability = market_side
+            .fees
+            .manager_interest_fee_liability
+            .checked_add(manager_fee)
             .ok_or(ErrorCode::MarketMathOverflow)?;
         market_side.fees.protocol_fee_liability = market_side
             .fees
@@ -264,39 +256,6 @@ impl SettleYieldClaim {
     }
 }
 
-impl PrepareMarketFeeClaim {
-    pub fn apply(self, market_side: &mut MarketSide) -> Result<MarketFeeClaimReceipt> {
-        let fee_amount = market_side.fees.market_fee_liability(self.claim_kind);
-        require!(fee_amount > 0, ErrorCode::AmountZero);
-        require_gte!(
-            self.fee_vault_balance,
-            fee_amount,
-            ErrorCode::UnbackedFeeLiability
-        );
-        Ok(MarketFeeClaimReceipt {
-            fee_amount,
-            remaining_fee_liability: fee_amount,
-            fee_vault_balance: self.fee_vault_balance,
-        })
-    }
-}
-
-impl SettleMarketFeeClaim {
-    pub fn apply(self, market_side: &mut MarketSide) -> Result<MarketFeeClaimReceipt> {
-        let fee_amount = market_side
-            .fees
-            .claim_market_fee_liability(self.claim_kind)?;
-        require_eq!(fee_amount, self.fee_amount, ErrorCode::BrokenInvariant);
-        market_side.fees.swap_fee_vault_balance = self.fee_vault_balance;
-        market_side.fees.assert_backed()?;
-        Ok(MarketFeeClaimReceipt {
-            fee_amount,
-            remaining_fee_liability: 0,
-            fee_vault_balance: self.fee_vault_balance,
-        })
-    }
-}
-
 pub fn carry_forward_swap_fees(market_side: &mut MarketSide) -> Result<()> {
     let supply = market_side.shares.ylp_supply;
     if supply == 0 || market_side.fees.unallocated_swap_fee_liability == 0 {
@@ -347,12 +306,8 @@ pub fn carry_forward_interest(market_side: &mut MarketSide) -> Result<()> {
     Ok(())
 }
 
-fn split_revenue(amount: u64, operator_bps: u16, protocol_bps: u16) -> Result<(u64, u64, u64)> {
-    require_gte!(
-        BPS_DENOMINATOR,
-        operator_bps,
-        ErrorCode::InvalidMarketConfig
-    );
+fn split_revenue(amount: u64, manager_bps: u16, protocol_bps: u16) -> Result<(u64, u64, u64)> {
+    require_gte!(BPS_DENOMINATOR, manager_bps, ErrorCode::InvalidMarketConfig);
     require_gte!(
         BPS_DENOMINATOR,
         protocol_bps,
@@ -360,18 +315,18 @@ fn split_revenue(amount: u64, operator_bps: u16, protocol_bps: u16) -> Result<(u
     );
     require_gte!(
         BPS_DENOMINATOR,
-        operator_bps
+        manager_bps
             .checked_add(protocol_bps)
             .ok_or(ErrorCode::InvalidMarketConfig)?,
         ErrorCode::InvalidMarketConfig
     );
-    let operator_fee = proportional_bps(amount, operator_bps)?;
+    let manager_fee = proportional_bps(amount, manager_bps)?;
     let protocol_fee = proportional_bps(amount, protocol_bps)?;
     let lp_amount = amount
-        .checked_sub(operator_fee)
+        .checked_sub(manager_fee)
         .and_then(|value| value.checked_sub(protocol_fee))
         .ok_or(ErrorCode::MarketMathOverflow)?;
-    Ok((operator_fee, protocol_fee, lp_amount))
+    Ok((manager_fee, protocol_fee, lp_amount))
 }
 
 fn split_protocol_auction_fee(
@@ -428,7 +383,8 @@ mod tests {
         .apply(&mut side)
         .unwrap();
 
-        assert_eq!(receipt.operator_fee_liability, 1_000);
+        assert_eq!(receipt.manager_swap_fee_liability, 1_000);
+        assert_eq!(receipt.manager_interest_fee_liability, 0);
         assert_eq!(receipt.protocol_fee_liability, 1_500);
         assert_eq!(receipt.buyback_fee_liability, 500);
         assert_eq!(receipt.unallocated_swap_fee_liability, 7_000);
@@ -441,6 +397,7 @@ mod tests {
         let mut side = MarketSide::default();
         let receipt = RecordInterestCredit::new(
             10_000,
+            500,
             1_000,
             ProtocolAuctionSplit {
                 fee_auction_bps: 4_000,
@@ -450,9 +407,11 @@ mod tests {
         .apply(&mut side)
         .unwrap();
 
+        assert_eq!(receipt.manager_swap_fee_liability, 0);
+        assert_eq!(receipt.manager_interest_fee_liability, 500);
         assert_eq!(receipt.protocol_fee_liability, 400);
         assert_eq!(receipt.buyback_fee_liability, 600);
-        assert_eq!(receipt.unallocated_interest_liability, 9_000);
+        assert_eq!(receipt.unallocated_interest_liability, 8_500);
         assert_eq!(receipt.interest_vault_balance, 10_000);
         side.fees.assert_backed().unwrap();
     }

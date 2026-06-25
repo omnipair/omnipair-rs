@@ -1,14 +1,14 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-    constants::{BPS_DENOMINATOR, MAX_HALF_LIFE_MS, MIN_HALF_LIFE_MS},
+    constants::{BPS_DENOMINATOR, MAX_HALF_LIFE_MS, MAX_MANAGER_FEE_BPS, MIN_HALF_LIFE_MS},
     errors::ErrorCode,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct MarketConfig {
     pub swap_fee_bps: u16,
-    pub operator_fee_bps: u16,
+    pub manager_fee_bps: u16,
     pub protocol_fee_bps: u16,
     pub target_hlp_leverage_bps: u16,
     pub settlement_divergence_bps: u16,
@@ -34,10 +34,12 @@ impl MarketConfig {
             self.swap_fee_bps,
             ErrorCode::InvalidSwapFeeBps
         );
-        require!(
-            self.operator_fee_bps == 0 && self.protocol_fee_bps == 0,
+        require_gte!(
+            MAX_MANAGER_FEE_BPS,
+            self.manager_fee_bps,
             ErrorCode::InvalidMarketConfig
         );
+        require!(self.protocol_fee_bps == 0, ErrorCode::InvalidMarketConfig);
         require_eq!(
             self.target_hlp_leverage_bps,
             BPS_DENOMINATOR
@@ -82,7 +84,7 @@ mod tests {
     fn valid_config() -> MarketConfig {
         MarketConfig {
             swap_fee_bps: 30,
-            operator_fee_bps: 0,
+            manager_fee_bps: 0,
             protocol_fee_bps: 0,
             target_hlp_leverage_bps: 20_000,
             settlement_divergence_bps: 500,
@@ -107,6 +109,21 @@ mod tests {
         let mut config = valid_config();
         config.soft_borrow_enabled = true;
 
+        let err = config.validate().unwrap_err();
+
+        assert_eq!(
+            err,
+            anchor_lang::prelude::error!(ErrorCode::InvalidMarketConfig)
+        );
+    }
+
+    #[test]
+    fn market_config_caps_manager_fee_at_five_percent() {
+        let mut config = valid_config();
+        config.manager_fee_bps = MAX_MANAGER_FEE_BPS;
+        config.validate().unwrap();
+
+        config.manager_fee_bps = MAX_MANAGER_FEE_BPS + 1;
         let err = config.validate().unwrap_err();
 
         assert_eq!(

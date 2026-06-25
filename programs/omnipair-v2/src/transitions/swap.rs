@@ -10,7 +10,7 @@ pub struct Swap {
     pub amount_in_after_fee: u64,
     pub amount_out: u64,
     pub fee_credit: u64,
-    pub operator_fee_bps: u16,
+    pub manager_fee_bps: u16,
     pub protocol_fee_bps: u16,
     pub protocol_auction_split: ProtocolAuctionSplit,
 }
@@ -30,7 +30,7 @@ impl Swap {
         amount_in_after_fee: u64,
         amount_out: u64,
         fee_credit: u64,
-        operator_fee_bps: u16,
+        manager_fee_bps: u16,
         protocol_fee_bps: u16,
         protocol_auction_split: ProtocolAuctionSplit,
     ) -> Self {
@@ -38,7 +38,7 @@ impl Swap {
             amount_in_after_fee,
             amount_out,
             fee_credit,
-            operator_fee_bps,
+            manager_fee_bps,
             protocol_fee_bps,
             protocol_auction_split,
         }
@@ -78,7 +78,7 @@ impl Swap {
 
         let fees = RecordSwapFeeCredit::new(
             self.fee_credit,
-            self.operator_fee_bps,
+            self.manager_fee_bps,
             self.protocol_fee_bps,
             self.protocol_auction_split,
         )

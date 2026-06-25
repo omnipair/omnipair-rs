@@ -9,6 +9,8 @@ pub const NAD_DECIMALS: u8 = 9;
 #[constant]
 pub const BPS_DENOMINATOR: u16 = 10_000;
 #[constant]
+pub const MAX_MANAGER_FEE_BPS: u16 = 500;
+#[constant]
 pub const LIQUIDATION_INCENTIVE_BPS: u16 = 100;
 #[constant]
 pub const LIQUIDATION_PENALTY_BPS: u16 = 300;

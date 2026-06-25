@@ -15,22 +15,8 @@ pub struct Fees {
     pub unallocated_interest_liability: u64,
     pub protocol_fee_liability: u64,
     pub buyback_fee_liability: u64,
-    pub operator_fee_liability: u64,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
-pub enum MarketFeeClaimKind {
-    Operator,
-    Protocol,
-}
-
-impl MarketFeeClaimKind {
-    pub fn event_code(self) -> u8 {
-        match self {
-            Self::Operator => 0,
-            Self::Protocol => 1,
-        }
-    }
+    pub manager_swap_fee_liability: u64,
+    pub manager_interest_fee_liability: u64,
 }
 
 impl Fees {
@@ -41,7 +27,8 @@ impl Fees {
             .and_then(|value| value.checked_add(self.unallocated_interest_liability))
             .and_then(|value| value.checked_add(self.protocol_fee_liability))
             .and_then(|value| value.checked_add(self.buyback_fee_liability))
-            .and_then(|value| value.checked_add(self.operator_fee_liability))
+            .and_then(|value| value.checked_add(self.manager_swap_fee_liability))
+            .and_then(|value| value.checked_add(self.manager_interest_fee_liability))
             .ok_or(ErrorCode::MarketMathOverflow.into())
     }
 
@@ -56,23 +43,6 @@ impl Fees {
             ErrorCode::UnbackedFeeLiability
         );
         Ok(())
-    }
-
-    pub fn market_fee_liability(&self, claim_kind: MarketFeeClaimKind) -> u64 {
-        match claim_kind {
-            MarketFeeClaimKind::Operator => self.operator_fee_liability,
-            MarketFeeClaimKind::Protocol => self.protocol_fee_liability,
-        }
-    }
-
-    pub fn claim_market_fee_liability(&mut self, claim_kind: MarketFeeClaimKind) -> Result<u64> {
-        let fee_amount = self.market_fee_liability(claim_kind);
-        require!(fee_amount > 0, ErrorCode::AmountZero);
-        match claim_kind {
-            MarketFeeClaimKind::Operator => self.operator_fee_liability = 0,
-            MarketFeeClaimKind::Protocol => self.protocol_fee_liability = 0,
-        }
-        Ok(fee_amount)
     }
 
     pub fn protocol_auction_liability(&self, lane: ProtocolAuctionLane) -> u64 {
@@ -111,31 +81,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn market_fee_liabilities_settle_operator_and_protocol_buckets() {
+    fn total_liability_includes_manager_fee_buckets() {
         let mut fees = Fees {
             swap_fee_vault_balance: 700,
-            operator_fee_liability: 400,
+            interest_vault_balance: 300,
+            manager_swap_fee_liability: 400,
+            manager_interest_fee_liability: 100,
             protocol_fee_liability: 250,
             buyback_fee_liability: 50,
             ..Fees::default()
         };
 
-        let operator_fee = fees
-            .claim_market_fee_liability(MarketFeeClaimKind::Operator)
-            .unwrap();
-        let protocol_fee = fees
-            .claim_market_fee_liability(MarketFeeClaimKind::Protocol)
-            .unwrap();
-        let err = fees
-            .claim_market_fee_liability(MarketFeeClaimKind::Operator)
-            .unwrap_err();
-
-        assert_eq!(operator_fee, 400);
-        assert_eq!(protocol_fee, 250);
-        assert_eq!(fees.operator_fee_liability, 0);
-        assert_eq!(fees.protocol_fee_liability, 0);
-        assert_eq!(fees.buyback_fee_liability, 50);
-        assert_eq!(err, error!(ErrorCode::AmountZero));
+        assert_eq!(fees.total_liability().unwrap(), 800);
+        fees.manager_swap_fee_liability = 0;
+        fees.manager_interest_fee_liability = 0;
+        assert_eq!(fees.total_liability().unwrap(), 300);
     }
 
     #[test]

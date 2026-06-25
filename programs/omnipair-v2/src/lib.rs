@@ -121,6 +121,14 @@ pub mod omnipair_v2 {
     }
 
     #[access_control(ctx.accounts.validate(&args))]
+    pub fn claim_manager_fees(
+        ctx: Context<ClaimManagerFees>,
+        args: ClaimManagerFeesArgs,
+    ) -> Result<()> {
+        ClaimManagerFees::handle_claim(ctx, args)
+    }
+
+    #[access_control(ctx.accounts.validate(&args))]
     pub fn add_liquidity(ctx: Context<AddLiquidity>, args: AddLiquidityArgs) -> Result<()> {
         AddLiquidity::handle_add_liquidity(ctx, args)
     }

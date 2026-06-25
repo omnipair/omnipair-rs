@@ -1029,7 +1029,7 @@ mod tests {
     fn valid_config() -> MarketConfig {
         MarketConfig {
             swap_fee_bps: 30,
-            operator_fee_bps: 0,
+            manager_fee_bps: 0,
             protocol_fee_bps: 0,
             target_hlp_leverage_bps: BPS_DENOMINATOR * 2,
             settlement_divergence_bps: 500,

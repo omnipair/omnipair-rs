@@ -121,7 +121,7 @@ impl<'info> Swap<'info> {
         let trader_key = ctx.accounts.trader.key();
         let asset_in_mint_key = ctx.accounts.asset_in_mint.key();
         let asset_out_mint_key = ctx.accounts.asset_out_mint.key();
-        let operator_fee_bps = 0;
+        let manager_fee_bps = ctx.accounts.market.config.manager_fee_bps;
         let protocol_fee_bps = ctx.accounts.futarchy_authority.revenue_share.swap_bps;
         let protocol_auction_split = ctx.accounts.futarchy_authority.protocol_auction_split;
 
@@ -189,7 +189,7 @@ impl<'info> Swap<'info> {
                 amount_in_after_fee,
                 amount_out,
                 fee_credit,
-                operator_fee_bps,
+                manager_fee_bps,
                 protocol_fee_bps,
                 protocol_auction_split,
             )
