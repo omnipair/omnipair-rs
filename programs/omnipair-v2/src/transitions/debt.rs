@@ -98,6 +98,9 @@ impl Borrow {
                     .ok_or(ErrorCode::MarketMathOverflow)?;
             }
         }
+        market
+            .debt
+            .add_margin_principal(self.borrow_asset, self.borrow_amount)?;
         sync_borrow_recognition(market, margin_position, self.borrow_asset)?;
         market.refresh_market_health()?;
         market.assert_market_health()?;
@@ -128,6 +131,12 @@ impl Repay {
         margin_position: &mut MarginPosition,
     ) -> Result<DebtReceipt> {
         let debt_delta = -i64::try_from(self.repay_credit).map_err(|_| ErrorCode::Overflow)?;
+        // Split the repaid amount into principal vs accrued interest before
+        // shares are reduced. Interest routing to the vault is wired in a later
+        // commit; for now interest still compounds (principal tracking only).
+        let _interest_paid = market
+            .debt
+            .realize_margin_repay(self.repay_asset, self.repay_credit)?;
         match self.repay_asset {
             MarketAsset::Base => {
                 let debt_before = margin_position.fixed_base_debt(&market.debt)?;
