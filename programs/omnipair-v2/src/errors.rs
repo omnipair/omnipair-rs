@@ -29,6 +29,9 @@ pub enum ErrorCode {
     #[msg("Invalid market config authority")]
     InvalidMarketConfigAuthority,
 
+    #[msg("Market governance timelock is not ready")]
+    GovernanceTimelockNotReady,
+
     #[msg("Invalid argument")]
     InvalidArgument,
 

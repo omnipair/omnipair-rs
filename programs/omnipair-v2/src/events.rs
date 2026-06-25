@@ -53,10 +53,30 @@ pub struct MarketUpdated {
 }
 
 #[event]
+pub struct MarketConfigUpdateScheduled {
+    pub market: Pubkey,
+    pub execute_after_slot: u64,
+    pub target_hlp_leverage_bps: u16,
+    pub swap_fee_bps: u16,
+    pub manager_fee_bps: u16,
+    pub protocol_fee_bps: u16,
+    pub metadata: MarketEventMetadata,
+}
+
+#[event]
 pub struct MarketAuthorityUpdated {
     pub market: Pubkey,
     pub manager: Pubkey,
     pub operator: Pubkey,
+    pub metadata: MarketEventMetadata,
+}
+
+#[event]
+pub struct MarketAuthorityUpdateScheduled {
+    pub market: Pubkey,
+    pub role: u8,
+    pub pending_authority: Pubkey,
+    pub execute_after_slot: u64,
     pub metadata: MarketEventMetadata,
 }
 

@@ -128,6 +128,7 @@ fn total_borrowed(market: &Market, asset: MarketAsset, index_nad: u128) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::{PendingAuthorityChange, PendingConfigChange};
     use crate::{
         constants::{
             INTEREST_INITIAL_RATE_AT_TARGET_NAD, INTEREST_MAX_RATE_AT_TARGET_NAD,
@@ -177,6 +178,9 @@ mod tests {
             risk: Risk::default(),
             health: MarketHealth::default(),
             insurance: Insurance::default(),
+            pending_config: PendingConfigChange::default(),
+            pending_operator: PendingAuthorityChange::default(),
+            pending_manager: PendingAuthorityChange::default(),
             params_hash: [0u8; 32],
             last_update_slot: 0,
             reduce_only: false,

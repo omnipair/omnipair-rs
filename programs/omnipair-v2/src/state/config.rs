@@ -5,7 +5,9 @@ use crate::{
     errors::ErrorCode,
 };
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
+#[derive(
+    AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, Default, InitSpace, PartialEq, Eq,
+)]
 pub struct MarketConfig {
     pub swap_fee_bps: u16,
     pub manager_fee_bps: u16,
@@ -195,5 +197,4 @@ mod tests {
             anchor_lang::prelude::error!(ErrorCode::InvalidMarketConfig)
         );
     }
-
 }

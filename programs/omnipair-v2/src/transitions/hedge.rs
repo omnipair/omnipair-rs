@@ -1019,6 +1019,7 @@ fn hlp_shares_for_delta_nav(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::{PendingAuthorityChange, PendingConfigChange};
     use crate::{
         constants::{BPS_DENOMINATOR, MARKET_VERSION},
         math::calculate_raw_amount_out,
@@ -1104,6 +1105,9 @@ mod tests {
             risk: Risk::default(),
             health: MarketHealth::default(),
             insurance: Insurance::default(),
+            pending_config: PendingConfigChange::default(),
+            pending_operator: PendingAuthorityChange::default(),
+            pending_manager: PendingAuthorityChange::default(),
             params_hash: [7; 32],
             last_update_slot: 0,
             reduce_only: false,

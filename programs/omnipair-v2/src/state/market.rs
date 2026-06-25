@@ -7,6 +7,75 @@ use super::{
 use crate::constants::*;
 use crate::errors::ErrorCode;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MarketTimelockAction {
+    Scheduled { execute_after_slot: u64 },
+    Ready,
+}
+
+#[derive(
+    AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, Default, PartialEq, Eq, InitSpace,
+)]
+pub struct PendingAuthorityChange {
+    pub active: bool,
+    pub new_authority: Pubkey,
+    pub scheduled_by: Pubkey,
+    pub scheduled_slot: u64,
+    pub execute_after_slot: u64,
+}
+
+impl PendingAuthorityChange {
+    fn schedule(
+        &mut self,
+        new_authority: Pubkey,
+        signer: Pubkey,
+        current_slot: u64,
+    ) -> Result<u64> {
+        let execute_after_slot = current_slot
+            .checked_add(MARKET_GOVERNANCE_DELAY_SLOTS)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        self.active = true;
+        self.new_authority = new_authority;
+        self.scheduled_by = signer;
+        self.scheduled_slot = current_slot;
+        self.execute_after_slot = execute_after_slot;
+        Ok(execute_after_slot)
+    }
+
+    fn clear(&mut self) {
+        *self = Self::default();
+    }
+}
+
+#[derive(
+    AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, Default, PartialEq, Eq, InitSpace,
+)]
+pub struct PendingConfigChange {
+    pub active: bool,
+    pub config: MarketConfig,
+    pub scheduled_by: Pubkey,
+    pub scheduled_slot: u64,
+    pub execute_after_slot: u64,
+}
+
+impl PendingConfigChange {
+    fn schedule(&mut self, config: MarketConfig, signer: Pubkey, current_slot: u64) -> Result<u64> {
+        let execute_after_slot = current_slot
+            .checked_add(MARKET_GOVERNANCE_DELAY_SLOTS)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        self.active = true;
+        self.config = config;
+        self.scheduled_by = signer;
+        self.scheduled_slot = current_slot;
+        self.execute_after_slot = execute_after_slot;
+        Ok(execute_after_slot)
+    }
+
+    fn clear(&mut self) {
+        *self = Self::default();
+    }
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct Market {
@@ -24,6 +93,9 @@ pub struct Market {
     pub risk: Risk,
     pub health: MarketHealth,
     pub insurance: Insurance,
+    pub pending_config: PendingConfigChange,
+    pub pending_operator: PendingAuthorityChange,
+    pub pending_manager: PendingAuthorityChange,
     pub params_hash: [u8; 32],
     pub last_update_slot: u64,
     pub reduce_only: bool,
@@ -99,6 +171,9 @@ impl Market {
             },
             health: MarketHealth::default(),
             insurance: Insurance::default(),
+            pending_config: PendingConfigChange::default(),
+            pending_operator: PendingAuthorityChange::default(),
+            pending_manager: PendingAuthorityChange::default(),
             params_hash,
             last_update_slot: current_slot,
             reduce_only: false,
@@ -151,6 +226,87 @@ impl Market {
             ErrorCode::InvalidMarketConfigAuthority
         );
         Ok(())
+    }
+
+    pub fn prepare_config_update(
+        &mut self,
+        signer: Pubkey,
+        config: MarketConfig,
+        current_slot: u64,
+    ) -> Result<MarketTimelockAction> {
+        self.assert_config_authority(signer)?;
+        config.validate()?;
+        if self.pending_config.active && self.pending_config.config == config {
+            require_gte!(
+                current_slot,
+                self.pending_config.execute_after_slot,
+                ErrorCode::GovernanceTimelockNotReady
+            );
+            return Ok(MarketTimelockAction::Ready);
+        }
+        require!(config != self.config, ErrorCode::InvalidArgument);
+        let execute_after_slot = self.pending_config.schedule(config, signer, current_slot)?;
+        Ok(MarketTimelockAction::Scheduled { execute_after_slot })
+    }
+
+    pub fn clear_pending_config_update(&mut self) {
+        self.pending_config.clear();
+    }
+
+    pub fn prepare_operator_update(
+        &mut self,
+        signer: Pubkey,
+        new_operator: Pubkey,
+        current_slot: u64,
+    ) -> Result<MarketTimelockAction> {
+        self.assert_manager(signer)?;
+        require_keys_neq!(new_operator, Pubkey::default(), ErrorCode::InvalidArgument);
+        require_keys_neq!(new_operator, self.operator, ErrorCode::InvalidArgument);
+        if self.pending_operator.active && self.pending_operator.new_authority == new_operator {
+            require_gte!(
+                current_slot,
+                self.pending_operator.execute_after_slot,
+                ErrorCode::GovernanceTimelockNotReady
+            );
+            return Ok(MarketTimelockAction::Ready);
+        }
+        let execute_after_slot =
+            self.pending_operator
+                .schedule(new_operator, signer, current_slot)?;
+        Ok(MarketTimelockAction::Scheduled { execute_after_slot })
+    }
+
+    pub fn apply_operator_update(&mut self, new_operator: Pubkey) {
+        self.operator = new_operator;
+        self.pending_operator.clear();
+    }
+
+    pub fn prepare_manager_update(
+        &mut self,
+        signer: Pubkey,
+        new_manager: Pubkey,
+        current_slot: u64,
+    ) -> Result<MarketTimelockAction> {
+        self.assert_manager(signer)?;
+        require_keys_neq!(new_manager, Pubkey::default(), ErrorCode::InvalidArgument);
+        require_keys_neq!(new_manager, self.manager, ErrorCode::InvalidArgument);
+        if self.pending_manager.active && self.pending_manager.new_authority == new_manager {
+            require_gte!(
+                current_slot,
+                self.pending_manager.execute_after_slot,
+                ErrorCode::GovernanceTimelockNotReady
+            );
+            return Ok(MarketTimelockAction::Ready);
+        }
+        let execute_after_slot =
+            self.pending_manager
+                .schedule(new_manager, signer, current_slot)?;
+        Ok(MarketTimelockAction::Scheduled { execute_after_slot })
+    }
+
+    pub fn apply_manager_update(&mut self, new_manager: Pubkey) {
+        self.manager = new_manager;
+        self.pending_manager.clear();
     }
 
     pub fn side(&self, market_asset: MarketAsset) -> Result<&MarketSide> {
@@ -250,6 +406,9 @@ mod tests {
             risk: Risk::default(),
             health: MarketHealth::default(),
             insurance: Insurance::default(),
+            pending_config: PendingConfigChange::default(),
+            pending_operator: PendingAuthorityChange::default(),
+            pending_manager: PendingAuthorityChange::default(),
             params_hash: [0u8; 32],
             last_update_slot: 0,
             reduce_only: false,
@@ -278,5 +437,71 @@ mod tests {
         assert!(market
             .assert_config_authority(Pubkey::new_unique())
             .is_err());
+    }
+
+    #[test]
+    fn operator_rotation_requires_timelock() {
+        let manager = Pubkey::new_unique();
+        let operator = Pubkey::new_unique();
+        let new_operator = Pubkey::new_unique();
+        let mut market = market_with_roles(manager, operator);
+
+        let action = market
+            .prepare_operator_update(manager, new_operator, 10)
+            .unwrap();
+        assert_eq!(
+            action,
+            MarketTimelockAction::Scheduled {
+                execute_after_slot: 10 + MARKET_GOVERNANCE_DELAY_SLOTS
+            }
+        );
+        assert_eq!(market.operator, operator);
+
+        let err = market
+            .prepare_operator_update(
+                manager,
+                new_operator,
+                10 + MARKET_GOVERNANCE_DELAY_SLOTS - 1,
+            )
+            .unwrap_err();
+        assert_eq!(
+            err,
+            anchor_lang::prelude::error!(ErrorCode::GovernanceTimelockNotReady)
+        );
+
+        let action = market
+            .prepare_operator_update(manager, new_operator, 10 + MARKET_GOVERNANCE_DELAY_SLOTS)
+            .unwrap();
+        assert_eq!(action, MarketTimelockAction::Ready);
+        market.apply_operator_update(new_operator);
+        assert_eq!(market.operator, new_operator);
+        assert!(!market.pending_operator.active);
+    }
+
+    #[test]
+    fn config_update_requires_timelock() {
+        let manager = Pubkey::new_unique();
+        let operator = Pubkey::new_unique();
+        let mut market = market_with_roles(manager, operator);
+        let mut config = MarketConfig::default();
+        config.target_hlp_leverage_bps = BPS_DENOMINATOR * 2;
+        config.recognized_collateral_cap_bps = BPS_DENOMINATOR;
+        config.market_health_min_bps = BPS_DENOMINATOR;
+        config.ema_half_life_ms = MIN_HALF_LIFE_MS;
+        config.directional_ema_half_life_ms = MIN_HALF_LIFE_MS;
+        config.k_ema_half_life_ms = MIN_HALF_LIFE_MS;
+
+        let action = market.prepare_config_update(manager, config, 7).unwrap();
+        assert_eq!(
+            action,
+            MarketTimelockAction::Scheduled {
+                execute_after_slot: 7 + MARKET_GOVERNANCE_DELAY_SLOTS
+            }
+        );
+
+        let action = market
+            .prepare_config_update(manager, config, 7 + MARKET_GOVERNANCE_DELAY_SLOTS)
+            .unwrap();
+        assert_eq!(action, MarketTimelockAction::Ready);
     }
 }

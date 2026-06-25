@@ -3,9 +3,12 @@ use anchor_lang::prelude::*;
 use crate::{
     constants::*,
     errors::ErrorCode,
-    events::{MarketAuthorityUpdated, MarketEventMetadata},
-    state::Market,
+    events::{MarketAuthorityUpdateScheduled, MarketAuthorityUpdated, MarketEventMetadata},
+    state::{Market, MarketTimelockAction},
 };
+
+const AUTHORITY_ROLE_OPERATOR: u8 = 0;
+const AUTHORITY_ROLE_MANAGER: u8 = 1;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct SetOperatorArgs {
@@ -46,9 +49,22 @@ impl<'info> SetMarketAuthority<'info> {
             ErrorCode::InvalidArgument
         );
         let signer = ctx.accounts.manager.key();
+        let current_slot = Clock::get()?.slot;
         let market = &mut ctx.accounts.market;
-        market.assert_manager(signer)?;
-        market.operator = args.new_operator;
+        match market.prepare_operator_update(signer, args.new_operator, current_slot)? {
+            MarketTimelockAction::Scheduled { execute_after_slot } => {
+                emit_cpi!(MarketAuthorityUpdateScheduled {
+                    market: market.key(),
+                    role: AUTHORITY_ROLE_OPERATOR,
+                    pending_authority: args.new_operator,
+                    execute_after_slot,
+                    metadata: MarketEventMetadata::new(signer, market.key())?,
+                });
+                return Ok(());
+            }
+            MarketTimelockAction::Ready => {}
+        }
+        market.apply_operator_update(args.new_operator);
         emit_cpi!(MarketAuthorityUpdated {
             market: market.key(),
             manager: market.manager,
@@ -65,9 +81,22 @@ impl<'info> SetMarketAuthority<'info> {
             ErrorCode::InvalidArgument
         );
         let signer = ctx.accounts.manager.key();
+        let current_slot = Clock::get()?.slot;
         let market = &mut ctx.accounts.market;
-        market.assert_manager(signer)?;
-        market.manager = args.new_manager;
+        match market.prepare_manager_update(signer, args.new_manager, current_slot)? {
+            MarketTimelockAction::Scheduled { execute_after_slot } => {
+                emit_cpi!(MarketAuthorityUpdateScheduled {
+                    market: market.key(),
+                    role: AUTHORITY_ROLE_MANAGER,
+                    pending_authority: args.new_manager,
+                    execute_after_slot,
+                    metadata: MarketEventMetadata::new(signer, market.key())?,
+                });
+                return Ok(());
+            }
+            MarketTimelockAction::Ready => {}
+        }
+        market.apply_manager_update(args.new_manager);
         emit_cpi!(MarketAuthorityUpdated {
             market: market.key(),
             manager: market.manager,

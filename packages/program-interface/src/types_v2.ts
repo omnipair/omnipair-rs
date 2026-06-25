@@ -3840,6 +3840,19 @@ export type OmnipairV2 = {
       ]
     },
     {
+      "name": "marketAuthorityUpdateScheduled",
+      "discriminator": [
+        39,
+        31,
+        228,
+        141,
+        129,
+        68,
+        113,
+        97
+      ]
+    },
+    {
       "name": "marketAuthorityUpdated",
       "discriminator": [
         203,
@@ -3876,6 +3889,19 @@ export type OmnipairV2 = {
         151,
         221,
         245
+      ]
+    },
+    {
+      "name": "marketConfigUpdateScheduled",
+      "discriminator": [
+        138,
+        36,
+        75,
+        26,
+        63,
+        119,
+        32,
+        217
       ]
     },
     {
@@ -4109,491 +4135,496 @@ export type OmnipairV2 = {
     },
     {
       "code": 6009,
+      "name": "governanceTimelockNotReady",
+      "msg": "Market governance timelock is not ready"
+    },
+    {
+      "code": 6010,
       "name": "invalidArgument",
       "msg": "Invalid argument"
     },
     {
-      "code": 6010,
+      "code": 6011,
       "name": "amountZero",
       "msg": "Amount cannot be zero"
     },
     {
-      "code": 6011,
+      "code": 6012,
       "name": "insufficientAmount0In",
       "msg": "Insufficient amount0 in"
     },
     {
-      "code": 6012,
+      "code": 6013,
       "name": "insufficientAmount1In",
       "msg": "Insufficient amount1 in"
     },
     {
-      "code": 6013,
+      "code": 6014,
       "name": "borrowingPowerExceeded",
       "msg": "Borrowing power exceeded"
     },
     {
-      "code": 6014,
+      "code": 6015,
       "name": "invalidTokenAccount",
       "msg": "Invalid token account"
     },
     {
-      "code": 6015,
+      "code": 6016,
       "name": "invalidTokenProgram",
       "msg": "Invalid token program"
     },
     {
-      "code": 6016,
+      "code": 6017,
       "name": "borrowExceedsReserve",
       "msg": "Borrow exceeds reserve"
     },
     {
-      "code": 6017,
+      "code": 6018,
       "name": "insufficientAmount0",
       "msg": "Insufficient amount0"
     },
     {
-      "code": 6018,
+      "code": 6019,
       "name": "insufficientAmount1",
       "msg": "Insufficient amount1"
     },
     {
-      "code": 6019,
+      "code": 6020,
       "name": "insufficientOutputAmount",
       "msg": "Insufficient output amount"
     },
     {
-      "code": 6020,
+      "code": 6021,
       "name": "slippageExceeded",
       "msg": "Output amount below minimum requested (slippage exceeded)"
     },
     {
-      "code": 6021,
+      "code": 6022,
       "name": "insufficientLiquidity",
       "msg": "Insufficient liquidity"
     },
     {
-      "code": 6022,
+      "code": 6023,
       "name": "insufficientCashReserve0",
       "msg": "Insufficient cash reserve0"
     },
     {
-      "code": 6023,
+      "code": 6024,
       "name": "insufficientCashReserve1",
       "msg": "Insufficient cash reserve1"
     },
     {
-      "code": 6024,
+      "code": 6025,
       "name": "overflow",
       "msg": "Arithmetic overflow"
     },
     {
-      "code": 6025,
+      "code": 6026,
       "name": "undercollateralized",
       "msg": "undercollateralized"
     },
     {
-      "code": 6026,
+      "code": 6027,
       "name": "insufficientBalanceForCollateral",
       "msg": "Insufficient balance for collateral"
     },
     {
-      "code": 6027,
+      "code": 6028,
       "name": "insufficientAmount",
       "msg": "Insufficient amount"
     },
     {
-      "code": 6028,
+      "code": 6029,
       "name": "insufficientBalance",
       "msg": "User balance insufficient to cover requested amount"
     },
     {
-      "code": 6029,
+      "code": 6030,
       "name": "insufficientDebt",
       "msg": "Insufficient debt"
     },
     {
-      "code": 6030,
+      "code": 6031,
       "name": "userPositionNotInitialized",
       "msg": "User position not initialized"
     },
     {
-      "code": 6031,
+      "code": 6032,
       "name": "zeroDebtAmount",
       "msg": "Zero debt amount"
     },
     {
-      "code": 6032,
+      "code": 6033,
       "name": "notUndercollateralized",
       "msg": "Not undercollateralized"
     },
     {
-      "code": 6033,
+      "code": 6034,
       "name": "brokenInvariant",
       "msg": "Broken invariant"
     },
     {
-      "code": 6034,
+      "code": 6035,
       "name": "invariantOverflow",
       "msg": "Math overflow during invariant calculation"
     },
     {
-      "code": 6035,
+      "code": 6036,
       "name": "feeMathOverflow",
       "msg": "Math overflow during fee calculation."
     },
     {
-      "code": 6036,
+      "code": 6037,
       "name": "outputAmountOverflow",
       "msg": "Math overflow during output amount calculation."
     },
     {
-      "code": 6037,
+      "code": 6038,
       "name": "reserveOverflow",
       "msg": "Math overflow during reserve calculation."
     },
     {
-      "code": 6038,
+      "code": 6039,
       "name": "reserveUnderflow",
       "msg": "Math underflow during reserve calculation."
     },
     {
-      "code": 6039,
+      "code": 6040,
       "name": "cashReserveUnderflow",
       "msg": "Math underflow during cash reserve calculation."
     },
     {
-      "code": 6040,
+      "code": 6041,
       "name": "denominatorOverflow",
       "msg": "Math overflow during denominator calculation."
     },
     {
-      "code": 6041,
+      "code": 6042,
       "name": "liquidityMathOverflow",
       "msg": "Math overflow during liquidity calculation"
     },
     {
-      "code": 6042,
+      "code": 6043,
       "name": "liquiditySqrtOverflow",
       "msg": "Math overflow during liquidity square root calculation"
     },
     {
-      "code": 6043,
+      "code": 6044,
       "name": "liquidityUnderflow",
       "msg": "Math underflow during liquidity calculation"
     },
     {
-      "code": 6044,
+      "code": 6045,
       "name": "liquidityConversionOverflow",
       "msg": "Math overflow during liquidity conversion"
     },
     {
-      "code": 6045,
+      "code": 6046,
       "name": "supplyOverflow",
       "msg": "Math overflow during supply calculation"
     },
     {
-      "code": 6046,
+      "code": 6047,
       "name": "supplyUnderflow",
       "msg": "Math underflow during supply calculation"
     },
     {
-      "code": 6047,
+      "code": 6048,
       "name": "debtMathOverflow",
       "msg": "Math overflow during debt calculation"
     },
     {
-      "code": 6048,
+      "code": 6049,
       "name": "debtShareMathOverflow",
       "msg": "Math overflow during debt share calculation"
     },
     {
-      "code": 6049,
+      "code": 6050,
       "name": "debtShareDivisionOverflow",
       "msg": "Math overflow during debt share division"
     },
     {
-      "code": 6050,
+      "code": 6051,
       "name": "debtUtilizationOverflow",
       "msg": "Math overflow during debt utilization calculation"
     },
     {
-      "code": 6051,
+      "code": 6052,
       "name": "invalidMint",
       "msg": "Invalid mint"
     },
     {
-      "code": 6052,
+      "code": 6053,
       "name": "invalidMintLen",
       "msg": "Invalid mint length"
     },
     {
-      "code": 6053,
+      "code": 6054,
       "name": "invalidDistribution",
       "msg": "Invalid distribution - percentages must sum to 100%"
     },
     {
-      "code": 6054,
+      "code": 6055,
       "name": "invalidAuctionConfig",
       "msg": "Invalid protocol auction config"
     },
     {
-      "code": 6055,
+      "code": 6056,
       "name": "staleAuctionReference",
       "msg": "Protocol auction reference price is stale"
     },
     {
-      "code": 6056,
+      "code": 6057,
       "name": "insufficientAuctionPayment",
       "msg": "Protocol auction payment is insufficient"
     },
     {
-      "code": 6057,
+      "code": 6058,
       "name": "invalidLpMintKey",
       "msg": "Invalid LP mint key"
     },
     {
-      "code": 6058,
+      "code": 6059,
       "name": "invalidLpName",
       "msg": "Invalid LP name"
     },
     {
-      "code": 6059,
+      "code": 6060,
       "name": "invalidLpSymbol",
       "msg": "Invalid LP symbol"
     },
     {
-      "code": 6060,
+      "code": 6061,
       "name": "invalidLpUri",
       "msg": "Invalid LP URI"
     },
     {
-      "code": 6061,
+      "code": 6062,
       "name": "accountNotEmpty",
       "msg": "Account not empty"
     },
     {
-      "code": 6062,
+      "code": 6063,
       "name": "invalidMintAuthority",
       "msg": "Invalid mint authority"
     },
     {
-      "code": 6063,
+      "code": 6064,
       "name": "frozenLpMint",
       "msg": "Frozen LP mint"
     },
     {
-      "code": 6064,
+      "code": 6065,
       "name": "nonZeroSupply",
       "msg": "Non-zero supply"
     },
     {
-      "code": 6065,
+      "code": 6066,
       "name": "wrongLpDecimals",
       "msg": "Wrong LP decimals"
     },
     {
-      "code": 6066,
+      "code": 6067,
       "name": "invalidVaultSameAccount",
       "msg": "Invalid vault - token_in_vault and token_out_vault must be different"
     },
     {
-      "code": 6067,
+      "code": 6068,
       "name": "invalidVault",
       "msg": "Invalid vault"
     },
     {
-      "code": 6068,
+      "code": 6069,
       "name": "invalidParamsHash",
       "msg": "Invalid params hash - hash does not match computed parameters"
     },
     {
-      "code": 6069,
+      "code": 6070,
       "name": "invalidVersion",
       "msg": "Invalid version"
     },
     {
-      "code": 6070,
+      "code": 6071,
       "name": "invalidTokenOrder",
       "msg": "Invalid token order"
     },
     {
-      "code": 6071,
+      "code": 6072,
       "name": "invalidRateModel",
       "msg": "Invalid rate model - rate_model does not match market configuration"
     },
     {
-      "code": 6072,
+      "code": 6073,
       "name": "invalidPositionMarket",
       "msg": "Invalid position market - position does not match market"
     },
     {
-      "code": 6073,
+      "code": 6074,
       "name": "invalidUtilBounds",
       "msg": "Invalid utilization bounds - must satisfy: MIN <= start < end <= MAX"
     },
     {
-      "code": 6074,
+      "code": 6075,
       "name": "invalidRateParams",
       "msg": "Invalid rate parameters - check half_life_ms, min_rate_bps, max_rate_bps, initial_rate_bps bounds"
     },
     {
-      "code": 6075,
+      "code": 6076,
       "name": "reduceOnlyMode",
       "msg": "Operation blocked: reduce-only mode is active"
     },
     {
-      "code": 6076,
+      "code": 6077,
       "name": "reduceOnlyHasDebt",
       "msg": "Cannot remove collateral in reduce-only mode while debt exists"
     },
     {
-      "code": 6077,
+      "code": 6078,
       "name": "liquidityDeltaCircuitBreaker",
       "msg": "Operation blocked: same-transaction liquidity delta detected"
     },
     {
-      "code": 6078,
+      "code": 6079,
       "name": "liquidityDeltaCircuitBreakerCpi",
       "msg": "Operation blocked: liquidity delta instruction must be top-level"
     },
     {
-      "code": 6079,
+      "code": 6080,
       "name": "invalidInstructionsSysvar",
       "msg": "Invalid instructions sysvar"
     },
     {
-      "code": 6080,
+      "code": 6081,
       "name": "insufficientPostWithdrawDebtCoverage",
       "msg": "Insufficient post-withdraw debt coverage"
     },
     {
-      "code": 6081,
+      "code": 6082,
       "name": "invalidRecipient",
       "msg": "Invalid recipient - address does not match configured revenue recipient"
     },
     {
-      "code": 6082,
+      "code": 6083,
       "name": "invalidMarket",
       "msg": "Invalid market"
     },
     {
-      "code": 6083,
+      "code": 6084,
       "name": "invalidMarketConfig",
       "msg": "Invalid market config"
     },
     {
-      "code": 6084,
+      "code": 6085,
       "name": "invalidSettlementPrice",
       "msg": "Invalid settlement price"
     },
     {
-      "code": 6085,
+      "code": 6086,
       "name": "insufficientMarketShareBacking",
       "msg": "Market reserve share backing is insufficient"
     },
     {
-      "code": 6086,
+      "code": 6087,
       "name": "invalidMarketSide",
       "msg": "Invalid market side"
     },
     {
-      "code": 6087,
+      "code": 6088,
       "name": "invalidYieldAccount",
       "msg": "Invalid yield account"
     },
     {
-      "code": 6088,
+      "code": 6089,
       "name": "invalidHlpVault",
       "msg": "Invalid hLP vault"
     },
     {
-      "code": 6089,
+      "code": 6090,
       "name": "notEnoughAccounts",
       "msg": "Not enough remaining accounts"
     },
     {
-      "code": 6090,
+      "code": 6091,
       "name": "hlpSettlementUnavailable",
       "msg": "hLP settlement is unavailable"
     },
     {
-      "code": 6091,
+      "code": 6092,
       "name": "insufficientBorrowHeadroom",
       "msg": "Borrow headroom is insufficient"
     },
     {
-      "code": 6092,
+      "code": 6093,
       "name": "insufficientMarketHealth",
       "msg": "Market health is insufficient"
     },
     {
-      "code": 6093,
+      "code": 6094,
       "name": "invalidMarginPosition",
       "msg": "Invalid margin position"
     },
     {
-      "code": 6094,
+      "code": 6095,
       "name": "insufficientRecognizedCollateral",
       "msg": "Recognized collateral is insufficient"
     },
     {
-      "code": 6095,
+      "code": 6096,
       "name": "positionNotLiquidatable",
       "msg": "Position is not liquidatable"
     },
     {
-      "code": 6096,
+      "code": 6097,
       "name": "insufficientInsurance",
       "msg": "Insurance coverage is insufficient"
     },
     {
-      "code": 6097,
+      "code": 6098,
       "name": "liquidationSocializationExceeded",
       "msg": "Socialized liquidation loss exceeds caller cap"
     },
     {
-      "code": 6098,
+      "code": 6099,
       "name": "invalidClaimMint",
       "msg": "Claim mint must not charge transfer fees"
     },
     {
-      "code": 6099,
+      "code": 6100,
       "name": "unbackedFeeLiability",
       "msg": "Fee liability is not backed by fee vault balance"
     },
     {
-      "code": 6100,
+      "code": 6101,
       "name": "invalidMarketFeeAuthority",
       "msg": "Invalid market fee authority"
     },
     {
-      "code": 6101,
+      "code": 6102,
       "name": "marketReduceOnly",
       "msg": "Market is reduce-only"
     },
     {
-      "code": 6102,
+      "code": 6103,
       "name": "marketNotStarted",
       "msg": "Market has not started"
     },
     {
-      "code": 6103,
+      "code": 6104,
       "name": "marketMathOverflow",
       "msg": "Market math overflow"
     },
     {
-      "code": 6104,
+      "code": 6105,
       "name": "dailyLimitExceeded",
       "msg": "Daily liquidity limit exceeded"
     },
     {
-      "code": 6105,
+      "code": 6106,
       "name": "marketRiskCircuitBreaker",
       "msg": "Market risk circuit breaker triggered"
     },
     {
-      "code": 6106,
+      "code": 6107,
       "name": "instructionNotLive",
       "msg": "Instruction is intentionally not live yet"
     }
@@ -5629,6 +5660,30 @@ export type OmnipairV2 = {
             }
           },
           {
+            "name": "pendingConfig",
+            "type": {
+              "defined": {
+                "name": "pendingConfigChange"
+              }
+            }
+          },
+          {
+            "name": "pendingOperator",
+            "type": {
+              "defined": {
+                "name": "pendingAuthorityChange"
+              }
+            }
+          },
+          {
+            "name": "pendingManager",
+            "type": {
+              "defined": {
+                "name": "pendingAuthorityChange"
+              }
+            }
+          },
+          {
             "name": "paramsHash",
             "type": {
               "array": [
@@ -5662,6 +5717,38 @@ export type OmnipairV2 = {
           },
           {
             "name": "quote"
+          }
+        ]
+      }
+    },
+    {
+      "name": "marketAuthorityUpdateScheduled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "role",
+            "type": "u8"
+          },
+          {
+            "name": "pendingAuthority",
+            "type": "pubkey"
+          },
+          {
+            "name": "executeAfterSlot",
+            "type": "u64"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "marketEventMetadata"
+              }
+            }
           }
         ]
       }
@@ -5854,6 +5941,46 @@ export type OmnipairV2 = {
           {
             "name": "startTime",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "marketConfigUpdateScheduled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "executeAfterSlot",
+            "type": "u64"
+          },
+          {
+            "name": "targetHlpLeverageBps",
+            "type": "u16"
+          },
+          {
+            "name": "swapFeeBps",
+            "type": "u16"
+          },
+          {
+            "name": "managerFeeBps",
+            "type": "u16"
+          },
+          {
+            "name": "protocolFeeBps",
+            "type": "u16"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "marketEventMetadata"
+              }
+            }
           }
         ]
       }
@@ -6270,6 +6397,66 @@ export type OmnipairV2 = {
           },
           {
             "name": "minHlpAmount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "pendingAuthorityChange",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "newAuthority",
+            "type": "pubkey"
+          },
+          {
+            "name": "scheduledBy",
+            "type": "pubkey"
+          },
+          {
+            "name": "scheduledSlot",
+            "type": "u64"
+          },
+          {
+            "name": "executeAfterSlot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "pendingConfigChange",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "config",
+            "type": {
+              "defined": {
+                "name": "marketConfig"
+              }
+            }
+          },
+          {
+            "name": "scheduledBy",
+            "type": "pubkey"
+          },
+          {
+            "name": "scheduledSlot",
+            "type": "u64"
+          },
+          {
+            "name": "executeAfterSlot",
             "type": "u64"
           }
         ]
@@ -7440,6 +7627,11 @@ export type OmnipairV2 = {
       "name": "marketFeeVaultSeedPrefix",
       "type": "bytes",
       "value": "[109, 97, 114, 107, 101, 116, 95, 102, 101, 101]"
+    },
+    {
+      "name": "marketGovernanceDelaySlots",
+      "type": "u64",
+      "value": "216000"
     },
     {
       "name": "marketInterestVaultSeedPrefix",

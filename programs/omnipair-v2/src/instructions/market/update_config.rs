@@ -2,8 +2,10 @@ use anchor_lang::prelude::*;
 
 use crate::{
     constants::*,
-    events::{MarketEventMetadata, MarketHealthUpdated, MarketUpdated},
-    state::{Market, MarketConfig},
+    events::{
+        MarketConfigUpdateScheduled, MarketEventMetadata, MarketHealthUpdated, MarketUpdated,
+    },
+    state::{Market, MarketConfig, MarketTimelockAction},
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -32,11 +34,26 @@ pub struct UpdateMarketConfig<'info> {
 
 impl<'info> UpdateMarketConfig<'info> {
     pub fn handle_update(ctx: Context<Self>, args: UpdateMarketConfigArgs) -> Result<()> {
-        ctx.accounts
-            .market
-            .assert_config_authority(ctx.accounts.authority_signer.key())?;
+        let signer = ctx.accounts.authority_signer.key();
+        let current_slot = Clock::get()?.slot;
         let market = &mut ctx.accounts.market;
+        match market.prepare_config_update(signer, args.config, current_slot)? {
+            MarketTimelockAction::Scheduled { execute_after_slot } => {
+                emit_cpi!(MarketConfigUpdateScheduled {
+                    market: market.key(),
+                    execute_after_slot,
+                    target_hlp_leverage_bps: args.config.target_hlp_leverage_bps,
+                    swap_fee_bps: args.config.swap_fee_bps,
+                    manager_fee_bps: args.config.manager_fee_bps,
+                    protocol_fee_bps: args.config.protocol_fee_bps,
+                    metadata: MarketEventMetadata::new(signer, market.key())?,
+                });
+                return Ok(());
+            }
+            MarketTimelockAction::Ready => {}
+        }
         apply_config_update(market, args.config)?;
+        market.clear_pending_config_update();
 
         emit_cpi!(MarketUpdated {
             market: market.key(),
@@ -45,7 +62,7 @@ impl<'info> UpdateMarketConfig<'info> {
             swap_fee_bps: market.config.swap_fee_bps,
             manager_fee_bps: market.config.manager_fee_bps,
             protocol_fee_bps: market.config.protocol_fee_bps,
-            metadata: MarketEventMetadata::new(ctx.accounts.authority_signer.key(), market.key())?,
+            metadata: MarketEventMetadata::new(signer, market.key())?,
         });
         emit_cpi!(MarketHealthUpdated {
             market: market.key(),
@@ -59,7 +76,7 @@ impl<'info> UpdateMarketConfig<'info> {
             effective_quote_debt_nad: market.health.effective_quote_debt_nad,
             base_debt_health_bps: market.health.base_debt_health_bps,
             quote_debt_health_bps: market.health.quote_debt_health_bps,
-            metadata: MarketEventMetadata::new(ctx.accounts.authority_signer.key(), market.key())?,
+            metadata: MarketEventMetadata::new(signer, market.key())?,
         });
 
         Ok(())
