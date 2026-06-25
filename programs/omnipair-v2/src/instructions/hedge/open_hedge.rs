@@ -207,6 +207,7 @@ impl<'info> OpenHedge<'info> {
     pub fn handle_open(ctx: Context<Self>, args: OpenHedgeArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
+        ctx.accounts.market.accrue_interest()?;
         let target_mint_key = match args.target_asset {
             MarketAsset::Base => ctx.accounts.base_mint.key(),
             MarketAsset::Quote => ctx.accounts.quote_mint.key(),

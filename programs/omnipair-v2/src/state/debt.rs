@@ -13,6 +13,7 @@ pub struct Debt {
     pub recognized_base_collateral_for_quote_debt: u64,
     pub recognized_quote_collateral_for_base_debt: u64,
     pub last_recognition_slot: u64,
+    pub last_accrual_slot: u64,
 }
 
 impl Debt {

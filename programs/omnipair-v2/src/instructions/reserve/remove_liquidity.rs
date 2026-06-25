@@ -179,6 +179,7 @@ impl<'info> RemoveLiquidity<'info> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
 
+        ctx.accounts.market.accrue_interest()?;
         ctx.accounts
             .market
             .enforce_daily_withdraw_limit(crate::state::MarketAsset::Base, args.base_ylp_amount)?;

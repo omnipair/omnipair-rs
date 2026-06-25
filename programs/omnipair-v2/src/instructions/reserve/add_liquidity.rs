@@ -183,6 +183,7 @@ impl<'info> AddLiquidity<'info> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
 
+        ctx.accounts.market.accrue_interest()?;
         initialize_or_validate_yield_account(
             &mut ctx.accounts.base_yield_account,
             owner_key,

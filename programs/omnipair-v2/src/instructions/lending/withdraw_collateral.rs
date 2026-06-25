@@ -122,6 +122,7 @@ impl<'info> WithdrawCollateral<'info> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
+        ctx.accounts.market.accrue_interest()?;
         let owner_asset_balance_before = ctx.accounts.owner_asset_account.amount;
         let collateral_balance_before = ctx.accounts.collateral_vault.amount;
 

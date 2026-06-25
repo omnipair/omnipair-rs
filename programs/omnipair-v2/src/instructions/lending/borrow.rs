@@ -112,6 +112,7 @@ impl<'info> Borrow<'info> {
         let owner_key = ctx.accounts.owner.key();
         let debt_asset_mint_key = ctx.accounts.debt_asset_mint.key();
 
+        ctx.accounts.market.accrue_interest()?;
         let debt_receipt =
             BorrowTransition::new(args.borrow_asset, args.borrow_amount, args.min_health_bps)
                 .apply(&mut ctx.accounts.market, &mut ctx.accounts.margin_position)?;

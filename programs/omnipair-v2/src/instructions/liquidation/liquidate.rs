@@ -131,6 +131,8 @@ impl<'info> Liquidate<'info> {
         let debt_asset_mint_key = ctx.accounts.debt_asset_mint.key();
         let collateral_asset_mint_key = ctx.accounts.collateral_asset_mint.key();
 
+        ctx.accounts.market.accrue_interest()?;
+
         let reserve_balance_before_repay = ctx.accounts.reserve_vault.amount;
         let debt_token_program = token_program_for_mint(
             &ctx.accounts.debt_asset_mint,

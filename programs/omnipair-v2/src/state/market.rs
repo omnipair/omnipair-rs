@@ -68,6 +68,7 @@ impl Market {
                 base_borrow_index_nad: NAD as u128,
                 quote_borrow_index_nad: NAD as u128,
                 last_recognition_slot: current_slot,
+                last_accrual_slot: current_slot,
                 ..Debt::default()
             },
             base_hlp_vault: {
@@ -122,6 +123,14 @@ impl Market {
         let now = Clock::get()?.unix_timestamp;
         require!(now >= self.config.start_time, ErrorCode::MarketNotStarted);
         Ok(())
+    }
+
+    /// Accrue borrow interest up to the current slot. Should be called before any
+    /// debt-dependent computation in an instruction (borrow/repay, hedge,
+    /// liquidation, yield claims, swaps, and liquidity changes).
+    pub fn accrue_interest(&mut self) -> Result<()> {
+        let current_slot = Clock::get()?.slot;
+        crate::transitions::interest::AccrueInterest::new(current_slot).apply(self)
     }
 
     pub fn side(&self, market_asset: MarketAsset) -> Result<&MarketSide> {

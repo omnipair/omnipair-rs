@@ -143,6 +143,7 @@ impl<'info> ClaimYield<'info> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
+        ctx.accounts.market.accrue_interest()?;
         let token_program = token_program_for_mint(
             &ctx.accounts.asset_mint,
             &ctx.accounts.token_program,

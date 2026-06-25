@@ -24,6 +24,7 @@ use crate::{
     state::{FutarchyAuthority, Market, MarketAsset},
     transitions::{
         hedge::{rebalance_hlp_vaults, HlpRebalanceReceipt},
+        interest::AccrueInterest,
         swap::Swap as SwapTransition,
     },
 };
@@ -124,6 +125,7 @@ impl<'info> Swap<'info> {
         let protocol_fee_bps = ctx.accounts.futarchy_authority.revenue_share.swap_bps;
         let protocol_auction_split = ctx.accounts.futarchy_authority.protocol_auction_split;
 
+        AccrueInterest::new(Clock::get()?.slot).apply(&mut ctx.accounts.market)?;
         validate_hlp_rebalance_accounts(&ctx.accounts.market, ctx.remaining_accounts)?;
         ctx.accounts.market.refresh_risk()?;
         ctx.accounts.market.assert_risk_circuit_breakers()?;

@@ -198,6 +198,7 @@ impl<'info> CloseHedge<'info> {
     pub fn handle_close(ctx: Context<Self>, args: CloseHedgeArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
+        ctx.accounts.market.accrue_interest()?;
         let target_mint_key = match args.target_asset {
             MarketAsset::Base => ctx.accounts.base_mint.key(),
             MarketAsset::Quote => ctx.accounts.quote_mint.key(),

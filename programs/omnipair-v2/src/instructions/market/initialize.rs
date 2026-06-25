@@ -263,6 +263,7 @@ impl<'info> InitializeMarket<'info> {
             base_borrow_index_nad: NAD as u128,
             quote_borrow_index_nad: NAD as u128,
             last_recognition_slot: current_slot,
+            last_accrual_slot: current_slot,
             ..crate::state::Debt::default()
         };
         market.base_hlp_vault = {
