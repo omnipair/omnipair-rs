@@ -4808,14 +4808,6 @@
             "type": "u128"
           },
           {
-            "name": "soft_base_shares",
-            "type": "u128"
-          },
-          {
-            "name": "soft_quote_shares",
-            "type": "u128"
-          },
-          {
             "name": "base_borrow_index_nad",
             "type": "u128"
           },
@@ -5961,10 +5953,6 @@
           {
             "name": "market_health_min_bps",
             "type": "u16"
-          },
-          {
-            "name": "soft_borrow_enabled",
-            "type": "bool"
           },
           {
             "name": "hedged_lp_enabled",

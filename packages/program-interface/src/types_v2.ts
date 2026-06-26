@@ -4814,14 +4814,6 @@ export type OmnipairV2 = {
             "type": "u128"
           },
           {
-            "name": "softBaseShares",
-            "type": "u128"
-          },
-          {
-            "name": "softQuoteShares",
-            "type": "u128"
-          },
-          {
             "name": "baseBorrowIndexNad",
             "type": "u128"
           },
@@ -5967,10 +5959,6 @@ export type OmnipairV2 = {
           {
             "name": "marketHealthMinBps",
             "type": "u16"
-          },
-          {
-            "name": "softBorrowEnabled",
-            "type": "bool"
           },
           {
             "name": "hedgedLpEnabled",
