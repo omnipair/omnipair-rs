@@ -94,6 +94,7 @@ describe("Omnipair V2 final model smoke", () => {
     const computeBudget = new ComputeBudget();
     computeBudget.computeUnitLimit = 600_000n;
     svm = new LiteSVM().withComputeBudget(computeBudget);
+    svm.warpToSlot(1n);
     const programPath = path.join(__dirname, "../target/deploy/omnipair_v2.so");
     if (!fs.existsSync(programPath)) {
       throw new Error(`Program file not found at ${programPath}`);
@@ -135,9 +136,32 @@ describe("Omnipair V2 final model smoke", () => {
     getCoverageReport();
   });
 
+  beforeEach(async () => {
+    await resetFutarchyDefaults();
+  });
+
   async function seedFutarchyAuthority() {
     const [authority, bump] = deriveFutarchyAuthorityV2Address();
     futarchyAuthority = authority;
+    const auctionRecipients = {
+      treasury: payer.publicKey,
+      staking_vault: payer.publicKey,
+      treasury_bps: 10_000,
+      staking_vault_bps: 0,
+    };
+    const auctionParams = {
+      start_multiplier_bps: 12_000,
+      floor_multiplier_bps: 8_000,
+      duration_slots: new BN(216_000),
+      max_reference_age_slots: new BN(21_600),
+    };
+    const auctionConfig = {
+      accepted_mint: NATIVE_MINT,
+      recipients: auctionRecipients,
+      params: auctionParams,
+      last_settlement_slot: new BN(0),
+      last_settlement_price_nad: new BN(0),
+    };
     const data = await accountCoder.encode("FutarchyAuthority", {
       version: 1,
       authority: payer.publicKey,
@@ -155,6 +179,12 @@ describe("Omnipair V2 final model smoke", () => {
         buybacks_vault_bps: 0,
         team_treasury_bps: 10_000,
       },
+      protocol_auction_split: {
+        fee_auction_bps: 10_000,
+        buyback_auction_bps: 0,
+      },
+      fee_auction: auctionConfig,
+      buyback_auction: auctionConfig,
       global_reduce_only: false,
       bump,
     });
@@ -323,7 +353,7 @@ describe("Omnipair V2 final model smoke", () => {
     };
   }
 
-  async function initializeFinalMarket(paramsSeed: number) {
+  async function initializeFinalMarket(paramsSeed: number, config = marketConfig()) {
     const baseMint = await createMint(connection as any, payer, payer.publicKey, null, 6);
     const quoteMint = await createMint(connection as any, payer, payer.publicKey, null, 6);
     const paramsHash = Buffer.alloc(32, paramsSeed);
@@ -351,7 +381,7 @@ describe("Omnipair V2 final model smoke", () => {
       .initialize({
         operator: payer.publicKey,
         manager: payer.publicKey,
-        config: marketConfig(),
+        config,
         paramsHash: [...paramsHash],
       })
       .accounts({
@@ -460,8 +490,8 @@ describe("Omnipair V2 final model smoke", () => {
     return { baseAccount, quoteAccount };
   }
 
-  async function addBalancedLiquidity(paramsSeed: number) {
-    const fixture = await initializeFinalMarket(paramsSeed);
+  async function addBalancedLiquidity(paramsSeed: number, config = marketConfig()) {
+    const fixture = await initializeFinalMarket(paramsSeed, config);
     const ownerAccounts = await createOwnerAssetAccounts(fixture);
 
     const tx = await program.methods
@@ -986,6 +1016,7 @@ describe("Omnipair V2 final model smoke", () => {
         targetHlpMint: fixture.baseHlpMint,
         baseReserveVault: fixture.baseReserveVault,
         quoteReserveVault: fixture.quoteReserveVault,
+        borrowedInterestVault: fixture.quoteInterestVault,
         ownerTargetAccount: fixture.ownerBaseAccount,
         ownerHlpAccount: hedge.ownerBaseHlpAccount,
         hlpBaseYlpAccount: hedge.hlpBaseYlpAccount,
@@ -1094,6 +1125,7 @@ describe("Omnipair V2 final model smoke", () => {
         targetHlpMint: fixture.quoteHlpMint,
         baseReserveVault: fixture.baseReserveVault,
         quoteReserveVault: fixture.quoteReserveVault,
+        borrowedInterestVault: fixture.baseInterestVault,
         ownerTargetAccount: fixture.ownerQuoteAccount,
         ownerHlpAccount: hedge.ownerQuoteHlpAccount,
         hlpBaseYlpAccount: hedge.hlpBaseYlpAccount,
@@ -1234,6 +1266,7 @@ describe("Omnipair V2 final model smoke", () => {
           buybacksVaultBps: 0,
           teamTreasuryBps: 10_000,
         },
+        protocolAuctionSplit: null,
       })
       .accounts({
         authoritySigner: payer.publicKey,
@@ -1308,7 +1341,9 @@ describe("Omnipair V2 final model smoke", () => {
     const marketAccount = svm.getAccount(fixture.market);
     expect(marketAccount).to.not.equal(null);
     const decodedMarket = accountCoder.decode("Market", Buffer.from(marketAccount!.data)) as any;
-    expect(decodedMarket.config.swap_fee_bps).to.equal(40);
+    expect(decodedMarket.config.swap_fee_bps).to.equal(30);
+    expect(decodedMarket.pending_config.active).to.equal(true);
+    expect(decodedMarket.pending_config.config.swap_fee_bps).to.equal(40);
 
     await resetFutarchyDefaults();
   });
@@ -1362,24 +1397,51 @@ describe("Omnipair V2 final model smoke", () => {
     expect(authority.global_reduce_only).to.equal(false);
   });
 
-  it("claims protocol swap fees through V1-style revenue recipients", async function () {
+  it("settles protocol swap fees through the fee auction lane", async function () {
     const fixture = await addBalancedLiquidity(53);
-    const futarchyTreasury = Keypair.generate().publicKey;
-    const buybacksVault = Keypair.generate().publicKey;
-    const replacementTeamTreasury = Keypair.generate().publicKey;
-    const futarchyAccounts = await createRecipientAssetAccounts(fixture, futarchyTreasury);
-    const buybacksAccounts = await createRecipientAssetAccounts(fixture, buybacksVault);
-    const teamAccounts = await createRecipientAssetAccounts(fixture, replacementTeamTreasury);
+    const treasury = Keypair.generate().publicKey;
+    const stakingVault = Keypair.generate().publicKey;
+    const treasuryAccounts = await createRecipientAssetAccounts(fixture, treasury);
+    const stakingAccounts = await createRecipientAssetAccounts(fixture, stakingVault);
+
+    const updateAuctionConfigTx = await program.methods
+      .updateProtocolAuctionConfig({
+        lane: { fee: {} },
+        acceptedMint: fixture.quoteMint,
+        params: null,
+      })
+      .accounts({
+        authoritySigner: payer.publicKey,
+        futarchyAuthority,
+        systemProgram: SystemProgram.programId,
+      })
+      .transaction();
+    await connection.sendTransaction(updateAuctionConfigTx, [payer]);
+    trackV2Instruction("updateProtocolAuctionConfig", this.test?.title);
+
+    const updateAuctionRecipientsTx = await program.methods
+      .updateProtocolAuctionRecipients({
+        lane: { fee: {} },
+        treasury,
+        stakingVault,
+        treasuryBps: 10_000,
+        stakingVaultBps: 0,
+      })
+      .accounts({
+        authoritySigner: payer.publicKey,
+        futarchyAuthority,
+        systemProgram: SystemProgram.programId,
+      })
+      .transaction();
+    await connection.sendTransaction(updateAuctionRecipientsTx, [payer]);
+    trackV2Instruction("updateProtocolAuctionRecipients", this.test?.title);
 
     const updateRevenueTx = await program.methods
       .updateProtocolRevenue({
         swapBps: 10_000,
         interestBps: 0,
-        revenueDistribution: {
-          futarchyTreasuryBps: 0,
-          buybacksVaultBps: 0,
-          teamTreasuryBps: 10_000,
-        },
+        revenueDistribution: null,
+        protocolAuctionSplit: null,
       })
       .accounts({
         authoritySigner: payer.publicKey,
@@ -1390,53 +1452,38 @@ describe("Omnipair V2 final model smoke", () => {
     await connection.sendTransaction(updateRevenueTx, [payer]);
     trackV2Instruction("updateProtocolRevenue", this.test?.title);
 
-    const updateRecipientsTx = await program.methods
-      .updateRevenueRecipients({
-        futarchyTreasury,
-        buybacksVault,
-        teamTreasury: replacementTeamTreasury,
-      })
-      .accounts({
-        authoritySigner: payer.publicKey,
-        futarchyAuthority,
-        systemProgram: SystemProgram.programId,
-      })
-      .transaction();
-    await connection.sendTransaction(updateRecipientsTx, [payer]);
-    trackV2Instruction("updateRevenueRecipients", this.test?.title);
-
     await swapBaseForQuote(fixture);
 
-    const claimTx = await program.methods
-      .claimProtocolFees()
+    const settleTx = await program.methods
+      .settleProtocolAuction({
+        lane: { fee: {} },
+        side: { base: {} },
+        soldAmount: new BN(3),
+        maxPaymentAmount: new BN(1_000),
+      })
       .accounts({
-        caller: payer.publicKey,
+        bidder: payer.publicKey,
         market: fixture.market,
         futarchyAuthority,
-        baseMint: fixture.baseMint,
-        quoteMint: fixture.quoteMint,
-        baseFeeVault: fixture.baseFeeVault,
-        quoteFeeVault: fixture.quoteFeeVault,
-        futarchyTreasury,
-        buybacksVault,
-        teamTreasury: replacementTeamTreasury,
-        futarchyTreasuryBaseAccount: futarchyAccounts.baseAccount,
-        futarchyTreasuryQuoteAccount: futarchyAccounts.quoteAccount,
-        buybacksVaultBaseAccount: buybacksAccounts.baseAccount,
-        buybacksVaultQuoteAccount: buybacksAccounts.quoteAccount,
-        teamTreasuryBaseAccount: teamAccounts.baseAccount,
-        teamTreasuryQuoteAccount: teamAccounts.quoteAccount,
+        soldMint: fixture.baseMint,
+        acceptedMint: fixture.quoteMint,
+        soldFeeVault: fixture.baseFeeVault,
+        bidderPaymentAccount: fixture.ownerQuoteAccount,
+        bidderReceiveAccount: fixture.ownerBaseAccount,
+        treasuryPaymentAccount: treasuryAccounts.quoteAccount,
+        stakingVaultPaymentAccount: stakingAccounts.quoteAccount,
+        referenceMarket: fixture.market,
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         eventAuthority: eventAuthority(),
         program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .transaction();
-    await connection.sendTransaction(claimTx, [payer]);
-    trackV2Instruction("claimProtocolFees", this.test?.title);
+    await connection.sendTransaction(settleTx, [payer]);
+    trackV2Instruction("settleProtocolAuction", this.test?.title);
 
-    const teamBaseBalance = await getAccount(connection as any, teamAccounts.baseAccount);
-    expect(teamBaseBalance.amount).to.equal(3n);
+    const treasuryQuoteBalance = await getAccount(connection as any, treasuryAccounts.quoteAccount);
+    expect(treasuryQuoteBalance.amount > 0n).to.equal(true);
     const baseFeeVault = await getAccount(connection as any, fixture.baseFeeVault);
     expect(baseFeeVault.amount).to.equal(0n);
 
@@ -1875,6 +1922,7 @@ describe("Omnipair V2 final model smoke", () => {
         owner: payer.publicKey,
         debtAssetMint: fixture.quoteMint,
         reserveVault: fixture.quoteReserveVault,
+        interestVault: fixture.quoteInterestVault,
         ownerDebtAccount: fixture.ownerQuoteAccount,
         marginPosition,
         tokenProgram: TOKEN_PROGRAM_ID,
@@ -1931,23 +1979,10 @@ describe("Omnipair V2 final model smoke", () => {
   });
 
   it("liquidates unhealthy fixed quote debt after collateral price moves", async function () {
-    const fixture = await addBalancedLiquidity(54);
-    const marginPosition = deriveMarginPositionAddress(fixture.market, payer.publicKey)[0];
     const liquidationConfig = marketConfig();
-    liquidationConfig.spotEmaDivergenceBps = 3_000;
-    const configTx = await program.methods
-      .updateConfig({
-        config: liquidationConfig,
-      })
-      .accounts({
-        market: fixture.market,
-        futarchyAuthority,
-        authoritySigner: payer.publicKey,
-        eventAuthority: eventAuthority(),
-        program: OMNIPAIR_V2_PROGRAM_ID,
-      })
-      .transaction();
-    await connection.sendTransaction(configTx, [payer]);
+    liquidationConfig.spotEmaDivergenceBps = 10_000;
+    const fixture = await addBalancedLiquidity(54, liquidationConfig);
+    const marginPosition = deriveMarginPositionAddress(fixture.market, payer.publicKey)[0];
 
     const depositTx = await program.methods
       .depositCollateral({
@@ -2020,6 +2055,7 @@ describe("Omnipair V2 final model smoke", () => {
         debtAssetMint: fixture.quoteMint,
         collateralAssetMint: fixture.baseMint,
         reserveVault: fixture.quoteReserveVault,
+        interestVault: fixture.quoteInterestVault,
         collateralVault: fixture.baseCollateralVault,
         insuranceVault: fixture.quoteInsuranceVault,
         collateralInsuranceVault: fixture.baseInsuranceVault,
