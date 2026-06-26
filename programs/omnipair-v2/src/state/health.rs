@@ -289,24 +289,11 @@ impl Market {
     }
 
     fn effective_debt_nad(&self, debt_asset: MarketAsset) -> Result<u128> {
-        let (fixed_debt, soft_debt, debt_side) = match debt_asset {
-            MarketAsset::Base => (
-                self.debt.fixed_base_debt()?,
-                self.debt.soft_base_debt()?,
-                &self.base_side,
-            ),
-            MarketAsset::Quote => (
-                self.debt.fixed_quote_debt()?,
-                self.debt.soft_quote_debt()?,
-                &self.quote_side,
-            ),
+        let (fixed_debt, debt_side) = match debt_asset {
+            MarketAsset::Base => (self.debt.fixed_base_debt()?, &self.base_side),
+            MarketAsset::Quote => (self.debt.fixed_quote_debt()?, &self.quote_side),
         };
-        let fixed_debt_nad = normalize_to_nad(fixed_debt, debt_side.asset_decimals)?;
-        let soft_debt_nad = normalize_to_nad(soft_debt, debt_side.asset_decimals)?;
-
-        fixed_debt_nad
-            .checked_add(soft_debt_nad)
-            .ok_or(ErrorCode::MarketMathOverflow.into())
+        normalize_to_nad(fixed_debt, debt_side.asset_decimals)
     }
 
     pub(crate) fn collateral_value_nad(

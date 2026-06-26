@@ -24,7 +24,6 @@ pub struct MarketConfig {
     pub k_ema_drawdown_bps: u16,
     pub recognized_collateral_cap_bps: u16,
     pub market_health_min_bps: u16,
-    pub soft_borrow_enabled: bool,
     pub hedged_lp_enabled: bool,
     pub start_time: i64,
 }
@@ -70,7 +69,6 @@ impl MarketConfig {
                 && self.recognized_collateral_cap_bps >= self.market_health_min_bps,
             ErrorCode::InvalidMarketConfig
         );
-        require!(!self.soft_borrow_enabled, ErrorCode::InvalidMarketConfig);
         Ok(())
     }
 }
@@ -100,23 +98,9 @@ mod tests {
             k_ema_drawdown_bps: 1_000,
             recognized_collateral_cap_bps: 15_000,
             market_health_min_bps: 11_000,
-            soft_borrow_enabled: false,
             hedged_lp_enabled: true,
             start_time: 0,
         }
-    }
-
-    #[test]
-    fn market_config_rejects_soft_borrow_until_implemented() {
-        let mut config = valid_config();
-        config.soft_borrow_enabled = true;
-
-        let err = config.validate().unwrap_err();
-
-        assert_eq!(
-            err,
-            anchor_lang::prelude::error!(ErrorCode::InvalidMarketConfig)
-        );
     }
 
     #[test]

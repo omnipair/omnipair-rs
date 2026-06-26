@@ -101,26 +101,23 @@ fn accrue_side(market: &mut Market, asset: MarketAsset, dt_ms: u64) -> Result<()
     Ok(())
 }
 
-/// Total outstanding debt denominated in `asset` (margin fixed + soft debt plus
-/// the opposite-direction hLP vault's borrowed leg), valued at `index_nad`.
+/// Total outstanding debt denominated in `asset` (margin fixed plus the
+/// opposite-direction hLP vault's borrowed leg), valued at `index_nad`.
 fn total_borrowed(market: &Market, asset: MarketAsset, index_nad: u128) -> Result<u128> {
-    let (margin_fixed, margin_soft, hlp_shares) = match asset {
+    let (margin_fixed, hlp_shares) = match asset {
         // Base-denominated debt: margin base legs + the quote-hLP's base borrow.
         MarketAsset::Base => (
             market.debt.fixed_base_shares,
-            market.debt.soft_base_shares,
             market.quote_hlp_vault.debt_shares,
         ),
         // Quote-denominated debt: margin quote legs + the base-hLP's quote borrow.
         MarketAsset::Quote => (
             market.debt.fixed_quote_shares,
-            market.debt.soft_quote_shares,
             market.base_hlp_vault.debt_shares,
         ),
     };
     let total_shares = margin_fixed
-        .checked_add(margin_soft)
-        .and_then(|value| value.checked_add(hlp_shares))
+        .checked_add(hlp_shares)
         .ok_or(ErrorCode::MarketMathOverflow)?;
     Debt::shares_to_debt(total_shares, index_nad)
 }

@@ -6,8 +6,6 @@ use crate::{constants::NAD, errors::ErrorCode, shared::math::ceil_div, state::Ma
 pub struct Debt {
     pub fixed_base_shares: u128,
     pub fixed_quote_shares: u128,
-    pub soft_base_shares: u128,
-    pub soft_quote_shares: u128,
     pub base_borrow_index_nad: u128,
     pub quote_borrow_index_nad: u128,
     pub base_rate_at_target_nad: u128,
@@ -116,30 +114,12 @@ impl Debt {
         Self::shares_to_debt(self.fixed_quote_shares, self.quote_borrow_index_nad)
     }
 
-    pub fn soft_base_debt(&self) -> Result<u128> {
-        self.soft_base_shares
-            .checked_mul(self.base_borrow_index_nad)
-            .and_then(|value| value.checked_div(NAD as u128))
-            .ok_or(ErrorCode::MarketMathOverflow.into())
-    }
-
-    pub fn soft_quote_debt(&self) -> Result<u128> {
-        self.soft_quote_shares
-            .checked_mul(self.quote_borrow_index_nad)
-            .and_then(|value| value.checked_div(NAD as u128))
-            .ok_or(ErrorCode::MarketMathOverflow.into())
-    }
-
     pub fn total_base_debt(&self) -> Result<u128> {
-        self.fixed_base_debt()?
-            .checked_add(self.soft_base_debt()?)
-            .ok_or(ErrorCode::MarketMathOverflow.into())
+        self.fixed_base_debt()
     }
 
     pub fn total_quote_debt(&self) -> Result<u128> {
-        self.fixed_quote_debt()?
-            .checked_add(self.soft_quote_debt()?)
-            .ok_or(ErrorCode::MarketMathOverflow.into())
+        self.fixed_quote_debt()
     }
 }
 

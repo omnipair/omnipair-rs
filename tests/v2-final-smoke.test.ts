@@ -76,7 +76,6 @@ function marketConfig() {
     kEmaDrawdownBps: 1_000,
     recognizedCollateralCapBps: 15_000,
     marketHealthMinBps: 11_000,
-    softBorrowEnabled: false,
     hedgedLpEnabled: true,
     startTime: new BN(0),
   };

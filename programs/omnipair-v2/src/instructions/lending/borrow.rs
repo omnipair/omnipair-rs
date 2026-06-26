@@ -82,10 +82,6 @@ impl<'info> Borrow<'info> {
     pub fn validate(&self, args: &BorrowArgs) -> Result<()> {
         self.market
             .assert_live_with_futarchy(&self.futarchy_authority)?;
-        require!(
-            !self.market.config.soft_borrow_enabled,
-            ErrorCode::InvalidMarketConfig
-        );
         require!(args.borrow_amount > 0, ErrorCode::AmountZero);
         require_gte!(
             args.borrow_amount,
