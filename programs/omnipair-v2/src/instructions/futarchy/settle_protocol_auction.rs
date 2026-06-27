@@ -21,7 +21,6 @@ use crate::instructions::common::{
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct SettleProtocolAuctionArgs {
     pub lane: ProtocolAuctionLane,
-    pub side: MarketAsset,
     pub sold_amount: u64,
     pub max_payment_amount: u64,
 }
@@ -93,7 +92,8 @@ impl<'info> SettleProtocolAuction<'info> {
             ErrorCode::InvalidMint
         );
 
-        let market_side = self.market.side(args.side)?;
+        let sold_side = self.market.asset_for_mint(self.sold_mint.key())?;
+        let market_side = self.market.side(sold_side)?;
         require_keys_eq!(
             self.sold_mint.key(),
             market_side.asset_mint,
@@ -162,10 +162,14 @@ impl<'info> SettleProtocolAuction<'info> {
             quote.staking_vault_amount,
         )?;
         transfer_sold_fee(&ctx.accounts, args.sold_amount)?;
+        let sold_side = ctx
+            .accounts
+            .market
+            .asset_for_mint(ctx.accounts.sold_mint.key())?;
         let (remaining_fee_liability, remaining_buyback_liability) = settle_auction_state(
             &mut ctx.accounts,
             args.lane,
-            args.side,
+            sold_side,
             args.sold_amount,
             quote.current_slot,
             quote.auction_price_nad,
@@ -174,6 +178,7 @@ impl<'info> SettleProtocolAuction<'info> {
             &ctx,
             &args,
             quote,
+            sold_side,
             remaining_fee_liability,
             remaining_buyback_liability,
         )?;
@@ -241,6 +246,7 @@ fn emit_auction_settled<'info>(
     ctx: &Context<'_, '_, '_, 'info, SettleProtocolAuction<'info>>,
     args: &SettleProtocolAuctionArgs,
     quote: AuctionSettlementQuote,
+    side: MarketAsset,
     remaining_fee_liability: u64,
     remaining_buyback_liability: u64,
 ) -> Result<()> {
@@ -250,7 +256,7 @@ fn emit_auction_settled<'info>(
         market: market_key,
         reference_market: quote.reference_market,
         lane: args.lane.code(),
-        side: args.side.code(),
+        side: side.code(),
         bidder: bidder_key,
         sold_mint: ctx.accounts.sold_mint.key(),
         accepted_mint: ctx.accounts.accepted_mint.key(),

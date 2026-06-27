@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
-use crate::{errors::ErrorCode, utils::market_math::accrue_fee_liability};
+use super::accrue_fee_liability;
+use crate::errors::ErrorCode;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
 pub enum YieldTokenKind {

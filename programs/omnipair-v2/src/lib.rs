@@ -7,9 +7,7 @@ pub mod instructions;
 pub mod math;
 pub mod shared;
 pub mod state;
-pub mod tokens;
 pub mod transitions;
-pub mod utils;
 
 pub use instructions::*;
 pub use state::*;
@@ -120,12 +118,9 @@ pub mod omnipair_v2 {
         SetMarketAuthority::handle_set_manager(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate(&args))]
-    pub fn claim_manager_fees(
-        ctx: Context<ClaimManagerFees>,
-        args: ClaimManagerFeesArgs,
-    ) -> Result<()> {
-        ClaimManagerFees::handle_claim(ctx, args)
+    #[access_control(ctx.accounts.validate())]
+    pub fn claim_manager_fees(ctx: Context<ClaimManagerFees>) -> Result<()> {
+        ClaimManagerFees::handle_claim(ctx)
     }
 
     #[access_control(ctx.accounts.validate(&args))]

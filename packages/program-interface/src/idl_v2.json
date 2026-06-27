@@ -483,16 +483,7 @@
           "name": "program"
         }
       ],
-      "args": [
-        {
-          "name": "args",
-          "type": {
-            "defined": {
-              "name": "ClaimManagerFeesArgs"
-            }
-          }
-        }
-      ]
+      "args": []
     },
     {
       "name": "claim_yield",
@@ -752,11 +743,79 @@
         },
         {
           "name": "hlp_base_ylp_account",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  108,
+                  112,
+                  95,
+                  121,
+                  108,
+                  112,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "target_hlp_mint"
+              },
+              {
+                "kind": "account",
+                "path": "base_ylp_mint"
+              }
+            ]
+          }
         },
         {
           "name": "hlp_quote_ylp_account",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  108,
+                  112,
+                  95,
+                  121,
+                  108,
+                  112,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "target_hlp_mint"
+              },
+              {
+                "kind": "account",
+                "path": "quote_ylp_mint"
+              }
+            ]
+          }
         },
         {
           "name": "target_yield_account",
@@ -1936,11 +1995,79 @@
         },
         {
           "name": "hlp_base_ylp_account",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  108,
+                  112,
+                  95,
+                  121,
+                  108,
+                  112,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "target_hlp_mint"
+              },
+              {
+                "kind": "account",
+                "path": "base_ylp_mint"
+              }
+            ]
+          }
         },
         {
           "name": "hlp_quote_ylp_account",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  108,
+                  112,
+                  95,
+                  121,
+                  108,
+                  112,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "target_hlp_mint"
+              },
+              {
+                "kind": "account",
+                "path": "quote_ylp_mint"
+              }
+            ]
+          }
         },
         {
           "name": "target_yield_account",
@@ -4688,14 +4815,6 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "borrow_asset",
-            "type": {
-              "defined": {
-                "name": "MarketAsset"
-              }
-            }
-          },
-          {
             "name": "borrow_amount",
             "type": "u64"
           },
@@ -4711,34 +4830,10 @@
       }
     },
     {
-      "name": "ClaimManagerFeesArgs",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "side",
-            "type": {
-              "defined": {
-                "name": "MarketAsset"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "ClaimYieldArgs",
       "type": {
         "kind": "struct",
         "fields": [
-          {
-            "name": "market_asset",
-            "type": {
-              "defined": {
-                "name": "MarketAsset"
-              }
-            }
-          },
           {
             "name": "token_kind",
             "type": {
@@ -4755,14 +4850,6 @@
       "type": {
         "kind": "struct",
         "fields": [
-          {
-            "name": "target_asset",
-            "type": {
-              "defined": {
-                "name": "MarketAsset"
-              }
-            }
-          },
           {
             "name": "hlp_amount",
             "type": "u64"
@@ -4862,14 +4949,6 @@
       "type": {
         "kind": "struct",
         "fields": [
-          {
-            "name": "market_asset",
-            "type": {
-              "defined": {
-                "name": "MarketAsset"
-              }
-            }
-          },
           {
             "name": "deposit_amount",
             "type": "u64"
@@ -5376,14 +5455,6 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "debt_asset",
-            "type": {
-              "defined": {
-                "name": "MarketAsset"
-              }
-            }
-          },
-          {
             "name": "repay_amount",
             "type": "u64"
           },
@@ -5727,20 +5798,6 @@
           {
             "name": "bump",
             "type": "u8"
-          }
-        ]
-      }
-    },
-    {
-      "name": "MarketAsset",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "Base"
-          },
-          {
-            "name": "Quote"
           }
         ]
       }
@@ -6404,14 +6461,6 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "target_asset",
-            "type": {
-              "defined": {
-                "name": "MarketAsset"
-              }
-            }
-          },
-          {
             "name": "deposit_amount",
             "type": "u64"
           },
@@ -6866,14 +6915,6 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "repay_asset",
-            "type": {
-              "defined": {
-                "name": "MarketAsset"
-              }
-            }
-          },
-          {
             "name": "repay_amount",
             "type": "u64"
           }
@@ -7122,14 +7163,6 @@
             }
           },
           {
-            "name": "side",
-            "type": {
-              "defined": {
-                "name": "MarketAsset"
-              }
-            }
-          },
-          {
             "name": "sold_amount",
             "type": "u64"
           },
@@ -7145,14 +7178,6 @@
       "type": {
         "kind": "struct",
         "fields": [
-          {
-            "name": "asset_in",
-            "type": {
-              "defined": {
-                "name": "MarketAsset"
-              }
-            }
-          },
           {
             "name": "exact_asset_in",
             "type": "u64"
@@ -7435,14 +7460,6 @@
       "type": {
         "kind": "struct",
         "fields": [
-          {
-            "name": "market_asset",
-            "type": {
-              "defined": {
-                "name": "MarketAsset"
-              }
-            }
-          },
           {
             "name": "withdraw_amount",
             "type": "u64"

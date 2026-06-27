@@ -6,7 +6,9 @@ use anchor_spl::{
 
 use crate::{
     errors::ErrorCode,
-    shared::token::is_supported_mint,
+    shared::token::{
+        is_fee_free_mint, is_supported_mint, is_token_2022_mint, transfer_hook_program_id,
+    },
     state::{Market, MarketAsset},
 };
 
@@ -27,6 +29,25 @@ pub fn token_program_for_mint<'info>(
 
 pub fn require_supported_asset_mint(mint: &InterfaceAccount<Mint>) -> Result<()> {
     require!(is_supported_mint(mint)?, ErrorCode::InvalidTokenProgram);
+    Ok(())
+}
+
+pub fn validate_lp_mint(
+    mint: &InterfaceAccount<Mint>,
+    market: Pubkey,
+    asset_decimals: u8,
+) -> Result<()> {
+    require!(is_token_2022_mint(mint)?, ErrorCode::InvalidLpMintKey);
+    require!(is_fee_free_mint(mint)?, ErrorCode::InvalidLpMintKey);
+    require!(
+        transfer_hook_program_id(mint)? == Some(crate::ID),
+        ErrorCode::InvalidLpMintKey
+    );
+    require_eq!(mint.decimals, asset_decimals, ErrorCode::WrongLpDecimals);
+    require!(
+        mint.mint_authority == COption::Some(market),
+        ErrorCode::InvalidMintAuthority
+    );
     Ok(())
 }
 
@@ -123,16 +144,11 @@ pub fn validate_owner_lp_account(
 
 pub fn validate_fee_accounts<'info>(
     market: &Account<'info, Market>,
-    market_asset: MarketAsset,
     asset_mint: &InterfaceAccount<'info, Mint>,
     fee_vault: &InterfaceAccount<'info, TokenAccount>,
-) -> Result<()> {
+) -> Result<MarketAsset> {
+    let market_asset = market.asset_for_mint(asset_mint.key())?;
     let market_side = market.side(market_asset)?;
-    require_keys_eq!(
-        market_side.asset_mint,
-        asset_mint.key(),
-        ErrorCode::InvalidMint
-    );
     require_keys_eq!(
         market_side.fee_vault,
         fee_vault.key(),
@@ -140,21 +156,16 @@ pub fn validate_fee_accounts<'info>(
     );
     require_keys_eq!(fee_vault.mint, asset_mint.key(), ErrorCode::InvalidVault);
     require_keys_eq!(fee_vault.owner, market.key(), ErrorCode::InvalidVault);
-    Ok(())
+    Ok(market_asset)
 }
 
 pub fn validate_interest_accounts<'info>(
     market: &Account<'info, Market>,
-    market_asset: MarketAsset,
     asset_mint: &InterfaceAccount<'info, Mint>,
     interest_vault: &InterfaceAccount<'info, TokenAccount>,
-) -> Result<()> {
+) -> Result<MarketAsset> {
+    let market_asset = market.asset_for_mint(asset_mint.key())?;
     let market_side = market.side(market_asset)?;
-    require_keys_eq!(
-        market_side.asset_mint,
-        asset_mint.key(),
-        ErrorCode::InvalidMint
-    );
     require_keys_eq!(
         market_side.interest_vault,
         interest_vault.key(),
@@ -166,12 +177,11 @@ pub fn validate_interest_accounts<'info>(
         ErrorCode::InvalidVault
     );
     require_keys_eq!(interest_vault.owner, market.key(), ErrorCode::InvalidVault);
-    Ok(())
+    Ok(market_asset)
 }
 
 pub fn validate_swap_accounts<'info>(
     market: &Account<'info, Market>,
-    asset_in: MarketAsset,
     trader: Pubkey,
     asset_in_mint: &InterfaceAccount<'info, Mint>,
     asset_out_mint: &InterfaceAccount<'info, Mint>,
@@ -180,18 +190,11 @@ pub fn validate_swap_accounts<'info>(
     fee_in_vault: &InterfaceAccount<'info, TokenAccount>,
     trader_asset_in_account: &InterfaceAccount<'info, TokenAccount>,
     trader_asset_out_account: &InterfaceAccount<'info, TokenAccount>,
-) -> Result<()> {
+) -> Result<MarketAsset> {
+    let asset_in = market.asset_for_mint(asset_in_mint.key())?;
+    let asset_out = market.asset_for_mint(asset_out_mint.key())?;
+    require!(asset_out == asset_in.opposite(), ErrorCode::InvalidMint);
     let (market_side_in, market_side_out) = market.swap_sides(asset_in);
-    require_keys_eq!(
-        market_side_in.asset_mint,
-        asset_in_mint.key(),
-        ErrorCode::InvalidMint
-    );
-    require_keys_eq!(
-        market_side_out.asset_mint,
-        asset_out_mint.key(),
-        ErrorCode::InvalidMint
-    );
     require_keys_eq!(
         market_side_in.reserve_vault,
         reserve_in_vault.key(),
@@ -234,5 +237,6 @@ pub fn validate_swap_accounts<'info>(
     );
     require_keys_eq!(fee_in_vault.owner, market.key(), ErrorCode::InvalidVault);
     validate_owner_asset_account(trader, asset_in_mint, trader_asset_in_account)?;
-    validate_owner_asset_account(trader, asset_out_mint, trader_asset_out_account)
+    validate_owner_asset_account(trader, asset_out_mint, trader_asset_out_account)?;
+    Ok(asset_in)
 }

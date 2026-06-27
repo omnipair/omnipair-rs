@@ -323,6 +323,26 @@ impl Market {
         }
     }
 
+    pub fn asset_for_mint(&self, mint: Pubkey) -> Result<MarketAsset> {
+        if mint == self.base_side.asset_mint {
+            return Ok(MarketAsset::Base);
+        }
+        if mint == self.quote_side.asset_mint {
+            return Ok(MarketAsset::Quote);
+        }
+        err!(ErrorCode::InvalidMint)
+    }
+
+    pub fn asset_for_hlp_mint(&self, mint: Pubkey) -> Result<MarketAsset> {
+        if mint == self.base_side.hlp_mint {
+            return Ok(MarketAsset::Base);
+        }
+        if mint == self.quote_side.hlp_mint {
+            return Ok(MarketAsset::Quote);
+        }
+        err!(ErrorCode::InvalidLpMintKey)
+    }
+
     pub fn swap_sides(&self, asset_in: MarketAsset) -> (&MarketSide, &MarketSide) {
         match asset_in {
             MarketAsset::Base => (&self.base_side, &self.quote_side),

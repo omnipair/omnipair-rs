@@ -98,7 +98,6 @@ async function main() {
     });
     const signature = await program.methods
       .openHedge({
-        targetAsset: { base: {} },
         depositAmount: bnFromUnits(hedgeAmount),
         minHlpAmount: new anchor.BN(1),
       })
@@ -149,7 +148,6 @@ async function main() {
 
   let builder = program.methods
     .swap({
-      assetIn: { base: {} },
       exactAssetIn: bnFromUnits(swapAmount),
       minAssetOut: new anchor.BN(0),
     })
@@ -178,14 +176,14 @@ async function main() {
       {
         pubkey:
           refreshedMarket.baseHlpVault.baseYlpVault ??
-          deriveHlpYlpVaultAddress(program.programId, marketAddress, "base", baseYlpMint),
+          deriveHlpYlpVaultAddress(program.programId, marketAddress, baseHlpMint, baseYlpMint),
         isWritable: true,
         isSigner: false,
       },
       {
         pubkey:
           refreshedMarket.baseHlpVault.quoteYlpVault ??
-          deriveHlpYlpVaultAddress(program.programId, marketAddress, "base", quoteYlpMint),
+          deriveHlpYlpVaultAddress(program.programId, marketAddress, baseHlpMint, quoteYlpMint),
         isWritable: true,
         isSigner: false,
       },

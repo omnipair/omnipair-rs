@@ -214,13 +214,6 @@ export function deriveMarginPositionAddress(
 }
 
 export type YieldTokenKind = "ylp" | "hlp" | 0 | 1;
-export type MarketAssetKind = "base" | "quote" | 0 | 1;
-
-function marketAssetCode(marketAsset: MarketAssetKind): number {
-  if (marketAsset === "base" || marketAsset === 0) return 0;
-  if (marketAsset === "quote" || marketAsset === 1) return 1;
-  throw new Error(`Unsupported market asset: ${marketAsset}`);
-}
 
 function yieldTokenKindCode(tokenKind: YieldTokenKind): number {
   if (tokenKind === "ylp" || tokenKind === 0) return 0;
@@ -494,14 +487,14 @@ export function buildYieldTransferHookAccountMetas({
  */
 export function deriveHlpYlpVaultAddress(
   market: PublicKey,
-  targetAsset: MarketAssetKind,
+  targetHlpMint: PublicKey,
   ylpMint: PublicKey
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [
       SEEDS.HLP_YLP_VAULT,
       market.toBuffer(),
-      Buffer.from([marketAssetCode(targetAsset)]),
+      targetHlpMint.toBuffer(),
       ylpMint.toBuffer(),
     ],
     OMNIPAIR_V2_PROGRAM_ID

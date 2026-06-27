@@ -10,7 +10,7 @@ use crate::{
     events::{ManagerFeesClaimed, MarketEventMetadata},
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
-    state::{Market, MarketAsset},
+    state::Market,
 };
 
 use crate::instructions::common::{
@@ -18,14 +18,8 @@ use crate::instructions::common::{
     validate_interest_accounts, validate_owner_asset_account,
 };
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct ClaimManagerFeesArgs {
-    pub side: MarketAsset,
-}
-
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: ClaimManagerFeesArgs)]
 pub struct ClaimManagerFees<'info> {
     #[account(
         mut,
@@ -58,15 +52,12 @@ pub struct ClaimManagerFees<'info> {
 }
 
 impl<'info> ClaimManagerFees<'info> {
-    pub fn validate(&self, args: &ClaimManagerFeesArgs) -> Result<()> {
+    pub fn validate(&self) -> Result<()> {
         self.market.assert_manager(self.manager.key())?;
-        validate_fee_accounts(&self.market, args.side, &self.asset_mint, &self.fee_vault)?;
-        validate_interest_accounts(
-            &self.market,
-            args.side,
-            &self.asset_mint,
-            &self.interest_vault,
-        )?;
+        let fee_asset = validate_fee_accounts(&self.market, &self.asset_mint, &self.fee_vault)?;
+        let interest_asset =
+            validate_interest_accounts(&self.market, &self.asset_mint, &self.interest_vault)?;
+        require!(fee_asset == interest_asset, ErrorCode::InvalidVault);
         validate_owner_asset_account(
             self.manager.key(),
             &self.asset_mint,
@@ -76,12 +67,13 @@ impl<'info> ClaimManagerFees<'info> {
         Ok(())
     }
 
-    pub fn handle_claim(ctx: Context<Self>, args: ClaimManagerFeesArgs) -> Result<()> {
+    pub fn handle_claim(ctx: Context<Self>) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let manager_key = ctx.accounts.manager.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
+        let market_asset = ctx.accounts.market.asset_for_mint(asset_mint_key)?;
         let (swap_fee_amount, interest_fee_amount) = {
-            let market_side = ctx.accounts.market.side(args.side)?;
+            let market_side = ctx.accounts.market.side(market_asset)?;
             (
                 market_side.fees.manager_swap_fee_liability,
                 market_side.fees.manager_interest_fee_liability,
@@ -125,7 +117,7 @@ impl<'info> ClaimManagerFees<'info> {
         ctx.accounts.fee_vault.reload()?;
         ctx.accounts.interest_vault.reload()?;
         {
-            let market_side = ctx.accounts.market.side_mut(args.side)?;
+            let market_side = ctx.accounts.market.side_mut(market_asset)?;
             market_side.fees.manager_swap_fee_liability = 0;
             market_side.fees.manager_interest_fee_liability = 0;
             market_side.fees.swap_fee_vault_balance = ctx.accounts.fee_vault.amount;

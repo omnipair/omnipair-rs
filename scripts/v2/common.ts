@@ -472,14 +472,14 @@ export function deriveYieldAccountAddress(
 export function deriveHlpYlpVaultAddress(
   programId: PublicKey,
   market: PublicKey,
-  targetAsset: "base" | "quote",
+  targetHlpMint: PublicKey,
   ylpMint: PublicKey
 ): PublicKey {
   return derivePda(
     programId,
     Buffer.from("hlp_ylp_vault"),
     market.toBuffer(),
-    Buffer.from([targetAsset === "base" ? 0 : 1]),
+    targetHlpMint.toBuffer(),
     ylpMint.toBuffer()
   );
 }
@@ -502,7 +502,6 @@ export function defaultMarketConfig() {
     kEmaDrawdownBps: Number(process.env.OMNIPAIR_V2_K_EMA_DRAWDOWN_BPS ?? "1000"),
     recognizedCollateralCapBps: Number(process.env.OMNIPAIR_V2_RECOGNIZED_COLLATERAL_CAP_BPS ?? "15000"),
     marketHealthMinBps: Number(process.env.OMNIPAIR_V2_MARKET_HEALTH_MIN_BPS ?? "11000"),
-    softBorrowEnabled: process.env.OMNIPAIR_V2_SOFT_BORROW_ENABLED === "1",
     hedgedLpEnabled: process.env.OMNIPAIR_V2_HEDGED_LP_ENABLED !== "0",
     startTime: new anchor.BN(startTime),
   };

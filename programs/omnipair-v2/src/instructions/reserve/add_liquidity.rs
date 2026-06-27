@@ -14,7 +14,6 @@ use crate::{
         token::{token_mint_to, transfer_from_user_to_vault},
     },
     state::{FutarchyAuthority, Market, YieldAccount, YieldTokenKind},
-    tokens::ylp_token::validate_ylp_mint,
     transitions::{
         fee::{carry_forward_interest, carry_forward_swap_fees},
         reserve::AddLiquidity as AddLiquidityTransition,
@@ -22,8 +21,8 @@ use crate::{
 };
 
 use crate::instructions::common::{
-    require_supported_asset_mint, token_program_for_mint, validate_owner_asset_account,
-    validate_owner_lp_account, validate_side_vault_accounts,
+    require_supported_asset_mint, token_program_for_mint, validate_lp_mint,
+    validate_owner_asset_account, validate_owner_lp_account, validate_side_vault_accounts,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -166,12 +165,12 @@ impl<'info> AddLiquidity<'info> {
         )?;
         require_supported_asset_mint(&self.base_mint)?;
         require_supported_asset_mint(&self.quote_mint)?;
-        validate_ylp_mint(
+        validate_lp_mint(
             &self.base_ylp_mint,
             self.market.key(),
             self.base_mint.decimals,
         )?;
-        validate_ylp_mint(
+        validate_lp_mint(
             &self.quote_ylp_mint,
             self.market.key(),
             self.quote_mint.decimals,

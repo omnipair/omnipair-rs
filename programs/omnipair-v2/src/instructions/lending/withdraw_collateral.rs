@@ -10,7 +10,7 @@ use crate::{
     events::{MarketCollateralWithdrawn, MarketEventMetadata, MarketHealthUpdated},
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
-    state::{FutarchyAuthority, MarginPosition, Market, MarketAsset},
+    state::{FutarchyAuthority, MarginPosition, Market},
     transitions::collateral::WithdrawCollateral as WithdrawCollateralTransition,
 };
 
@@ -22,7 +22,6 @@ use super::common::validate_collateral_accounts;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct WithdrawCollateralArgs {
-    pub market_asset: MarketAsset,
     pub withdraw_amount: u64,
     pub min_asset_amount_out: u64,
 }
@@ -79,9 +78,8 @@ impl<'info> WithdrawCollateral<'info> {
     pub fn validate(&self, args: &WithdrawCollateralArgs) -> Result<()> {
         self.market.assert_started()?;
         require!(args.withdraw_amount > 0, ErrorCode::AmountZero);
-        validate_collateral_accounts(
+        let market_asset = validate_collateral_accounts(
             &self.market,
-            args.market_asset,
             self.owner.key(),
             &self.asset_mint,
             &self.collateral_vault,
@@ -106,9 +104,9 @@ impl<'info> WithdrawCollateral<'info> {
             args.withdraw_amount,
             ErrorCode::InsufficientBalance
         );
-        let idle_collateral = match args.market_asset {
-            MarketAsset::Base => self.margin_position.idle_base_collateral()?,
-            MarketAsset::Quote => self.margin_position.idle_quote_collateral()?,
+        let idle_collateral = match market_asset {
+            crate::state::MarketAsset::Base => self.margin_position.idle_base_collateral()?,
+            crate::state::MarketAsset::Quote => self.margin_position.idle_quote_collateral()?,
         };
         require_gte!(
             idle_collateral,
@@ -122,6 +120,7 @@ impl<'info> WithdrawCollateral<'info> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
+        let market_asset = ctx.accounts.market.asset_for_mint(asset_mint_key)?;
         ctx.accounts.market.accrue_interest()?;
         let owner_asset_balance_before = ctx.accounts.owner_asset_account.amount;
         let collateral_balance_before = ctx.accounts.collateral_vault.amount;
@@ -160,9 +159,8 @@ impl<'info> WithdrawCollateral<'info> {
             ErrorCode::SlippageExceeded
         );
 
-        let collateral_receipt =
-            WithdrawCollateralTransition::new(args.market_asset, collateral_debit)
-                .apply(&mut ctx.accounts.market, &mut ctx.accounts.margin_position)?;
+        let collateral_receipt = WithdrawCollateralTransition::new(market_asset, collateral_debit)
+            .apply(&mut ctx.accounts.market, &mut ctx.accounts.margin_position)?;
 
         emit_cpi!(MarketCollateralWithdrawn {
             market: market_key,

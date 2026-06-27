@@ -276,13 +276,13 @@ function deriveYieldAccount(
 
 function deriveHlpYlpVault(
   market: PublicKey,
-  targetAsset: MarketAsset,
+  targetHlpMint: PublicKey,
   ylpMint: PublicKey
 ): PublicKey {
   return pda(
     seed("hlp_ylp_vault"),
     market.toBuffer(),
-    Buffer.from([targetAsset === "base" ? 0 : 1]),
+    targetHlpMint.toBuffer(),
     ylpMint.toBuffer()
   );
 }
@@ -306,10 +306,6 @@ function paramsHashForMarket(label: string, baseMint: PublicKey, quoteMint: Publ
   return createHash("sha256")
     .update(`omnipair-v2-mainnet-fork:${label}:${baseMint.toBase58()}:${quoteMint.toBase58()}`)
     .digest();
-}
-
-function marketAssetVariant(asset: MarketAsset) {
-  return asset === "base" ? { base: {} } : { quote: {} };
 }
 
 function toBN(value: bigint | number | string): BN {
@@ -509,7 +505,6 @@ function defaultMarketConfig() {
       process.env.OMNIPAIR_V2_RECOGNIZED_COLLATERAL_CAP_BPS ?? "15000"
     ),
     marketHealthMinBps: Number(process.env.OMNIPAIR_V2_MARKET_HEALTH_MIN_BPS ?? "11000"),
-    softBorrowEnabled: process.env.OMNIPAIR_V2_SOFT_BORROW_ENABLED === "1",
     hedgedLpEnabled: process.env.OMNIPAIR_V2_HEDGED_LP_ENABLED !== "0",
     startTime: toBN(process.env.OMNIPAIR_V2_MARKET_START_TIME ?? "0"),
   };
@@ -845,10 +840,10 @@ async function bootstrapUncached(): Promise<StoredMarket> {
     throw new Error(`Unable to resolve V2 LP mints for market ${addresses.market.toBase58()}`);
   }
 
-  const baseHlpBaseYlpVault = deriveHlpYlpVault(addresses.market, "base", baseYlpMint);
-  const baseHlpQuoteYlpVault = deriveHlpYlpVault(addresses.market, "base", quoteYlpMint);
-  const quoteHlpBaseYlpVault = deriveHlpYlpVault(addresses.market, "quote", baseYlpMint);
-  const quoteHlpQuoteYlpVault = deriveHlpYlpVault(addresses.market, "quote", quoteYlpMint);
+  const baseHlpBaseYlpVault = deriveHlpYlpVault(addresses.market, baseHlpMint, baseYlpMint);
+  const baseHlpQuoteYlpVault = deriveHlpYlpVault(addresses.market, baseHlpMint, quoteYlpMint);
+  const quoteHlpBaseYlpVault = deriveHlpYlpVault(addresses.market, quoteHlpMint, baseYlpMint);
+  const quoteHlpQuoteYlpVault = deriveHlpYlpVault(addresses.market, quoteHlpMint, quoteYlpMint);
 
   const transferHookValidationAccounts = {
     baseYlp: (
@@ -1253,7 +1248,6 @@ async function buildSwapTx(params: {
 
   let builder = program.methods
     .swap({
-      assetIn: marketAssetVariant(params.assetIn),
       exactAssetIn: toBN(params.exactAssetIn),
       minAssetOut: toBN(params.minAssetOut),
     })
@@ -1320,7 +1314,6 @@ async function buildDepositCollateralTx(params: {
   instructions.push(
     await program.methods
       .depositCollateral({
-        marketAsset: marketAssetVariant(params.marketAsset),
         depositAmount: toBN(params.depositAmount),
       })
       .accounts({
@@ -1362,7 +1355,6 @@ async function buildBorrowTx(params: {
   instructions.push(
     await program.methods
       .borrow({
-        borrowAsset: marketAssetVariant(params.borrowAsset),
         borrowAmount: toBN(params.borrowAmount),
         minDebtAmountOut: toBN(params.minDebtAmountOut),
         minHealthBps: toBN(params.minHealthBps),
@@ -1405,7 +1397,6 @@ async function buildRepayTx(params: {
   instructions.push(
     await program.methods
       .repay({
-        repayAsset: marketAssetVariant(params.repayAsset),
         repayAmount: toBN(params.repayAmount),
       })
       .accounts({
@@ -1451,7 +1442,6 @@ async function buildOpenHedgeTx(params: {
   instructions.push(
     await program.methods
       .openHedge({
-        targetAsset: marketAssetVariant(params.targetAsset),
         depositAmount: toBN(params.depositAmount),
         minHlpAmount: toBN(params.minHlpAmount),
       })
@@ -1513,7 +1503,6 @@ async function buildCloseHedgeTx(params: {
   instructions.push(
     await program.methods
       .closeHedge({
-        targetAsset: marketAssetVariant(params.targetAsset),
         hlpAmount: toBN(params.hlpAmount),
         minTargetAmountOut: toBN(params.minTargetAmountOut),
       })

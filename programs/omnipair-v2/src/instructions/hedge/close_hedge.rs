@@ -14,7 +14,6 @@ use crate::{
         token::{token_burn, transfer_from_vault_to_user, transfer_from_vault_to_vault},
     },
     state::{FutarchyAuthority, Market, MarketAsset, YieldAccount, YieldTokenKind},
-    tokens::{hlp_token::validate_hlp_mint, ylp_token::validate_ylp_mint},
     transitions::{
         fee::RecordInterestCredit,
         hedge::{checkpoint_hlp_yield_from_ylp, CloseHedge as CloseHedgeTransition},
@@ -23,13 +22,12 @@ use crate::{
 
 use crate::instructions::common::{
     require_supported_asset_mint, token_account_credit, token_program_for_mint,
-    validate_interest_accounts, validate_owner_asset_account, validate_owner_lp_account,
-    validate_side_vault_accounts,
+    validate_interest_accounts, validate_lp_mint, validate_owner_asset_account,
+    validate_owner_lp_account, validate_side_vault_accounts,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct CloseHedgeArgs {
-    pub target_asset: MarketAsset,
     pub hlp_amount: u64,
     pub min_target_amount_out: u64,
 }
@@ -86,7 +84,7 @@ pub struct CloseHedge<'info> {
         seeds = [
             HLP_YLP_VAULT_SEED_PREFIX,
             market.key().as_ref(),
-            &[args.target_asset.code()],
+            target_hlp_mint.key().as_ref(),
             base_ylp_mint.key().as_ref(),
         ],
         bump,
@@ -100,7 +98,7 @@ pub struct CloseHedge<'info> {
         seeds = [
             HLP_YLP_VAULT_SEED_PREFIX,
             market.key().as_ref(),
-            &[args.target_asset.code()],
+            target_hlp_mint.key().as_ref(),
             quote_ylp_mint.key().as_ref(),
         ],
         bump,
@@ -148,26 +146,24 @@ impl<'info> CloseHedge<'info> {
             &self.quote_ylp_mint,
             &self.quote_reserve_vault,
         )?;
-        let target_mint = match args.target_asset {
+        let target_asset = self.market.asset_for_hlp_mint(self.target_hlp_mint.key())?;
+        let target_mint = match target_asset {
             MarketAsset::Base => &self.base_mint,
             MarketAsset::Quote => &self.quote_mint,
         };
-        let borrowed_asset = args.target_asset.opposite();
+        let borrowed_asset = target_asset.opposite();
         let borrowed_mint = match borrowed_asset {
             MarketAsset::Base => &self.base_mint,
             MarketAsset::Quote => &self.quote_mint,
         };
         require_keys_eq!(
-            self.market.side(args.target_asset)?.hlp_mint,
+            self.market.side(target_asset)?.hlp_mint,
             self.target_hlp_mint.key(),
             ErrorCode::InvalidMint
         );
-        validate_interest_accounts(
-            &self.market,
-            borrowed_asset,
-            borrowed_mint,
-            &self.borrowed_interest_vault,
-        )?;
+        let interest_asset =
+            validate_interest_accounts(&self.market, borrowed_mint, &self.borrowed_interest_vault)?;
+        require!(interest_asset == borrowed_asset, ErrorCode::InvalidVault);
         validate_owner_asset_account(self.owner.key(), target_mint, &self.owner_target_account)?;
         validate_owner_lp_account(
             self.owner.key(),
@@ -179,17 +175,17 @@ impl<'info> CloseHedge<'info> {
             args.hlp_amount,
             ErrorCode::InsufficientBalance
         );
-        validate_hlp_mint(
+        validate_lp_mint(
             &self.target_hlp_mint,
             self.market.key(),
             target_mint.decimals,
         )?;
-        validate_ylp_mint(
+        validate_lp_mint(
             &self.base_ylp_mint,
             self.market.key(),
             self.base_mint.decimals,
         )?;
-        validate_ylp_mint(
+        validate_lp_mint(
             &self.quote_ylp_mint,
             self.market.key(),
             self.quote_mint.decimals,
@@ -222,8 +218,12 @@ impl<'info> CloseHedge<'info> {
     pub fn handle_close(ctx: Context<Self>, args: CloseHedgeArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
+        let target_asset = ctx
+            .accounts
+            .market
+            .asset_for_hlp_mint(ctx.accounts.target_hlp_mint.key())?;
         ctx.accounts.market.accrue_interest()?;
-        let target_mint_key = match args.target_asset {
+        let target_mint_key = match target_asset {
             MarketAsset::Base => ctx.accounts.base_mint.key(),
             MarketAsset::Quote => ctx.accounts.quote_mint.key(),
         };
@@ -235,9 +235,9 @@ impl<'info> CloseHedge<'info> {
             target_mint_key,
             ctx.bumps.target_yield_account,
         )?;
-        checkpoint_hlp_yield_from_ylp(&mut ctx.accounts.market, args.target_asset)?;
+        checkpoint_hlp_yield_from_ylp(&mut ctx.accounts.market, target_asset)?;
         let (swap_fee_growth_index_nad, interest_growth_index_nad) =
-            hlp_yield_growth_indexes(&ctx.accounts.market, args.target_asset);
+            hlp_yield_growth_indexes(&ctx.accounts.market, target_asset);
         ctx.accounts.target_yield_account.accrue(
             ctx.accounts.owner_hlp_account.amount,
             swap_fee_growth_index_nad,
@@ -258,10 +258,10 @@ impl<'info> CloseHedge<'info> {
             &[],
         )?;
 
-        let receipt = CloseHedgeTransition::new(args.target_asset, args.hlp_amount)
+        let receipt = CloseHedgeTransition::new(target_asset, args.hlp_amount)
             .apply(&mut ctx.accounts.market)?;
         if receipt.interest_paid > 0 {
-            let borrowed_asset = args.target_asset.opposite();
+            let borrowed_asset = target_asset.opposite();
             let (borrowed_reserve_vault, borrowed_mint, borrowed_decimals) = match borrowed_asset {
                 MarketAsset::Base => (
                     ctx.accounts.base_reserve_vault.to_account_info(),
@@ -330,7 +330,7 @@ impl<'info> CloseHedge<'info> {
         )?;
 
         let target_balance_before = ctx.accounts.owner_target_account.amount;
-        let (target_reserve_vault, target_mint, target_decimals) = match args.target_asset {
+        let (target_reserve_vault, target_mint, target_decimals) = match target_asset {
             MarketAsset::Base => (
                 ctx.accounts.base_reserve_vault.to_account_info(),
                 ctx.accounts.base_mint.to_account_info(),
@@ -343,7 +343,7 @@ impl<'info> CloseHedge<'info> {
             ),
         };
         let target_token_program = token_program_for_mint(
-            match args.target_asset {
+            match target_asset {
                 MarketAsset::Base => &ctx.accounts.base_mint,
                 MarketAsset::Quote => &ctx.accounts.quote_mint,
             },

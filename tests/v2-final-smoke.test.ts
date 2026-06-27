@@ -362,10 +362,10 @@ describe("Omnipair V2 final model smoke", () => {
     const quoteYlpMint = await createHookedLpMint(market, 6);
     const baseHlpMint = await createHookedLpMint(market, 6);
     const quoteHlpMint = await createHookedLpMint(market, 6);
-    const baseHlpBaseYlpVault = deriveHlpYlpVaultAddress(market, "base", baseYlpMint)[0];
-    const baseHlpQuoteYlpVault = deriveHlpYlpVaultAddress(market, "base", quoteYlpMint)[0];
-    const quoteHlpBaseYlpVault = deriveHlpYlpVaultAddress(market, "quote", baseYlpMint)[0];
-    const quoteHlpQuoteYlpVault = deriveHlpYlpVaultAddress(market, "quote", quoteYlpMint)[0];
+    const baseHlpBaseYlpVault = deriveHlpYlpVaultAddress(market, baseHlpMint, baseYlpMint)[0];
+    const baseHlpQuoteYlpVault = deriveHlpYlpVaultAddress(market, baseHlpMint, quoteYlpMint)[0];
+    const quoteHlpBaseYlpVault = deriveHlpYlpVaultAddress(market, quoteHlpMint, baseYlpMint)[0];
+    const quoteHlpQuoteYlpVault = deriveHlpYlpVaultAddress(market, quoteHlpMint, quoteYlpMint)[0];
     const baseReserveVault = deriveMarketReserveVaultAddress(market, baseMint)[0];
     const quoteReserveVault = deriveMarketReserveVaultAddress(market, quoteMint)[0];
     const baseCollateralVault = deriveMarketCollateralVaultAddress(market, baseMint)[0];
@@ -560,12 +560,12 @@ describe("Omnipair V2 final model smoke", () => {
       ));
     const hlpBaseYlpAccount = deriveHlpYlpVaultAddress(
       fixture.market,
-      "base",
+      fixture.baseHlpMint,
       fixture.baseYlpMint
     )[0];
     const hlpQuoteYlpAccount = deriveHlpYlpVaultAddress(
       fixture.market,
-      "base",
+      fixture.baseHlpMint,
       fixture.quoteYlpMint
     )[0];
     const targetYieldAccount = deriveYieldAccountAddress(
@@ -577,7 +577,6 @@ describe("Omnipair V2 final model smoke", () => {
 
     const tx = await program.methods
       .openHedge({
-        targetAsset: { base: {} },
         depositAmount: new BN(depositAmount),
         minHlpAmount: new BN(1),
       })
@@ -632,12 +631,12 @@ describe("Omnipair V2 final model smoke", () => {
       ));
     const hlpBaseYlpAccount = deriveHlpYlpVaultAddress(
       fixture.market,
-      "quote",
+      fixture.quoteHlpMint,
       fixture.baseYlpMint
     )[0];
     const hlpQuoteYlpAccount = deriveHlpYlpVaultAddress(
       fixture.market,
-      "quote",
+      fixture.quoteHlpMint,
       fixture.quoteYlpMint
     )[0];
     const targetYieldAccount = deriveYieldAccountAddress(
@@ -649,7 +648,6 @@ describe("Omnipair V2 final model smoke", () => {
 
     const tx = await program.methods
       .openHedge({
-        targetAsset: { quote: {} },
         depositAmount: new BN(depositAmount),
         minHlpAmount: new BN(1),
       })
@@ -748,7 +746,6 @@ describe("Omnipair V2 final model smoke", () => {
   ) {
     let builder = program.methods
       .swap({
-        assetIn: { base: {} },
         exactAssetIn: new BN(exactAssetIn),
         minAssetOut: new BN(minAssetOut),
       })
@@ -783,7 +780,6 @@ describe("Omnipair V2 final model smoke", () => {
   ) {
     let builder = program.methods
       .swap({
-        assetIn: { quote: {} },
         exactAssetIn: new BN(exactAssetIn),
         minAssetOut: new BN(minAssetOut),
       })
@@ -1002,7 +998,6 @@ describe("Omnipair V2 final model smoke", () => {
 
     const tx = await program.methods
       .closeHedge({
-        targetAsset: { base: {} },
         hlpAmount: new BN(10_000),
         minTargetAmountOut: new BN(9_999),
       })
@@ -1111,7 +1106,6 @@ describe("Omnipair V2 final model smoke", () => {
 
     const tx = await program.methods
       .closeHedge({
-        targetAsset: { quote: {} },
         hlpAmount: new BN(20_000),
         minTargetAmountOut: new BN(19_999),
       })
@@ -1457,7 +1451,6 @@ describe("Omnipair V2 final model smoke", () => {
     const settleTx = await program.methods
       .settleProtocolAuction({
         lane: { fee: {} },
-        side: { base: {} },
         soldAmount: new BN(3),
         maxPaymentAmount: new BN(1_000),
       })
@@ -1685,7 +1678,6 @@ describe("Omnipair V2 final model smoke", () => {
 
     const claimTx = await program.methods
       .claimYield({
-        marketAsset: { base: {} },
         tokenKind: { ylp: {} },
       })
       .accounts({
@@ -1855,7 +1847,6 @@ describe("Omnipair V2 final model smoke", () => {
 
     const depositTx = await program.methods
       .depositCollateral({
-        marketAsset: { base: {} },
         depositAmount: new BN(10_000),
       })
       .accounts({
@@ -1877,7 +1868,6 @@ describe("Omnipair V2 final model smoke", () => {
 
     const borrowTx = await program.methods
       .borrow({
-        borrowAsset: { quote: {} },
         borrowAmount: new BN(5_000),
         minDebtAmountOut: new BN(5_000),
         minHealthBps: new BN(11_000),
@@ -1914,7 +1904,6 @@ describe("Omnipair V2 final model smoke", () => {
 
     const repayTx = await program.methods
       .repay({
-        repayAsset: { quote: {} },
         repayAmount: new BN(5_000),
       })
       .accounts({
@@ -1936,7 +1925,6 @@ describe("Omnipair V2 final model smoke", () => {
 
     const withdrawTx = await program.methods
       .withdrawCollateral({
-        marketAsset: { base: {} },
         withdrawAmount: new BN(10_000),
         minAssetAmountOut: new BN(10_000),
       })
@@ -1986,7 +1974,6 @@ describe("Omnipair V2 final model smoke", () => {
 
     const depositTx = await program.methods
       .depositCollateral({
-        marketAsset: { base: {} },
         depositAmount: new BN(10_000),
       })
       .accounts({
@@ -2007,7 +1994,6 @@ describe("Omnipair V2 final model smoke", () => {
 
     const borrowTx = await program.methods
       .borrow({
-        borrowAsset: { quote: {} },
         borrowAmount: new BN(14_500),
         minDebtAmountOut: new BN(14_500),
         minHealthBps: new BN(11_000),
@@ -2043,7 +2029,6 @@ describe("Omnipair V2 final model smoke", () => {
 
     const liquidateTx = await program.methods
       .liquidate({
-        debtAsset: { quote: {} },
         repayAmount: new BN(1_000),
         minCollateralOut: new BN(1),
         maxInsuranceDraw: new BN(0),

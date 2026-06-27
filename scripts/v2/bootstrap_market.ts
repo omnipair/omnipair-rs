@@ -109,28 +109,30 @@ async function main() {
 
   const baseYlp = new PublicKey(baseYlpMint.mint);
   const quoteYlp = new PublicKey(quoteYlpMint.mint);
+  const baseHlp = new PublicKey(baseHlpMint.mint);
+  const quoteHlp = new PublicKey(quoteHlpMint.mint);
   const baseHlpBaseYlpVault = deriveHlpYlpVaultAddress(
     program.programId,
     market,
-    "base",
+    baseHlp,
     baseYlp
   );
   const baseHlpQuoteYlpVault = deriveHlpYlpVaultAddress(
     program.programId,
     market,
-    "base",
+    baseHlp,
     quoteYlp
   );
   const quoteHlpBaseYlpVault = deriveHlpYlpVaultAddress(
     program.programId,
     market,
-    "quote",
+    quoteHlp,
     baseYlp
   );
   const quoteHlpQuoteYlpVault = deriveHlpYlpVaultAddress(
     program.programId,
     market,
-    "quote",
+    quoteHlp,
     quoteYlp
   );
 
@@ -152,8 +154,8 @@ async function main() {
         futarchyAuthority,
         baseYlpMint: baseYlp,
         quoteYlpMint: quoteYlp,
-        baseHlpMint: new PublicKey(baseHlpMint.mint),
-        quoteHlpMint: new PublicKey(quoteHlpMint.mint),
+        baseHlpMint: baseHlp,
+        quoteHlpMint: quoteHlp,
         baseReserveVault: addresses.baseReserveVault,
         quoteReserveVault: addresses.quoteReserveVault,
         baseCollateralVault: addresses.baseCollateralVault,

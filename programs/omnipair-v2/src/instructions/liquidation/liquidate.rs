@@ -26,7 +26,6 @@ use crate::instructions::common::{
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct LiquidateArgs {
-    pub debt_asset: MarketAsset,
     pub repay_amount: u64,
     pub min_collateral_out: u64,
     pub max_insurance_draw: u64,
@@ -107,9 +106,8 @@ impl<'info> Liquidate<'info> {
             args.repay_amount,
             ErrorCode::InsufficientBalance
         );
-        validate_liquidation_accounts(
+        let debt_asset = validate_liquidation_accounts(
             &self.market,
-            args.debt_asset,
             self.liquidator.key(),
             &self.debt_asset_mint,
             &self.collateral_asset_mint,
@@ -120,12 +118,9 @@ impl<'info> Liquidate<'info> {
             &self.liquidator_debt_account,
             &self.liquidator_collateral_account,
         )?;
-        validate_interest_accounts(
-            &self.market,
-            args.debt_asset,
-            &self.debt_asset_mint,
-            &self.interest_vault,
-        )?;
+        let interest_asset =
+            validate_interest_accounts(&self.market, &self.debt_asset_mint, &self.interest_vault)?;
+        require!(interest_asset == debt_asset, ErrorCode::InvalidVault);
         require_supported_asset_mint(&self.debt_asset_mint)?;
         require_supported_asset_mint(&self.collateral_asset_mint)?;
         require_keys_eq!(
@@ -135,7 +130,7 @@ impl<'info> Liquidate<'info> {
         );
         let health_bps = self
             .market
-            .position_health_bps(&self.margin_position, args.debt_asset)?;
+            .position_health_bps(&self.margin_position, debt_asset)?;
         require!(
             health_bps < self.market.config.market_health_min_bps as u64,
             ErrorCode::PositionNotLiquidatable
@@ -149,6 +144,7 @@ impl<'info> Liquidate<'info> {
         let liquidator_key = ctx.accounts.liquidator.key();
         let debt_asset_mint_key = ctx.accounts.debt_asset_mint.key();
         let collateral_asset_mint_key = ctx.accounts.collateral_asset_mint.key();
+        let debt_asset = ctx.accounts.market.asset_for_mint(debt_asset_mint_key)?;
 
         ctx.accounts.market.accrue_interest()?;
 
@@ -179,7 +175,7 @@ impl<'info> Liquidate<'info> {
         let insurance_request = insurance_request_for_liquidation(
             &ctx.accounts.market,
             &ctx.accounts.margin_position,
-            args.debt_asset,
+            debt_asset,
             repay_credit,
             args.max_insurance_draw,
         )?;
@@ -214,7 +210,7 @@ impl<'info> Liquidate<'info> {
         };
 
         let liquidation_receipt = Liquidation::new(
-            args.debt_asset,
+            debt_asset,
             repay_credit,
             insurance_spent,
             insurance_credit,
@@ -239,7 +235,7 @@ impl<'info> Liquidate<'info> {
                 ctx.accounts.futarchy_authority.revenue_share.interest_bps,
                 ctx.accounts.futarchy_authority.protocol_auction_split,
             )
-            .apply(ctx.accounts.market.side_mut(args.debt_asset)?)?;
+            .apply(ctx.accounts.market.side_mut(debt_asset)?)?;
         }
         let collateral_token_program = token_program_for_mint(
             &ctx.accounts.collateral_asset_mint,
@@ -337,7 +333,6 @@ impl<'info> Liquidate<'info> {
 
 fn validate_liquidation_accounts<'info>(
     market: &Account<'info, Market>,
-    debt_asset: MarketAsset,
     liquidator: Pubkey,
     debt_asset_mint: &InterfaceAccount<'info, Mint>,
     collateral_asset_mint: &InterfaceAccount<'info, Mint>,
@@ -347,7 +342,8 @@ fn validate_liquidation_accounts<'info>(
     collateral_insurance_vault: &InterfaceAccount<'info, TokenAccount>,
     liquidator_debt_account: &InterfaceAccount<'info, TokenAccount>,
     liquidator_collateral_account: &InterfaceAccount<'info, TokenAccount>,
-) -> Result<()> {
+) -> Result<MarketAsset> {
+    let debt_asset = market.asset_for_mint(debt_asset_mint.key())?;
     let (debt_side, collateral_side, insurance_vault_key, collateral_insurance_vault_key) =
         match debt_asset {
             MarketAsset::Base => (
@@ -445,5 +441,5 @@ fn validate_liquidation_accounts<'info>(
         liquidator,
         ErrorCode::InvalidTokenAccount
     );
-    Ok(())
+    Ok(debt_asset)
 }

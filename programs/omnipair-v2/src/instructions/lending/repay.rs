@@ -10,7 +10,7 @@ use crate::{
     events::{MarketDebtUpdated, MarketEventMetadata, MarketHealthUpdated},
     generate_market_seeds,
     shared::token::{transfer_from_user_to_vault, transfer_from_vault_to_vault},
-    state::{FutarchyAuthority, MarginPosition, Market, MarketAsset},
+    state::{FutarchyAuthority, MarginPosition, Market},
     transitions::{debt::Repay as RepayTransition, fee::RecordInterestCredit},
 };
 
@@ -22,7 +22,6 @@ use super::common::validate_repay_accounts;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct RepayArgs {
-    pub repay_asset: MarketAsset,
     pub repay_amount: u64,
 }
 
@@ -86,20 +85,16 @@ impl<'info> Repay<'info> {
             args.repay_amount,
             ErrorCode::InsufficientBalance
         );
-        validate_repay_accounts(
+        let repay_asset = validate_repay_accounts(
             &self.market,
-            args.repay_asset,
             self.owner.key(),
             &self.debt_asset_mint,
             &self.reserve_vault,
             &self.owner_debt_account,
         )?;
-        validate_interest_accounts(
-            &self.market,
-            args.repay_asset,
-            &self.debt_asset_mint,
-            &self.interest_vault,
-        )?;
+        let interest_asset =
+            validate_interest_accounts(&self.market, &self.debt_asset_mint, &self.interest_vault)?;
+        require!(interest_asset == repay_asset, ErrorCode::InvalidVault);
         require_supported_asset_mint(&self.debt_asset_mint)?;
         self.margin_position
             .assert_position(self.owner.key(), self.market.key())?;
@@ -110,6 +105,7 @@ impl<'info> Repay<'info> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let debt_asset_mint_key = ctx.accounts.debt_asset_mint.key();
+        let repay_asset = ctx.accounts.market.asset_for_mint(debt_asset_mint_key)?;
         ctx.accounts.market.accrue_interest()?;
         let reserve_balance_before = ctx.accounts.reserve_vault.amount;
         let debt_token_program = token_program_for_mint(
@@ -135,7 +131,7 @@ impl<'info> Repay<'info> {
             .ok_or(ErrorCode::MarketMathOverflow)?;
         require!(repay_credit > 0, ErrorCode::AmountZero);
 
-        let debt_receipt = RepayTransition::new(args.repay_asset, repay_credit)
+        let debt_receipt = RepayTransition::new(repay_asset, repay_credit)
             .apply(&mut ctx.accounts.market, &mut ctx.accounts.margin_position)?;
         if debt_receipt.interest_paid > 0 {
             transfer_from_vault_to_vault(
@@ -155,7 +151,7 @@ impl<'info> Repay<'info> {
                 ctx.accounts.futarchy_authority.revenue_share.interest_bps,
                 ctx.accounts.futarchy_authority.protocol_auction_split,
             )
-            .apply(ctx.accounts.market.side_mut(args.repay_asset)?)?;
+            .apply(ctx.accounts.market.side_mut(repay_asset)?)?;
         }
 
         emit_cpi!(MarketDebtUpdated {

@@ -36,7 +36,6 @@ use crate::instructions::common::{
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct SwapArgs {
-    pub asset_in: MarketAsset,
     pub exact_asset_in: u64,
     pub min_asset_out: u64,
 }
@@ -101,7 +100,6 @@ impl<'info> Swap<'info> {
         );
         validate_swap_accounts(
             &self.market,
-            args.asset_in,
             self.trader.key(),
             &self.asset_in_mint,
             &self.asset_out_mint,
@@ -121,6 +119,7 @@ impl<'info> Swap<'info> {
         let trader_key = ctx.accounts.trader.key();
         let asset_in_mint_key = ctx.accounts.asset_in_mint.key();
         let asset_out_mint_key = ctx.accounts.asset_out_mint.key();
+        let asset_in = ctx.accounts.market.asset_for_mint(asset_in_mint_key)?;
         let manager_fee_bps = ctx.accounts.market.config.manager_fee_bps;
         let protocol_fee_bps = ctx.accounts.futarchy_authority.revenue_share.swap_bps;
         let protocol_auction_split = ctx.accounts.futarchy_authority.protocol_auction_split;
@@ -147,7 +146,7 @@ impl<'info> Swap<'info> {
         require!(amount_in_after_fee > 0, ErrorCode::InsufficientOutputAmount);
 
         let amount_out = {
-            let (market_side_in, market_side_out) = ctx.accounts.market.swap_sides(args.asset_in);
+            let (market_side_in, market_side_out) = ctx.accounts.market.swap_sides(asset_in);
             calculate_raw_amount_out(
                 market_side_in.reserves.live_reserve,
                 market_side_out.reserves.live_reserve,
@@ -183,8 +182,7 @@ impl<'info> Swap<'info> {
         );
 
         let swap_receipt = {
-            let (market_side_in, market_side_out) =
-                ctx.accounts.market.swap_sides_mut(args.asset_in);
+            let (market_side_in, market_side_out) = ctx.accounts.market.swap_sides_mut(asset_in);
             SwapTransition::new(
                 amount_in_after_fee,
                 amount_out,
@@ -211,7 +209,7 @@ impl<'info> Swap<'info> {
             emit_swap_settled_low_heap(
                 market_key,
                 trader_key,
-                args.asset_in.code(),
+                asset_in.code(),
                 reserve_credit,
                 swap_receipt.amount_in_after_fee,
                 swap_receipt.amount_out,

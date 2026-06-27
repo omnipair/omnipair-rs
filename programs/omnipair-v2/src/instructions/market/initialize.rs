@@ -13,10 +13,11 @@ use crate::{
     events::{MarketCreated, MarketEventMetadata},
     shared::{account::get_size_with_discriminator, token::create_token_account},
     state::{FutarchyAuthority, HlpVault, Market, MarketAsset, MarketConfig, MarketSide},
-    tokens::{hlp_token::validate_hlp_mint, ylp_token::validate_ylp_mint},
 };
 
-use crate::instructions::common::{require_supported_asset_mint, token_program_for_mint};
+use crate::instructions::common::{
+    require_supported_asset_mint, token_program_for_mint, validate_lp_mint,
+};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InitializeMarketArgs {
@@ -199,10 +200,10 @@ impl<'info> InitializeMarket<'info> {
         require_supported_asset_mint(&self.base_mint)?;
         require_supported_asset_mint(&self.quote_mint)?;
         let market = self.market.key();
-        validate_ylp_mint(&self.base_ylp_mint, market, self.base_mint.decimals)?;
-        validate_ylp_mint(&self.quote_ylp_mint, market, self.quote_mint.decimals)?;
-        validate_hlp_mint(&self.base_hlp_mint, market, self.base_mint.decimals)?;
-        validate_hlp_mint(&self.quote_hlp_mint, market, self.quote_mint.decimals)?;
+        validate_lp_mint(&self.base_ylp_mint, market, self.base_mint.decimals)?;
+        validate_lp_mint(&self.quote_ylp_mint, market, self.quote_mint.decimals)?;
+        validate_lp_mint(&self.base_hlp_mint, market, self.base_mint.decimals)?;
+        validate_lp_mint(&self.quote_hlp_mint, market, self.quote_mint.decimals)?;
         args.config.validate()
     }
 
@@ -270,7 +271,7 @@ impl<'info> InitializeMarket<'info> {
             let mut vault = HlpVault::default();
             let (base_ylp_vault, quote_ylp_vault) = derive_hlp_ylp_vaults(
                 market_key,
-                MarketAsset::Base,
+                ctx.accounts.base_hlp_mint.key(),
                 ctx.accounts.base_ylp_mint.key(),
                 ctx.accounts.quote_ylp_mint.key(),
             );
@@ -286,7 +287,7 @@ impl<'info> InitializeMarket<'info> {
             let mut vault = HlpVault::default();
             let (base_ylp_vault, quote_ylp_vault) = derive_hlp_ylp_vaults(
                 market_key,
-                MarketAsset::Quote,
+                ctx.accounts.quote_hlp_mint.key(),
                 ctx.accounts.base_ylp_mint.key(),
                 ctx.accounts.quote_ylp_mint.key(),
             );
@@ -480,16 +481,15 @@ fn create_vault_token_account<'info>(
 
 fn derive_hlp_ylp_vaults(
     market: Pubkey,
-    target_asset: MarketAsset,
+    target_hlp_mint: Pubkey,
     base_ylp_mint: Pubkey,
     quote_ylp_mint: Pubkey,
 ) -> (Pubkey, Pubkey) {
-    let target_side = [target_asset.code()];
     let (base_ylp_vault, _) = Pubkey::find_program_address(
         &[
             HLP_YLP_VAULT_SEED_PREFIX,
             market.as_ref(),
-            &target_side,
+            target_hlp_mint.as_ref(),
             base_ylp_mint.as_ref(),
         ],
         &crate::ID,
@@ -498,7 +498,7 @@ fn derive_hlp_ylp_vaults(
         &[
             HLP_YLP_VAULT_SEED_PREFIX,
             market.as_ref(),
-            &target_side,
+            target_hlp_mint.as_ref(),
             quote_ylp_mint.as_ref(),
         ],
         &crate::ID,

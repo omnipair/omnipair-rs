@@ -14,18 +14,16 @@ use crate::{
         token::{token_mint_to, transfer_from_user_to_vault},
     },
     state::{FutarchyAuthority, Market, MarketAsset, YieldAccount, YieldTokenKind},
-    tokens::{hlp_token::validate_hlp_mint, ylp_token::validate_ylp_mint},
     transitions::hedge::OpenHedge as OpenHedgeTransition,
 };
 
 use crate::instructions::common::{
-    require_supported_asset_mint, token_program_for_mint, validate_owner_asset_account,
-    validate_owner_lp_account, validate_side_vault_accounts,
+    require_supported_asset_mint, token_program_for_mint, validate_lp_mint,
+    validate_owner_asset_account, validate_owner_lp_account, validate_side_vault_accounts,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct OpenHedgeArgs {
-    pub target_asset: MarketAsset,
     pub deposit_amount: u64,
     pub min_hlp_amount: u64,
 }
@@ -80,7 +78,7 @@ pub struct OpenHedge<'info> {
         seeds = [
             HLP_YLP_VAULT_SEED_PREFIX,
             market.key().as_ref(),
-            &[args.target_asset.code()],
+            target_hlp_mint.key().as_ref(),
             base_ylp_mint.key().as_ref(),
         ],
         bump,
@@ -95,7 +93,7 @@ pub struct OpenHedge<'info> {
         seeds = [
             HLP_YLP_VAULT_SEED_PREFIX,
             market.key().as_ref(),
-            &[args.target_asset.code()],
+            target_hlp_mint.key().as_ref(),
             quote_ylp_mint.key().as_ref(),
         ],
         bump,
@@ -148,11 +146,12 @@ impl<'info> OpenHedge<'info> {
             &self.quote_ylp_mint,
             &self.quote_reserve_vault,
         )?;
-        let target_mint = match args.target_asset {
+        let target_asset = self.market.asset_for_hlp_mint(self.target_hlp_mint.key())?;
+        let target_mint = match target_asset {
             MarketAsset::Base => &self.base_mint,
             MarketAsset::Quote => &self.quote_mint,
         };
-        let target_hlp_mint = self.market.side(args.target_asset)?.hlp_mint;
+        let target_hlp_mint = self.market.side(target_asset)?.hlp_mint;
         require_keys_eq!(
             target_hlp_mint,
             self.target_hlp_mint.key(),
@@ -164,17 +163,17 @@ impl<'info> OpenHedge<'info> {
             &self.target_hlp_mint,
             &self.owner_hlp_account,
         )?;
-        validate_hlp_mint(
+        validate_lp_mint(
             &self.target_hlp_mint,
             self.market.key(),
             target_mint.decimals,
         )?;
-        validate_ylp_mint(
+        validate_lp_mint(
             &self.base_ylp_mint,
             self.market.key(),
             self.base_mint.decimals,
         )?;
-        validate_ylp_mint(
+        validate_lp_mint(
             &self.quote_ylp_mint,
             self.market.key(),
             self.quote_mint.decimals,
@@ -207,8 +206,12 @@ impl<'info> OpenHedge<'info> {
     pub fn handle_open(ctx: Context<Self>, args: OpenHedgeArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
+        let target_asset = ctx
+            .accounts
+            .market
+            .asset_for_hlp_mint(ctx.accounts.target_hlp_mint.key())?;
         ctx.accounts.market.accrue_interest()?;
-        let target_mint_key = match args.target_asset {
+        let target_mint_key = match target_asset {
             MarketAsset::Base => ctx.accounts.base_mint.key(),
             MarketAsset::Quote => ctx.accounts.quote_mint.key(),
         };
@@ -216,7 +219,7 @@ impl<'info> OpenHedge<'info> {
         ctx.accounts.market.refresh_risk()?;
         ctx.accounts.market.assert_risk_circuit_breakers()?;
 
-        let (target_reserve_vault, target_mint) = match args.target_asset {
+        let (target_reserve_vault, target_mint) = match target_asset {
             MarketAsset::Base => (
                 ctx.accounts.base_reserve_vault.to_account_info(),
                 ctx.accounts.base_mint.to_account_info(),
@@ -226,12 +229,12 @@ impl<'info> OpenHedge<'info> {
                 ctx.accounts.quote_mint.to_account_info(),
             ),
         };
-        let reserve_before = match args.target_asset {
+        let reserve_before = match target_asset {
             MarketAsset::Base => ctx.accounts.base_reserve_vault.amount,
             MarketAsset::Quote => ctx.accounts.quote_reserve_vault.amount,
         };
         let target_token_program = token_program_for_mint(
-            match args.target_asset {
+            match target_asset {
                 MarketAsset::Base => &ctx.accounts.base_mint,
                 MarketAsset::Quote => &ctx.accounts.quote_mint,
             },
@@ -245,14 +248,14 @@ impl<'info> OpenHedge<'info> {
             target_mint,
             target_token_program,
             args.deposit_amount,
-            match args.target_asset {
+            match target_asset {
                 MarketAsset::Base => ctx.accounts.base_mint.decimals,
                 MarketAsset::Quote => ctx.accounts.quote_mint.decimals,
             },
         )?;
         ctx.accounts.base_reserve_vault.reload()?;
         ctx.accounts.quote_reserve_vault.reload()?;
-        let deposit_credit = match args.target_asset {
+        let deposit_credit = match target_asset {
             MarketAsset::Base => ctx
                 .accounts
                 .base_reserve_vault
@@ -266,9 +269,8 @@ impl<'info> OpenHedge<'info> {
         }
         .ok_or(ErrorCode::MarketMathOverflow)?;
 
-        let receipt =
-            OpenHedgeTransition::new(args.target_asset, deposit_credit, args.min_hlp_amount)
-                .apply(&mut ctx.accounts.market)?;
+        let receipt = OpenHedgeTransition::new(target_asset, deposit_credit, args.min_hlp_amount)
+            .apply(&mut ctx.accounts.market)?;
         initialize_or_validate_hlp_yield_account(
             &mut ctx.accounts.target_yield_account,
             owner_key,
@@ -277,7 +279,7 @@ impl<'info> OpenHedge<'info> {
             ctx.bumps.target_yield_account,
         )?;
         let (swap_fee_growth_index_nad, interest_growth_index_nad) =
-            hlp_yield_growth_indexes(&ctx.accounts.market, args.target_asset);
+            hlp_yield_growth_indexes(&ctx.accounts.market, target_asset);
         ctx.accounts.target_yield_account.accrue(
             ctx.accounts.owner_hlp_account.amount,
             swap_fee_growth_index_nad,

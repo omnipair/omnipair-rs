@@ -489,16 +489,7 @@ export type OmnipairV2 = {
           "name": "program"
         }
       ],
-      "args": [
-        {
-          "name": "args",
-          "type": {
-            "defined": {
-              "name": "claimManagerFeesArgs"
-            }
-          }
-        }
-      ]
+      "args": []
     },
     {
       "name": "claimYield",
@@ -758,11 +749,79 @@ export type OmnipairV2 = {
         },
         {
           "name": "hlpBaseYlpAccount",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  108,
+                  112,
+                  95,
+                  121,
+                  108,
+                  112,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "targetHlpMint"
+              },
+              {
+                "kind": "account",
+                "path": "baseYlpMint"
+              }
+            ]
+          }
         },
         {
           "name": "hlpQuoteYlpAccount",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  108,
+                  112,
+                  95,
+                  121,
+                  108,
+                  112,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "targetHlpMint"
+              },
+              {
+                "kind": "account",
+                "path": "quoteYlpMint"
+              }
+            ]
+          }
         },
         {
           "name": "targetYieldAccount",
@@ -1942,11 +2001,79 @@ export type OmnipairV2 = {
         },
         {
           "name": "hlpBaseYlpAccount",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  108,
+                  112,
+                  95,
+                  121,
+                  108,
+                  112,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "targetHlpMint"
+              },
+              {
+                "kind": "account",
+                "path": "baseYlpMint"
+              }
+            ]
+          }
         },
         {
           "name": "hlpQuoteYlpAccount",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  108,
+                  112,
+                  95,
+                  121,
+                  108,
+                  112,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "targetHlpMint"
+              },
+              {
+                "kind": "account",
+                "path": "quoteYlpMint"
+              }
+            ]
+          }
         },
         {
           "name": "targetYieldAccount",
@@ -4694,14 +4821,6 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "borrowAsset",
-            "type": {
-              "defined": {
-                "name": "marketAsset"
-              }
-            }
-          },
-          {
             "name": "borrowAmount",
             "type": "u64"
           },
@@ -4717,34 +4836,10 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "claimManagerFeesArgs",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "side",
-            "type": {
-              "defined": {
-                "name": "marketAsset"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "claimYieldArgs",
       "type": {
         "kind": "struct",
         "fields": [
-          {
-            "name": "marketAsset",
-            "type": {
-              "defined": {
-                "name": "marketAsset"
-              }
-            }
-          },
           {
             "name": "tokenKind",
             "type": {
@@ -4761,14 +4856,6 @@ export type OmnipairV2 = {
       "type": {
         "kind": "struct",
         "fields": [
-          {
-            "name": "targetAsset",
-            "type": {
-              "defined": {
-                "name": "marketAsset"
-              }
-            }
-          },
           {
             "name": "hlpAmount",
             "type": "u64"
@@ -4868,14 +4955,6 @@ export type OmnipairV2 = {
       "type": {
         "kind": "struct",
         "fields": [
-          {
-            "name": "marketAsset",
-            "type": {
-              "defined": {
-                "name": "marketAsset"
-              }
-            }
-          },
           {
             "name": "depositAmount",
             "type": "u64"
@@ -5382,14 +5461,6 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "debtAsset",
-            "type": {
-              "defined": {
-                "name": "marketAsset"
-              }
-            }
-          },
-          {
             "name": "repayAmount",
             "type": "u64"
           },
@@ -5733,20 +5804,6 @@ export type OmnipairV2 = {
           {
             "name": "bump",
             "type": "u8"
-          }
-        ]
-      }
-    },
-    {
-      "name": "marketAsset",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "base"
-          },
-          {
-            "name": "quote"
           }
         ]
       }
@@ -6410,14 +6467,6 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "targetAsset",
-            "type": {
-              "defined": {
-                "name": "marketAsset"
-              }
-            }
-          },
-          {
             "name": "depositAmount",
             "type": "u64"
           },
@@ -6872,14 +6921,6 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "repayAsset",
-            "type": {
-              "defined": {
-                "name": "marketAsset"
-              }
-            }
-          },
-          {
             "name": "repayAmount",
             "type": "u64"
           }
@@ -7128,14 +7169,6 @@ export type OmnipairV2 = {
             }
           },
           {
-            "name": "side",
-            "type": {
-              "defined": {
-                "name": "marketAsset"
-              }
-            }
-          },
-          {
             "name": "soldAmount",
             "type": "u64"
           },
@@ -7151,14 +7184,6 @@ export type OmnipairV2 = {
       "type": {
         "kind": "struct",
         "fields": [
-          {
-            "name": "assetIn",
-            "type": {
-              "defined": {
-                "name": "marketAsset"
-              }
-            }
-          },
           {
             "name": "exactAssetIn",
             "type": "u64"
@@ -7441,14 +7466,6 @@ export type OmnipairV2 = {
       "type": {
         "kind": "struct",
         "fields": [
-          {
-            "name": "marketAsset",
-            "type": {
-              "defined": {
-                "name": "marketAsset"
-              }
-            }
-          },
           {
             "name": "withdrawAmount",
             "type": "u64"

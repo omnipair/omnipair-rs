@@ -23,7 +23,6 @@ use crate::instructions::common::{
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct ClaimYieldArgs {
-    pub market_asset: MarketAsset,
     pub token_kind: YieldTokenKind,
 }
 
@@ -77,7 +76,8 @@ pub struct ClaimYield<'info> {
 
 impl<'info> ClaimYield<'info> {
     pub fn validate(&self, args: &ClaimYieldArgs) -> Result<()> {
-        let market_side = self.market.side(args.market_asset)?;
+        let market_asset = self.market.asset_for_mint(self.asset_mint.key())?;
+        let market_side = self.market.side(market_asset)?;
         require_keys_eq!(
             market_side.asset_mint,
             self.asset_mint.key(),
@@ -119,18 +119,11 @@ impl<'info> ClaimYield<'info> {
             self.asset_mint.key(),
             ErrorCode::InvalidTokenAccount
         );
-        validate_fee_accounts(
-            &self.market,
-            args.market_asset,
-            &self.asset_mint,
-            &self.fee_vault,
-        )?;
-        validate_interest_accounts(
-            &self.market,
-            args.market_asset,
-            &self.asset_mint,
-            &self.interest_vault,
-        )?;
+        let fee_asset = validate_fee_accounts(&self.market, &self.asset_mint, &self.fee_vault)?;
+        let interest_asset =
+            validate_interest_accounts(&self.market, &self.asset_mint, &self.interest_vault)?;
+        require!(fee_asset == market_asset, ErrorCode::InvalidVault);
+        require!(interest_asset == market_asset, ErrorCode::InvalidVault);
         self.yield_account.assert_account(
             self.owner.key(),
             self.market.key(),
@@ -143,6 +136,7 @@ impl<'info> ClaimYield<'info> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
+        let market_asset = ctx.accounts.market.asset_for_mint(asset_mint_key)?;
         ctx.accounts.market.accrue_interest()?;
         let token_program = token_program_for_mint(
             &ctx.accounts.asset_mint,
@@ -157,14 +151,14 @@ impl<'info> ClaimYield<'info> {
             .ok_or(ErrorCode::MarketMathOverflow)?;
         let receipt = match args.token_kind {
             YieldTokenKind::Ylp => {
-                let market_side = ctx.accounts.market.side_mut(args.market_asset)?;
+                let market_side = ctx.accounts.market.side_mut(market_asset)?;
                 PrepareYieldClaim::new(vault_balance, ctx.accounts.owner_lp_account.amount)
                     .apply(market_side, &mut ctx.accounts.yield_account)?
             }
             YieldTokenKind::Hlp => {
-                checkpoint_hlp_yield_from_ylp(&mut ctx.accounts.market, args.market_asset)?;
+                checkpoint_hlp_yield_from_ylp(&mut ctx.accounts.market, market_asset)?;
                 let (swap_fee_growth_index_nad, interest_growth_index_nad) =
-                    hlp_yield_growth_indexes(&ctx.accounts.market, args.market_asset);
+                    hlp_yield_growth_indexes(&ctx.accounts.market, market_asset);
                 ctx.accounts.yield_account.accrue(
                     ctx.accounts.owner_lp_account.amount,
                     swap_fee_growth_index_nad,
@@ -180,13 +174,13 @@ impl<'info> ClaimYield<'info> {
                     remaining_swap_fee_liability: ctx
                         .accounts
                         .market
-                        .side(args.market_asset)?
+                        .side(market_asset)?
                         .fees
                         .swap_fee_liability,
                     remaining_interest_liability: ctx
                         .accounts
                         .market
-                        .side(args.market_asset)?
+                        .side(market_asset)?
                         .fees
                         .interest_liability,
                 }
@@ -219,7 +213,7 @@ impl<'info> ClaimYield<'info> {
         ctx.accounts.fee_vault.reload()?;
         ctx.accounts.interest_vault.reload()?;
         {
-            let market_side = ctx.accounts.market.side_mut(args.market_asset)?;
+            let market_side = ctx.accounts.market.side_mut(market_asset)?;
             SettleYieldClaim {
                 claim_amount: receipt.claim_amount,
                 swap_fee_amount: receipt.swap_fee_amount,

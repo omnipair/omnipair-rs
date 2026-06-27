@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
-use super::{Debt, MarketAsset, MarketSide};
-use crate::{constants::NAD, errors::ErrorCode, utils::market_math::accrue_fee_liability};
+use super::{accrue_fee_liability, Debt, MarketAsset, MarketSide};
+use crate::{constants::NAD, errors::ErrorCode};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct HlpVault {
