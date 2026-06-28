@@ -41,6 +41,7 @@ const V2_INSTRUCTIONS = [
   "updateRevenueRecipients",
   "setGlobalReduceOnly",
   "initialize",
+  "initializeLpMetadata",
   "updateConfig",
   "setReduceOnly",
   "addLiquidity",

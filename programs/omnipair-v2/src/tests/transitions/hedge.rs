@@ -50,27 +50,18 @@ use super::*;
         };
         quote_side.reserves.live_reserve = 2_000;
         quote_side.reserves.cash_reserve = 2_000;
-        quote_side.shares.ylp_supply = 2_000;
+        quote_side.shares.ylp_supply = 1_000;
 
         let mut base_hlp_vault = HlpVault::default();
-        base_hlp_vault.initialize(
-            MarketAsset::Base,
-            Pubkey::new_unique(),
-            Pubkey::new_unique(),
-            0,
-        );
+        base_hlp_vault.initialize(MarketAsset::Base, Pubkey::new_unique(), 0);
         let mut quote_hlp_vault = HlpVault::default();
-        quote_hlp_vault.initialize(
-            MarketAsset::Quote,
-            Pubkey::new_unique(),
-            Pubkey::new_unique(),
-            0,
-        );
+        quote_hlp_vault.initialize(MarketAsset::Quote, Pubkey::new_unique(), 0);
 
         Market {
             version: MARKET_VERSION,
             base_mint,
             quote_mint,
+            ylp_mint: Pubkey::new_unique(),
             operator: Pubkey::new_unique(),
             manager: Pubkey::new_unique(),
             base_side,
@@ -105,14 +96,12 @@ use super::*;
             .unwrap();
 
         assert_eq!(receipt.borrowed_amount, 200);
-        assert_eq!(receipt.base_ylp_amount, 100);
-        assert_eq!(receipt.quote_ylp_amount, 200);
+        assert_eq!(receipt.ylp_amount, 100);
         assert_eq!(receipt.hlp_amount, 100);
         assert_eq!(market.debt.fixed_quote_shares, 0);
         assert!(market.base_hlp_vault.debt_shares > 0);
         assert_eq!(market.base_hlp_vault.debt_principal, 200);
-        assert_eq!(market.base_hlp_vault.ylp_base_shares, 100);
-        assert_eq!(market.base_hlp_vault.ylp_quote_shares, 200);
+        assert_eq!(market.base_hlp_vault.ylp_shares, 100);
         assert_eq!(market.base_side.reserves.cash_reserve, 1_100);
         assert_eq!(market.quote_side.reserves.cash_reserve, 2_000);
         assert_eq!(market.base_hlp_vault.last_nav_nad, 100 * NAD as u128);
@@ -144,8 +133,7 @@ use super::*;
         assert_eq!(first.hlp_amount, 100);
         assert_eq!(second.hlp_amount, 120);
         assert_eq!(market.base_hlp_vault.hlp_supply, 220);
-        assert_eq!(market.base_hlp_vault.ylp_base_shares, 220);
-        assert_eq!(market.base_hlp_vault.ylp_quote_shares, 440);
+        assert_eq!(market.base_hlp_vault.ylp_shares, 220);
         assert_eq!(market.base_hlp_vault.last_nav_nad, 220 * NAD as u128);
     }
 
@@ -210,15 +198,14 @@ use super::*;
         assert_eq!(market.base_hlp_vault.hlp_supply, 0);
         assert_eq!(market.base_hlp_vault.debt_shares, 0);
         assert_eq!(market.base_hlp_vault.debt_principal, 0);
-        assert_eq!(market.base_hlp_vault.ylp_base_shares, 0);
-        assert_eq!(market.base_hlp_vault.ylp_quote_shares, 0);
+        assert_eq!(market.base_hlp_vault.ylp_shares, 0);
         assert_eq!(market.debt.fixed_quote_shares, 0);
         assert_eq!(market.base_side.reserves.live_reserve, 1_000);
         assert_eq!(market.base_side.reserves.cash_reserve, 1_000);
         assert_eq!(market.quote_side.reserves.live_reserve, 2_000);
         assert_eq!(market.quote_side.reserves.cash_reserve, 2_000);
         assert_eq!(market.base_side.shares.ylp_supply, 1_000);
-        assert_eq!(market.quote_side.shares.ylp_supply, 2_000);
+        assert_eq!(market.quote_side.shares.ylp_supply, 1_000);
     }
 
     #[test]
@@ -342,8 +329,7 @@ use super::*;
             .apply(&mut market)
             .unwrap();
         market.quote_side.reserves.live_reserve = 2_400;
-        let base_ylp_before = market.base_hlp_vault.ylp_base_shares;
-        let quote_ylp_before = market.base_hlp_vault.ylp_quote_shares;
+        let ylp_before = market.base_hlp_vault.ylp_shares;
         let debt_before = market.base_hlp_vault.debt_shares;
         let principal_before = market.base_hlp_vault.debt_principal;
 
@@ -351,13 +337,9 @@ use super::*;
 
         assert!(base_receipt.ideal_delta > 0);
         assert!(base_receipt.executed_delta > 0);
-        assert!(base_receipt.base_ylp_mint_amount > 0);
-        assert!(base_receipt.quote_ylp_mint_amount > 0);
-        assert_eq!(base_receipt.base_ylp_burn_amount, 0);
-        assert_eq!(base_receipt.quote_ylp_burn_amount, 0);
-        assert!(market.base_hlp_vault.ylp_base_shares > base_ylp_before);
-        assert!(market.base_hlp_vault.ylp_quote_shares > 200);
-        assert!(market.base_hlp_vault.ylp_quote_shares > quote_ylp_before);
+        assert!(base_receipt.ylp_mint_amount > 0);
+        assert_eq!(base_receipt.ylp_burn_amount, 0);
+        assert!(market.base_hlp_vault.ylp_shares > ylp_before);
         assert!(market.base_hlp_vault.debt_shares > debt_before);
         assert!(market.base_hlp_vault.debt_principal > principal_before);
         assert_eq!(market.base_hlp_vault.last_rebalance_slot, 43);
@@ -375,7 +357,7 @@ use super::*;
             .apply(&mut market)
             .unwrap();
         market.quote_side.reserves.live_reserve = 2_400;
-        market.quote_side.reserves.cash_reserve = 5;
+        market.quote_side.reserves.cash_reserve = 50;
         let ideal_before = current_hlp_ideal_delta(&market, MarketAsset::Base).unwrap();
         assert!(ideal_before > 0);
 
@@ -385,7 +367,7 @@ use super::*;
         assert!(base_receipt.executed_delta < ideal_before);
         assert!(base_receipt.pending_rebalance > 0);
         assert!(base_receipt.debt_delta > 0);
-        assert!(base_receipt.debt_delta <= 5);
+        assert!(base_receipt.debt_delta <= 50);
         assert_eq!(
             market.base_hlp_vault.pending_rebalance,
             base_receipt.pending_rebalance
@@ -418,8 +400,7 @@ use super::*;
             .apply(&mut market)
             .unwrap();
         market.quote_side.reserves.live_reserve = 1_800;
-        let base_ylp_before = market.base_hlp_vault.ylp_base_shares;
-        let quote_ylp_before = market.base_hlp_vault.ylp_quote_shares;
+        let ylp_before = market.base_hlp_vault.ylp_shares;
         let debt_before = market.base_hlp_vault.debt_shares;
         let principal_before = market.base_hlp_vault.debt_principal;
 
@@ -427,12 +408,9 @@ use super::*;
 
         assert!(base_receipt.ideal_delta < 0);
         assert!(base_receipt.executed_delta < 0);
-        assert!(base_receipt.base_ylp_burn_amount > 0);
-        assert!(base_receipt.quote_ylp_burn_amount > 0);
-        assert_eq!(base_receipt.base_ylp_mint_amount, 0);
-        assert_eq!(base_receipt.quote_ylp_mint_amount, 0);
-        assert!(market.base_hlp_vault.ylp_base_shares < base_ylp_before);
-        assert!(market.base_hlp_vault.ylp_quote_shares < quote_ylp_before);
+        assert!(base_receipt.ylp_burn_amount > 0);
+        assert_eq!(base_receipt.ylp_mint_amount, 0);
+        assert!(market.base_hlp_vault.ylp_shares < ylp_before);
         assert!(market.base_hlp_vault.debt_shares < debt_before);
         assert!(market.base_hlp_vault.debt_principal < principal_before);
         assert_eq!(market.base_hlp_vault.last_rebalance_slot, 44);
@@ -450,8 +428,7 @@ use super::*;
             .apply(&mut market)
             .unwrap();
         market.base_side.reserves.live_reserve = 1_200;
-        let base_ylp_before = market.quote_hlp_vault.ylp_base_shares;
-        let quote_ylp_before = market.quote_hlp_vault.ylp_quote_shares;
+        let ylp_before = market.quote_hlp_vault.ylp_shares;
         let debt_before = market.quote_hlp_vault.debt_shares;
         let principal_before = market.quote_hlp_vault.debt_principal;
 
@@ -459,14 +436,12 @@ use super::*;
 
         assert!(quote_receipt.ideal_delta > 0);
         assert!(quote_receipt.executed_delta > 0);
-        assert!(quote_receipt.base_ylp_mint_amount > 0);
-        assert!(quote_receipt.quote_ylp_mint_amount > 0);
-        assert!(market.quote_hlp_vault.ylp_base_shares > base_ylp_before);
-        assert!(market.quote_hlp_vault.ylp_quote_shares > quote_ylp_before);
+        assert!(quote_receipt.ylp_mint_amount > 0);
+        assert!(market.quote_hlp_vault.ylp_shares > ylp_before);
         assert!(market.quote_hlp_vault.debt_shares > debt_before);
         assert!(market.quote_hlp_vault.debt_principal > principal_before);
         assert_eq!(market.quote_hlp_vault.last_rebalance_slot, 45);
-        assert_hlp_near_target(&market, MarketAsset::Quote, 5 * NAD as u128);
+        assert_hlp_near_target(&market, MarketAsset::Quote, 7 * NAD as u128);
     }
 
     #[test]
@@ -477,7 +452,7 @@ use super::*;
         market.base_side.shares.ylp_supply = 1_000_000;
         market.quote_side.reserves.live_reserve = 2_000_000;
         market.quote_side.reserves.cash_reserve = 2_000_000;
-        market.quote_side.shares.ylp_supply = 2_000_000;
+        market.quote_side.shares.ylp_supply = 1_000_000;
 
         OpenHedge::new(MarketAsset::Base, 100_000, 1)
             .apply(&mut market)

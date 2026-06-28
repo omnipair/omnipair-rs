@@ -28,8 +28,8 @@ import {
 import { expect } from "chai";
 import { ComputeBudget, LiteSVM } from "litesvm";
 import {
-  buildYieldTransferHookAccountMetas,
-  buildYieldTransferHookYieldValidationAccountData,
+  buildYlpTransferHookAccountMetas,
+  buildYlpTransferHookValidationAccountData,
   deriveFutarchyAuthorityV2Address,
   deriveHlpYlpVaultAddress,
   deriveInsuranceAddress,
@@ -42,6 +42,8 @@ import {
   deriveMarginPositionAddress,
   deriveYieldAccountAddress,
   deriveYieldTransferHookValidationAddress,
+  deriveTokenMetadataAddress,
+  TOKEN_METADATA_PROGRAM_ID,
 } from "../packages/program-interface/src/constants.js";
 import { LiteSVMConnection } from "./utils/litesvm-connection.js";
 import { getCoverageReport, trackV2Instruction } from "./utils/instruction-coverage.js";
@@ -59,6 +61,23 @@ const REDUCE_ONLY_EMERGENCY_AUTHORITY = new PublicKey(
 const BPF_LOADER_UPGRADEABLE_PROGRAM_ID = new PublicKey(
   "BPFLoaderUpgradeab1e11111111111111111111111"
 );
+const RUN_REAL_TOKEN_METADATA_CPI = process.env.OMNIPAIR_V2_TEST_REAL_METADATA_CPI === "1";
+
+function tokenMetadataProgramPath() {
+  const fallback =
+    "/Users/User/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/trident-svm-0.2.0/src/solana-program-library/metaplex-token-metadata.so";
+  if (fs.existsSync(fallback)) return fallback;
+
+  const depsDir = path.join(__dirname, "../target/sbpf-solana-solana/release/deps");
+  if (fs.existsSync(depsDir)) {
+    const candidate = fs
+      .readdirSync(depsDir)
+      .filter((name) => name.startsWith("mpl_token_metadata-") && name.endsWith(".so"))
+      .sort()[0];
+    if (candidate) return path.join(depsDir, candidate);
+  }
+  throw new Error("Token Metadata program file not found");
+}
 
 function marketConfig() {
   return {
@@ -103,6 +122,9 @@ describe("Omnipair V2 final model smoke", () => {
       throw new Error(`Program file not found at ${programPath}`);
     }
     svm.addProgramFromFile(OMNIPAIR_V2_PROGRAM_ID, programPath);
+    if (RUN_REAL_TOKEN_METADATA_CPI) {
+      svm.addProgramFromFile(TOKEN_METADATA_PROGRAM_ID, tokenMetadataProgramPath());
+    }
     connection = new LiteSVMConnection(svm);
 
     payer = Keypair.generate();
@@ -234,17 +256,17 @@ describe("Omnipair V2 final model smoke", () => {
     });
   }
 
-  function seedTransferHookValidationAccount(
+  function seedYlpTransferHookValidationAccount(
     lpMint: PublicKey,
     market: PublicKey,
-    assetMint: PublicKey,
-    tokenKind: "ylp" | "hlp"
+    baseMint: PublicKey,
+    quoteMint: PublicKey
   ) {
     const validationAccount = deriveYieldTransferHookValidationAddress(lpMint)[0];
-    const data = buildYieldTransferHookYieldValidationAccountData({
+    const data = buildYlpTransferHookValidationAccountData({
       market,
-      assetMint,
-      tokenKind,
+      baseMint,
+      quoteMint,
     });
     svm.setAccount(validationAccount, {
       lamports: Number(svm.minimumBalanceForRentExemption(BigInt(data.length))),
@@ -339,6 +361,9 @@ describe("Omnipair V2 final model smoke", () => {
     const isolatedSvm = new LiteSVM().withComputeBudget(new ComputeBudget());
     const programPath = path.join(__dirname, "../target/deploy/omnipair_v2.so");
     isolatedSvm.addProgramFromFile(OMNIPAIR_V2_PROGRAM_ID, programPath);
+    if (RUN_REAL_TOKEN_METADATA_CPI) {
+      isolatedSvm.addProgramFromFile(TOKEN_METADATA_PROGRAM_ID, tokenMetadataProgramPath());
+    }
     const isolatedConnection = new LiteSVMConnection(isolatedSvm);
     const isolatedPayer = Keypair.generate();
     await isolatedConnection.requestAirdrop(isolatedPayer.publicKey, 10 * LAMPORTS_PER_SOL);
@@ -361,14 +386,14 @@ describe("Omnipair V2 final model smoke", () => {
     const quoteMint = await createMint(connection as any, payer, payer.publicKey, null, 6);
     const paramsHash = Buffer.alloc(32, paramsSeed);
     const [market] = deriveMarketAddress(baseMint, quoteMint, paramsHash);
-    const baseYlpMint = await createHookedLpMint(market, 6);
-    const quoteYlpMint = await createHookedLpMint(market, 6);
+    const ylpMint = await createHookedLpMint(market, 6);
     const baseHlpMint = await createHookedLpMint(market, 6);
     const quoteHlpMint = await createHookedLpMint(market, 6);
-    const baseHlpBaseYlpVault = deriveHlpYlpVaultAddress(market, baseHlpMint, baseYlpMint)[0];
-    const baseHlpQuoteYlpVault = deriveHlpYlpVaultAddress(market, baseHlpMint, quoteYlpMint)[0];
-    const quoteHlpBaseYlpVault = deriveHlpYlpVaultAddress(market, quoteHlpMint, baseYlpMint)[0];
-    const quoteHlpQuoteYlpVault = deriveHlpYlpVaultAddress(market, quoteHlpMint, quoteYlpMint)[0];
+    const ylpTokenMetadata = deriveTokenMetadataAddress(ylpMint)[0];
+    const baseHlpTokenMetadata = deriveTokenMetadataAddress(baseHlpMint)[0];
+    const quoteHlpTokenMetadata = deriveTokenMetadataAddress(quoteHlpMint)[0];
+    const baseHlpYlpVault = deriveHlpYlpVaultAddress(market, baseHlpMint, ylpMint)[0];
+    const quoteHlpYlpVault = deriveHlpYlpVaultAddress(market, quoteHlpMint, ylpMint)[0];
     const baseReserveVault = deriveMarketReserveVaultAddress(market, baseMint)[0];
     const quoteReserveVault = deriveMarketReserveVaultAddress(market, quoteMint)[0];
     const baseCollateralVault = deriveMarketCollateralVaultAddress(market, baseMint)[0];
@@ -393,8 +418,7 @@ describe("Omnipair V2 final model smoke", () => {
         quoteMint,
         market,
         futarchyAuthority,
-        baseYlpMint,
-        quoteYlpMint,
+        ylpMint,
         baseHlpMint,
         quoteHlpMint,
         baseReserveVault,
@@ -417,19 +441,44 @@ describe("Omnipair V2 final model smoke", () => {
       })
       .transaction();
     await connection.sendTransaction(tx, [payer]);
+
+    await initializeLpMetadata({
+      market,
+      lpMint: ylpMint,
+      lpTokenMetadata: ylpTokenMetadata,
+      name: "Omnipair Dusk yLP",
+      symbol: "yLP",
+      uri: "https://omnipair.fi/metadata/dusk/ylp.json",
+    });
+    await initializeLpMetadata({
+      market,
+      lpMint: baseHlpMint,
+      lpTokenMetadata: baseHlpTokenMetadata,
+      name: "Omnipair Dusk Base hLP",
+      symbol: "hLP",
+      uri: "https://omnipair.fi/metadata/dusk/base-hlp.json",
+    });
+    await initializeLpMetadata({
+      market,
+      lpMint: quoteHlpMint,
+      lpTokenMetadata: quoteHlpTokenMetadata,
+      name: "Omnipair Dusk Quote hLP",
+      symbol: "hLP",
+      uri: "https://omnipair.fi/metadata/dusk/quote-hlp.json",
+    });
     return {
       baseMint,
       quoteMint,
       paramsHash,
       market,
-      baseYlpMint,
-      quoteYlpMint,
+      ylpMint,
       baseHlpMint,
       quoteHlpMint,
-      baseHlpBaseYlpVault,
-      baseHlpQuoteYlpVault,
-      quoteHlpBaseYlpVault,
-      quoteHlpQuoteYlpVault,
+      ylpTokenMetadata,
+      baseHlpTokenMetadata,
+      quoteHlpTokenMetadata,
+      baseHlpYlpVault,
+      quoteHlpYlpVault,
       baseReserveVault,
       quoteReserveVault,
       baseCollateralVault,
@@ -441,6 +490,51 @@ describe("Omnipair V2 final model smoke", () => {
       baseInterestVault,
       quoteInterestVault,
     };
+  }
+
+  async function initializeLpMetadata(params: {
+    market: PublicKey;
+    lpMint: PublicKey;
+    lpTokenMetadata: PublicKey;
+    name: string;
+    symbol: string;
+    uri: string;
+  }) {
+    if (!RUN_REAL_TOKEN_METADATA_CPI) {
+      const data = Buffer.from(
+        JSON.stringify({
+          name: params.name,
+          symbol: params.symbol,
+          uri: params.uri,
+        })
+      );
+      svm.setAccount(params.lpTokenMetadata, {
+        lamports: Number(svm.minimumBalanceForRentExemption(BigInt(data.length))),
+        data: new Uint8Array(data),
+        owner: TOKEN_METADATA_PROGRAM_ID,
+        executable: false,
+        rentEpoch: 0,
+      });
+      return;
+    }
+
+    const tx = await program.methods
+      .initializeLpMetadata({
+        name: params.name,
+        symbol: params.symbol,
+        uri: params.uri,
+      })
+      .accounts({
+        payer: payer.publicKey,
+        market: params.market,
+        lpMint: params.lpMint,
+        lpTokenMetadata: params.lpTokenMetadata,
+        systemProgram: SystemProgram.programId,
+        tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      })
+      .transaction();
+    await connection.sendTransaction(tx, [payer]);
   }
 
   async function createOwnerAssetAccounts(fixture: Awaited<ReturnType<typeof initializeFinalMarket>>) {
@@ -456,19 +550,10 @@ describe("Omnipair V2 final model smoke", () => {
       fixture.quoteMint,
       payer.publicKey
     );
-    const ownerBaseYlpAccount = await createAccount(
+    const ownerYlpAccount = await createAccount(
       connection as any,
       payer,
-      fixture.baseYlpMint,
-      payer.publicKey,
-      Keypair.generate(),
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    );
-    const ownerQuoteYlpAccount = await createAccount(
-      connection as any,
-      payer,
-      fixture.quoteYlpMint,
+      fixture.ylpMint,
       payer.publicKey,
       Keypair.generate(),
       undefined,
@@ -479,8 +564,7 @@ describe("Omnipair V2 final model smoke", () => {
     return {
       ownerBaseAccount,
       ownerQuoteAccount,
-      ownerBaseYlpAccount,
-      ownerQuoteYlpAccount,
+      ownerYlpAccount,
     };
   }
 
@@ -501,8 +585,7 @@ describe("Omnipair V2 final model smoke", () => {
       .addLiquidity({
         baseDepositAmount: new BN(100_000),
         quoteDepositAmount: new BN(200_000),
-        minBaseYlpAmount: new BN(100_000),
-        minQuoteYlpAmount: new BN(200_000),
+        minYlpAmount: new BN(100_000),
       })
       .accounts({
         market: fixture.market,
@@ -510,14 +593,12 @@ describe("Omnipair V2 final model smoke", () => {
         owner: payer.publicKey,
         baseMint: fixture.baseMint,
         quoteMint: fixture.quoteMint,
-        baseYlpMint: fixture.baseYlpMint,
-        quoteYlpMint: fixture.quoteYlpMint,
+        ylpMint: fixture.ylpMint,
         baseReserveVault: fixture.baseReserveVault,
         quoteReserveVault: fixture.quoteReserveVault,
         ownerBaseAccount: ownerAccounts.ownerBaseAccount,
         ownerQuoteAccount: ownerAccounts.ownerQuoteAccount,
-        ownerBaseYlpAccount: ownerAccounts.ownerBaseYlpAccount,
-        ownerQuoteYlpAccount: ownerAccounts.ownerQuoteYlpAccount,
+        ownerYlpAccount: ownerAccounts.ownerYlpAccount,
         baseYieldAccount: deriveYieldAccountAddress(
           fixture.market,
           payer.publicKey,
@@ -561,15 +642,10 @@ describe("Omnipair V2 final model smoke", () => {
         undefined,
         TOKEN_2022_PROGRAM_ID
       ));
-    const hlpBaseYlpAccount = deriveHlpYlpVaultAddress(
+    const hlpYlpAccount = deriveHlpYlpVaultAddress(
       fixture.market,
       fixture.baseHlpMint,
-      fixture.baseYlpMint
-    )[0];
-    const hlpQuoteYlpAccount = deriveHlpYlpVaultAddress(
-      fixture.market,
-      fixture.baseHlpMint,
-      fixture.quoteYlpMint
+      fixture.ylpMint
     )[0];
     const targetYieldAccount = deriveYieldAccountAddress(
       fixture.market,
@@ -589,15 +665,13 @@ describe("Omnipair V2 final model smoke", () => {
         owner: payer.publicKey,
         baseMint: fixture.baseMint,
         quoteMint: fixture.quoteMint,
-        baseYlpMint: fixture.baseYlpMint,
-        quoteYlpMint: fixture.quoteYlpMint,
+        ylpMint: fixture.ylpMint,
         targetHlpMint: fixture.baseHlpMint,
         baseReserveVault: fixture.baseReserveVault,
         quoteReserveVault: fixture.quoteReserveVault,
         ownerTargetAccount: fixture.ownerBaseAccount,
         ownerHlpAccount: ownerBaseHlpAccount,
-        hlpBaseYlpAccount,
-        hlpQuoteYlpAccount,
+        hlpYlpAccount,
         targetYieldAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
@@ -610,8 +684,7 @@ describe("Omnipair V2 final model smoke", () => {
 
     return {
       ownerBaseHlpAccount,
-      hlpBaseYlpAccount,
-      hlpQuoteYlpAccount,
+      hlpYlpAccount,
       targetYieldAccount,
     };
   }
@@ -632,15 +705,10 @@ describe("Omnipair V2 final model smoke", () => {
         undefined,
         TOKEN_2022_PROGRAM_ID
       ));
-    const hlpBaseYlpAccount = deriveHlpYlpVaultAddress(
+    const hlpYlpAccount = deriveHlpYlpVaultAddress(
       fixture.market,
       fixture.quoteHlpMint,
-      fixture.baseYlpMint
-    )[0];
-    const hlpQuoteYlpAccount = deriveHlpYlpVaultAddress(
-      fixture.market,
-      fixture.quoteHlpMint,
-      fixture.quoteYlpMint
+      fixture.ylpMint
     )[0];
     const targetYieldAccount = deriveYieldAccountAddress(
       fixture.market,
@@ -660,15 +728,13 @@ describe("Omnipair V2 final model smoke", () => {
         owner: payer.publicKey,
         baseMint: fixture.baseMint,
         quoteMint: fixture.quoteMint,
-        baseYlpMint: fixture.baseYlpMint,
-        quoteYlpMint: fixture.quoteYlpMint,
+        ylpMint: fixture.ylpMint,
         targetHlpMint: fixture.quoteHlpMint,
         baseReserveVault: fixture.baseReserveVault,
         quoteReserveVault: fixture.quoteReserveVault,
         ownerTargetAccount: fixture.ownerQuoteAccount,
         ownerHlpAccount: ownerQuoteHlpAccount,
-        hlpBaseYlpAccount,
-        hlpQuoteYlpAccount,
+        hlpYlpAccount,
         targetYieldAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
@@ -681,8 +747,7 @@ describe("Omnipair V2 final model smoke", () => {
 
     return {
       ownerQuoteHlpAccount,
-      hlpBaseYlpAccount,
-      hlpQuoteYlpAccount,
+      hlpYlpAccount,
       targetYieldAccount,
     };
   }
@@ -690,22 +755,12 @@ describe("Omnipair V2 final model smoke", () => {
   function baseHlpRebalanceAccounts(fixture: Awaited<ReturnType<typeof addBalancedLiquidity>>) {
     return [
       {
-        pubkey: fixture.baseYlpMint,
+        pubkey: fixture.ylpMint,
         isWritable: true,
         isSigner: false,
       },
       {
-        pubkey: fixture.quoteYlpMint,
-        isWritable: true,
-        isSigner: false,
-      },
-      {
-        pubkey: fixture.baseHlpBaseYlpVault,
-        isWritable: true,
-        isSigner: false,
-      },
-      {
-        pubkey: fixture.baseHlpQuoteYlpVault,
+        pubkey: fixture.baseHlpYlpVault,
         isWritable: true,
         isSigner: false,
       },
@@ -715,22 +770,12 @@ describe("Omnipair V2 final model smoke", () => {
   function quoteHlpRebalanceAccounts(fixture: Awaited<ReturnType<typeof addBalancedLiquidity>>) {
     return [
       {
-        pubkey: fixture.baseYlpMint,
+        pubkey: fixture.ylpMint,
         isWritable: true,
         isSigner: false,
       },
       {
-        pubkey: fixture.quoteYlpMint,
-        isWritable: true,
-        isSigner: false,
-      },
-      {
-        pubkey: fixture.quoteHlpBaseYlpVault,
-        isWritable: true,
-        isSigner: false,
-      },
-      {
-        pubkey: fixture.quoteHlpQuoteYlpVault,
+        pubkey: fixture.quoteHlpYlpVault,
         isWritable: true,
         isSigner: false,
       },
@@ -818,22 +863,18 @@ describe("Omnipair V2 final model smoke", () => {
     const decoded = accountCoder.decode("Market", Buffer.from(account!.data)) as any;
     expect(decoded.base_mint.toString()).to.equal(fixture.baseMint.toString());
     expect(decoded.quote_mint.toString()).to.equal(fixture.quoteMint.toString());
-    expect(decoded.base_side.ylp_mint.toString()).to.equal(fixture.baseYlpMint.toString());
-    expect(decoded.quote_side.ylp_mint.toString()).to.equal(fixture.quoteYlpMint.toString());
+    expect(decoded.ylp_mint.toString()).to.equal(fixture.ylpMint.toString());
     expect(decoded.base_side.hlp_mint.toString()).to.equal(fixture.baseHlpMint.toString());
     expect(decoded.quote_side.hlp_mint.toString()).to.equal(fixture.quoteHlpMint.toString());
-    expect(decoded.base_hlp_vault.base_ylp_vault.toString()).to.equal(
-      fixture.baseHlpBaseYlpVault.toString()
+    expect(decoded.base_hlp_vault.ylp_vault.toString()).to.equal(
+      fixture.baseHlpYlpVault.toString()
     );
-    expect(decoded.base_hlp_vault.quote_ylp_vault.toString()).to.equal(
-      fixture.baseHlpQuoteYlpVault.toString()
+    expect(decoded.quote_hlp_vault.ylp_vault.toString()).to.equal(
+      fixture.quoteHlpYlpVault.toString()
     );
-    expect(decoded.quote_hlp_vault.base_ylp_vault.toString()).to.equal(
-      fixture.quoteHlpBaseYlpVault.toString()
-    );
-    expect(decoded.quote_hlp_vault.quote_ylp_vault.toString()).to.equal(
-      fixture.quoteHlpQuoteYlpVault.toString()
-    );
+    expect(svm.getAccount(fixture.ylpTokenMetadata)).to.not.equal(null);
+    expect(svm.getAccount(fixture.baseHlpTokenMetadata)).to.not.equal(null);
+    expect(svm.getAccount(fixture.quoteHlpTokenMetadata)).to.not.equal(null);
   });
 
   it("initializes the V2 futarchy authority from upgradeable ProgramData", async function () {
@@ -893,20 +934,13 @@ describe("Omnipair V2 final model smoke", () => {
     const fixture = await addBalancedLiquidity(43);
     trackV2Instruction("addLiquidity", this.test?.title);
 
-    const baseYlpAccount = await getAccount(
+    const ylpAccount = await getAccount(
       connection as any,
-      fixture.ownerBaseYlpAccount,
+      fixture.ownerYlpAccount,
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
-    const quoteYlpAccount = await getAccount(
-      connection as any,
-      fixture.ownerQuoteYlpAccount,
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    );
-    expect(baseYlpAccount.amount).to.equal(100_000n);
-    expect(quoteYlpAccount.amount).to.equal(200_000n);
+    expect(ylpAccount.amount).to.equal(100_000n);
 
     const account = svm.getAccount(fixture.market);
     expect(account).to.not.equal(null);
@@ -914,7 +948,7 @@ describe("Omnipair V2 final model smoke", () => {
     expect(decoded.base_side.reserves.live_reserve.toNumber()).to.equal(100_000);
     expect(decoded.quote_side.reserves.live_reserve.toNumber()).to.equal(200_000);
     expect(decoded.base_side.shares.ylp_supply.toNumber()).to.equal(100_000);
-    expect(decoded.quote_side.shares.ylp_supply.toNumber()).to.equal(200_000);
+    expect(decoded.quote_side.shares.ylp_supply.toNumber()).to.equal(100_000);
   });
 
   it("opens base hLP by borrowing quote and locking both yLP sides", async function () {
@@ -932,29 +966,21 @@ describe("Omnipair V2 final model smoke", () => {
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
-    const vaultBaseYlp = await getAccount(
+    const vaultYlp = await getAccount(
       connection as any,
-      hedge.hlpBaseYlpAccount,
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    );
-    const vaultQuoteYlp = await getAccount(
-      connection as any,
-      hedge.hlpQuoteYlpAccount,
+      hedge.hlpYlpAccount,
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
     expect(ownerHlp.amount).to.equal(10_000n);
-    expect(vaultBaseYlp.amount).to.equal(10_000n);
-    expect(vaultQuoteYlp.amount).to.equal(20_000n);
+    expect(vaultYlp.amount).to.equal(10_000n);
 
     const account = svm.getAccount(fixture.market);
     expect(account).to.not.equal(null);
     const decoded = accountCoder.decode("Market", Buffer.from(account!.data)) as any;
     expect(decoded.base_side.reserves.live_reserve.toNumber()).to.equal(110_000);
     expect(decoded.quote_side.reserves.live_reserve.toNumber()).to.equal(220_000);
-    expect(decoded.base_hlp_vault.ylp_base_shares.toNumber()).to.equal(10_000);
-    expect(decoded.base_hlp_vault.ylp_quote_shares.toNumber()).to.equal(20_000);
+    expect(decoded.base_hlp_vault.ylp_shares.toNumber()).to.equal(10_000);
     expect(decoded.base_hlp_vault.hlp_supply.toNumber()).to.equal(10_000);
     expect(decoded.base_hlp_vault.debt_shares.toNumber()).to.be.greaterThan(0);
   });
@@ -970,27 +996,19 @@ describe("Omnipair V2 final model smoke", () => {
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
-    const vaultBaseYlp = await getAccount(
+    const vaultYlp = await getAccount(
       connection as any,
-      first.hlpBaseYlpAccount,
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    );
-    const vaultQuoteYlp = await getAccount(
-      connection as any,
-      first.hlpQuoteYlpAccount,
+      first.hlpYlpAccount,
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
     expect(ownerHlp.amount).to.equal(11_000n);
-    expect(vaultBaseYlp.amount).to.equal(11_000n);
-    expect(vaultQuoteYlp.amount).to.equal(22_000n);
+    expect(vaultYlp.amount).to.equal(11_000n);
 
     const account = svm.getAccount(fixture.market);
     expect(account).to.not.equal(null);
     const decoded = accountCoder.decode("Market", Buffer.from(account!.data)) as any;
-    expect(decoded.base_hlp_vault.ylp_base_shares.toNumber()).to.equal(11_000);
-    expect(decoded.base_hlp_vault.ylp_quote_shares.toNumber()).to.equal(22_000);
+    expect(decoded.base_hlp_vault.ylp_shares.toNumber()).to.equal(11_000);
     expect(decoded.base_hlp_vault.hlp_supply.toNumber()).to.equal(11_000);
   });
 
@@ -1009,16 +1027,14 @@ describe("Omnipair V2 final model smoke", () => {
         owner: payer.publicKey,
         baseMint: fixture.baseMint,
         quoteMint: fixture.quoteMint,
-        baseYlpMint: fixture.baseYlpMint,
-        quoteYlpMint: fixture.quoteYlpMint,
+        ylpMint: fixture.ylpMint,
         targetHlpMint: fixture.baseHlpMint,
         baseReserveVault: fixture.baseReserveVault,
         quoteReserveVault: fixture.quoteReserveVault,
         borrowedInterestVault: fixture.quoteInterestVault,
         ownerTargetAccount: fixture.ownerBaseAccount,
         ownerHlpAccount: hedge.ownerBaseHlpAccount,
-        hlpBaseYlpAccount: hedge.hlpBaseYlpAccount,
-        hlpQuoteYlpAccount: hedge.hlpQuoteYlpAccount,
+        hlpYlpAccount: hedge.hlpYlpAccount,
         targetYieldAccount: hedge.targetYieldAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
@@ -1039,21 +1055,14 @@ describe("Omnipair V2 final model smoke", () => {
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
-    const vaultBaseYlp = await getAccount(
+    const vaultYlp = await getAccount(
       connection as any,
-      hedge.hlpBaseYlpAccount,
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    );
-    const vaultQuoteYlp = await getAccount(
-      connection as any,
-      hedge.hlpQuoteYlpAccount,
+      hedge.hlpYlpAccount,
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
     expect(ownerHlp.amount).to.equal(0n);
-    expect(vaultBaseYlp.amount).to.equal(0n);
-    expect(vaultQuoteYlp.amount).to.equal(0n);
+    expect(vaultYlp.amount).to.equal(0n);
 
     const account = svm.getAccount(fixture.market);
     expect(account).to.not.equal(null);
@@ -1061,9 +1070,8 @@ describe("Omnipair V2 final model smoke", () => {
     expect(decoded.base_side.reserves.live_reserve.toNumber()).to.equal(100_000);
     expect(decoded.quote_side.reserves.live_reserve.toNumber()).to.equal(200_000);
     expect(decoded.base_side.shares.ylp_supply.toNumber()).to.equal(100_000);
-    expect(decoded.quote_side.shares.ylp_supply.toNumber()).to.equal(200_000);
-    expect(decoded.base_hlp_vault.ylp_base_shares.toNumber()).to.equal(0);
-    expect(decoded.base_hlp_vault.ylp_quote_shares.toNumber()).to.equal(0);
+    expect(decoded.quote_side.shares.ylp_supply.toNumber()).to.equal(100_000);
+    expect(decoded.base_hlp_vault.ylp_shares.toNumber()).to.equal(0);
     expect(decoded.base_hlp_vault.hlp_supply.toNumber()).to.equal(0);
     expect(decoded.base_hlp_vault.debt_shares.toNumber()).to.equal(0);
   });
@@ -1083,27 +1091,19 @@ describe("Omnipair V2 final model smoke", () => {
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
-    const vaultBaseYlp = await getAccount(
+    const vaultYlp = await getAccount(
       connection as any,
-      hedge.hlpBaseYlpAccount,
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    );
-    const vaultQuoteYlp = await getAccount(
-      connection as any,
-      hedge.hlpQuoteYlpAccount,
+      hedge.hlpYlpAccount,
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
     expect(ownerHlp.amount).to.equal(20_000n);
-    expect(vaultBaseYlp.amount).to.equal(10_000n);
-    expect(vaultQuoteYlp.amount).to.equal(20_000n);
+    expect(vaultYlp.amount).to.equal(10_000n);
 
     let account = svm.getAccount(fixture.market);
     expect(account).to.not.equal(null);
     let decoded = accountCoder.decode("Market", Buffer.from(account!.data)) as any;
-    expect(decoded.quote_hlp_vault.ylp_base_shares.toNumber()).to.equal(10_000);
-    expect(decoded.quote_hlp_vault.ylp_quote_shares.toNumber()).to.equal(20_000);
+    expect(decoded.quote_hlp_vault.ylp_shares.toNumber()).to.equal(10_000);
     expect(decoded.quote_hlp_vault.hlp_supply.toNumber()).to.equal(20_000);
     expect(decoded.quote_hlp_vault.debt_shares.toNumber()).to.be.greaterThan(0);
 
@@ -1117,16 +1117,14 @@ describe("Omnipair V2 final model smoke", () => {
         owner: payer.publicKey,
         baseMint: fixture.baseMint,
         quoteMint: fixture.quoteMint,
-        baseYlpMint: fixture.baseYlpMint,
-        quoteYlpMint: fixture.quoteYlpMint,
+        ylpMint: fixture.ylpMint,
         targetHlpMint: fixture.quoteHlpMint,
         baseReserveVault: fixture.baseReserveVault,
         quoteReserveVault: fixture.quoteReserveVault,
         borrowedInterestVault: fixture.baseInterestVault,
         ownerTargetAccount: fixture.ownerQuoteAccount,
         ownerHlpAccount: hedge.ownerQuoteHlpAccount,
-        hlpBaseYlpAccount: hedge.hlpBaseYlpAccount,
-        hlpQuoteYlpAccount: hedge.hlpQuoteYlpAccount,
+        hlpYlpAccount: hedge.hlpYlpAccount,
         targetYieldAccount: hedge.targetYieldAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
@@ -1146,8 +1144,7 @@ describe("Omnipair V2 final model smoke", () => {
     decoded = accountCoder.decode("Market", Buffer.from(account!.data)) as any;
     expect(decoded.base_side.reserves.live_reserve.toNumber()).to.equal(100_000);
     expect(decoded.quote_side.reserves.live_reserve.toNumber()).to.equal(200_000);
-    expect(decoded.quote_hlp_vault.ylp_base_shares.toNumber()).to.equal(0);
-    expect(decoded.quote_hlp_vault.ylp_quote_shares.toNumber()).to.equal(0);
+    expect(decoded.quote_hlp_vault.ylp_shares.toNumber()).to.equal(0);
     expect(decoded.quote_hlp_vault.hlp_supply.toNumber()).to.equal(0);
     expect(decoded.quote_hlp_vault.debt_shares.toNumber()).to.equal(0);
   });
@@ -1159,8 +1156,7 @@ describe("Omnipair V2 final model smoke", () => {
 
     const tx = await program.methods
       .removeLiquidity({
-        baseYlpAmount: new BN(1_000),
-        quoteYlpAmount: new BN(2_000),
+        ylpAmount: new BN(1_000),
         minBaseAmountOut: new BN(1_000),
         minQuoteAmountOut: new BN(2_000),
       })
@@ -1169,14 +1165,12 @@ describe("Omnipair V2 final model smoke", () => {
         owner: payer.publicKey,
         baseMint: fixture.baseMint,
         quoteMint: fixture.quoteMint,
-        baseYlpMint: fixture.baseYlpMint,
-        quoteYlpMint: fixture.quoteYlpMint,
+        ylpMint: fixture.ylpMint,
         baseReserveVault: fixture.baseReserveVault,
         quoteReserveVault: fixture.quoteReserveVault,
         ownerBaseAccount: fixture.ownerBaseAccount,
         ownerQuoteAccount: fixture.ownerQuoteAccount,
-        ownerBaseYlpAccount: fixture.ownerBaseYlpAccount,
-        ownerQuoteYlpAccount: fixture.ownerQuoteYlpAccount,
+        ownerYlpAccount: fixture.ownerYlpAccount,
         baseYieldAccount: deriveYieldAccountAddress(
           fixture.market,
           payer.publicKey,
@@ -1203,20 +1197,13 @@ describe("Omnipair V2 final model smoke", () => {
     expect(ownerBaseAfter.amount).to.equal(ownerBaseBefore.amount + 1_000n);
     expect(ownerQuoteAfter.amount).to.equal(ownerQuoteBefore.amount + 2_000n);
 
-    const baseYlpAccount = await getAccount(
+    const ylpAccount = await getAccount(
       connection as any,
-      fixture.ownerBaseYlpAccount,
+      fixture.ownerYlpAccount,
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
-    const quoteYlpAccount = await getAccount(
-      connection as any,
-      fixture.ownerQuoteYlpAccount,
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    );
-    expect(baseYlpAccount.amount).to.equal(99_000n);
-    expect(quoteYlpAccount.amount).to.equal(198_000n);
+    expect(ylpAccount.amount).to.equal(99_000n);
 
     const account = svm.getAccount(fixture.market);
     expect(account).to.not.equal(null);
@@ -1224,7 +1211,7 @@ describe("Omnipair V2 final model smoke", () => {
     expect(decoded.base_side.reserves.live_reserve.toNumber()).to.equal(99_000);
     expect(decoded.quote_side.reserves.live_reserve.toNumber()).to.equal(198_000);
     expect(decoded.base_side.shares.ylp_supply.toNumber()).to.equal(99_000);
-    expect(decoded.quote_side.shares.ylp_supply.toNumber()).to.equal(198_000);
+    expect(decoded.quote_side.shares.ylp_supply.toNumber()).to.equal(99_000);
   });
 
   it("swaps through the V2 market and routes non-compounding swap fees", async function () {
@@ -1495,15 +1482,9 @@ describe("Omnipair V2 final model smoke", () => {
   it("checkpoints active hLP vaults during swaps with canonical vault accounts", async function () {
     const fixture = await addBalancedLiquidity(51);
     const hedge = await openBaseHedge(fixture);
-    const baseYlpBefore = await getAccount(
+    const ylpBefore = await getAccount(
       connection as any,
-      hedge.hlpBaseYlpAccount,
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    );
-    const quoteYlpBefore = await getAccount(
-      connection as any,
-      hedge.hlpQuoteYlpAccount,
+      hedge.hlpYlpAccount,
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
@@ -1511,41 +1492,27 @@ describe("Omnipair V2 final model smoke", () => {
     await swapBaseForQuote(fixture, baseHlpRebalanceAccounts(fixture));
     trackV2Instruction("swap", this.test?.title);
 
-    const baseYlpAfter = await getAccount(
+    const ylpAfter = await getAccount(
       connection as any,
-      hedge.hlpBaseYlpAccount,
+      hedge.hlpYlpAccount,
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
-    const quoteYlpAfter = await getAccount(
-      connection as any,
-      hedge.hlpQuoteYlpAccount,
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    );
-    expect(baseYlpAfter.amount < baseYlpBefore.amount).to.equal(true);
-    expect(quoteYlpAfter.amount < quoteYlpBefore.amount).to.equal(true);
+    expect(ylpAfter.amount < ylpBefore.amount).to.equal(true);
 
     const account = svm.getAccount(fixture.market);
     expect(account).to.not.equal(null);
     const decoded = accountCoder.decode("Market", Buffer.from(account!.data)) as any;
     expect(decoded.base_hlp_vault.hlp_supply.toNumber()).to.equal(10_000);
-    expect(decoded.base_hlp_vault.ylp_base_shares.toNumber()).to.be.lessThan(10_000);
-    expect(decoded.base_hlp_vault.ylp_quote_shares.toNumber()).to.be.lessThan(20_000);
+    expect(decoded.base_hlp_vault.ylp_shares.toNumber()).to.be.lessThan(10_000);
   });
 
   it("checkpoints quote hLP vaults during opposite-direction swaps", async function () {
     const fixture = await addBalancedLiquidity(55);
     const hedge = await openQuoteHedge(fixture);
-    const baseYlpBefore = await getAccount(
+    const ylpBefore = await getAccount(
       connection as any,
-      hedge.hlpBaseYlpAccount,
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    );
-    const quoteYlpBefore = await getAccount(
-      connection as any,
-      hedge.hlpQuoteYlpAccount,
+      hedge.hlpYlpAccount,
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
@@ -1553,54 +1520,34 @@ describe("Omnipair V2 final model smoke", () => {
     await swapQuoteForBase(fixture, quoteHlpRebalanceAccounts(fixture));
     trackV2Instruction("swap", this.test?.title);
 
-    const baseYlpAfter = await getAccount(
+    const ylpAfter = await getAccount(
       connection as any,
-      hedge.hlpBaseYlpAccount,
+      hedge.hlpYlpAccount,
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
-    const quoteYlpAfter = await getAccount(
-      connection as any,
-      hedge.hlpQuoteYlpAccount,
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    );
-    expect(baseYlpAfter.amount < baseYlpBefore.amount).to.equal(true);
-    expect(quoteYlpAfter.amount < quoteYlpBefore.amount).to.equal(true);
+    expect(ylpAfter.amount < ylpBefore.amount).to.equal(true);
 
     const account = svm.getAccount(fixture.market);
     expect(account).to.not.equal(null);
     const decoded = accountCoder.decode("Market", Buffer.from(account!.data)) as any;
     expect(decoded.quote_hlp_vault.hlp_supply.toNumber()).to.equal(20_000);
-    expect(decoded.quote_hlp_vault.ylp_base_shares.toNumber()).to.be.lessThan(10_000);
-    expect(decoded.quote_hlp_vault.ylp_quote_shares.toNumber()).to.be.lessThan(20_000);
+    expect(decoded.quote_hlp_vault.ylp_shares.toNumber()).to.be.lessThan(10_000);
   });
 
   it("checkpoints both aggregate hLP vaults in one swap", async function () {
     const fixture = await addBalancedLiquidity(56);
     const baseHedge = await openBaseHedge(fixture);
     const quoteHedge = await openQuoteHedge(fixture);
-    const baseHlpBaseYlpBefore = await getAccount(
+    const baseHlpYlpBefore = await getAccount(
       connection as any,
-      baseHedge.hlpBaseYlpAccount,
+      baseHedge.hlpYlpAccount,
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
-    const baseHlpQuoteYlpBefore = await getAccount(
+    const quoteHlpYlpBefore = await getAccount(
       connection as any,
-      baseHedge.hlpQuoteYlpAccount,
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    );
-    const quoteHlpBaseYlpBefore = await getAccount(
-      connection as any,
-      quoteHedge.hlpBaseYlpAccount,
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    );
-    const quoteHlpQuoteYlpBefore = await getAccount(
-      connection as any,
-      quoteHedge.hlpQuoteYlpAccount,
+      quoteHedge.hlpYlpAccount,
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
@@ -1608,34 +1555,20 @@ describe("Omnipair V2 final model smoke", () => {
     await swapBaseForQuote(fixture, allHlpRebalanceAccounts(fixture));
     trackV2Instruction("swap", this.test?.title);
 
-    const baseHlpBaseYlpAfter = await getAccount(
+    const baseHlpYlpAfter = await getAccount(
       connection as any,
-      baseHedge.hlpBaseYlpAccount,
+      baseHedge.hlpYlpAccount,
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
-    const baseHlpQuoteYlpAfter = await getAccount(
+    const quoteHlpYlpAfter = await getAccount(
       connection as any,
-      baseHedge.hlpQuoteYlpAccount,
+      quoteHedge.hlpYlpAccount,
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
-    const quoteHlpBaseYlpAfter = await getAccount(
-      connection as any,
-      quoteHedge.hlpBaseYlpAccount,
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    );
-    const quoteHlpQuoteYlpAfter = await getAccount(
-      connection as any,
-      quoteHedge.hlpQuoteYlpAccount,
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    );
-    expect(baseHlpBaseYlpAfter.amount).to.not.equal(baseHlpBaseYlpBefore.amount);
-    expect(baseHlpQuoteYlpAfter.amount).to.not.equal(baseHlpQuoteYlpBefore.amount);
-    expect(quoteHlpBaseYlpAfter.amount).to.not.equal(quoteHlpBaseYlpBefore.amount);
-    expect(quoteHlpQuoteYlpAfter.amount).to.not.equal(quoteHlpQuoteYlpBefore.amount);
+    expect(baseHlpYlpAfter.amount).to.not.equal(baseHlpYlpBefore.amount);
+    expect(quoteHlpYlpAfter.amount).to.not.equal(quoteHlpYlpBefore.amount);
 
     const account = svm.getAccount(fixture.market);
     expect(account).to.not.equal(null);
@@ -1687,8 +1620,8 @@ describe("Omnipair V2 final model smoke", () => {
         market: fixture.market,
         owner: payer.publicKey,
         assetMint: fixture.baseMint,
-        lpMint: fixture.baseYlpMint,
-        ownerLpAccount: fixture.ownerBaseYlpAccount,
+        lpMint: fixture.ylpMint,
+        ownerLpAccount: fixture.ownerYlpAccount,
         feeVault: fixture.baseFeeVault,
         interestVault: fixture.baseInterestVault,
         recipientAssetAccount: recipientBaseAccount,
@@ -1717,91 +1650,120 @@ describe("Omnipair V2 final model smoke", () => {
   it("checkpoints yLP yield accounts during a Token-2022 transfer hook", async function () {
     const fixture = await addBalancedLiquidity(58);
     const recipient = Keypair.generate().publicKey;
-    const destinationBaseYlpAccount = await createAccount(
+    const destinationYlpAccount = await createAccount(
       connection as any,
       payer,
-      fixture.baseYlpMint,
+      fixture.ylpMint,
       recipient,
       Keypair.generate(),
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
-    const sourceYieldAccount = deriveYieldAccountAddress(
+    const sourceBaseYieldAccount = deriveYieldAccountAddress(
       fixture.market,
       payer.publicKey,
       fixture.baseMint,
       "ylp"
     )[0];
-    const [destinationYieldAccount, destinationYieldBump] = deriveYieldAccountAddress(
+    const [destinationBaseYieldAccount, destinationBaseYieldBump] = deriveYieldAccountAddress(
       fixture.market,
       recipient,
       fixture.baseMint,
       "ylp"
     );
-    const validationAccount = seedTransferHookValidationAccount(
-      fixture.baseYlpMint,
+    const sourceQuoteYieldAccount = deriveYieldAccountAddress(
       fixture.market,
-      fixture.baseMint,
+      payer.publicKey,
+      fixture.quoteMint,
+      "ylp"
+    )[0];
+    const [destinationQuoteYieldAccount, destinationQuoteYieldBump] = deriveYieldAccountAddress(
+      fixture.market,
+      recipient,
+      fixture.quoteMint,
       "ylp"
     );
+    const validationAccount = seedYlpTransferHookValidationAccount(
+      fixture.ylpMint,
+      fixture.market,
+      fixture.baseMint,
+      fixture.quoteMint
+    );
 
-    const metas = buildYieldTransferHookAccountMetas({
-      lpMint: fixture.baseYlpMint,
+    const metas = buildYlpTransferHookAccountMetas({
+      lpMint: fixture.ylpMint,
       market: fixture.market,
       sourceOwner: payer.publicKey,
       destinationOwner: recipient,
-      assetMint: fixture.baseMint,
-      tokenKind: "ylp",
+      baseMint: fixture.baseMint,
+      quoteMint: fixture.quoteMint,
     });
 
     expect(metas.map((meta) => meta.pubkey.toString())).to.deep.equal([
       fixture.market.toString(),
       fixture.baseMint.toString(),
-      sourceYieldAccount.toString(),
-      destinationYieldAccount.toString(),
+      fixture.quoteMint.toString(),
+      sourceBaseYieldAccount.toString(),
+      destinationBaseYieldAccount.toString(),
+      sourceQuoteYieldAccount.toString(),
+      destinationQuoteYieldAccount.toString(),
       OMNIPAIR_V2_PROGRAM_ID.toString(),
       validationAccount.toString(),
     ]);
     expect(metas.map((meta) => meta.isWritable)).to.deep.equal([
       false,
       false,
+      false,
+      true,
+      true,
       true,
       true,
       false,
       false,
     ]);
-    const selfTransferMetas = buildYieldTransferHookAccountMetas({
-      lpMint: fixture.baseYlpMint,
+    const selfTransferMetas = buildYlpTransferHookAccountMetas({
+      lpMint: fixture.ylpMint,
       market: fixture.market,
       sourceOwner: payer.publicKey,
       destinationOwner: payer.publicKey,
-      assetMint: fixture.baseMint,
-      tokenKind: "ylp",
+      baseMint: fixture.baseMint,
+      quoteMint: fixture.quoteMint,
     });
     expect(selfTransferMetas.map((meta) => meta.pubkey.toString())).to.deep.equal([
       fixture.market.toString(),
       fixture.baseMint.toString(),
-      sourceYieldAccount.toString(),
-      sourceYieldAccount.toString(),
+      fixture.quoteMint.toString(),
+      sourceBaseYieldAccount.toString(),
+      sourceBaseYieldAccount.toString(),
+      sourceQuoteYieldAccount.toString(),
+      sourceQuoteYieldAccount.toString(),
       OMNIPAIR_V2_PROGRAM_ID.toString(),
       validationAccount.toString(),
     ]);
 
     await seedYieldAccount(
-      destinationYieldAccount,
+      destinationBaseYieldAccount,
       recipient,
       fixture.market,
       fixture.baseMint,
       "ylp",
-      destinationYieldBump
+      destinationBaseYieldBump
+    );
+    await seedYieldAccount(
+      destinationQuoteYieldAccount,
+      recipient,
+      fixture.market,
+      fixture.quoteMint,
+      "ylp",
+      destinationQuoteYieldBump
     );
     await swapBaseForQuote(fixture);
 
     const transferIx = await createTransferCheckedWithTransferHookInstruction(
       connection as any,
-      fixture.ownerBaseYlpAccount,
-      fixture.baseYlpMint,
-      destinationBaseYlpAccount,
+      fixture.ownerYlpAccount,
+      fixture.ylpMint,
+      destinationYlpAccount,
       payer.publicKey,
       BigInt(10_000),
       6,
@@ -1811,30 +1773,44 @@ describe("Omnipair V2 final model smoke", () => {
     );
     await connection.sendTransaction(new Transaction().add(transferIx), [payer]);
 
-    const sourceYieldData = svm.getAccount(sourceYieldAccount);
-    const destinationYieldData = svm.getAccount(destinationYieldAccount);
-    expect(sourceYieldData).to.not.equal(null);
-    expect(destinationYieldData).to.not.equal(null);
-    const sourceYield = accountCoder.decode(
+    const sourceBaseYieldData = svm.getAccount(sourceBaseYieldAccount);
+    const destinationBaseYieldData = svm.getAccount(destinationBaseYieldAccount);
+    const sourceQuoteYieldData = svm.getAccount(sourceQuoteYieldAccount);
+    const destinationQuoteYieldData = svm.getAccount(destinationQuoteYieldAccount);
+    expect(sourceBaseYieldData).to.not.equal(null);
+    expect(destinationBaseYieldData).to.not.equal(null);
+    expect(sourceQuoteYieldData).to.not.equal(null);
+    expect(destinationQuoteYieldData).to.not.equal(null);
+    const sourceBaseYield = accountCoder.decode(
       "YieldAccount",
-      Buffer.from(sourceYieldData!.data)
+      Buffer.from(sourceBaseYieldData!.data)
     ) as any;
-    const destinationYield = accountCoder.decode(
+    const destinationBaseYield = accountCoder.decode(
       "YieldAccount",
-      Buffer.from(destinationYieldData!.data)
+      Buffer.from(destinationBaseYieldData!.data)
     ) as any;
-    expect(sourceYield.accrued_swap_fee_amount.toNumber()).to.equal(3);
-    expect(destinationYield.accrued_swap_fee_amount.toNumber()).to.equal(0);
+    const sourceQuoteYield = accountCoder.decode(
+      "YieldAccount",
+      Buffer.from(sourceQuoteYieldData!.data)
+    ) as any;
+    const destinationQuoteYield = accountCoder.decode(
+      "YieldAccount",
+      Buffer.from(destinationQuoteYieldData!.data)
+    ) as any;
+    expect(sourceBaseYield.accrued_swap_fee_amount.toNumber()).to.equal(3);
+    expect(destinationBaseYield.accrued_swap_fee_amount.toNumber()).to.equal(0);
+    expect(sourceQuoteYield.accrued_swap_fee_amount.toNumber()).to.equal(0);
+    expect(destinationQuoteYield.accrued_swap_fee_amount.toNumber()).to.equal(0);
 
     const sourceYlpAfter = await getAccount(
       connection as any,
-      fixture.ownerBaseYlpAccount,
+      fixture.ownerYlpAccount,
       undefined,
       TOKEN_2022_PROGRAM_ID
     );
     const destinationYlpAfter = await getAccount(
       connection as any,
-      destinationBaseYlpAccount,
+      destinationYlpAccount,
       undefined,
       TOKEN_2022_PROGRAM_ID
     );

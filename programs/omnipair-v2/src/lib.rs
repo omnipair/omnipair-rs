@@ -95,6 +95,14 @@ pub mod omnipair_v2 {
         InitializeMarket::handle_initialize(ctx, args)
     }
 
+    #[access_control(ctx.accounts.validate(&args))]
+    pub fn initialize_lp_metadata(
+        ctx: Context<InitializeLpMetadata>,
+        args: InitializeLpMetadataArgs,
+    ) -> Result<()> {
+        InitializeLpMetadata::handle_initialize(ctx, args)
+    }
+
     pub fn update_config(
         ctx: Context<UpdateMarketConfig>,
         args: UpdateMarketConfigArgs,

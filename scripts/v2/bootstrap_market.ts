@@ -3,15 +3,18 @@ import {
   NATIVE_MINT,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  TOKEN_METADATA_PROGRAM_ID,
   PublicKey,
   SystemProgram,
   bnFromUnits,
   createHookedLpMintIfMissing,
+  defaultLpMetadata,
   defaultMarketConfig,
   deriveFutarchyAuthorityAddress,
   deriveHlpYlpVaultAddress,
   deriveMarketAddresses,
   deriveProgramDataAddress,
+  deriveTokenMetadataAddress,
   deriveYieldAccountAddress,
   explorerTx,
   getOrCreateAta,
@@ -74,19 +77,11 @@ async function main() {
     tokenProgram: TOKEN_PROGRAM_ID,
   });
 
-  const baseYlpMint = await createHookedLpMintIfMissing({
+  const ylpMint = await createHookedLpMintIfMissing({
     connection: provider.connection,
     payer,
-    label: `${marketLabel}-base-ylp`,
+    label: `${marketLabel}-ylp`,
     decimals: baseDecimals,
-    mintAuthority: market,
-    transferHookProgramId: program.programId,
-  });
-  const quoteYlpMint = await createHookedLpMintIfMissing({
-    connection: provider.connection,
-    payer,
-    label: `${marketLabel}-quote-ylp`,
-    decimals: quoteDecimals,
     mintAuthority: market,
     transferHookProgramId: program.programId,
   });
@@ -107,33 +102,23 @@ async function main() {
     transferHookProgramId: program.programId,
   });
 
-  const baseYlp = new PublicKey(baseYlpMint.mint);
-  const quoteYlp = new PublicKey(quoteYlpMint.mint);
+  const ylp = new PublicKey(ylpMint.mint);
   const baseHlp = new PublicKey(baseHlpMint.mint);
   const quoteHlp = new PublicKey(quoteHlpMint.mint);
-  const baseHlpBaseYlpVault = deriveHlpYlpVaultAddress(
+  const ylpTokenMetadata = deriveTokenMetadataAddress(ylp);
+  const baseHlpTokenMetadata = deriveTokenMetadataAddress(baseHlp);
+  const quoteHlpTokenMetadata = deriveTokenMetadataAddress(quoteHlp);
+  const baseHlpYlpVault = deriveHlpYlpVaultAddress(
     program.programId,
     market,
     baseHlp,
-    baseYlp
+    ylp
   );
-  const baseHlpQuoteYlpVault = deriveHlpYlpVaultAddress(
-    program.programId,
-    market,
-    baseHlp,
-    quoteYlp
-  );
-  const quoteHlpBaseYlpVault = deriveHlpYlpVaultAddress(
+  const quoteHlpYlpVault = deriveHlpYlpVaultAddress(
     program.programId,
     market,
     quoteHlp,
-    baseYlp
-  );
-  const quoteHlpQuoteYlpVault = deriveHlpYlpVaultAddress(
-    program.programId,
-    market,
-    quoteHlp,
-    quoteYlp
+    ylp
   );
 
   const marketAccount = await provider.connection.getAccountInfo(market, "confirmed");
@@ -152,8 +137,7 @@ async function main() {
         quoteMint,
         market,
         futarchyAuthority,
-        baseYlpMint: baseYlp,
-        quoteYlpMint: quoteYlp,
+        ylpMint: ylp,
         baseHlpMint: baseHlp,
         quoteHlpMint: quoteHlp,
         baseReserveVault: addresses.baseReserveVault,
@@ -181,6 +165,34 @@ async function main() {
     console.log(`Market already exists: ${market.toBase58()}`);
   }
 
+  await ensureLpMetadata({
+    provider,
+    payer,
+    program,
+    market,
+    lpMint: ylp,
+    lpTokenMetadata: ylpTokenMetadata,
+    metadata: defaultLpMetadata("ylp"),
+  });
+  await ensureLpMetadata({
+    provider,
+    payer,
+    program,
+    market,
+    lpMint: baseHlp,
+    lpTokenMetadata: baseHlpTokenMetadata,
+    metadata: defaultLpMetadata("baseHlp"),
+  });
+  await ensureLpMetadata({
+    provider,
+    payer,
+    program,
+    market,
+    lpMint: quoteHlp,
+    lpTokenMetadata: quoteHlpTokenMetadata,
+    metadata: defaultLpMetadata("quoteHlp"),
+  });
+
   const storedMarket = {
     label: marketLabel,
     programId: program.programId.toBase58(),
@@ -188,10 +200,12 @@ async function main() {
     paramsHash: paramsHash.toString("hex"),
     baseMint: baseMint.toBase58(),
     quoteMint: quoteMint.toBase58(),
-    baseYlpMint: baseYlpMint.mint,
-    quoteYlpMint: quoteYlpMint.mint,
+    ylpMint: ylpMint.mint,
     baseHlpMint: baseHlpMint.mint,
     quoteHlpMint: quoteHlpMint.mint,
+    ylpTokenMetadata: ylpTokenMetadata.toBase58(),
+    baseHlpTokenMetadata: baseHlpTokenMetadata.toBase58(),
+    quoteHlpTokenMetadata: quoteHlpTokenMetadata.toBase58(),
     baseReserveVault: addresses.baseReserveVault.toBase58(),
     quoteReserveVault: addresses.quoteReserveVault.toBase58(),
     baseCollateralVault: addresses.baseCollateralVault.toBase58(),
@@ -202,10 +216,8 @@ async function main() {
     quoteFeeVault: addresses.quoteFeeVault.toBase58(),
     baseInterestVault: addresses.baseInterestVault.toBase58(),
     quoteInterestVault: addresses.quoteInterestVault.toBase58(),
-    baseHlpBaseYlpVault: baseHlpBaseYlpVault.toBase58(),
-    baseHlpQuoteYlpVault: baseHlpQuoteYlpVault.toBase58(),
-    quoteHlpBaseYlpVault: quoteHlpBaseYlpVault.toBase58(),
-    quoteHlpQuoteYlpVault: quoteHlpQuoteYlpVault.toBase58(),
+    baseHlpYlpVault: baseHlpYlpVault.toBase58(),
+    quoteHlpYlpVault: quoteHlpYlpVault.toBase58(),
     eventAuthority: addresses.eventAuthority.toBase58(),
     seededLiquidity:
       state.markets[marketLabel]?.market === market.toBase58()
@@ -238,8 +250,7 @@ async function main() {
     eventAuthority: addresses.eventAuthority,
     baseMint,
     quoteMint,
-    baseYlpMint: baseYlp,
-    quoteYlpMint: quoteYlp,
+    ylpMint: ylp,
     baseReserveVault: addresses.baseReserveVault,
     quoteReserveVault: addresses.quoteReserveVault,
     baseAmount,
@@ -292,6 +303,36 @@ async function ensureFutarchyAuthority(params: {
   return await params.program.account.futarchyAuthority.fetch(params.futarchyAuthority);
 }
 
+async function ensureLpMetadata(params: {
+  provider: anchor.AnchorProvider;
+  payer: anchor.web3.Keypair;
+  program: any;
+  market: PublicKey;
+  lpMint: PublicKey;
+  lpTokenMetadata: PublicKey;
+  metadata: { name: string; symbol: string; uri: string };
+}) {
+  const existing = await params.provider.connection.getAccountInfo(
+    params.lpTokenMetadata,
+    "confirmed"
+  );
+  if (existing) return;
+
+  const signature = await params.program.methods
+    .initializeLpMetadata(params.metadata)
+    .accounts({
+      payer: params.payer.publicKey,
+      market: params.market,
+      lpMint: params.lpMint,
+      lpTokenMetadata: params.lpTokenMetadata,
+      systemProgram: SystemProgram.programId,
+      tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+      rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+    })
+    .rpc();
+  console.log(`LP metadata tx: ${explorerTx(signature)}`);
+}
+
 async function seedBalancedLiquidity(params: {
   provider: anchor.AnchorProvider;
   payer: anchor.web3.Keypair;
@@ -301,8 +342,7 @@ async function seedBalancedLiquidity(params: {
   eventAuthority: PublicKey;
   baseMint: PublicKey;
   quoteMint: PublicKey;
-  baseYlpMint: PublicKey;
-  quoteYlpMint: PublicKey;
+  ylpMint: PublicKey;
   baseReserveVault: PublicKey;
   quoteReserveVault: PublicKey;
   baseAmount: bigint;
@@ -324,17 +364,10 @@ async function seedBalancedLiquidity(params: {
     owner: params.payer.publicKey,
     tokenProgram: quoteTokenProgram,
   });
-  const ownerBaseYlpAccount = await getOrCreateAta({
+  const ownerYlpAccount = await getOrCreateAta({
     connection: params.provider.connection,
     payer: params.payer,
-    mint: params.baseYlpMint,
-    owner: params.payer.publicKey,
-    tokenProgram: TOKEN_2022_PROGRAM_ID,
-  });
-  const ownerQuoteYlpAccount = await getOrCreateAta({
-    connection: params.provider.connection,
-    payer: params.payer,
-    mint: params.quoteYlpMint,
+    mint: params.ylpMint,
     owner: params.payer.publicKey,
     tokenProgram: TOKEN_2022_PROGRAM_ID,
   });
@@ -360,8 +393,7 @@ async function seedBalancedLiquidity(params: {
     .addLiquidity({
       baseDepositAmount: bnFromUnits(params.baseAmount),
       quoteDepositAmount: bnFromUnits(params.quoteAmount),
-      minBaseYlpAmount: new anchor.BN(0),
-      minQuoteYlpAmount: new anchor.BN(0),
+      minYlpAmount: new anchor.BN(0),
     })
     .accounts({
       market: params.market,
@@ -369,14 +401,12 @@ async function seedBalancedLiquidity(params: {
       owner: params.payer.publicKey,
       baseMint: params.baseMint,
       quoteMint: params.quoteMint,
-      baseYlpMint: params.baseYlpMint,
-      quoteYlpMint: params.quoteYlpMint,
+      ylpMint: params.ylpMint,
       baseReserveVault: params.baseReserveVault,
       quoteReserveVault: params.quoteReserveVault,
       ownerBaseAccount: ownerBaseAccount.address,
       ownerQuoteAccount: ownerQuoteAccount.address,
-      ownerBaseYlpAccount: ownerBaseYlpAccount.address,
-      ownerQuoteYlpAccount: ownerQuoteYlpAccount.address,
+      ownerYlpAccount: ownerYlpAccount.address,
       baseYieldAccount: deriveYieldAccountAddress(
         params.program.programId,
         params.market,

@@ -3,6 +3,7 @@ import { AccountMeta, PublicKey } from "@solana/web3.js";
 /** Default Omnipair program ID (mainnet) when env is not set */
 const DEFAULT_PROGRAM_ID = "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE";
 const DEFAULT_V2_PROGRAM_ID = "358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv";
+const MPL_TOKEN_METADATA_PROGRAM_ID = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
 
 function getProgramIdFromEnv(envNames: string[], fallback: string): string {
   if (typeof process === "undefined" || !process.env) return fallback;
@@ -30,6 +31,8 @@ export const OMNIPAIR_PROGRAM_ID = PROGRAM_ID;
 export const OMNIPAIR_V2_PROGRAM_ID = new PublicKey(
   getProgramIdFromEnv(["OMNIPAIR_V2_PROGRAM_ID", "PROGRAM_ID_V2"], DEFAULT_V2_PROGRAM_ID)
 );
+
+export const TOKEN_METADATA_PROGRAM_ID = new PublicKey(MPL_TOKEN_METADATA_PROGRAM_ID);
 
 /**
  * PDA seeds used by the program
@@ -148,6 +151,16 @@ export function deriveMarketAddress(
 }
 
 export const deriveMarketV2Address = deriveMarketAddress;
+
+/**
+ * Derive a Metaplex Token Metadata PDA for a mint.
+ */
+export function deriveTokenMetadataAddress(mint: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [SEEDS.METADATA, TOKEN_METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    TOKEN_METADATA_PROGRAM_ID
+  );
+}
 
 /**
  * Derive market reserve vault PDA address
@@ -281,6 +294,7 @@ const TRANSFER_HOOK_SOURCE_ACCOUNT_INDEX = 0;
 const TRANSFER_HOOK_DESTINATION_ACCOUNT_INDEX = 2;
 const TRANSFER_HOOK_MARKET_ACCOUNT_INDEX = 5;
 const TRANSFER_HOOK_ASSET_MINT_ACCOUNT_INDEX = 6;
+const TRANSFER_HOOK_QUOTE_ASSET_MINT_ACCOUNT_INDEX = 7;
 
 type TransferHookSeed =
   | { kind: "literal"; bytes: Uint8Array | Buffer | number[] }
@@ -299,6 +313,12 @@ export interface YieldTransferHookValidationArgs {
   market: PublicKey;
   assetMint: PublicKey;
   tokenKind: YieldTokenKind;
+}
+
+export interface YlpTransferHookValidationArgs {
+  market: PublicKey;
+  baseMint: PublicKey;
+  quoteMint: PublicKey;
 }
 
 /**
@@ -387,7 +407,8 @@ function pdaTransferHookMeta(
 
 function yieldAccountTransferHookSeeds(
   ownerTokenAccountIndex: number,
-  tokenKind: YieldTokenKind
+  tokenKind: YieldTokenKind,
+  assetMintAccountIndex = TRANSFER_HOOK_ASSET_MINT_ACCOUNT_INDEX
 ): TransferHookSeed[] {
   return [
     { kind: "literal", bytes: SEEDS.YIELD_ACCOUNT },
@@ -398,7 +419,7 @@ function yieldAccountTransferHookSeeds(
       dataIndex: TRANSFER_HOOK_TOKEN_ACCOUNT_OWNER_OFFSET,
       length: 32,
     },
-    { kind: "accountKey", index: TRANSFER_HOOK_ASSET_MINT_ACCOUNT_INDEX },
+    { kind: "accountKey", index: assetMintAccountIndex },
     { kind: "literal", bytes: [yieldTokenKindCode(tokenKind)] },
   ];
 }
@@ -461,6 +482,42 @@ export function buildYieldTransferHookYieldValidationAccountData({
   ]);
 }
 
+export function buildYlpTransferHookValidationAccountData({
+  market,
+  baseMint,
+  quoteMint,
+}: YlpTransferHookValidationArgs): Buffer {
+  return encodeTransferHookValidationAccountData([
+    staticTransferHookMeta({ pubkey: market, isSigner: false, isWritable: false }),
+    staticTransferHookMeta({ pubkey: baseMint, isSigner: false, isWritable: false }),
+    staticTransferHookMeta({ pubkey: quoteMint, isSigner: false, isWritable: false }),
+    pdaTransferHookMeta(
+      yieldAccountTransferHookSeeds(TRANSFER_HOOK_SOURCE_ACCOUNT_INDEX, "ylp"),
+      true
+    ),
+    pdaTransferHookMeta(
+      yieldAccountTransferHookSeeds(TRANSFER_HOOK_DESTINATION_ACCOUNT_INDEX, "ylp"),
+      true
+    ),
+    pdaTransferHookMeta(
+      yieldAccountTransferHookSeeds(
+        TRANSFER_HOOK_SOURCE_ACCOUNT_INDEX,
+        "ylp",
+        TRANSFER_HOOK_QUOTE_ASSET_MINT_ACCOUNT_INDEX
+      ),
+      true
+    ),
+    pdaTransferHookMeta(
+      yieldAccountTransferHookSeeds(
+        TRANSFER_HOOK_DESTINATION_ACCOUNT_INDEX,
+        "ylp",
+        TRANSFER_HOOK_QUOTE_ASSET_MINT_ACCOUNT_INDEX
+      ),
+      true
+    ),
+  ]);
+}
+
 /**
  * Build V2 yLP/hLP transfer-hook extra account metas.
  *
@@ -497,6 +554,56 @@ export function buildYieldTransferHookAccountMetas({
     { pubkey: assetMint, isSigner: false, isWritable: false },
     { pubkey: sourceYieldAccount, isSigner: false, isWritable: true },
     { pubkey: destinationYieldAccount, isSigner: false, isWritable: true },
+    { pubkey: OMNIPAIR_V2_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: validationAccount, isSigner: false, isWritable: false },
+  ];
+}
+
+export function buildYlpTransferHookAccountMetas({
+  lpMint,
+  market,
+  sourceOwner,
+  destinationOwner,
+  baseMint,
+  quoteMint,
+}: Omit<YieldTransferHookAccountsArgs, "assetMint" | "tokenKind"> & {
+  baseMint: PublicKey;
+  quoteMint: PublicKey;
+}): AccountMeta[] {
+  const sourceBaseYieldAccount = deriveYieldAccountAddress(
+    market,
+    sourceOwner,
+    baseMint,
+    "ylp"
+  )[0];
+  const destinationBaseYieldAccount = deriveYieldAccountAddress(
+    market,
+    destinationOwner,
+    baseMint,
+    "ylp"
+  )[0];
+  const sourceQuoteYieldAccount = deriveYieldAccountAddress(
+    market,
+    sourceOwner,
+    quoteMint,
+    "ylp"
+  )[0];
+  const destinationQuoteYieldAccount = deriveYieldAccountAddress(
+    market,
+    destinationOwner,
+    quoteMint,
+    "ylp"
+  )[0];
+  const validationAccount = deriveYieldTransferHookValidationAddress(lpMint)[0];
+
+  return [
+    { pubkey: market, isSigner: false, isWritable: false },
+    { pubkey: baseMint, isSigner: false, isWritable: false },
+    { pubkey: quoteMint, isSigner: false, isWritable: false },
+    { pubkey: sourceBaseYieldAccount, isSigner: false, isWritable: true },
+    { pubkey: destinationBaseYieldAccount, isSigner: false, isWritable: true },
+    { pubkey: sourceQuoteYieldAccount, isSigner: false, isWritable: true },
+    { pubkey: destinationQuoteYieldAccount, isSigner: false, isWritable: true },
     { pubkey: OMNIPAIR_V2_PROGRAM_ID, isSigner: false, isWritable: false },
     { pubkey: validationAccount, isSigner: false, isWritable: false },
   ];

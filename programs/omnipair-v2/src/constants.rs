@@ -96,6 +96,8 @@ pub const YIELD_ACCOUNT_SEED_PREFIX: &[u8] = b"yield";
 #[constant]
 pub const HLP_YLP_VAULT_SEED_PREFIX: &[u8] = b"hlp_ylp_vault";
 #[constant]
+pub const METADATA_SEED_PREFIX: &[u8] = b"metadata";
+#[constant]
 pub const INSURANCE_SEED_PREFIX: &[u8] = b"insurance";
 #[constant]
 pub const LIQUIDATION_AUCTION_SEED_PREFIX: &[u8] = b"liquidation_auction";

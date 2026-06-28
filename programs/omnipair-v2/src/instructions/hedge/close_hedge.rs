@@ -60,9 +60,7 @@ pub struct CloseHedge<'info> {
     pub base_mint: Box<InterfaceAccount<'info, Mint>>,
     pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(mut)]
-    pub base_ylp_mint: Box<InterfaceAccount<'info, Mint>>,
-    #[account(mut)]
-    pub quote_ylp_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub ylp_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(mut)]
     pub target_hlp_mint: Box<InterfaceAccount<'info, Mint>>,
 
@@ -85,28 +83,14 @@ pub struct CloseHedge<'info> {
             HLP_YLP_VAULT_SEED_PREFIX,
             market.key().as_ref(),
             target_hlp_mint.key().as_ref(),
-            base_ylp_mint.key().as_ref(),
+            ylp_mint.key().as_ref(),
         ],
         bump,
-        token::mint = base_ylp_mint,
+        token::mint = ylp_mint,
         token::authority = market,
         token::token_program = token_2022_program,
     )]
-    pub hlp_base_ylp_account: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(
-        mut,
-        seeds = [
-            HLP_YLP_VAULT_SEED_PREFIX,
-            market.key().as_ref(),
-            target_hlp_mint.key().as_ref(),
-            quote_ylp_mint.key().as_ref(),
-        ],
-        bump,
-        token::mint = quote_ylp_mint,
-        token::authority = market,
-        token::token_program = token_2022_program,
-    )]
-    pub hlp_quote_ylp_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub hlp_ylp_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -136,16 +120,19 @@ impl<'info> CloseHedge<'info> {
             &self.market,
             MarketAsset::Base,
             &self.base_mint,
-            &self.base_ylp_mint,
             &self.base_reserve_vault,
         )?;
         validate_side_vault_accounts(
             &self.market,
             MarketAsset::Quote,
             &self.quote_mint,
-            &self.quote_ylp_mint,
             &self.quote_reserve_vault,
         )?;
+        require_keys_eq!(
+            self.market.ylp_mint,
+            self.ylp_mint.key(),
+            ErrorCode::InvalidLpMintKey
+        );
         let target_asset = self.market.asset_for_hlp_mint(self.target_hlp_mint.key())?;
         let target_mint = match target_asset {
             MarketAsset::Base => &self.base_mint,
@@ -180,33 +167,14 @@ impl<'info> CloseHedge<'info> {
             self.market.key(),
             target_mint.decimals,
         )?;
-        validate_lp_mint(
-            &self.base_ylp_mint,
-            self.market.key(),
-            self.base_mint.decimals,
-        )?;
-        validate_lp_mint(
-            &self.quote_ylp_mint,
-            self.market.key(),
-            self.quote_mint.decimals,
-        )?;
+        validate_lp_mint(&self.ylp_mint, self.market.key(), self.base_mint.decimals)?;
         require_keys_eq!(
-            self.hlp_base_ylp_account.mint,
-            self.base_ylp_mint.key(),
+            self.hlp_ylp_account.mint,
+            self.ylp_mint.key(),
             ErrorCode::InvalidTokenAccount
         );
         require_keys_eq!(
-            self.hlp_quote_ylp_account.mint,
-            self.quote_ylp_mint.key(),
-            ErrorCode::InvalidTokenAccount
-        );
-        require_keys_eq!(
-            self.hlp_base_ylp_account.owner,
-            self.market.key(),
-            ErrorCode::InvalidVault
-        );
-        require_keys_eq!(
-            self.hlp_quote_ylp_account.owner,
+            self.hlp_ylp_account.owner,
             self.market.key(),
             ErrorCode::InvalidVault
         );
@@ -302,30 +270,17 @@ impl<'info> CloseHedge<'info> {
             .apply(ctx.accounts.market.side_mut(borrowed_asset)?)?;
         }
 
-        let base_ylp_program = token_program_for_mint(
-            &ctx.accounts.base_ylp_mint,
-            &ctx.accounts.token_program,
-            &ctx.accounts.token_2022_program,
-        )?;
-        let quote_ylp_program = token_program_for_mint(
-            &ctx.accounts.quote_ylp_mint,
+        let ylp_program = token_program_for_mint(
+            &ctx.accounts.ylp_mint,
             &ctx.accounts.token_program,
             &ctx.accounts.token_2022_program,
         )?;
         token_burn(
             ctx.accounts.market.to_account_info(),
-            base_ylp_program,
-            ctx.accounts.base_ylp_mint.to_account_info(),
-            ctx.accounts.hlp_base_ylp_account.to_account_info(),
-            receipt.base_ylp_amount,
-            &[&generate_market_seeds!(ctx.accounts.market)[..]],
-        )?;
-        token_burn(
-            ctx.accounts.market.to_account_info(),
-            quote_ylp_program,
-            ctx.accounts.quote_ylp_mint.to_account_info(),
-            ctx.accounts.hlp_quote_ylp_account.to_account_info(),
-            receipt.quote_ylp_amount,
+            ylp_program,
+            ctx.accounts.ylp_mint.to_account_info(),
+            ctx.accounts.hlp_ylp_account.to_account_info(),
+            receipt.ylp_amount,
             &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
 
@@ -374,8 +329,7 @@ impl<'info> CloseHedge<'info> {
             owner: owner_key,
             asset_mint: target_mint_key,
             hlp_amount: receipt.hlp_amount,
-            base_ylp_amount: receipt.base_ylp_amount,
-            quote_ylp_amount: receipt.quote_ylp_amount,
+            ylp_amount: receipt.ylp_amount,
             target_amount_out: receipt.target_amount_out,
             debt_repaid: receipt.debt_repaid,
             interest_paid: receipt.interest_paid,

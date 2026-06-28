@@ -4,7 +4,7 @@ use super::*;
     #[test]
     fn hlp_vault_checkpoints_owned_ylp_revenue_into_hlp_indexes() {
         let mut vault = HlpVault {
-            ylp_base_shares: 50,
+            ylp_shares: 50,
             hlp_supply: 25,
             ..HlpVault::default()
         };

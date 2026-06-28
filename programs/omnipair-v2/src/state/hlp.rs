@@ -6,10 +6,8 @@ use crate::{constants::NAD, errors::ErrorCode};
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct HlpVault {
     pub target_side: u8,
-    pub base_ylp_vault: Pubkey,
-    pub quote_ylp_vault: Pubkey,
-    pub ylp_base_shares: u64,
-    pub ylp_quote_shares: u64,
+    pub ylp_vault: Pubkey,
+    pub ylp_shares: u64,
     pub debt_shares: u128,
     pub debt_principal: u128,
     pub hlp_supply: u64,
@@ -32,16 +30,9 @@ pub struct HlpVault {
 }
 
 impl HlpVault {
-    pub fn initialize(
-        &mut self,
-        target_side: MarketAsset,
-        base_ylp_vault: Pubkey,
-        quote_ylp_vault: Pubkey,
-        current_slot: u64,
-    ) {
+    pub fn initialize(&mut self, target_side: MarketAsset, ylp_vault: Pubkey, current_slot: u64) {
         self.target_side = target_side.code();
-        self.base_ylp_vault = base_ylp_vault;
-        self.quote_ylp_vault = quote_ylp_vault;
+        self.ylp_vault = ylp_vault;
         self.last_rebalance_slot = current_slot;
     }
 
@@ -67,26 +58,18 @@ impl HlpVault {
         Ok(())
     }
 
-    pub fn credit_ylp(&mut self, base_shares: u64, quote_shares: u64) -> Result<()> {
-        self.ylp_base_shares = self
-            .ylp_base_shares
-            .checked_add(base_shares)
-            .ok_or(ErrorCode::SupplyOverflow)?;
-        self.ylp_quote_shares = self
-            .ylp_quote_shares
-            .checked_add(quote_shares)
+    pub fn credit_ylp(&mut self, shares: u64) -> Result<()> {
+        self.ylp_shares = self
+            .ylp_shares
+            .checked_add(shares)
             .ok_or(ErrorCode::SupplyOverflow)?;
         Ok(())
     }
 
-    pub fn debit_ylp(&mut self, base_shares: u64, quote_shares: u64) -> Result<()> {
-        self.ylp_base_shares = self
-            .ylp_base_shares
-            .checked_sub(base_shares)
-            .ok_or(ErrorCode::SupplyUnderflow)?;
-        self.ylp_quote_shares = self
-            .ylp_quote_shares
-            .checked_sub(quote_shares)
+    pub fn debit_ylp(&mut self, shares: u64) -> Result<()> {
+        self.ylp_shares = self
+            .ylp_shares
+            .checked_sub(shares)
             .ok_or(ErrorCode::SupplyUnderflow)?;
         Ok(())
     }
@@ -130,22 +113,22 @@ impl HlpVault {
         quote_side: &MarketSide,
     ) -> Result<()> {
         let base_swap_fee_amount = accrue_fee_liability(
-            self.ylp_base_shares,
+            self.ylp_shares,
             base_side.fees.swap_fee_growth_index_nad,
             self.base_swap_fee_checkpoint_nad,
         )?;
         let base_interest_amount = accrue_fee_liability(
-            self.ylp_base_shares,
+            self.ylp_shares,
             base_side.fees.interest_growth_index_nad,
             self.base_interest_checkpoint_nad,
         )?;
         let quote_swap_fee_amount = accrue_fee_liability(
-            self.ylp_quote_shares,
+            self.ylp_shares,
             quote_side.fees.swap_fee_growth_index_nad,
             self.quote_swap_fee_checkpoint_nad,
         )?;
         let quote_interest_amount = accrue_fee_liability(
-            self.ylp_quote_shares,
+            self.ylp_shares,
             quote_side.fees.interest_growth_index_nad,
             self.quote_interest_checkpoint_nad,
         )?;

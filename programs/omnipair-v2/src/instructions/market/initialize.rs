@@ -57,8 +57,7 @@ pub struct InitializeMarket<'info> {
     )]
     pub futarchy_authority: Box<Account<'info, FutarchyAuthority>>,
 
-    pub base_ylp_mint: Box<InterfaceAccount<'info, Mint>>,
-    pub quote_ylp_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub ylp_mint: Box<InterfaceAccount<'info, Mint>>,
     pub base_hlp_mint: Box<InterfaceAccount<'info, Mint>>,
     pub quote_hlp_mint: Box<InterfaceAccount<'info, Mint>>,
 
@@ -200,10 +199,15 @@ impl<'info> InitializeMarket<'info> {
         require_supported_asset_mint(&self.base_mint)?;
         require_supported_asset_mint(&self.quote_mint)?;
         let market = self.market.key();
-        validate_lp_mint(&self.base_ylp_mint, market, self.base_mint.decimals)?;
-        validate_lp_mint(&self.quote_ylp_mint, market, self.quote_mint.decimals)?;
+        validate_lp_mint(&self.ylp_mint, market, self.base_mint.decimals)?;
         validate_lp_mint(&self.base_hlp_mint, market, self.base_mint.decimals)?;
         validate_lp_mint(&self.quote_hlp_mint, market, self.quote_mint.decimals)?;
+        require_vanity_suffix(&self.ylp_mint, "yLP")?;
+        require_vanity_suffix(&self.base_hlp_mint, "hLP")?;
+        require_vanity_suffix(&self.quote_hlp_mint, "hLP")?;
+        require!(self.ylp_mint.supply == 0, ErrorCode::NonZeroSupply);
+        require!(self.base_hlp_mint.supply == 0, ErrorCode::NonZeroSupply);
+        require!(self.quote_hlp_mint.supply == 0, ErrorCode::NonZeroSupply);
         args.config.validate()
     }
 
@@ -218,6 +222,7 @@ impl<'info> InitializeMarket<'info> {
         market.version = MARKET_VERSION;
         market.base_mint = ctx.accounts.base_mint.key();
         market.quote_mint = ctx.accounts.quote_mint.key();
+        market.ylp_mint = ctx.accounts.ylp_mint.key();
         // Default both roles to the deployer; an explicit non-default value in
         // args lets a deployer hand control to a multisig/operator at creation.
         let payer_key = ctx.accounts.payer.key();
@@ -236,7 +241,6 @@ impl<'info> InitializeMarket<'info> {
         market.base_side = MarketSide {
             asset_mint: ctx.accounts.base_mint.key(),
             asset_decimals: ctx.accounts.base_mint.decimals,
-            ylp_mint: ctx.accounts.base_ylp_mint.key(),
             hlp_mint: ctx.accounts.base_hlp_mint.key(),
             reserve_vault: ctx.accounts.base_reserve_vault.key(),
             collateral_vault: ctx.accounts.base_collateral_vault.key(),
@@ -247,7 +251,6 @@ impl<'info> InitializeMarket<'info> {
         market.quote_side = MarketSide {
             asset_mint: ctx.accounts.quote_mint.key(),
             asset_decimals: ctx.accounts.quote_mint.decimals,
-            ylp_mint: ctx.accounts.quote_ylp_mint.key(),
             hlp_mint: ctx.accounts.quote_hlp_mint.key(),
             reserve_vault: ctx.accounts.quote_reserve_vault.key(),
             collateral_vault: ctx.accounts.quote_collateral_vault.key(),
@@ -269,34 +272,22 @@ impl<'info> InitializeMarket<'info> {
         };
         market.base_hlp_vault = {
             let mut vault = HlpVault::default();
-            let (base_ylp_vault, quote_ylp_vault) = derive_hlp_ylp_vaults(
+            let ylp_vault = derive_hlp_ylp_vault(
                 market_key,
                 ctx.accounts.base_hlp_mint.key(),
-                ctx.accounts.base_ylp_mint.key(),
-                ctx.accounts.quote_ylp_mint.key(),
+                ctx.accounts.ylp_mint.key(),
             );
-            vault.initialize(
-                MarketAsset::Base,
-                base_ylp_vault,
-                quote_ylp_vault,
-                current_slot,
-            );
+            vault.initialize(MarketAsset::Base, ylp_vault, current_slot);
             vault
         };
         market.quote_hlp_vault = {
             let mut vault = HlpVault::default();
-            let (base_ylp_vault, quote_ylp_vault) = derive_hlp_ylp_vaults(
+            let ylp_vault = derive_hlp_ylp_vault(
                 market_key,
                 ctx.accounts.quote_hlp_mint.key(),
-                ctx.accounts.base_ylp_mint.key(),
-                ctx.accounts.quote_ylp_mint.key(),
+                ctx.accounts.ylp_mint.key(),
             );
-            vault.initialize(
-                MarketAsset::Quote,
-                base_ylp_vault,
-                quote_ylp_vault,
-                current_slot,
-            );
+            vault.initialize(MarketAsset::Quote, ylp_vault, current_slot);
             vault
         };
         market.risk = crate::state::Risk {
@@ -313,8 +304,7 @@ impl<'info> InitializeMarket<'info> {
             market: market_key,
             base_mint: ctx.accounts.base_mint.key(),
             quote_mint: ctx.accounts.quote_mint.key(),
-            base_ylp_mint: ctx.accounts.base_ylp_mint.key(),
-            quote_ylp_mint: ctx.accounts.quote_ylp_mint.key(),
+            ylp_mint: ctx.accounts.ylp_mint.key(),
             base_collateral_vault: ctx.accounts.base_collateral_vault.key(),
             quote_collateral_vault: ctx.accounts.quote_collateral_vault.key(),
             base_insurance_vault: ctx.accounts.base_insurance_vault.key(),
@@ -450,6 +440,22 @@ impl<'info> InitializeMarket<'info> {
     }
 }
 
+#[cfg(feature = "production")]
+fn require_vanity_suffix(mint: &InterfaceAccount<Mint>, suffix: &str) -> Result<()> {
+    let mint_key = mint.key().to_string();
+    let start_idx = mint_key
+        .len()
+        .checked_sub(suffix.len())
+        .ok_or(ErrorCode::InvalidLpMintKey)?;
+    require_eq!(suffix, &mint_key[start_idx..], ErrorCode::InvalidLpMintKey);
+    Ok(())
+}
+
+#[cfg(not(feature = "production"))]
+fn require_vanity_suffix(_mint: &InterfaceAccount<Mint>, _suffix: &str) -> Result<()> {
+    Ok(())
+}
+
 fn create_vault_token_account<'info>(
     market: &Account<'info, Market>,
     payer: &Signer<'info>,
@@ -479,31 +485,17 @@ fn create_vault_token_account<'info>(
     )
 }
 
-fn derive_hlp_ylp_vaults(
-    market: Pubkey,
-    target_hlp_mint: Pubkey,
-    base_ylp_mint: Pubkey,
-    quote_ylp_mint: Pubkey,
-) -> (Pubkey, Pubkey) {
-    let (base_ylp_vault, _) = Pubkey::find_program_address(
+fn derive_hlp_ylp_vault(market: Pubkey, target_hlp_mint: Pubkey, ylp_mint: Pubkey) -> Pubkey {
+    let (ylp_vault, _) = Pubkey::find_program_address(
         &[
             HLP_YLP_VAULT_SEED_PREFIX,
             market.as_ref(),
             target_hlp_mint.as_ref(),
-            base_ylp_mint.as_ref(),
+            ylp_mint.as_ref(),
         ],
         &crate::ID,
     );
-    let (quote_ylp_vault, _) = Pubkey::find_program_address(
-        &[
-            HLP_YLP_VAULT_SEED_PREFIX,
-            market.as_ref(),
-            target_hlp_mint.as_ref(),
-            quote_ylp_mint.as_ref(),
-        ],
-        &crate::ID,
-    );
-    (base_ylp_vault, quote_ylp_vault)
+    ylp_vault
 }
 
 fn collect_market_creation_fee(ctx: &Context<InitializeMarket>) -> Result<()> {

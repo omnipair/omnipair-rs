@@ -191,7 +191,8 @@ pub fn realized_interest_split(
     let interest_paid = repaid_u
         .checked_sub(principal_paid)
         .ok_or(ErrorCode::MarketMathOverflow)?;
-    let principal_paid = u64::try_from(principal_paid).map_err(|_| ErrorCode::MarketMathOverflow)?;
+    let principal_paid =
+        u64::try_from(principal_paid).map_err(|_| ErrorCode::MarketMathOverflow)?;
     let interest_paid = u64::try_from(interest_paid).map_err(|_| ErrorCode::MarketMathOverflow)?;
     Ok((principal_paid, interest_paid))
 }

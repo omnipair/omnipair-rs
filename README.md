@@ -15,7 +15,7 @@ Beyond the AMM invariant *xy* = *k*, Omnipair enforces a **lending solvency inva
 This repository now contains two Omnipair program generations:
 
 - `programs/omnipair`: legacy V1 GAMM pair program. Existing pair accounts, instruction names, and integrations remain compatible.
-- `programs/omnipair-v2`: standalone V2 market architecture program with market accounts, claim-token (`omLP`) liquidity, hedge-token (`h-omLP`) wrappers, fixed debt, market health, insurance, and V2-specific events/IDL.
+- `programs/omnipair-v2`: standalone V2 market architecture program with market accounts, two-sided yLP liquidity, one-sided hLP hedged vault shares, fixed debt, market health, insurance, and V2-specific events/IDL.
 
 V2 review and integration entry points:
 
@@ -47,11 +47,11 @@ V2 review and integration entry points:
 ### V2 Key Changes
 
 - **Standalone market program** - V2 has its own program ID, IDL, accounts, events, and SDK helpers.
-- **Fixed-principal claim tokens** - LP principal is represented by 1:1 `omLP` claim tokens; fees do not rebase or compound into claim-token exchange rates.
-- **Matched staking for fees** - Fee rights require staking claim tokens with matched junior buffer shares.
+- **Two-sided yLP liquidity** - Normal LPs deposit both reserves and receive one fungible yLP mint whose production vanity suffix is `yLP`.
+- **Separate revenue accounting** - Swap fees and borrow interest are held outside principal reserves and distributed through yield accounts, so LP revenue can be claimed or routed separately from principal.
 - **Recognized-collateral health** - Borrow health uses debt-bearing recognized collateral, not idle collateral balances.
 - **Cached EMA risk books** - Risk checks roll EMA values from cached observations to avoid same-instruction spot manipulation.
-- **Insurance and hedge overlays** - V2 adds insurance reserves and `h-omLP` claim-token wrappers without giving hedge tokens staking rights.
+- **Insurance and hedge overlays** - V2 adds insurance reserves plus one-sided hLP vault shares that target base or quote exposure while owning yLP internally.
 
 ### How It Works
 

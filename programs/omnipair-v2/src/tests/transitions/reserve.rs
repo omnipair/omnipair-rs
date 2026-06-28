@@ -10,10 +10,9 @@ use super::*;
             .apply(&mut base_side, &mut quote_side)
             .unwrap();
 
-        assert_eq!(receipt.base_ylp_amount, 1_000_000);
-        assert_eq!(receipt.quote_ylp_amount, 2_000_000);
+        assert_eq!(receipt.ylp_amount, 1_000_000);
         assert_eq!(base_side.shares.ylp_supply, 1_000_000);
-        assert_eq!(quote_side.shares.ylp_supply, 2_000_000);
+        assert_eq!(quote_side.shares.ylp_supply, 1_000_000);
     }
 
     #[test]
@@ -24,12 +23,13 @@ use super::*;
             .apply(&mut base_side, &mut quote_side)
             .unwrap();
 
-        let receipt = RemoveLiquidity::new(250_000, 500_000)
+        let receipt = RemoveLiquidity::new(250_000)
             .apply(&mut base_side, &mut quote_side)
             .unwrap();
 
         assert_eq!(receipt.base_amount_out, 250_000);
         assert_eq!(receipt.quote_amount_out, 500_000);
-        assert_eq!(receipt.base_ylp_supply, 750_000);
-        assert_eq!(receipt.quote_ylp_supply, 1_500_000);
+        assert_eq!(receipt.ylp_supply, 750_000);
+        assert_eq!(base_side.shares.ylp_supply, 750_000);
+        assert_eq!(quote_side.shares.ylp_supply, 750_000);
     }

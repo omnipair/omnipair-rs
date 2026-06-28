@@ -39,8 +39,7 @@ async function main() {
   console.log(`Fetched V2 yLP/hLP market ${market.market}`);
   console.log(`Base mint: ${market.baseMint}`);
   console.log(`Quote mint: ${market.quoteMint}`);
-  console.log(`Base yLP mint: ${market.baseYlpMint}`);
-  console.log(`Quote yLP mint: ${market.quoteYlpMint}`);
+  console.log(`yLP mint: ${market.ylpMint}`);
   console.log(`Base hLP mint: ${market.baseHlpMint}`);
   console.log(`Quote hLP mint: ${market.quoteHlpMint}`);
   console.log(
@@ -52,9 +51,9 @@ async function main() {
 
   const baseMint = new PublicKey(market.baseMint);
   const quoteMint = new PublicKey(market.quoteMint);
-  const baseYlpMint = new PublicKey(market.baseYlpMint);
-  const quoteYlpMint = new PublicKey(market.quoteYlpMint);
+  const ylpMint = new PublicKey(market.ylpMint);
   const baseHlpMint = new PublicKey(market.baseHlpMint);
+  const quoteHlpMint = new PublicKey(market.quoteHlpMint);
   const baseProgram = await tokenProgramForMint(provider.connection, baseMint);
   const quoteProgram = await tokenProgramForMint(provider.connection, quoteMint);
   const baseDecimals = await mintDecimals(provider.connection, baseMint);
@@ -107,15 +106,13 @@ async function main() {
         owner: payer.publicKey,
         baseMint,
         quoteMint,
-        baseYlpMint,
-        quoteYlpMint,
+        ylpMint,
         targetHlpMint: baseHlpMint,
         baseReserveVault: new PublicKey(market.baseReserveVault),
         quoteReserveVault: new PublicKey(market.quoteReserveVault),
         ownerTargetAccount: traderBaseAccount.address,
         ownerHlpAccount: ownerBaseHlpAccount.address,
-        hlpBaseYlpAccount: new PublicKey(market.baseHlpBaseYlpVault),
-        hlpQuoteYlpAccount: new PublicKey(market.baseHlpQuoteYlpVault),
+        hlpYlpAccount: new PublicKey(market.baseHlpYlpVault),
         targetYieldAccount: deriveYieldAccountAddress(
           program.programId,
           marketAddress,
@@ -169,25 +166,33 @@ async function main() {
     });
 
   const refreshedMarket = await program.account.market.fetch(marketAddress);
+  const remainingAccounts = [];
   if (refreshedMarket.baseHlpVault.hlpSupply.gtn(0)) {
-    builder = builder.remainingAccounts([
-      { pubkey: baseYlpMint, isWritable: true, isSigner: false },
-      { pubkey: quoteYlpMint, isWritable: true, isSigner: false },
+    remainingAccounts.push(
+      { pubkey: ylpMint, isWritable: true, isSigner: false },
       {
         pubkey:
-          refreshedMarket.baseHlpVault.baseYlpVault ??
-          deriveHlpYlpVaultAddress(program.programId, marketAddress, baseHlpMint, baseYlpMint),
+          refreshedMarket.baseHlpVault.ylpVault ??
+          deriveHlpYlpVaultAddress(program.programId, marketAddress, baseHlpMint, ylpMint),
         isWritable: true,
         isSigner: false,
-      },
+      }
+    );
+  }
+  if (refreshedMarket.quoteHlpVault.hlpSupply.gtn(0)) {
+    remainingAccounts.push(
+      { pubkey: ylpMint, isWritable: true, isSigner: false },
       {
         pubkey:
-          refreshedMarket.baseHlpVault.quoteYlpVault ??
-          deriveHlpYlpVaultAddress(program.programId, marketAddress, baseHlpMint, quoteYlpMint),
+          refreshedMarket.quoteHlpVault.ylpVault ??
+          deriveHlpYlpVaultAddress(program.programId, marketAddress, quoteHlpMint, ylpMint),
         isWritable: true,
         isSigner: false,
-      },
-    ]);
+      }
+    );
+  }
+  if (remainingAccounts.length > 0) {
+    builder = builder.remainingAccounts(remainingAccounts);
   }
 
   const signature = await builder

@@ -290,10 +290,7 @@ fn should_emit_hlp_rebalance(ideal_delta: i128, pending_rebalance: i128, hlp_sup
 }
 
 fn rebalance_executes_token_changes(receipt: &HlpRebalanceReceipt) -> bool {
-    receipt.base_ylp_mint_amount > 0
-        || receipt.quote_ylp_mint_amount > 0
-        || receipt.base_ylp_burn_amount > 0
-        || receipt.quote_ylp_burn_amount > 0
+    receipt.ylp_mint_amount > 0 || receipt.ylp_burn_amount > 0
 }
 
 fn refresh_risk_snapshot(market: &mut Market) -> Result<()> {
@@ -349,36 +346,26 @@ fn validate_hlp_rebalance_accounts(
     if market.base_hlp_vault.hlp_supply > 0 {
         require_gte!(
             remaining_accounts.len(),
-            cursor + 4,
+            cursor + 2,
             ErrorCode::NotEnoughAccounts
         );
-        require_hlp_mint_account(&remaining_accounts[cursor], market.base_side.ylp_mint)?;
-        require_hlp_mint_account(&remaining_accounts[cursor + 1], market.quote_side.ylp_mint)?;
+        require_hlp_mint_account(&remaining_accounts[cursor], market.ylp_mint)?;
         require_hlp_vault_account(
-            &remaining_accounts[cursor + 2],
-            market.base_hlp_vault.base_ylp_vault,
+            &remaining_accounts[cursor + 1],
+            market.base_hlp_vault.ylp_vault,
         )?;
-        require_hlp_vault_account(
-            &remaining_accounts[cursor + 3],
-            market.base_hlp_vault.quote_ylp_vault,
-        )?;
-        cursor += 4;
+        cursor += 2;
     }
     if market.quote_hlp_vault.hlp_supply > 0 {
         require_gte!(
             remaining_accounts.len(),
-            cursor + 4,
+            cursor + 2,
             ErrorCode::NotEnoughAccounts
         );
-        require_hlp_mint_account(&remaining_accounts[cursor], market.base_side.ylp_mint)?;
-        require_hlp_mint_account(&remaining_accounts[cursor + 1], market.quote_side.ylp_mint)?;
+        require_hlp_mint_account(&remaining_accounts[cursor], market.ylp_mint)?;
         require_hlp_vault_account(
-            &remaining_accounts[cursor + 2],
-            market.quote_hlp_vault.base_ylp_vault,
-        )?;
-        require_hlp_vault_account(
-            &remaining_accounts[cursor + 3],
-            market.quote_hlp_vault.quote_ylp_vault,
+            &remaining_accounts[cursor + 1],
+            market.quote_hlp_vault.ylp_vault,
         )?;
     }
     Ok(())
@@ -405,7 +392,7 @@ fn apply_hlp_rebalance_token_changes<'info>(
     let mut scratch = Token2022InstructionScratch::new(ctx.accounts.token_2022_program.key());
     if ctx.accounts.market.base_hlp_vault.hlp_supply > 0 {
         apply_single_hlp_rebalance_token_changes(ctx, base_receipt, cursor, &mut scratch)?;
-        cursor += 4;
+        cursor += 2;
     }
     if ctx.accounts.market.quote_hlp_vault.hlp_supply > 0 {
         apply_single_hlp_rebalance_token_changes(ctx, quote_receipt, cursor, &mut scratch)?;
@@ -473,56 +460,32 @@ fn apply_single_hlp_rebalance_token_changes<'info>(
     cursor: usize,
     scratch: &mut Token2022InstructionScratch,
 ) -> Result<()> {
-    let base_ylp_mint = &ctx.remaining_accounts[cursor];
-    let quote_ylp_mint = &ctx.remaining_accounts[cursor + 1];
-    let base_ylp_vault = &ctx.remaining_accounts[cursor + 2];
-    let quote_ylp_vault = &ctx.remaining_accounts[cursor + 3];
+    let ylp_mint = &ctx.remaining_accounts[cursor];
+    let ylp_vault = &ctx.remaining_accounts[cursor + 1];
     let market_seeds = generate_market_seeds!(ctx.accounts.market);
     let signer_seeds = [&market_seeds[..]];
     let market = ctx.accounts.market.to_account_info();
     let token_2022_program = ctx.accounts.token_2022_program.to_account_info();
 
-    if receipt.base_ylp_mint_amount > 0 {
+    if receipt.ylp_mint_amount > 0 {
         token_2022_mint_to_with_scratch(
             scratch,
             market.clone(),
             token_2022_program.clone(),
-            base_ylp_mint.clone(),
-            base_ylp_vault.clone(),
-            receipt.base_ylp_mint_amount,
+            ylp_mint.clone(),
+            ylp_vault.clone(),
+            receipt.ylp_mint_amount,
             &signer_seeds,
         )?;
     }
-    if receipt.quote_ylp_mint_amount > 0 {
-        token_2022_mint_to_with_scratch(
-            scratch,
-            market.clone(),
-            token_2022_program.clone(),
-            quote_ylp_mint.clone(),
-            quote_ylp_vault.clone(),
-            receipt.quote_ylp_mint_amount,
-            &signer_seeds,
-        )?;
-    }
-    if receipt.base_ylp_burn_amount > 0 {
-        token_2022_burn_with_scratch(
-            scratch,
-            market.clone(),
-            token_2022_program.clone(),
-            base_ylp_mint.clone(),
-            base_ylp_vault.clone(),
-            receipt.base_ylp_burn_amount,
-            &signer_seeds,
-        )?;
-    }
-    if receipt.quote_ylp_burn_amount > 0 {
+    if receipt.ylp_burn_amount > 0 {
         token_2022_burn_with_scratch(
             scratch,
             market,
             token_2022_program,
-            quote_ylp_mint.clone(),
-            quote_ylp_vault.clone(),
-            receipt.quote_ylp_burn_amount,
+            ylp_mint.clone(),
+            ylp_vault.clone(),
+            receipt.ylp_burn_amount,
             &signer_seeds,
         )?;
     }

@@ -27,26 +27,26 @@ V2 exposes the current market instruction set:
 
 ## Token Model
 
-Each market records four Token-2022 mints:
+Each market records three Token-2022 LP mints:
 
-- `yLP_base`: yield LP shares for the base reserve side.
-- `yLP_quote`: yield LP shares for the quote reserve side.
-- `hLP_base`: aggregate 2x LP vault shares targeting base exposure.
-- `hLP_quote`: aggregate 2x LP vault shares targeting quote exposure.
+- `yLP`: the normal two-sided LP share for balanced base/quote liquidity.
+- `hLP_base`: one-sided hedged LP shares targeting base exposure.
+- `hLP_quote`: one-sided hedged LP shares targeting quote exposure.
 
-yLP and hLP mints must be fee-free Token-2022 mints with a transfer hook configured to the V2 program and mint authority set to the market PDA. Underlying asset mints may be SPL Token or Token-2022 mints accepted by the shared mint validator.
+yLP and hLP mints must be fee-free Token-2022 mints with a transfer hook configured to the V2 program, mint authority set to the market PDA, and no freeze authority. `initialize_lp_metadata` creates Metaplex metadata for each LP mint with the market PDA as update authority. Production builds additionally enforce vanity suffixes: `yLP` for yLP and `hLP` for each hLP mint. Underlying asset mints may be SPL Token or Token-2022 mints accepted by the shared mint validator.
 
 ## yLP Liquidity
 
-`add_liquidity` is the normal LP entry. Users deposit both market assets at the current market ratio and receive `yLP_base + yLP_quote`.
+`add_liquidity` is the normal LP entry. Users deposit both market assets at the current market ratio and receive one fungible `yLP` token.
 
-yLP shares are floating reserve-side shares:
+yLP shares are floating two-sided principal shares:
 
 ```text
-asset_claim = user_ylp_shares * live_reserve / total_ylp_supply
+base_claim  = user_ylp_shares * base_live_reserve  / total_ylp_supply
+quote_claim = user_ylp_shares * quote_live_reserve / total_ylp_supply
 ```
 
-There is no fixed 1:1 protected-principal LP, no separate public fee-eligibility step, and no retained junior-capital account. `remove_liquidity` burns matched yLP proportions and returns pro-rata principal reserves subject to cash availability and user slippage bounds.
+There is no fixed 1:1 protected-principal LP, no separate public fee-eligibility step, and no retained junior-capital account. `remove_liquidity` burns yLP and returns pro-rata base and quote principal reserves subject to cash availability and user slippage bounds.
 
 Swap fees and borrow interest are non-compounding liabilities. They are held outside principal reserves in side-specific fee and interest vaults and distributed through side-specific growth indexes. `YieldAccount` stores owner checkpoints, accrued revenue, and an optional external revenue recipient for treasury or protocol-owned liquidity flows.
 
@@ -54,8 +54,8 @@ Swap fees and borrow interest are non-compounding liabilities. They are held out
 
 Each market has two aggregate hLP vault records embedded in the `Market` account:
 
-- `hLP_base`: user deposits base, the vault borrows quote, and the vault owns both yLP sides.
-- `hLP_quote`: user deposits quote, the vault borrows base, and the vault owns both yLP sides.
+- `hLP_base`: user deposits base, the vault borrows quote, and the vault owns yLP.
+- `hLP_quote`: user deposits quote, the vault borrows base, and the vault owns yLP.
 
 Opening hLP:
 
@@ -63,17 +63,17 @@ Opening hLP:
 user target asset
   -> hLP vault borrows opposite asset
   -> vault adds balanced liquidity
-  -> vault receives yLP_base + yLP_quote
+  -> vault receives yLP
   -> user receives hLP_target
 ```
 
-Closing hLP burns hLP shares, burns the vault's proportional yLP shares, repays the borrowed-side vault debt, and returns remaining target-side inventory to the user. hLP debt is denominated in the borrowed underlying asset and tracked on the aggregate hLP vault, not as borrower margin debt.
+Closing hLP burns hLP shares, burns the vault's proportional yLP, repays the borrowed-side vault debt, and returns remaining target-side inventory to the user. hLP debt is denominated in the borrowed underlying asset and tracked on the aggregate hLP vault, not as borrower margin debt.
 
 ## Swaps And Rebalancing
 
 `swap` is the V2 swap entry. It transfers inventory, routes swap fees to the fee vault, applies GAMM reserve movement, and checkpoints both aggregate hLP vaults in O(1).
 
-hLP checkpointing computes NAV, attempts the spot-based leverage adjustment, records any unexecuted amount in `pending_rebalance`, and refreshes a cached settlement reference. The adjustment mints or burns balanced yLP legs, so the quoted post-swap spot is preserved within rounding and there is no hidden second price move after the user output. Leverage-up is capped by borrowed-side cash headroom; when cash is unavailable, ordinary swaps remain live and the gap is carried forward as pending rebalance. hLP open/close uses the cached reference to block settlement when spot has moved beyond `settlement_divergence_bps`.
+hLP checkpointing computes NAV, attempts the spot-based leverage adjustment, records any unexecuted amount in `pending_rebalance`, and refreshes a cached settlement reference. The adjustment mints or burns balanced yLP, so the quoted post-swap spot is preserved within rounding and there is no hidden second price move after the user output. Leverage-up is capped by borrowed-side cash headroom; when cash is unavailable, ordinary swaps remain live and the gap is carried forward as pending rebalance. hLP open/close uses the cached reference to block settlement when spot has moved beyond `settlement_divergence_bps`.
 
 ## PDA Map
 
@@ -87,8 +87,9 @@ hLP checkpointing computes NAV, attempts the spot-based leverage adjustment, rec
 | Margin position | `margin`, `market`, `owner` | `deriveMarginPositionAddress` |
 | Yield account | `yield`, `market`, `owner`, `asset_mint`, `token_kind` | `deriveYieldAccountAddress` |
 | Insurance vault | `insurance`, `market`, `asset_mint` | `deriveInsuranceAddress` |
+| LP token metadata | Metaplex `metadata`, token metadata program, `lp_mint` | `deriveTokenMetadataAddress` |
 
-yLP and hLP mints are supplied to `initialize` and validated by mint authority, decimals, Token-2022 owner, transfer hook, and fee-free extension rules.
+yLP and hLP mints are supplied to `initialize` and validated by mint authority, decimals, Token-2022 owner, transfer hook, fee-free extension rules, no freeze authority, vanity suffix, and zero supply at market creation. LP metadata is created in follow-up `initialize_lp_metadata` calls, one mint per transaction.
 
 ## Event Surface
 
@@ -106,7 +107,7 @@ Every V2 event carries `MarketEventMetadata` with signer, market, and slot.
 
 ## Core Invariants
 
-- yLP supply is backed by reserve-side principal accounting.
+- yLP supply is backed by paired base/quote principal accounting.
 - No operation mints yLP without corresponding reserve value.
 - yLP principal reserves exclude fee and interest vault balances.
 - Fee liabilities must be backed by fee and interest vault balances.

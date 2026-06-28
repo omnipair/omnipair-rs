@@ -11,7 +11,7 @@ use crate::{
     state::{Debt, HlpVault, Market, MarketAsset},
     transitions::{
         fee::{carry_forward_interest, carry_forward_swap_fees},
-        reserve::{credit_reserve, debit_reserve},
+        reserve::{credit_reserve, debit_reserve, market_ylp_for_deposit},
     },
 };
 
@@ -30,8 +30,7 @@ pub struct CloseHedge {
 pub struct HedgeReceipt {
     pub deposit_amount: u64,
     pub borrowed_amount: u64,
-    pub base_ylp_amount: u64,
-    pub quote_ylp_amount: u64,
+    pub ylp_amount: u64,
     pub hlp_amount: u64,
     pub hlp_supply: u64,
     pub target_amount_out: u64,
@@ -45,10 +44,8 @@ pub struct HlpRebalanceReceipt {
     pub ideal_delta: i128,
     pub executed_delta: i128,
     pub pending_rebalance: i128,
-    pub base_ylp_mint_amount: u64,
-    pub quote_ylp_mint_amount: u64,
-    pub base_ylp_burn_amount: u64,
-    pub quote_ylp_burn_amount: u64,
+    pub ylp_mint_amount: u64,
+    pub ylp_burn_amount: u64,
     pub debt_delta: i128,
     pub nav_nad: u128,
 }
@@ -60,10 +57,8 @@ impl Default for HlpRebalanceReceipt {
             ideal_delta: 0,
             executed_delta: 0,
             pending_rebalance: 0,
-            base_ylp_mint_amount: 0,
-            quote_ylp_mint_amount: 0,
-            base_ylp_burn_amount: 0,
-            quote_ylp_burn_amount: 0,
+            ylp_mint_amount: 0,
+            ylp_burn_amount: 0,
             debt_delta: 0,
             nav_nad: 0,
         }
@@ -91,7 +86,7 @@ impl OpenHedge {
         require!(borrowed_amount > 0, ErrorCode::InsufficientLiquidity);
         checkpoint_hlp_yield_from_ylp(market, self.target_asset)?;
 
-        let (base_ylp_amount, quote_ylp_amount, hlp_amount, hlp_supply) = match self.target_asset {
+        let (ylp_amount, hlp_amount, hlp_supply) = match self.target_asset {
             MarketAsset::Base => open_base_hlp(market, self.deposit_amount, borrowed_amount)?,
             MarketAsset::Quote => open_quote_hlp(market, self.deposit_amount, borrowed_amount)?,
         };
@@ -101,8 +96,7 @@ impl OpenHedge {
         Ok(HedgeReceipt {
             deposit_amount: self.deposit_amount,
             borrowed_amount,
-            base_ylp_amount,
-            quote_ylp_amount,
+            ylp_amount,
             hlp_amount,
             hlp_supply,
             target_amount_out: 0,
@@ -152,7 +146,7 @@ fn open_base_hlp(
     market: &mut Market,
     base_deposit: u64,
     quote_borrow: u64,
-) -> Result<(u64, u64, u64, u64)> {
+) -> Result<(u64, u64, u64)> {
     require_hlp_borrow_headroom(&market.quote_side, quote_borrow)?;
     let hlp_supply_before = market.base_hlp_vault.hlp_supply;
     let nav_before_nad = if hlp_supply_before == 0 {
@@ -162,22 +156,23 @@ fn open_base_hlp(
     };
     let base_reserve_before = market.base_side.reserves.live_reserve;
     let quote_reserve_before = market.quote_side.reserves.live_reserve;
-    let base_ylp = market
-        .base_side
-        .shares
-        .shares_for_deposit(base_reserve_before, base_deposit)?;
-    let quote_ylp = market
-        .quote_side
-        .shares
-        .shares_for_deposit(quote_reserve_before, quote_borrow)?;
+    let ylp_amount = market_ylp_for_deposit(
+        &market.base_side,
+        &market.quote_side,
+        base_reserve_before,
+        quote_reserve_before,
+        base_deposit,
+        quote_borrow,
+    )?;
+    require!(ylp_amount > 0, ErrorCode::SlippageExceeded);
     credit_reserve(&mut market.base_side, base_deposit, true)?;
     credit_reserve(&mut market.quote_side, quote_borrow, false)?;
-    market.base_side.shares.mint(base_ylp)?;
-    market.quote_side.shares.mint(quote_ylp)?;
+    market.base_side.shares.mint(ylp_amount)?;
+    market.quote_side.shares.mint(ylp_amount)?;
     let debt_shares = Debt::debt_to_shares(quote_borrow, market.debt.quote_borrow_index_nad)?;
     market.base_hlp_vault.add_debt_shares(debt_shares)?;
     market.base_hlp_vault.add_debt_principal(quote_borrow)?;
-    market.base_hlp_vault.credit_ylp(base_ylp, quote_ylp)?;
+    market.base_hlp_vault.credit_ylp(ylp_amount)?;
     let current_nav_nad = hlp_nav_nad(market, MarketAsset::Base)?;
     let hlp_amount = if hlp_supply_before == 0 {
         base_deposit
@@ -195,19 +190,14 @@ fn open_base_hlp(
     market.base_hlp_vault.last_nav_nad = current_nav_nad;
     market.base_hlp_vault.cached_settlement_price_nad =
         current_settlement_price_nad(market, MarketAsset::Base)?;
-    Ok((
-        base_ylp,
-        quote_ylp,
-        hlp_amount,
-        market.base_hlp_vault.hlp_supply,
-    ))
+    Ok((ylp_amount, hlp_amount, market.base_hlp_vault.hlp_supply))
 }
 
 fn open_quote_hlp(
     market: &mut Market,
     quote_deposit: u64,
     base_borrow: u64,
-) -> Result<(u64, u64, u64, u64)> {
+) -> Result<(u64, u64, u64)> {
     require_hlp_borrow_headroom(&market.base_side, base_borrow)?;
     let hlp_supply_before = market.quote_hlp_vault.hlp_supply;
     let nav_before_nad = if hlp_supply_before == 0 {
@@ -217,22 +207,23 @@ fn open_quote_hlp(
     };
     let base_reserve_before = market.base_side.reserves.live_reserve;
     let quote_reserve_before = market.quote_side.reserves.live_reserve;
-    let base_ylp = market
-        .base_side
-        .shares
-        .shares_for_deposit(base_reserve_before, base_borrow)?;
-    let quote_ylp = market
-        .quote_side
-        .shares
-        .shares_for_deposit(quote_reserve_before, quote_deposit)?;
+    let ylp_amount = market_ylp_for_deposit(
+        &market.base_side,
+        &market.quote_side,
+        base_reserve_before,
+        quote_reserve_before,
+        base_borrow,
+        quote_deposit,
+    )?;
+    require!(ylp_amount > 0, ErrorCode::SlippageExceeded);
     credit_reserve(&mut market.base_side, base_borrow, false)?;
     credit_reserve(&mut market.quote_side, quote_deposit, true)?;
-    market.base_side.shares.mint(base_ylp)?;
-    market.quote_side.shares.mint(quote_ylp)?;
+    market.base_side.shares.mint(ylp_amount)?;
+    market.quote_side.shares.mint(ylp_amount)?;
     let debt_shares = Debt::debt_to_shares(base_borrow, market.debt.base_borrow_index_nad)?;
     market.quote_hlp_vault.add_debt_shares(debt_shares)?;
     market.quote_hlp_vault.add_debt_principal(base_borrow)?;
-    market.quote_hlp_vault.credit_ylp(base_ylp, quote_ylp)?;
+    market.quote_hlp_vault.credit_ylp(ylp_amount)?;
     let current_nav_nad = hlp_nav_nad(market, MarketAsset::Quote)?;
     let hlp_amount = if hlp_supply_before == 0 {
         quote_deposit
@@ -250,29 +241,23 @@ fn open_quote_hlp(
     market.quote_hlp_vault.last_nav_nad = current_nav_nad;
     market.quote_hlp_vault.cached_settlement_price_nad =
         current_settlement_price_nad(market, MarketAsset::Quote)?;
-    Ok((
-        base_ylp,
-        quote_ylp,
-        hlp_amount,
-        market.quote_hlp_vault.hlp_supply,
-    ))
+    Ok((ylp_amount, hlp_amount, market.quote_hlp_vault.hlp_supply))
 }
 
 fn close_base_hlp(market: &mut Market, hlp_amount: u64) -> Result<HedgeReceipt> {
     let supply = market.base_hlp_vault.hlp_supply;
     require_gte!(supply, hlp_amount, ErrorCode::InsufficientBalance);
-    let base_ylp = proportional(market.base_hlp_vault.ylp_base_shares, hlp_amount, supply)?;
-    let quote_ylp = proportional(market.base_hlp_vault.ylp_quote_shares, hlp_amount, supply)?;
+    let ylp_amount = proportional(market.base_hlp_vault.ylp_shares, hlp_amount, supply)?;
     let quote_debt_shares =
         proportional_u128(market.base_hlp_vault.debt_shares, hlp_amount, supply)?;
     let base_out = market
         .base_side
         .shares
-        .reserve_for_burn(market.base_side.reserves.live_reserve, base_ylp)?;
+        .reserve_for_burn(market.base_side.reserves.live_reserve, ylp_amount)?;
     let quote_redeemed = market
         .quote_side
         .shares
-        .reserve_for_burn(market.quote_side.reserves.live_reserve, quote_ylp)?;
+        .reserve_for_burn(market.quote_side.reserves.live_reserve, ylp_amount)?;
     let debt_repaid = Debt::shares_to_debt(quote_debt_shares, market.debt.quote_borrow_index_nad)?;
     let debt_repaid = u64::try_from(debt_repaid).map_err(|_| ErrorCode::DebtMathOverflow)?;
     let base_out = settled_close_target_amount(
@@ -284,11 +269,11 @@ fn close_base_hlp(market: &mut Market, hlp_amount: u64) -> Result<HedgeReceipt> 
     )?;
     debit_reserve(&mut market.base_side, base_out, true)?;
     debit_reserve(&mut market.quote_side, debt_repaid, false)?;
-    market.base_side.shares.burn(base_ylp)?;
-    market.quote_side.shares.burn(quote_ylp)?;
+    market.base_side.shares.burn(ylp_amount)?;
+    market.quote_side.shares.burn(ylp_amount)?;
     market.base_side.assert_share_backing()?;
     market.quote_side.assert_share_backing()?;
-    market.base_hlp_vault.debit_ylp(base_ylp, quote_ylp)?;
+    market.base_hlp_vault.debit_ylp(ylp_amount)?;
     let interest_paid = market
         .base_hlp_vault
         .realize_debt_repay(debt_repaid, market.debt.quote_borrow_index_nad)?;
@@ -302,8 +287,7 @@ fn close_base_hlp(market: &mut Market, hlp_amount: u64) -> Result<HedgeReceipt> 
         current_settlement_price_nad(market, MarketAsset::Base)?;
     Ok(HedgeReceipt {
         hlp_amount,
-        base_ylp_amount: base_ylp,
-        quote_ylp_amount: quote_ylp,
+        ylp_amount,
         hlp_supply: market.base_hlp_vault.hlp_supply,
         target_amount_out: base_out,
         debt_repaid,
@@ -315,18 +299,17 @@ fn close_base_hlp(market: &mut Market, hlp_amount: u64) -> Result<HedgeReceipt> 
 fn close_quote_hlp(market: &mut Market, hlp_amount: u64) -> Result<HedgeReceipt> {
     let supply = market.quote_hlp_vault.hlp_supply;
     require_gte!(supply, hlp_amount, ErrorCode::InsufficientBalance);
-    let base_ylp = proportional(market.quote_hlp_vault.ylp_base_shares, hlp_amount, supply)?;
-    let quote_ylp = proportional(market.quote_hlp_vault.ylp_quote_shares, hlp_amount, supply)?;
+    let ylp_amount = proportional(market.quote_hlp_vault.ylp_shares, hlp_amount, supply)?;
     let base_debt_shares =
         proportional_u128(market.quote_hlp_vault.debt_shares, hlp_amount, supply)?;
     let quote_out = market
         .quote_side
         .shares
-        .reserve_for_burn(market.quote_side.reserves.live_reserve, quote_ylp)?;
+        .reserve_for_burn(market.quote_side.reserves.live_reserve, ylp_amount)?;
     let base_redeemed = market
         .base_side
         .shares
-        .reserve_for_burn(market.base_side.reserves.live_reserve, base_ylp)?;
+        .reserve_for_burn(market.base_side.reserves.live_reserve, ylp_amount)?;
     let debt_repaid = Debt::shares_to_debt(base_debt_shares, market.debt.base_borrow_index_nad)?;
     let debt_repaid = u64::try_from(debt_repaid).map_err(|_| ErrorCode::DebtMathOverflow)?;
     let quote_out = settled_close_target_amount(
@@ -338,11 +321,11 @@ fn close_quote_hlp(market: &mut Market, hlp_amount: u64) -> Result<HedgeReceipt>
     )?;
     debit_reserve(&mut market.quote_side, quote_out, true)?;
     debit_reserve(&mut market.base_side, debt_repaid, false)?;
-    market.base_side.shares.burn(base_ylp)?;
-    market.quote_side.shares.burn(quote_ylp)?;
+    market.base_side.shares.burn(ylp_amount)?;
+    market.quote_side.shares.burn(ylp_amount)?;
     market.base_side.assert_share_backing()?;
     market.quote_side.assert_share_backing()?;
-    market.quote_hlp_vault.debit_ylp(base_ylp, quote_ylp)?;
+    market.quote_hlp_vault.debit_ylp(ylp_amount)?;
     let interest_paid = market
         .quote_hlp_vault
         .realize_debt_repay(debt_repaid, market.debt.base_borrow_index_nad)?;
@@ -356,8 +339,7 @@ fn close_quote_hlp(market: &mut Market, hlp_amount: u64) -> Result<HedgeReceipt>
         current_settlement_price_nad(market, MarketAsset::Quote)?;
     Ok(HedgeReceipt {
         hlp_amount,
-        base_ylp_amount: base_ylp,
-        quote_ylp_amount: quote_ylp,
+        ylp_amount,
         hlp_supply: market.quote_hlp_vault.hlp_supply,
         target_amount_out: quote_out,
         debt_repaid,
@@ -500,24 +482,33 @@ fn leverage_up_balanced(
     }
     let borrowed_asset = target_asset.opposite();
     require_hlp_borrow_headroom(market.side(borrowed_asset)?, amounts.debt_amount)?;
-
-    let target_side = market.side_mut(target_asset)?;
-    let target_reserve_before = target_side.reserves.live_reserve;
-    let target_ylp_amount = target_side
-        .shares
-        .shares_for_deposit(target_reserve_before, amounts.target_leg_amount)?;
-    credit_reserve(target_side, amounts.target_leg_amount, false)?;
-    target_side.shares.mint(target_ylp_amount)?;
-    target_side.assert_share_backing()?;
-
-    let borrowed_side = market.side_mut(borrowed_asset)?;
-    let reserve_before = borrowed_side.reserves.live_reserve;
-    let ylp_amount = borrowed_side
-        .shares
-        .shares_for_deposit(reserve_before, amounts.borrowed_leg_amount)?;
-    credit_reserve(borrowed_side, amounts.borrowed_leg_amount, false)?;
-    borrowed_side.shares.mint(ylp_amount)?;
-    borrowed_side.assert_share_backing()?;
+    let (base_leg_amount, quote_leg_amount) = match target_asset {
+        MarketAsset::Base => (amounts.target_leg_amount, amounts.borrowed_leg_amount),
+        MarketAsset::Quote => (amounts.borrowed_leg_amount, amounts.target_leg_amount),
+    };
+    let base_reserve_before = market.base_side.reserves.live_reserve;
+    let quote_reserve_before = market.quote_side.reserves.live_reserve;
+    let ylp_amount = market_ylp_for_deposit(
+        &market.base_side,
+        &market.quote_side,
+        base_reserve_before,
+        quote_reserve_before,
+        base_leg_amount,
+        quote_leg_amount,
+    )?;
+    if ylp_amount == 0 {
+        return Ok(HlpRebalanceReceipt {
+            target_asset,
+            ideal_delta,
+            ..HlpRebalanceReceipt::default()
+        });
+    }
+    credit_reserve(&mut market.base_side, base_leg_amount, false)?;
+    credit_reserve(&mut market.quote_side, quote_leg_amount, false)?;
+    market.base_side.shares.mint(ylp_amount)?;
+    market.quote_side.shares.mint(ylp_amount)?;
+    market.base_side.assert_share_backing()?;
+    market.quote_side.assert_share_backing()?;
 
     let debt_shares = match target_asset {
         MarketAsset::Base => {
@@ -533,18 +524,14 @@ fn leverage_up_balanced(
             market
                 .base_hlp_vault
                 .add_debt_principal(amounts.debt_amount)?;
-            market
-                .base_hlp_vault
-                .credit_ylp(target_ylp_amount, ylp_amount)?;
+            market.base_hlp_vault.credit_ylp(ylp_amount)?;
         }
         MarketAsset::Quote => {
             market.quote_hlp_vault.add_debt_shares(debt_shares)?;
             market
                 .quote_hlp_vault
                 .add_debt_principal(amounts.debt_amount)?;
-            market
-                .quote_hlp_vault
-                .credit_ylp(ylp_amount, target_ylp_amount)?;
+            market.quote_hlp_vault.credit_ylp(ylp_amount)?;
         }
     }
     let executed_delta =
@@ -553,20 +540,7 @@ fn leverage_up_balanced(
         target_asset,
         ideal_delta,
         executed_delta,
-        base_ylp_mint_amount: if target_asset == MarketAsset::Base {
-            target_ylp_amount
-        } else if borrowed_asset == MarketAsset::Base {
-            ylp_amount
-        } else {
-            0
-        },
-        quote_ylp_mint_amount: if target_asset == MarketAsset::Quote {
-            target_ylp_amount
-        } else if borrowed_asset == MarketAsset::Quote {
-            ylp_amount
-        } else {
-            0
-        },
+        ylp_mint_amount: ylp_amount,
         debt_delta: amounts.debt_amount as i128,
         ..HlpRebalanceReceipt::default()
     })
@@ -601,26 +575,24 @@ fn deleverage_balanced(
 ) -> Result<HlpRebalanceReceipt> {
     let borrowed_asset = target_asset.opposite();
 
-    let (borrow_index, debt_shares, vault_target_ylp, vault_borrowed_ylp) = match target_asset {
+    let (borrow_index, debt_shares, vault_ylp) = match target_asset {
         MarketAsset::Base => (
             market.debt.quote_borrow_index_nad,
             market.base_hlp_vault.debt_shares,
-            market.base_hlp_vault.ylp_base_shares,
-            market.base_hlp_vault.ylp_quote_shares,
+            market.base_hlp_vault.ylp_shares,
         ),
         MarketAsset::Quote => (
             market.debt.base_borrow_index_nad,
             market.quote_hlp_vault.debt_shares,
-            market.quote_hlp_vault.ylp_quote_shares,
-            market.quote_hlp_vault.ylp_base_shares,
+            market.quote_hlp_vault.ylp_shares,
         ),
     };
     let current_debt = Debt::shares_to_debt(debt_shares, borrow_index)?;
     let current_debt = u64::try_from(current_debt).unwrap_or(u64::MAX);
     let target_side = market.side(target_asset)?;
     let borrowed_side = market.side(borrowed_asset)?;
-    let target_underlying = ylp_underlying_amount(target_side, vault_target_ylp)?;
-    let borrowed_underlying = ylp_underlying_amount(borrowed_side, vault_borrowed_ylp)?;
+    let target_underlying = ylp_underlying_amount(target_side, vault_ylp)?;
+    let borrowed_underlying = ylp_underlying_amount(borrowed_side, vault_ylp)?;
     let target_total_amount = feasible_deleverage_target_amount(
         market,
         target_asset,
@@ -642,21 +614,20 @@ fn deleverage_balanced(
         });
     }
 
-    let target_side = market.side_mut(target_asset)?;
-    let target_ylp_burn = ylp_shares_for_reserve_amount(target_side, amounts.target_leg_amount)?
-        .min(vault_target_ylp);
-    require!(target_ylp_burn > 0, ErrorCode::AmountZero);
-    debit_reserve(target_side, amounts.target_leg_amount, false)?;
-    target_side.shares.burn(target_ylp_burn)?;
-    target_side.assert_share_backing()?;
-
-    let borrowed_side = market.side_mut(borrowed_asset)?;
-    let ylp_burn = ylp_shares_for_reserve_amount(borrowed_side, amounts.borrowed_leg_amount)?
-        .min(vault_borrowed_ylp);
+    let (base_leg_amount, quote_leg_amount) = match target_asset {
+        MarketAsset::Base => (amounts.target_leg_amount, amounts.borrowed_leg_amount),
+        MarketAsset::Quote => (amounts.borrowed_leg_amount, amounts.target_leg_amount),
+    };
+    let base_ylp_burn = ylp_shares_for_reserve_amount(&market.base_side, base_leg_amount)?;
+    let quote_ylp_burn = ylp_shares_for_reserve_amount(&market.quote_side, quote_leg_amount)?;
+    let ylp_burn = base_ylp_burn.max(quote_ylp_burn).min(vault_ylp);
     require!(ylp_burn > 0, ErrorCode::AmountZero);
-    debit_reserve(borrowed_side, amounts.borrowed_leg_amount, false)?;
-    borrowed_side.shares.burn(ylp_burn)?;
-    borrowed_side.assert_share_backing()?;
+    debit_reserve(&mut market.base_side, base_leg_amount, false)?;
+    debit_reserve(&mut market.quote_side, quote_leg_amount, false)?;
+    market.base_side.shares.burn(ylp_burn)?;
+    market.quote_side.shares.burn(ylp_burn)?;
+    market.base_side.assert_share_backing()?;
+    market.quote_side.assert_share_backing()?;
 
     let repay_amount = amounts.debt_amount.min(current_debt);
     let debt_shares_to_remove = Debt::debt_to_shares(repay_amount, borrow_index)?.min(debt_shares);
@@ -668,7 +639,7 @@ fn deleverage_balanced(
             market
                 .base_hlp_vault
                 .remove_debt_shares(debt_shares_to_remove)?;
-            market.base_hlp_vault.debit_ylp(target_ylp_burn, ylp_burn)?;
+            market.base_hlp_vault.debit_ylp(ylp_burn)?;
         }
         MarketAsset::Quote => {
             let _interest_paid = market
@@ -677,9 +648,7 @@ fn deleverage_balanced(
             market
                 .quote_hlp_vault
                 .remove_debt_shares(debt_shares_to_remove)?;
-            market
-                .quote_hlp_vault
-                .debit_ylp(ylp_burn, target_ylp_burn)?;
+            market.quote_hlp_vault.debit_ylp(ylp_burn)?;
         }
     }
     let executed_abs = executed_delta_for_borrowed_amount(market, target_asset, repay_amount)?;
@@ -687,20 +656,7 @@ fn deleverage_balanced(
         target_asset,
         ideal_delta,
         executed_delta: -executed_abs,
-        base_ylp_burn_amount: if target_asset == MarketAsset::Base {
-            target_ylp_burn
-        } else if borrowed_asset == MarketAsset::Base {
-            ylp_burn
-        } else {
-            0
-        },
-        quote_ylp_burn_amount: if target_asset == MarketAsset::Quote {
-            target_ylp_burn
-        } else if borrowed_asset == MarketAsset::Quote {
-            ylp_burn
-        } else {
-            0
-        },
+        ylp_burn_amount: ylp_burn,
         debt_delta: -(repay_amount as i128),
         ..HlpRebalanceReceipt::default()
     })
@@ -944,8 +900,8 @@ fn hlp_collateral_value_nad(
     target_asset: MarketAsset,
     vault: &HlpVault,
 ) -> Result<u128> {
-    let base_underlying = ylp_underlying_amount(&market.base_side, vault.ylp_base_shares)?;
-    let quote_underlying = ylp_underlying_amount(&market.quote_side, vault.ylp_quote_shares)?;
+    let base_underlying = ylp_underlying_amount(&market.base_side, vault.ylp_shares)?;
+    let quote_underlying = ylp_underlying_amount(&market.quote_side, vault.ylp_shares)?;
     let base_value =
         asset_value_in_target_nad(market, MarketAsset::Base, base_underlying, target_asset)?;
     let quote_value =

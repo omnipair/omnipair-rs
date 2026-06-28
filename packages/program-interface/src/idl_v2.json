@@ -99,11 +99,7 @@
           "name": "quote_mint"
         },
         {
-          "name": "base_ylp_mint",
-          "writable": true
-        },
-        {
-          "name": "quote_ylp_mint",
+          "name": "ylp_mint",
           "writable": true
         },
         {
@@ -123,11 +119,7 @@
           "writable": true
         },
         {
-          "name": "owner_base_ylp_account",
-          "writable": true
-        },
-        {
-          "name": "owner_quote_ylp_account",
+          "name": "owner_ylp_account",
           "writable": true
         },
         {
@@ -710,11 +702,7 @@
           "name": "quote_mint"
         },
         {
-          "name": "base_ylp_mint",
-          "writable": true
-        },
-        {
-          "name": "quote_ylp_mint",
+          "name": "ylp_mint",
           "writable": true
         },
         {
@@ -742,7 +730,7 @@
           "writable": true
         },
         {
-          "name": "hlp_base_ylp_account",
+          "name": "hlp_ylp_account",
           "writable": true,
           "pda": {
             "seeds": [
@@ -774,45 +762,7 @@
               },
               {
                 "kind": "account",
-                "path": "base_ylp_mint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "hlp_quote_ylp_account",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  104,
-                  108,
-                  112,
-                  95,
-                  121,
-                  108,
-                  112,
-                  95,
-                  118,
-                  97,
-                  117,
-                  108,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "target_hlp_mint"
-              },
-              {
-                "kind": "account",
-                "path": "quote_ylp_mint"
+                "path": "ylp_mint"
               }
             ]
           }
@@ -1261,10 +1211,7 @@
           }
         },
         {
-          "name": "base_ylp_mint"
-        },
-        {
-          "name": "quote_ylp_mint"
+          "name": "ylp_mint"
         },
         {
           "name": "base_hlp_mint"
@@ -1676,6 +1623,153 @@
       ]
     },
     {
+      "name": "initialize_lp_metadata",
+      "discriminator": [
+        214,
+        99,
+        201,
+        159,
+        220,
+        88,
+        74,
+        27
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market"
+        },
+        {
+          "name": "lp_mint"
+        },
+        {
+          "name": "lp_token_metadata",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  11,
+                  112,
+                  101,
+                  177,
+                  227,
+                  209,
+                  124,
+                  69,
+                  56,
+                  157,
+                  82,
+                  127,
+                  107,
+                  4,
+                  195,
+                  205,
+                  88,
+                  184,
+                  108,
+                  115,
+                  26,
+                  160,
+                  253,
+                  181,
+                  73,
+                  182,
+                  209,
+                  188,
+                  3,
+                  248,
+                  41,
+                  70
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "lp_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                11,
+                112,
+                101,
+                177,
+                227,
+                209,
+                124,
+                69,
+                56,
+                157,
+                82,
+                127,
+                107,
+                4,
+                195,
+                205,
+                88,
+                184,
+                108,
+                115,
+                26,
+                160,
+                253,
+                181,
+                73,
+                182,
+                209,
+                188,
+                3,
+                248,
+                41,
+                70
+              ]
+            }
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_metadata_program",
+          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "InitializeLpMetadataArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "open_hedge",
       "discriminator": [
         76,
@@ -1767,11 +1861,7 @@
           "name": "quote_mint"
         },
         {
-          "name": "base_ylp_mint",
-          "writable": true
-        },
-        {
-          "name": "quote_ylp_mint",
+          "name": "ylp_mint",
           "writable": true
         },
         {
@@ -1795,7 +1885,7 @@
           "writable": true
         },
         {
-          "name": "hlp_base_ylp_account",
+          "name": "hlp_ylp_account",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1827,45 +1917,7 @@
               },
               {
                 "kind": "account",
-                "path": "base_ylp_mint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "hlp_quote_ylp_account",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  104,
-                  108,
-                  112,
-                  95,
-                  121,
-                  108,
-                  112,
-                  95,
-                  118,
-                  97,
-                  117,
-                  108,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "target_hlp_mint"
-              },
-              {
-                "kind": "account",
-                "path": "quote_ylp_mint"
+                "path": "ylp_mint"
               }
             ]
           }
@@ -2131,11 +2183,7 @@
           "name": "quote_mint"
         },
         {
-          "name": "base_ylp_mint",
-          "writable": true
-        },
-        {
-          "name": "quote_ylp_mint",
+          "name": "ylp_mint",
           "writable": true
         },
         {
@@ -2155,11 +2203,7 @@
           "writable": true
         },
         {
-          "name": "owner_base_ylp_account",
-          "writable": true
-        },
-        {
-          "name": "owner_quote_ylp_account",
+          "name": "owner_ylp_account",
           "writable": true
         },
         {
@@ -5014,11 +5058,7 @@
             "type": "u64"
           },
           {
-            "name": "min_base_ylp_amount",
-            "type": "u64"
-          },
-          {
-            "name": "min_quote_ylp_amount",
+            "name": "min_ylp_amount",
             "type": "u64"
           }
         ]
@@ -5321,11 +5361,7 @@
             "type": "u64"
           },
           {
-            "name": "base_ylp_amount",
-            "type": "u64"
-          },
-          {
-            "name": "quote_ylp_amount",
+            "name": "ylp_amount",
             "type": "u64"
           },
           {
@@ -5381,11 +5417,7 @@
             "type": "u64"
           },
           {
-            "name": "base_ylp_amount",
-            "type": "u64"
-          },
-          {
-            "name": "quote_ylp_amount",
+            "name": "ylp_amount",
             "type": "u64"
           },
           {
@@ -5457,19 +5489,11 @@
             "type": "u8"
           },
           {
-            "name": "base_ylp_vault",
+            "name": "ylp_vault",
             "type": "pubkey"
           },
           {
-            "name": "quote_ylp_vault",
-            "type": "pubkey"
-          },
-          {
-            "name": "ylp_base_shares",
-            "type": "u64"
-          },
-          {
-            "name": "ylp_quote_shares",
+            "name": "ylp_shares",
             "type": "u64"
           },
           {
@@ -5603,6 +5627,26 @@
           {
             "name": "buyback_auction_accepted_mint",
             "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InitializeLpMetadataArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "symbol",
+            "type": "string"
+          },
+          {
+            "name": "uri",
+            "type": "string"
           }
         ]
       }
@@ -5918,19 +5962,11 @@
             "type": "u64"
           },
           {
-            "name": "base_ylp_amount",
+            "name": "ylp_amount",
             "type": "u64"
           },
           {
-            "name": "quote_ylp_amount",
-            "type": "u64"
-          },
-          {
-            "name": "base_ylp_supply",
-            "type": "u64"
-          },
-          {
-            "name": "quote_ylp_supply",
+            "name": "ylp_supply",
             "type": "u64"
           },
           {
@@ -5958,11 +5994,7 @@
             "type": "pubkey"
           },
           {
-            "name": "base_ylp_amount",
-            "type": "u64"
-          },
-          {
-            "name": "quote_ylp_amount",
+            "name": "ylp_amount",
             "type": "u64"
           },
           {
@@ -5974,11 +6006,7 @@
             "type": "u64"
           },
           {
-            "name": "base_ylp_supply",
-            "type": "u64"
-          },
-          {
-            "name": "quote_ylp_supply",
+            "name": "ylp_supply",
             "type": "u64"
           },
           {
@@ -6099,6 +6127,10 @@
           },
           {
             "name": "quote_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "ylp_mint",
             "type": "pubkey"
           },
           {
@@ -6515,11 +6547,7 @@
             "type": "pubkey"
           },
           {
-            "name": "base_ylp_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "quote_ylp_mint",
+            "name": "ylp_mint",
             "type": "pubkey"
           },
           {
@@ -6790,10 +6818,6 @@
           {
             "name": "asset_decimals",
             "type": "u8"
-          },
-          {
-            "name": "ylp_mint",
-            "type": "pubkey"
           },
           {
             "name": "hlp_mint",
@@ -7326,11 +7350,7 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "base_ylp_amount",
-            "type": "u64"
-          },
-          {
-            "name": "quote_ylp_amount",
+            "name": "ylp_amount",
             "type": "u64"
           },
           {
@@ -8168,6 +8188,11 @@
       "name": "MAX_MANAGER_FEE_BPS",
       "type": "u16",
       "value": "500"
+    },
+    {
+      "name": "METADATA_SEED_PREFIX",
+      "type": "bytes",
+      "value": "[109, 101, 116, 97, 100, 97, 116, 97]"
     },
     {
       "name": "NAD",

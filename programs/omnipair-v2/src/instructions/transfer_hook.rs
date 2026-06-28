@@ -39,6 +39,25 @@ struct YieldContext {
     interest_growth_index_nad: u128,
 }
 
+#[derive(Clone, Copy)]
+struct YieldContexts {
+    items: [Option<YieldContext>; 2],
+}
+
+impl YieldContexts {
+    fn one(context: YieldContext) -> Self {
+        Self {
+            items: [Some(context), None],
+        }
+    }
+
+    fn two(first: YieldContext, second: YieldContext) -> Self {
+        Self {
+            items: [Some(first), Some(second)],
+        }
+    }
+}
+
 pub fn handle_transfer_hook<'info>(
     program_id: &Pubkey,
     accounts: &'info [AccountInfo<'info>],
@@ -68,55 +87,18 @@ fn handle_execute<'info>(
     require_keys_eq!(destination_token.mint, lp_mint, ErrorCode::InvalidMint);
 
     let balances = pre_transfer_balances(source_token.amount, destination_token.amount, amount)?;
-    let (market_index, yield_context) = find_market_context(program_id, accounts, lp_mint)?;
+    let (market_index, yield_contexts) = find_market_context(program_id, accounts, lp_mint)?;
     let market_key = *accounts[market_index].key;
 
-    let source_yield_index = find_yield_account_index(
-        program_id,
-        accounts,
-        source_token.owner,
-        market_key,
-        yield_context.asset_mint,
-        yield_context.token_kind,
-    )?;
-    let destination_yield_index = find_yield_account_index(
-        program_id,
-        accounts,
-        destination_token.owner,
-        market_key,
-        yield_context.asset_mint,
-        yield_context.token_kind,
-    )?;
-
-    if source_yield_index == destination_yield_index {
-        let combined_pre_balance = balances
-            .source_pre_balance
-            .checked_add(balances.destination_pre_balance)
-            .ok_or(ErrorCode::MarketMathOverflow)?;
-        checkpoint_yield_account(
-            &accounts[source_yield_index],
+    for yield_context in yield_contexts.items.into_iter().flatten() {
+        checkpoint_transfer_yield_accounts(
             program_id,
-            source_token.owner,
+            accounts,
             market_key,
             yield_context,
-            combined_pre_balance,
-        )?;
-    } else {
-        checkpoint_yield_account(
-            &accounts[source_yield_index],
-            program_id,
             source_token.owner,
-            market_key,
-            yield_context,
-            balances.source_pre_balance,
-        )?;
-        checkpoint_yield_account(
-            &accounts[destination_yield_index],
-            program_id,
             destination_token.owner,
-            market_key,
-            yield_context,
-            balances.destination_pre_balance,
+            balances,
         )?;
     }
     Ok(())
@@ -162,7 +144,7 @@ fn find_market_context<'info>(
     program_id: &Pubkey,
     accounts: &'info [AccountInfo<'info>],
     lp_mint: Pubkey,
-) -> Result<(usize, YieldContext)> {
+) -> Result<(usize, YieldContexts)> {
     for (index, account_info) in accounts
         .iter()
         .enumerate()
@@ -180,7 +162,7 @@ fn find_market_context<'info>(
 }
 
 #[inline(never)]
-fn load_market_context(account_info: &AccountInfo, lp_mint: Pubkey) -> Result<YieldContext> {
+fn load_market_context(account_info: &AccountInfo, lp_mint: Pubkey) -> Result<YieldContexts> {
     let data = account_info.try_borrow_data()?;
     let mut data_cursor: &[u8] = &data;
     let market =
@@ -188,40 +170,99 @@ fn load_market_context(account_info: &AccountInfo, lp_mint: Pubkey) -> Result<Yi
     infer_yield_context(&market, lp_mint).ok_or(error!(ErrorCode::InvalidMint))
 }
 
-fn infer_yield_context(market: &Market, lp_mint: Pubkey) -> Option<YieldContext> {
-    if market.base_side.ylp_mint == lp_mint {
-        return Some(YieldContext {
-            asset_mint: market.base_side.asset_mint,
-            token_kind: YieldTokenKind::Ylp,
-            swap_fee_growth_index_nad: market.base_side.fees.swap_fee_growth_index_nad,
-            interest_growth_index_nad: market.base_side.fees.interest_growth_index_nad,
-        });
-    }
-    if market.quote_side.ylp_mint == lp_mint {
-        return Some(YieldContext {
-            asset_mint: market.quote_side.asset_mint,
-            token_kind: YieldTokenKind::Ylp,
-            swap_fee_growth_index_nad: market.quote_side.fees.swap_fee_growth_index_nad,
-            interest_growth_index_nad: market.quote_side.fees.interest_growth_index_nad,
-        });
+fn infer_yield_context(market: &Market, lp_mint: Pubkey) -> Option<YieldContexts> {
+    if market.ylp_mint == lp_mint {
+        return Some(YieldContexts::two(
+            YieldContext {
+                asset_mint: market.base_side.asset_mint,
+                token_kind: YieldTokenKind::Ylp,
+                swap_fee_growth_index_nad: market.base_side.fees.swap_fee_growth_index_nad,
+                interest_growth_index_nad: market.base_side.fees.interest_growth_index_nad,
+            },
+            YieldContext {
+                asset_mint: market.quote_side.asset_mint,
+                token_kind: YieldTokenKind::Ylp,
+                swap_fee_growth_index_nad: market.quote_side.fees.swap_fee_growth_index_nad,
+                interest_growth_index_nad: market.quote_side.fees.interest_growth_index_nad,
+            },
+        ));
     }
     if market.base_side.hlp_mint == lp_mint {
-        return Some(YieldContext {
+        return Some(YieldContexts::one(YieldContext {
             asset_mint: market.base_side.asset_mint,
             token_kind: YieldTokenKind::Hlp,
             swap_fee_growth_index_nad: market.base_hlp_vault.base_swap_fee_growth_index_nad,
             interest_growth_index_nad: market.base_hlp_vault.base_interest_growth_index_nad,
-        });
+        }));
     }
     if market.quote_side.hlp_mint == lp_mint {
-        return Some(YieldContext {
+        return Some(YieldContexts::one(YieldContext {
             asset_mint: market.quote_side.asset_mint,
             token_kind: YieldTokenKind::Hlp,
             swap_fee_growth_index_nad: market.quote_hlp_vault.quote_swap_fee_growth_index_nad,
             interest_growth_index_nad: market.quote_hlp_vault.quote_interest_growth_index_nad,
-        });
+        }));
     }
     None
+}
+
+fn checkpoint_transfer_yield_accounts<'info>(
+    program_id: &Pubkey,
+    accounts: &'info [AccountInfo<'info>],
+    market_key: Pubkey,
+    yield_context: YieldContext,
+    source_owner: Pubkey,
+    destination_owner: Pubkey,
+    balances: TransferBalances,
+) -> Result<()> {
+    let source_yield_index = find_yield_account_index(
+        program_id,
+        accounts,
+        source_owner,
+        market_key,
+        yield_context.asset_mint,
+        yield_context.token_kind,
+    )?;
+    let destination_yield_index = find_yield_account_index(
+        program_id,
+        accounts,
+        destination_owner,
+        market_key,
+        yield_context.asset_mint,
+        yield_context.token_kind,
+    )?;
+
+    if source_yield_index == destination_yield_index {
+        let combined_pre_balance = balances
+            .source_pre_balance
+            .checked_add(balances.destination_pre_balance)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        checkpoint_yield_account(
+            &accounts[source_yield_index],
+            program_id,
+            source_owner,
+            market_key,
+            yield_context,
+            combined_pre_balance,
+        )
+    } else {
+        checkpoint_yield_account(
+            &accounts[source_yield_index],
+            program_id,
+            source_owner,
+            market_key,
+            yield_context,
+            balances.source_pre_balance,
+        )?;
+        checkpoint_yield_account(
+            &accounts[destination_yield_index],
+            program_id,
+            destination_owner,
+            market_key,
+            yield_context,
+            balances.destination_pre_balance,
+        )
+    }
 }
 
 fn find_yield_account_index<'info>(

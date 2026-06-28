@@ -48,6 +48,10 @@ pub fn validate_lp_mint(
         mint.mint_authority == COption::Some(market),
         ErrorCode::InvalidMintAuthority
     );
+    require!(
+        mint.freeze_authority == COption::None,
+        ErrorCode::FrozenLpMint
+    );
     Ok(())
 }
 
@@ -74,7 +78,6 @@ pub fn validate_side_vault_accounts<'info>(
     market: &Account<'info, Market>,
     market_asset: MarketAsset,
     asset_mint: &InterfaceAccount<'info, Mint>,
-    ylp_mint: &InterfaceAccount<'info, Mint>,
     reserve_vault: &InterfaceAccount<'info, TokenAccount>,
 ) -> Result<()> {
     let market_side = market.side(market_asset)?;
@@ -82,11 +85,6 @@ pub fn validate_side_vault_accounts<'info>(
         market_side.asset_mint,
         asset_mint.key(),
         ErrorCode::InvalidMint
-    );
-    require_keys_eq!(
-        market_side.ylp_mint,
-        ylp_mint.key(),
-        ErrorCode::InvalidLpMintKey
     );
     require_keys_eq!(
         market_side.reserve_vault,
@@ -99,10 +97,6 @@ pub fn validate_side_vault_accounts<'info>(
         ErrorCode::InvalidVault
     );
     require_keys_eq!(reserve_vault.owner, market.key(), ErrorCode::InvalidVault);
-    require!(
-        ylp_mint.mint_authority == COption::Some(market.key()),
-        ErrorCode::InvalidMintAuthority
-    );
     Ok(())
 }
 

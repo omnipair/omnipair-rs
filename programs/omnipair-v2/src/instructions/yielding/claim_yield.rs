@@ -86,7 +86,7 @@ impl<'info> ClaimYield<'info> {
         match args.token_kind {
             YieldTokenKind::Ylp => {
                 require_keys_eq!(
-                    market_side.ylp_mint,
+                    self.market.ylp_mint,
                     self.lp_mint.key(),
                     ErrorCode::InvalidMint
                 )

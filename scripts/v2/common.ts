@@ -31,6 +31,9 @@ export const TOKEN_PROGRAMS = {
   token: TOKEN_PROGRAM_ID,
   token2022: TOKEN_2022_PROGRAM_ID,
 } as const;
+export const TOKEN_METADATA_PROGRAM_ID = new PublicKey(
+  "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+);
 
 export type StoredMint = {
   label: string;
@@ -48,10 +51,12 @@ export type StoredMarket = {
   paramsHash: string;
   baseMint: string;
   quoteMint: string;
-  baseYlpMint: string;
-  quoteYlpMint: string;
+  ylpMint: string;
   baseHlpMint: string;
   quoteHlpMint: string;
+  ylpTokenMetadata: string;
+  baseHlpTokenMetadata: string;
+  quoteHlpTokenMetadata: string;
   baseReserveVault: string;
   quoteReserveVault: string;
   baseCollateralVault: string;
@@ -62,10 +67,8 @@ export type StoredMarket = {
   quoteFeeVault: string;
   baseInterestVault: string;
   quoteInterestVault: string;
-  baseHlpBaseYlpVault: string;
-  baseHlpQuoteYlpVault: string;
-  quoteHlpBaseYlpVault: string;
-  quoteHlpQuoteYlpVault: string;
+  baseHlpYlpVault: string;
+  quoteHlpYlpVault: string;
   eventAuthority: string;
   seededLiquidity?: boolean;
 };
@@ -412,6 +415,15 @@ export function derivePda(programId: PublicKey, ...seeds: Buffer[]): PublicKey {
   return PublicKey.findProgramAddressSync(seeds, programId)[0];
 }
 
+export function deriveTokenMetadataAddress(mint: PublicKey): PublicKey {
+  return derivePda(
+    TOKEN_METADATA_PROGRAM_ID,
+    Buffer.from("metadata"),
+    TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+    mint.toBuffer()
+  );
+}
+
 export function deriveMarketAddresses(params: {
   programId: PublicKey;
   baseMint: PublicKey;
@@ -506,6 +518,37 @@ export function defaultMarketConfig() {
     liquidationAuctionStartIncentiveBps: Number(process.env.OMNIPAIR_V2_LIQUIDATION_AUCTION_START_INCENTIVE_BPS ?? "0"),
     hedgedLpEnabled: process.env.OMNIPAIR_V2_HEDGED_LP_ENABLED !== "0",
     startTime: new anchor.BN(startTime),
+  };
+}
+
+export function defaultLpMetadata(kind: "ylp" | "baseHlp" | "quoteHlp") {
+  const prefix =
+    kind === "ylp"
+      ? "OMNIPAIR_V2_YLP"
+      : kind === "baseHlp"
+        ? "OMNIPAIR_V2_BASE_HLP"
+        : "OMNIPAIR_V2_QUOTE_HLP";
+  const defaults = {
+    ylp: {
+      name: "Omnipair Dusk yLP",
+      symbol: "yLP",
+      uri: "https://omnipair.fi/metadata/dusk/ylp.json",
+    },
+    baseHlp: {
+      name: "Omnipair Dusk Base hLP",
+      symbol: "hLP",
+      uri: "https://omnipair.fi/metadata/dusk/base-hlp.json",
+    },
+    quoteHlp: {
+      name: "Omnipair Dusk Quote hLP",
+      symbol: "hLP",
+      uri: "https://omnipair.fi/metadata/dusk/quote-hlp.json",
+    },
+  }[kind];
+  return {
+    name: process.env[`${prefix}_NAME`] ?? defaults.name,
+    symbol: process.env[`${prefix}_SYMBOL`] ?? defaults.symbol,
+    uri: process.env[`${prefix}_URI`] ?? defaults.uri,
   };
 }
 

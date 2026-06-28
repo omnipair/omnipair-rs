@@ -5,6 +5,7 @@ use super::*;
             version: MARKET_VERSION,
             base_mint: Pubkey::new_unique(),
             quote_mint: Pubkey::new_unique(),
+            ylp_mint: Pubkey::new_unique(),
             operator,
             manager,
             base_side: MarketSide::default(),

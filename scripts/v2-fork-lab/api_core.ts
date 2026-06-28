@@ -33,6 +33,7 @@ const DEFAULT_PROGRAM_ID = "358bjJKXWxeAXAzteX1xTgyd9JNnjtzW8fnwCS8Da1mv";
 const DEFAULT_META_MINT = "METAwkXcqyXKy1AtsSgJ8JiUHwGCafnZL38n3vYmeta";
 const DEFAULT_USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const BPF_LOADER_UPGRADEABLE_ID = new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");
+const TOKEN_METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 const NAD = 1_000_000_000n;
 
 const SURFPOOL_RPC_URL = process.env.SURFPOOL_RPC_URL ?? "http://127.0.0.1:8899";
@@ -64,10 +65,12 @@ type StoredMarket = {
   quoteDecimals: number;
   baseTokenProgram: string;
   quoteTokenProgram: string;
-  baseYlpMint: string;
-  quoteYlpMint: string;
+  ylpMint: string;
   baseHlpMint: string;
   quoteHlpMint: string;
+  ylpTokenMetadata: string;
+  baseHlpTokenMetadata: string;
+  quoteHlpTokenMetadata: string;
   baseReserveVault: string;
   quoteReserveVault: string;
   baseCollateralVault: string;
@@ -78,10 +81,8 @@ type StoredMarket = {
   quoteFeeVault: string;
   baseInterestVault: string;
   quoteInterestVault: string;
-  baseHlpBaseYlpVault: string;
-  baseHlpQuoteYlpVault: string;
-  quoteHlpBaseYlpVault: string;
-  quoteHlpQuoteYlpVault: string;
+  baseHlpYlpVault: string;
+  quoteHlpYlpVault: string;
   eventAuthority: string;
   seededLiquidity: boolean;
   transferHookValidationAccounts: Record<string, string>;
@@ -230,6 +231,13 @@ function seed(value: string): Buffer {
 
 function pda(...seeds: Buffer[]): PublicKey {
   return PublicKey.findProgramAddressSync(seeds, PROGRAM_ID)[0];
+}
+
+function tokenMetadataPda(mint: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [seed("metadata"), TOKEN_METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    TOKEN_METADATA_PROGRAM_ID
+  )[0];
 }
 
 function marketPda(baseMint: PublicKey, quoteMint: PublicKey, paramsHash: Buffer): PublicKey {
@@ -516,6 +524,37 @@ function defaultMarketConfig() {
   };
 }
 
+function defaultLpMetadata(kind: "ylp" | "baseHlp" | "quoteHlp") {
+  const prefix =
+    kind === "ylp"
+      ? "OMNIPAIR_V2_YLP"
+      : kind === "baseHlp"
+        ? "OMNIPAIR_V2_BASE_HLP"
+        : "OMNIPAIR_V2_QUOTE_HLP";
+  const defaults = {
+    ylp: {
+      name: "Omnipair Dusk yLP",
+      symbol: "yLP",
+      uri: "https://omnipair.fi/metadata/dusk/ylp.json",
+    },
+    baseHlp: {
+      name: "Omnipair Dusk Base hLP",
+      symbol: "hLP",
+      uri: "https://omnipair.fi/metadata/dusk/base-hlp.json",
+    },
+    quoteHlp: {
+      name: "Omnipair Dusk Quote hLP",
+      symbol: "hLP",
+      uri: "https://omnipair.fi/metadata/dusk/quote-hlp.json",
+    },
+  }[kind];
+  return {
+    name: process.env[`${prefix}_NAME`] ?? defaults.name,
+    symbol: process.env[`${prefix}_SYMBOL`] ?? defaults.symbol,
+    uri: process.env[`${prefix}_URI`] ?? defaults.uri,
+  };
+}
+
 async function ensureFutarchyAuthority(futarchyAuthority: PublicKey) {
   const { program, payer, accountCoder, connection } = initializeRuntime();
   const existing = await program.account.futarchyAuthority.fetchNullable(futarchyAuthority);
@@ -728,6 +767,49 @@ function encodeTransferHookValidationAccountData(params: {
   return data;
 }
 
+function encodeYlpTransferHookValidationAccountData(params: {
+  market: PublicKey;
+  baseMint: PublicKey;
+  quoteMint: PublicKey;
+}): Buffer {
+  const executeDiscriminator = Buffer.from([105, 37, 101, 197, 75, 251, 102, 26]);
+  const ylpSeed = (ownerAccountIndex: number, assetMintAccountIndex: number) =>
+    packTransferHookSeedConfig([
+      { kind: "literal", bytes: seed("yield") },
+      { kind: "accountKey", index: 5 },
+      { kind: "accountData", accountIndex: ownerAccountIndex, dataIndex: 32, length: 32 },
+      { kind: "accountKey", index: assetMintAccountIndex },
+      { kind: "literal", bytes: [0] },
+    ]);
+  const metas = [
+    { discriminator: 0, addressConfig: params.market.toBuffer(), isSigner: false, isWritable: false },
+    { discriminator: 0, addressConfig: params.baseMint.toBuffer(), isSigner: false, isWritable: false },
+    { discriminator: 0, addressConfig: params.quoteMint.toBuffer(), isSigner: false, isWritable: false },
+    { discriminator: 1, addressConfig: ylpSeed(0, 6), isSigner: false, isWritable: true },
+    { discriminator: 1, addressConfig: ylpSeed(2, 6), isSigner: false, isWritable: true },
+    { discriminator: 1, addressConfig: ylpSeed(0, 7), isSigner: false, isWritable: true },
+    { discriminator: 1, addressConfig: ylpSeed(2, 7), isSigner: false, isWritable: true },
+  ];
+
+  const podSliceLength = 4 + metas.length * 35;
+  const data = Buffer.alloc(8 + 4 + podSliceLength);
+  executeDiscriminator.copy(data, 0);
+  data.writeUInt32LE(podSliceLength, 8);
+  data.writeUInt32LE(metas.length, 12);
+  let offset = 16;
+  for (const meta of metas) {
+    data[offset] = meta.discriminator;
+    offset += 1;
+    meta.addressConfig.copy(data, offset);
+    offset += 32;
+    data[offset] = meta.isSigner ? 1 : 0;
+    offset += 1;
+    data[offset] = meta.isWritable ? 1 : 0;
+    offset += 1;
+  }
+  return data;
+}
+
 function deriveTransferHookValidationAddress(lpMint: PublicKey): PublicKey {
   return pda(seed("extra-account-metas"), lpMint.toBuffer());
 }
@@ -757,6 +839,58 @@ async function seedTransferHookValidationAccount(params: {
     );
   }
   return validationAccount;
+}
+
+async function seedYlpTransferHookValidationAccount(params: {
+  lpMint: PublicKey;
+  market: PublicKey;
+  baseMint: PublicKey;
+  quoteMint: PublicKey;
+}) {
+  const { connection } = initializeRuntime();
+  const validationAccount = deriveTransferHookValidationAddress(params.lpMint);
+  if (await connection.getAccountInfo(validationAccount, "confirmed")) return validationAccount;
+  const data = encodeYlpTransferHookValidationAccountData(params);
+  try {
+    await setRawAccount({
+      pubkey: validationAccount,
+      owner: PROGRAM_ID,
+      lamports: await connection.getMinimumBalanceForRentExemption(data.length),
+      data,
+    });
+  } catch (error) {
+    console.warn(
+      `Unable to seed transfer-hook validation account ${validationAccount.toBase58()}: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
+  return validationAccount;
+}
+
+async function ensureLpMetadata(params: {
+  market: PublicKey;
+  lpMint: PublicKey;
+  lpTokenMetadata: PublicKey;
+  metadata: { name: string; symbol: string; uri: string };
+}) {
+  const { connection, program, payer } = initializeRuntime();
+  if (await connection.getAccountInfo(params.lpTokenMetadata, "confirmed")) return;
+
+  const signature = await program.methods
+    .initializeLpMetadata(params.metadata)
+    .accounts({
+      payer: payer.publicKey,
+      market: params.market,
+      lpMint: params.lpMint,
+      lpTokenMetadata: params.lpTokenMetadata,
+      systemProgram: SystemProgram.programId,
+      tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+      rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+    })
+    .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 250_000 })])
+    .rpc();
+  console.log(`V2 fork LP metadata initialized: ${signature}`);
 }
 
 async function bootstrap(): Promise<StoredMarket> {
@@ -799,30 +933,23 @@ async function bootstrapUncached(): Promise<StoredMarket> {
   });
 
   const lpLabels = {
-    baseYlp: `${marketLabel}-base-ylp`,
-    quoteYlp: `${marketLabel}-quote-ylp`,
+    ylp: `${marketLabel}-ylp`,
     baseHlp: `${marketLabel}-base-hlp`,
     quoteHlp: `${marketLabel}-quote-hlp`,
   };
 
   const existingMarketAccount = await program.account.market.fetchNullable(addresses.market);
+  let ylpMint = field<PublicKey>(existingMarketAccount, "ylpMint", "ylp_mint");
   const existingBaseSide = field<any>(existingMarketAccount, "baseSide", "base_side");
   const existingQuoteSide = field<any>(existingMarketAccount, "quoteSide", "quote_side");
-  let baseYlpMint = field<PublicKey>(existingBaseSide, "ylpMint", "ylp_mint");
-  let quoteYlpMint = field<PublicKey>(existingQuoteSide, "ylpMint", "ylp_mint");
   let baseHlpMint = field<PublicKey>(existingBaseSide, "hlpMint", "hlp_mint");
   let quoteHlpMint = field<PublicKey>(existingQuoteSide, "hlpMint", "hlp_mint");
 
   if (!existingMarketAccount) {
-    const [baseYlp, quoteYlp, baseHlp, quoteHlp] = await Promise.all([
+    const [ylp, baseHlp, quoteHlp] = await Promise.all([
       createHookedLpMintIfMissing({
-        label: lpLabels.baseYlp,
+        label: lpLabels.ylp,
         decimals: baseDecimals,
-        mintAuthority: addresses.market,
-      }),
-      createHookedLpMintIfMissing({
-        label: lpLabels.quoteYlp,
-        decimals: quoteDecimals,
         mintAuthority: addresses.market,
       }),
       createHookedLpMintIfMissing({
@@ -836,36 +963,28 @@ async function bootstrapUncached(): Promise<StoredMarket> {
         mintAuthority: addresses.market,
       }),
     ]);
-    baseYlpMint = baseYlp.mint;
-    quoteYlpMint = quoteYlp.mint;
+    ylpMint = ylp.mint;
     baseHlpMint = baseHlp.mint;
     quoteHlpMint = quoteHlp.mint;
   }
 
-  if (!baseYlpMint || !quoteYlpMint || !baseHlpMint || !quoteHlpMint) {
+  if (!ylpMint || !baseHlpMint || !quoteHlpMint) {
     throw new Error(`Unable to resolve V2 LP mints for market ${addresses.market.toBase58()}`);
   }
 
-  const baseHlpBaseYlpVault = deriveHlpYlpVault(addresses.market, baseHlpMint, baseYlpMint);
-  const baseHlpQuoteYlpVault = deriveHlpYlpVault(addresses.market, baseHlpMint, quoteYlpMint);
-  const quoteHlpBaseYlpVault = deriveHlpYlpVault(addresses.market, quoteHlpMint, baseYlpMint);
-  const quoteHlpQuoteYlpVault = deriveHlpYlpVault(addresses.market, quoteHlpMint, quoteYlpMint);
+  const ylpTokenMetadata = tokenMetadataPda(ylpMint);
+  const baseHlpTokenMetadata = tokenMetadataPda(baseHlpMint);
+  const quoteHlpTokenMetadata = tokenMetadataPda(quoteHlpMint);
+  const baseHlpYlpVault = deriveHlpYlpVault(addresses.market, baseHlpMint, ylpMint);
+  const quoteHlpYlpVault = deriveHlpYlpVault(addresses.market, quoteHlpMint, ylpMint);
 
   const transferHookValidationAccounts = {
-    baseYlp: (
-      await seedTransferHookValidationAccount({
-        lpMint: baseYlpMint,
+    ylp: (
+      await seedYlpTransferHookValidationAccount({
+        lpMint: ylpMint,
         market: addresses.market,
-        assetMint: baseMint,
-        tokenKind: "ylp",
-      })
-    ).toBase58(),
-    quoteYlp: (
-      await seedTransferHookValidationAccount({
-        lpMint: quoteYlpMint,
-        market: addresses.market,
-        assetMint: quoteMint,
-        tokenKind: "ylp",
+        baseMint,
+        quoteMint,
       })
     ).toBase58(),
     baseHlp: (
@@ -900,8 +1019,7 @@ async function bootstrapUncached(): Promise<StoredMarket> {
         quoteMint,
         market: addresses.market,
         futarchyAuthority: addresses.futarchyAuthority,
-        baseYlpMint,
-        quoteYlpMint,
+        ylpMint,
         baseHlpMint,
         quoteHlpMint,
         baseReserveVault: addresses.baseReserveVault,
@@ -927,6 +1045,25 @@ async function bootstrapUncached(): Promise<StoredMarket> {
     console.log(`V2 fork market initialized: ${signature}`);
   }
 
+  await ensureLpMetadata({
+    market: addresses.market,
+    lpMint: ylpMint,
+    lpTokenMetadata: ylpTokenMetadata,
+    metadata: defaultLpMetadata("ylp"),
+  });
+  await ensureLpMetadata({
+    market: addresses.market,
+    lpMint: baseHlpMint,
+    lpTokenMetadata: baseHlpTokenMetadata,
+    metadata: defaultLpMetadata("baseHlp"),
+  });
+  await ensureLpMetadata({
+    market: addresses.market,
+    lpMint: quoteHlpMint,
+    lpTokenMetadata: quoteHlpTokenMetadata,
+    metadata: defaultLpMetadata("quoteHlp"),
+  });
+
   const previous = state.markets[marketLabel];
   const stored: StoredMarket = {
     label: marketLabel,
@@ -939,10 +1076,12 @@ async function bootstrapUncached(): Promise<StoredMarket> {
     quoteDecimals,
     baseTokenProgram: baseTokenProgram.toBase58(),
     quoteTokenProgram: quoteTokenProgram.toBase58(),
-    baseYlpMint: baseYlpMint.toBase58(),
-    quoteYlpMint: quoteYlpMint.toBase58(),
+    ylpMint: ylpMint.toBase58(),
     baseHlpMint: baseHlpMint.toBase58(),
     quoteHlpMint: quoteHlpMint.toBase58(),
+    ylpTokenMetadata: ylpTokenMetadata.toBase58(),
+    baseHlpTokenMetadata: baseHlpTokenMetadata.toBase58(),
+    quoteHlpTokenMetadata: quoteHlpTokenMetadata.toBase58(),
     baseReserveVault: addresses.baseReserveVault.toBase58(),
     quoteReserveVault: addresses.quoteReserveVault.toBase58(),
     baseCollateralVault: addresses.baseCollateralVault.toBase58(),
@@ -953,10 +1092,8 @@ async function bootstrapUncached(): Promise<StoredMarket> {
     quoteFeeVault: addresses.quoteFeeVault.toBase58(),
     baseInterestVault: addresses.baseInterestVault.toBase58(),
     quoteInterestVault: addresses.quoteInterestVault.toBase58(),
-    baseHlpBaseYlpVault: baseHlpBaseYlpVault.toBase58(),
-    baseHlpQuoteYlpVault: baseHlpQuoteYlpVault.toBase58(),
-    quoteHlpBaseYlpVault: quoteHlpBaseYlpVault.toBase58(),
-    quoteHlpQuoteYlpVault: quoteHlpQuoteYlpVault.toBase58(),
+    baseHlpYlpVault: baseHlpYlpVault.toBase58(),
+    quoteHlpYlpVault: quoteHlpYlpVault.toBase58(),
     eventAuthority: addresses.eventAuthority.toBase58(),
     seededLiquidity: previous?.market === addresses.market.toBase58() && previous.seededLiquidity,
     transferHookValidationAccounts,
@@ -991,8 +1128,7 @@ async function seedInitialLiquidity(market: StoredMarket) {
     market,
     baseDepositAmount: baseAmount,
     quoteDepositAmount: quoteAmount,
-    minBaseYlpAmount: 0n,
-    minQuoteYlpAmount: 0n,
+    minYlpAmount: 0n,
     payerCanSign: true,
   });
   tx.sign(payer);
@@ -1027,8 +1163,7 @@ async function marketPayload(stored: StoredMarket) {
     quoteMint: stored.quoteMint,
     baseDecimals: stored.baseDecimals,
     quoteDecimals: stored.quoteDecimals,
-    baseYlpMint: stored.baseYlpMint,
-    quoteYlpMint: stored.quoteYlpMint,
+    ylpMint: stored.ylpMint,
     baseHlpMint: stored.baseHlpMint,
     quoteHlpMint: stored.quoteHlpMint,
     baseReserveVault: stored.baseReserveVault,
@@ -1055,8 +1190,8 @@ async function marketPayload(stored: StoredMarket) {
     state: {
       baseReserve: stringValue(field(field(baseSide, "reserves"), "liveReserve", "live_reserve")),
       quoteReserve: stringValue(field(field(quoteSide, "reserves"), "liveReserve", "live_reserve")),
-      baseYlpSupply: stringValue(field(field(baseSide, "shares"), "ylpSupply", "ylp_supply")),
-      quoteYlpSupply: stringValue(field(field(quoteSide, "shares"), "ylpSupply", "ylp_supply")),
+      baseReserveYlpSupply: stringValue(field(field(baseSide, "shares"), "ylpSupply", "ylp_supply")),
+      quoteReserveYlpSupply: stringValue(field(field(quoteSide, "shares"), "ylpSupply", "ylp_supply")),
       fixedBaseDebt: stringValue(field(debt, "fixedBaseShares", "fixed_base_shares")),
       fixedQuoteDebt: stringValue(field(debt, "fixedQuoteShares", "fixed_quote_shares")),
       recognizedBaseCollateralForQuoteDebt: stringValue(
@@ -1100,8 +1235,7 @@ function forkConfigPayload(stored: StoredMarket) {
     quoteDecimals: stored.quoteDecimals,
     baseTokenProgram: stored.baseTokenProgram,
     quoteTokenProgram: stored.quoteTokenProgram,
-    baseYlpMint: stored.baseYlpMint,
-    quoteYlpMint: stored.quoteYlpMint,
+    ylpMint: stored.ylpMint,
     baseHlpMint: stored.baseHlpMint,
     quoteHlpMint: stored.quoteHlpMint,
     seededLiquidity: stored.seededLiquidity,
@@ -1118,8 +1252,7 @@ function marketFromStored(stored: StoredMarket) {
     quoteMint: new PublicKey(stored.quoteMint),
     baseTokenProgram: new PublicKey(stored.baseTokenProgram),
     quoteTokenProgram: new PublicKey(stored.quoteTokenProgram),
-    baseYlpMint: new PublicKey(stored.baseYlpMint),
-    quoteYlpMint: new PublicKey(stored.quoteYlpMint),
+    ylpMint: new PublicKey(stored.ylpMint),
     baseHlpMint: new PublicKey(stored.baseHlpMint),
     quoteHlpMint: new PublicKey(stored.quoteHlpMint),
     baseReserveVault: new PublicKey(stored.baseReserveVault),
@@ -1128,10 +1261,10 @@ function marketFromStored(stored: StoredMarket) {
     quoteCollateralVault: new PublicKey(stored.quoteCollateralVault),
     baseFeeVault: new PublicKey(stored.baseFeeVault),
     quoteFeeVault: new PublicKey(stored.quoteFeeVault),
-    baseHlpBaseYlpVault: new PublicKey(stored.baseHlpBaseYlpVault),
-    baseHlpQuoteYlpVault: new PublicKey(stored.baseHlpQuoteYlpVault),
-    quoteHlpBaseYlpVault: new PublicKey(stored.quoteHlpBaseYlpVault),
-    quoteHlpQuoteYlpVault: new PublicKey(stored.quoteHlpQuoteYlpVault),
+    baseInterestVault: new PublicKey(stored.baseInterestVault),
+    quoteInterestVault: new PublicKey(stored.quoteInterestVault),
+    baseHlpYlpVault: new PublicKey(stored.baseHlpYlpVault),
+    quoteHlpYlpVault: new PublicKey(stored.quoteHlpYlpVault),
   };
 }
 
@@ -1182,8 +1315,7 @@ async function buildAddLiquidityTx(params: {
   market: StoredMarket;
   baseDepositAmount: bigint;
   quoteDepositAmount: bigint;
-  minBaseYlpAmount: bigint;
-  minQuoteYlpAmount: bigint;
+  minYlpAmount: bigint;
   payerCanSign?: boolean;
 }) {
   const { program } = initializeRuntime();
@@ -1191,15 +1323,13 @@ async function buildAddLiquidityTx(params: {
   const instructions: TransactionInstruction[] = [];
   const ownerBase = await maybeAddAta(instructions, params.owner, m.baseMint, m.baseTokenProgram);
   const ownerQuote = await maybeAddAta(instructions, params.owner, m.quoteMint, m.quoteTokenProgram);
-  const ownerBaseYlp = await maybeAddAta(instructions, params.owner, m.baseYlpMint, TOKEN_2022_PROGRAM_ID);
-  const ownerQuoteYlp = await maybeAddAta(instructions, params.owner, m.quoteYlpMint, TOKEN_2022_PROGRAM_ID);
+  const ownerYlp = await maybeAddAta(instructions, params.owner, m.ylpMint, TOKEN_2022_PROGRAM_ID);
 
   const ix = await program.methods
     .addLiquidity({
       baseDepositAmount: toBN(params.baseDepositAmount),
       quoteDepositAmount: toBN(params.quoteDepositAmount),
-      minBaseYlpAmount: toBN(params.minBaseYlpAmount),
-      minQuoteYlpAmount: toBN(params.minQuoteYlpAmount),
+      minYlpAmount: toBN(params.minYlpAmount),
     })
     .accounts({
       market: m.market,
@@ -1207,14 +1337,12 @@ async function buildAddLiquidityTx(params: {
       owner: params.owner,
       baseMint: m.baseMint,
       quoteMint: m.quoteMint,
-      baseYlpMint: m.baseYlpMint,
-      quoteYlpMint: m.quoteYlpMint,
+      ylpMint: m.ylpMint,
       baseReserveVault: m.baseReserveVault,
       quoteReserveVault: m.quoteReserveVault,
       ownerBaseAccount: ownerBase,
       ownerQuoteAccount: ownerQuote,
-      ownerBaseYlpAccount: ownerBaseYlp,
-      ownerQuoteYlpAccount: ownerQuoteYlp,
+      ownerYlpAccount: ownerYlp,
       baseYieldAccount: deriveYieldAccount(m.market, params.owner, m.baseMint, "ylp"),
       quoteYieldAccount: deriveYieldAccount(m.market, params.owner, m.quoteMint, "ylp"),
       tokenProgram: TOKEN_PROGRAM_ID,
@@ -1282,18 +1410,14 @@ async function buildSwapTx(params: {
   const remainingAccounts = [];
   if (baseHlpSupply > 0n) {
     remainingAccounts.push(
-      { pubkey: m.baseYlpMint, isWritable: true, isSigner: false },
-      { pubkey: m.quoteYlpMint, isWritable: true, isSigner: false },
-      { pubkey: m.baseHlpBaseYlpVault, isWritable: true, isSigner: false },
-      { pubkey: m.baseHlpQuoteYlpVault, isWritable: true, isSigner: false }
+      { pubkey: m.ylpMint, isWritable: true, isSigner: false },
+      { pubkey: m.baseHlpYlpVault, isWritable: true, isSigner: false }
     );
   }
   if (quoteHlpSupply > 0n) {
     remainingAccounts.push(
-      { pubkey: m.baseYlpMint, isWritable: true, isSigner: false },
-      { pubkey: m.quoteYlpMint, isWritable: true, isSigner: false },
-      { pubkey: m.quoteHlpBaseYlpVault, isWritable: true, isSigner: false },
-      { pubkey: m.quoteHlpQuoteYlpVault, isWritable: true, isSigner: false }
+      { pubkey: m.ylpMint, isWritable: true, isSigner: false },
+      { pubkey: m.quoteHlpYlpVault, isWritable: true, isSigner: false }
     );
   }
   if (remainingAccounts.length > 0) builder = builder.remainingAccounts(remainingAccounts);
@@ -1457,15 +1581,13 @@ async function buildOpenHedgeTx(params: {
         owner: params.owner,
         baseMint: m.baseMint,
         quoteMint: m.quoteMint,
-        baseYlpMint: m.baseYlpMint,
-        quoteYlpMint: m.quoteYlpMint,
+        ylpMint: m.ylpMint,
         targetHlpMint: isBase ? m.baseHlpMint : m.quoteHlpMint,
         baseReserveVault: m.baseReserveVault,
         quoteReserveVault: m.quoteReserveVault,
         ownerTargetAccount: ownerTarget,
         ownerHlpAccount: ownerHlp,
-        hlpBaseYlpAccount: isBase ? m.baseHlpBaseYlpVault : m.quoteHlpBaseYlpVault,
-        hlpQuoteYlpAccount: isBase ? m.baseHlpQuoteYlpVault : m.quoteHlpQuoteYlpVault,
+        hlpYlpAccount: isBase ? m.baseHlpYlpVault : m.quoteHlpYlpVault,
         targetYieldAccount: deriveYieldAccount(
           m.market,
           params.owner,
@@ -1514,18 +1636,18 @@ async function buildCloseHedgeTx(params: {
       })
       .accounts({
         market: m.market,
+        futarchyAuthority: m.futarchyAuthority,
         owner: params.owner,
         baseMint: m.baseMint,
         quoteMint: m.quoteMint,
-        baseYlpMint: m.baseYlpMint,
-        quoteYlpMint: m.quoteYlpMint,
+        ylpMint: m.ylpMint,
         targetHlpMint: isBase ? m.baseHlpMint : m.quoteHlpMint,
         baseReserveVault: m.baseReserveVault,
         quoteReserveVault: m.quoteReserveVault,
+        borrowedInterestVault: isBase ? m.quoteInterestVault : m.baseInterestVault,
         ownerTargetAccount: ownerTarget,
         ownerHlpAccount: ownerHlp,
-        hlpBaseYlpAccount: isBase ? m.baseHlpBaseYlpVault : m.quoteHlpBaseYlpVault,
-        hlpQuoteYlpAccount: isBase ? m.baseHlpQuoteYlpVault : m.quoteHlpQuoteYlpVault,
+        hlpYlpAccount: isBase ? m.baseHlpYlpVault : m.quoteHlpYlpVault,
         targetYieldAccount: deriveYieldAccount(
           m.market,
           params.owner,
@@ -1701,8 +1823,7 @@ export async function route(req: http.IncomingMessage, body: Record<string, unkn
         market: stored,
         baseDepositAmount: rawAmount(body, ["baseDepositAmount", "baseAmount"], stored.baseDecimals, "1"),
         quoteDepositAmount: rawAmount(body, ["quoteDepositAmount", "quoteAmount"], stored.quoteDecimals, "1"),
-        minBaseYlpAmount: rawAmount(body, ["minBaseYlpAmount"], stored.baseDecimals, "0"),
-        minQuoteYlpAmount: rawAmount(body, ["minQuoteYlpAmount"], stored.quoteDecimals, "0"),
+        minYlpAmount: rawAmount(body, ["minYlpAmount", "minBaseYlpAmount"], stored.baseDecimals, "0"),
       })
     ).serialize({ requireAllSignatures: false, verifySignatures: false }).toString("base64");
     return txResponse("add-liquidity", owner, stored, transaction);
@@ -1834,8 +1955,7 @@ export async function localE2E() {
     market: stored,
     baseDepositAmount: parseUnits("1", stored.baseDecimals),
     quoteDepositAmount: parseUnits("1", stored.quoteDecimals),
-    minBaseYlpAmount: 0n,
-    minQuoteYlpAmount: 0n,
+    minYlpAmount: 0n,
     payerCanSign: true,
   });
   addLiquidityTx.sign(payer);

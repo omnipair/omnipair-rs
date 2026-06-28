@@ -29,8 +29,7 @@ use crate::instructions::common::{
 pub struct AddLiquidityArgs {
     pub base_deposit_amount: u64,
     pub quote_deposit_amount: u64,
-    pub min_base_ylp_amount: u64,
-    pub min_quote_ylp_amount: u64,
+    pub min_ylp_amount: u64,
 }
 
 #[event_cpi]
@@ -62,9 +61,7 @@ pub struct AddLiquidity<'info> {
     pub quote_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
-    pub base_ylp_mint: Box<InterfaceAccount<'info, Mint>>,
-    #[account(mut)]
-    pub quote_ylp_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub ylp_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
     pub base_reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
@@ -76,9 +73,7 @@ pub struct AddLiquidity<'info> {
     #[account(mut)]
     pub owner_quote_account: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut)]
-    pub owner_base_ylp_account: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(mut)]
-    pub owner_quote_ylp_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub owner_ylp_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -137,44 +132,29 @@ impl<'info> AddLiquidity<'info> {
             &self.market,
             crate::state::MarketAsset::Base,
             &self.base_mint,
-            &self.base_ylp_mint,
             &self.base_reserve_vault,
         )?;
         validate_side_vault_accounts(
             &self.market,
             crate::state::MarketAsset::Quote,
             &self.quote_mint,
-            &self.quote_ylp_mint,
             &self.quote_reserve_vault,
         )?;
+        require_keys_eq!(
+            self.market.ylp_mint,
+            self.ylp_mint.key(),
+            ErrorCode::InvalidLpMintKey
+        );
         validate_owner_asset_account(self.owner.key(), &self.base_mint, &self.owner_base_account)?;
         validate_owner_asset_account(
             self.owner.key(),
             &self.quote_mint,
             &self.owner_quote_account,
         )?;
-        validate_owner_lp_account(
-            self.owner.key(),
-            &self.base_ylp_mint,
-            &self.owner_base_ylp_account,
-        )?;
-        validate_owner_lp_account(
-            self.owner.key(),
-            &self.quote_ylp_mint,
-            &self.owner_quote_ylp_account,
-        )?;
+        validate_owner_lp_account(self.owner.key(), &self.ylp_mint, &self.owner_ylp_account)?;
         require_supported_asset_mint(&self.base_mint)?;
         require_supported_asset_mint(&self.quote_mint)?;
-        validate_lp_mint(
-            &self.base_ylp_mint,
-            self.market.key(),
-            self.base_mint.decimals,
-        )?;
-        validate_lp_mint(
-            &self.quote_ylp_mint,
-            self.market.key(),
-            self.quote_mint.decimals,
-        )?;
+        validate_lp_mint(&self.ylp_mint, self.market.key(), self.base_mint.decimals)?;
         Ok(())
     }
 
@@ -205,12 +185,12 @@ impl<'info> AddLiquidity<'info> {
             carry_forward_swap_fees(&mut market.quote_side)?;
             carry_forward_interest(&mut market.quote_side)?;
             ctx.accounts.base_yield_account.accrue(
-                ctx.accounts.owner_base_ylp_account.amount,
+                ctx.accounts.owner_ylp_account.amount,
                 market.base_side.fees.swap_fee_growth_index_nad,
                 market.base_side.fees.interest_growth_index_nad,
             )?;
             ctx.accounts.quote_yield_account.accrue(
-                ctx.accounts.owner_quote_ylp_account.amount,
+                ctx.accounts.owner_ylp_account.amount,
                 market.quote_side.fees.swap_fee_growth_index_nad,
                 market.quote_side.fees.interest_growth_index_nad,
             )?;
@@ -268,40 +248,22 @@ impl<'info> AddLiquidity<'info> {
                 .apply(base_side, quote_side)?
         };
         require_gte!(
-            receipt.base_ylp_amount,
-            args.min_base_ylp_amount,
-            ErrorCode::SlippageExceeded
-        );
-        require_gte!(
-            receipt.quote_ylp_amount,
-            args.min_quote_ylp_amount,
+            receipt.ylp_amount,
+            args.min_ylp_amount,
             ErrorCode::SlippageExceeded
         );
 
-        let base_ylp_program = token_program_for_mint(
-            &ctx.accounts.base_ylp_mint,
-            &ctx.accounts.token_program,
-            &ctx.accounts.token_2022_program,
-        )?;
-        let quote_ylp_program = token_program_for_mint(
-            &ctx.accounts.quote_ylp_mint,
+        let ylp_program = token_program_for_mint(
+            &ctx.accounts.ylp_mint,
             &ctx.accounts.token_program,
             &ctx.accounts.token_2022_program,
         )?;
         token_mint_to(
             ctx.accounts.market.to_account_info(),
-            base_ylp_program,
-            ctx.accounts.base_ylp_mint.to_account_info(),
-            ctx.accounts.owner_base_ylp_account.to_account_info(),
-            receipt.base_ylp_amount,
-            &[&generate_market_seeds!(ctx.accounts.market)[..]],
-        )?;
-        token_mint_to(
-            ctx.accounts.market.to_account_info(),
-            quote_ylp_program,
-            ctx.accounts.quote_ylp_mint.to_account_info(),
-            ctx.accounts.owner_quote_ylp_account.to_account_info(),
-            receipt.quote_ylp_amount,
+            ylp_program,
+            ctx.accounts.ylp_mint.to_account_info(),
+            ctx.accounts.owner_ylp_account.to_account_info(),
+            receipt.ylp_amount,
             &[&generate_market_seeds!(ctx.accounts.market)[..]],
         )?;
 
@@ -310,10 +272,8 @@ impl<'info> AddLiquidity<'info> {
             owner: owner_key,
             base_reserve_credit: receipt.base_reserve_credit,
             quote_reserve_credit: receipt.quote_reserve_credit,
-            base_ylp_amount: receipt.base_ylp_amount,
-            quote_ylp_amount: receipt.quote_ylp_amount,
-            base_ylp_supply: receipt.base_ylp_supply,
-            quote_ylp_supply: receipt.quote_ylp_supply,
+            ylp_amount: receipt.ylp_amount,
+            ylp_supply: receipt.ylp_supply,
             metadata: MarketEventMetadata::new(owner_key, market_key)?,
         });
 

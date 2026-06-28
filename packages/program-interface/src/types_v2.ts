@@ -105,11 +105,7 @@ export type OmnipairV2 = {
           "name": "quoteMint"
         },
         {
-          "name": "baseYlpMint",
-          "writable": true
-        },
-        {
-          "name": "quoteYlpMint",
+          "name": "ylpMint",
           "writable": true
         },
         {
@@ -129,11 +125,7 @@ export type OmnipairV2 = {
           "writable": true
         },
         {
-          "name": "ownerBaseYlpAccount",
-          "writable": true
-        },
-        {
-          "name": "ownerQuoteYlpAccount",
+          "name": "ownerYlpAccount",
           "writable": true
         },
         {
@@ -716,11 +708,7 @@ export type OmnipairV2 = {
           "name": "quoteMint"
         },
         {
-          "name": "baseYlpMint",
-          "writable": true
-        },
-        {
-          "name": "quoteYlpMint",
+          "name": "ylpMint",
           "writable": true
         },
         {
@@ -748,7 +736,7 @@ export type OmnipairV2 = {
           "writable": true
         },
         {
-          "name": "hlpBaseYlpAccount",
+          "name": "hlpYlpAccount",
           "writable": true,
           "pda": {
             "seeds": [
@@ -780,45 +768,7 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "baseYlpMint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "hlpQuoteYlpAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  104,
-                  108,
-                  112,
-                  95,
-                  121,
-                  108,
-                  112,
-                  95,
-                  118,
-                  97,
-                  117,
-                  108,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "targetHlpMint"
-              },
-              {
-                "kind": "account",
-                "path": "quoteYlpMint"
+                "path": "ylpMint"
               }
             ]
           }
@@ -1267,10 +1217,7 @@ export type OmnipairV2 = {
           }
         },
         {
-          "name": "baseYlpMint"
-        },
-        {
-          "name": "quoteYlpMint"
+          "name": "ylpMint"
         },
         {
           "name": "baseHlpMint"
@@ -1682,6 +1629,153 @@ export type OmnipairV2 = {
       ]
     },
     {
+      "name": "initializeLpMetadata",
+      "discriminator": [
+        214,
+        99,
+        201,
+        159,
+        220,
+        88,
+        74,
+        27
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market"
+        },
+        {
+          "name": "lpMint"
+        },
+        {
+          "name": "lpTokenMetadata",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  11,
+                  112,
+                  101,
+                  177,
+                  227,
+                  209,
+                  124,
+                  69,
+                  56,
+                  157,
+                  82,
+                  127,
+                  107,
+                  4,
+                  195,
+                  205,
+                  88,
+                  184,
+                  108,
+                  115,
+                  26,
+                  160,
+                  253,
+                  181,
+                  73,
+                  182,
+                  209,
+                  188,
+                  3,
+                  248,
+                  41,
+                  70
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "lpMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                11,
+                112,
+                101,
+                177,
+                227,
+                209,
+                124,
+                69,
+                56,
+                157,
+                82,
+                127,
+                107,
+                4,
+                195,
+                205,
+                88,
+                184,
+                108,
+                115,
+                26,
+                160,
+                253,
+                181,
+                73,
+                182,
+                209,
+                188,
+                3,
+                248,
+                41,
+                70
+              ]
+            }
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "tokenMetadataProgram",
+          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "initializeLpMetadataArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "openHedge",
       "discriminator": [
         76,
@@ -1773,11 +1867,7 @@ export type OmnipairV2 = {
           "name": "quoteMint"
         },
         {
-          "name": "baseYlpMint",
-          "writable": true
-        },
-        {
-          "name": "quoteYlpMint",
+          "name": "ylpMint",
           "writable": true
         },
         {
@@ -1801,7 +1891,7 @@ export type OmnipairV2 = {
           "writable": true
         },
         {
-          "name": "hlpBaseYlpAccount",
+          "name": "hlpYlpAccount",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1833,45 +1923,7 @@ export type OmnipairV2 = {
               },
               {
                 "kind": "account",
-                "path": "baseYlpMint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "hlpQuoteYlpAccount",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  104,
-                  108,
-                  112,
-                  95,
-                  121,
-                  108,
-                  112,
-                  95,
-                  118,
-                  97,
-                  117,
-                  108,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "targetHlpMint"
-              },
-              {
-                "kind": "account",
-                "path": "quoteYlpMint"
+                "path": "ylpMint"
               }
             ]
           }
@@ -2137,11 +2189,7 @@ export type OmnipairV2 = {
           "name": "quoteMint"
         },
         {
-          "name": "baseYlpMint",
-          "writable": true
-        },
-        {
-          "name": "quoteYlpMint",
+          "name": "ylpMint",
           "writable": true
         },
         {
@@ -2161,11 +2209,7 @@ export type OmnipairV2 = {
           "writable": true
         },
         {
-          "name": "ownerBaseYlpAccount",
-          "writable": true
-        },
-        {
-          "name": "ownerQuoteYlpAccount",
+          "name": "ownerYlpAccount",
           "writable": true
         },
         {
@@ -5020,11 +5064,7 @@ export type OmnipairV2 = {
             "type": "u64"
           },
           {
-            "name": "minBaseYlpAmount",
-            "type": "u64"
-          },
-          {
-            "name": "minQuoteYlpAmount",
+            "name": "minYlpAmount",
             "type": "u64"
           }
         ]
@@ -5327,11 +5367,7 @@ export type OmnipairV2 = {
             "type": "u64"
           },
           {
-            "name": "baseYlpAmount",
-            "type": "u64"
-          },
-          {
-            "name": "quoteYlpAmount",
+            "name": "ylpAmount",
             "type": "u64"
           },
           {
@@ -5387,11 +5423,7 @@ export type OmnipairV2 = {
             "type": "u64"
           },
           {
-            "name": "baseYlpAmount",
-            "type": "u64"
-          },
-          {
-            "name": "quoteYlpAmount",
+            "name": "ylpAmount",
             "type": "u64"
           },
           {
@@ -5463,19 +5495,11 @@ export type OmnipairV2 = {
             "type": "u8"
           },
           {
-            "name": "baseYlpVault",
+            "name": "ylpVault",
             "type": "pubkey"
           },
           {
-            "name": "quoteYlpVault",
-            "type": "pubkey"
-          },
-          {
-            "name": "ylpBaseShares",
-            "type": "u64"
-          },
-          {
-            "name": "ylpQuoteShares",
+            "name": "ylpShares",
             "type": "u64"
           },
           {
@@ -5609,6 +5633,26 @@ export type OmnipairV2 = {
           {
             "name": "buybackAuctionAcceptedMint",
             "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "initializeLpMetadataArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "symbol",
+            "type": "string"
+          },
+          {
+            "name": "uri",
+            "type": "string"
           }
         ]
       }
@@ -5924,19 +5968,11 @@ export type OmnipairV2 = {
             "type": "u64"
           },
           {
-            "name": "baseYlpAmount",
+            "name": "ylpAmount",
             "type": "u64"
           },
           {
-            "name": "quoteYlpAmount",
-            "type": "u64"
-          },
-          {
-            "name": "baseYlpSupply",
-            "type": "u64"
-          },
-          {
-            "name": "quoteYlpSupply",
+            "name": "ylpSupply",
             "type": "u64"
           },
           {
@@ -5964,11 +6000,7 @@ export type OmnipairV2 = {
             "type": "pubkey"
           },
           {
-            "name": "baseYlpAmount",
-            "type": "u64"
-          },
-          {
-            "name": "quoteYlpAmount",
+            "name": "ylpAmount",
             "type": "u64"
           },
           {
@@ -5980,11 +6012,7 @@ export type OmnipairV2 = {
             "type": "u64"
           },
           {
-            "name": "baseYlpSupply",
-            "type": "u64"
-          },
-          {
-            "name": "quoteYlpSupply",
+            "name": "ylpSupply",
             "type": "u64"
           },
           {
@@ -6105,6 +6133,10 @@ export type OmnipairV2 = {
           },
           {
             "name": "quoteMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "ylpMint",
             "type": "pubkey"
           },
           {
@@ -6521,11 +6553,7 @@ export type OmnipairV2 = {
             "type": "pubkey"
           },
           {
-            "name": "baseYlpMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "quoteYlpMint",
+            "name": "ylpMint",
             "type": "pubkey"
           },
           {
@@ -6796,10 +6824,6 @@ export type OmnipairV2 = {
           {
             "name": "assetDecimals",
             "type": "u8"
-          },
-          {
-            "name": "ylpMint",
-            "type": "pubkey"
           },
           {
             "name": "hlpMint",
@@ -7332,11 +7356,7 @@ export type OmnipairV2 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "baseYlpAmount",
-            "type": "u64"
-          },
-          {
-            "name": "quoteYlpAmount",
+            "name": "ylpAmount",
             "type": "u64"
           },
           {
@@ -8174,6 +8194,11 @@ export type OmnipairV2 = {
       "name": "maxManagerFeeBps",
       "type": "u16",
       "value": "500"
+    },
+    {
+      "name": "metadataSeedPrefix",
+      "type": "bytes",
+      "value": "[109, 101, 116, 97, 100, 97, 116, 97]"
     },
     {
       "name": "nad",

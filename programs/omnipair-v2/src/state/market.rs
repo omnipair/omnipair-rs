@@ -82,6 +82,7 @@ pub struct Market {
     pub version: u8,
     pub base_mint: Pubkey,
     pub quote_mint: Pubkey,
+    pub ylp_mint: Pubkey,
     pub operator: Pubkey,
     pub manager: Pubkey,
     pub base_side: MarketSide,
@@ -107,15 +108,14 @@ impl Market {
     pub fn initialize(
         base_mint: Pubkey,
         quote_mint: Pubkey,
+        ylp_mint: Pubkey,
         operator: Pubkey,
         manager: Pubkey,
         base_side: MarketSide,
         quote_side: MarketSide,
         config: MarketConfig,
-        base_hlp_base_ylp_vault: Pubkey,
-        base_hlp_quote_ylp_vault: Pubkey,
-        quote_hlp_base_ylp_vault: Pubkey,
-        quote_hlp_quote_ylp_vault: Pubkey,
+        base_hlp_ylp_vault: Pubkey,
+        quote_hlp_ylp_vault: Pubkey,
         params_hash: [u8; 32],
         current_slot: u64,
         bump: u8,
@@ -131,6 +131,7 @@ impl Market {
             version: MARKET_VERSION,
             base_mint,
             quote_mint,
+            ylp_mint,
             operator,
             manager,
             base_side,
@@ -147,22 +148,12 @@ impl Market {
             },
             base_hlp_vault: {
                 let mut vault = HlpVault::default();
-                vault.initialize(
-                    MarketAsset::Base,
-                    base_hlp_base_ylp_vault,
-                    base_hlp_quote_ylp_vault,
-                    current_slot,
-                );
+                vault.initialize(MarketAsset::Base, base_hlp_ylp_vault, current_slot);
                 vault
             },
             quote_hlp_vault: {
                 let mut vault = HlpVault::default();
-                vault.initialize(
-                    MarketAsset::Quote,
-                    quote_hlp_base_ylp_vault,
-                    quote_hlp_quote_ylp_vault,
-                    current_slot,
-                );
+                vault.initialize(MarketAsset::Quote, quote_hlp_ylp_vault, current_slot);
                 vault
             },
             risk: Risk {

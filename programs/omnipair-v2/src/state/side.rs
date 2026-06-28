@@ -41,7 +41,6 @@ impl MarketAsset {
 pub struct MarketSide {
     pub asset_mint: Pubkey,
     pub asset_decimals: u8,
-    pub ylp_mint: Pubkey,
     pub hlp_mint: Pubkey,
     pub reserve_vault: Pubkey,
     pub collateral_vault: Pubkey,

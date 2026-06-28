@@ -8,7 +8,7 @@ This PR adds Omnipair V2 as a standalone market architecture program while
 keeping the legacy V1 pair program available and compatible.
 
 V2 is not a V1 account rename. It has its own program ID, IDL, market accounts,
-claim-token and hedge-token semantics, risk books, events, generated
+yLP and hLP token semantics, risk books, events, generated
 interfaces, decoder support, release checklist, and owner signoff register.
 
 ## What Changed
@@ -28,7 +28,7 @@ interfaces, decoder support, release checklist, and owner signoff register.
 
 ## Core V2 Invariants
 
-- Claim tokens are fixed-principal `omLP` assets, not rebasing LP shares.
+- yLP tokens are the normal two-sided LP shares.
 - Deposits split into protected claim amount plus retained buffer shares.
 - Fee rights require matched staked claim tokens and buffer shares.
 - Fees are explicit non-compounding liabilities settled through fee ledgers.
@@ -40,8 +40,7 @@ interfaces, decoder support, release checklist, and owner signoff register.
   post-state spot.
 - Liquidation follows borrower collateral, liquidator repayment/incentive,
   insurance reserve, then LP socialization.
-- Hedge tokens are one-to-one `h-omLP` wrappers over claim tokens without
-  staking rights.
+- hLP tokens are one-sided hedged LP shares backed by aggregate vault-owned yLP.
 
 ## Security And Risk Work
 
@@ -114,7 +113,7 @@ These original V2 ideas are intentionally not enabled in this PR:
 - stale locked collateral-factor machinery.
 
 Current V2 uses fixed-token debt, inventory-native settlement, recognized
-collateral valuation, and h-omLP wrappers with routed hedge fees. Any deferred
+collateral valuation, and hLP shares with routed hedge fees. Any deferred
 feature above should land behind a separate reviewed spec.
 
 ## Review Notes

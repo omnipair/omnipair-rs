@@ -31,6 +31,7 @@ use super::*;
             version: 2,
             base_mint: Pubkey::new_unique(),
             quote_mint: Pubkey::new_unique(),
+            ylp_mint: Pubkey::new_unique(),
             operator: Pubkey::new_unique(),
             manager: Pubkey::new_unique(),
             base_side,
