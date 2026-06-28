@@ -296,6 +296,44 @@ pub struct PositionLiquidated {
 }
 
 #[event]
+pub struct LiquidationAuctionOpened {
+    pub market: Pubkey,
+    pub margin_position: Pubkey,
+    pub borrower: Pubkey,
+    pub debt_asset_mint: Pubkey,
+    pub collateral_asset_mint: Pubkey,
+    pub start_slot: u64,
+    pub end_slot: u64,
+    pub start_health_bps: u64,
+    pub start_incentive_bps: u16,
+    pub max_incentive_bps: u16,
+    pub max_repay_amount: u64,
+    pub reference_price_nad: u64,
+    pub metadata: MarketEventMetadata,
+}
+
+#[event]
+pub struct LiquidationAuctionSettled {
+    pub market: Pubkey,
+    pub margin_position: Pubkey,
+    pub borrower: Pubkey,
+    pub bidder: Pubkey,
+    pub debt_asset_mint: Pubkey,
+    pub collateral_asset_mint: Pubkey,
+    pub repaid_amount: u64,
+    pub collateral_to_bidder: u64,
+    pub collateral_seized: u64,
+    pub insurance_funded: u64,
+    pub insurance_drawn: u64,
+    pub socialized_loss: u64,
+    pub auction_incentive_bps: u16,
+    pub max_repay_amount: u64,
+    pub remaining_debt: u128,
+    pub auction_active: bool,
+    pub metadata: MarketEventMetadata,
+}
+
+#[event]
 pub struct HlpOpened {
     pub market: Pubkey,
     pub owner: Pubkey,

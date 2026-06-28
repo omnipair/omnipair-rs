@@ -1682,205 +1682,6 @@ export type OmnipairV2 = {
       ]
     },
     {
-      "name": "liquidate",
-      "discriminator": [
-        223,
-        179,
-        226,
-        125,
-        48,
-        46,
-        39,
-        74
-      ],
-      "accounts": [
-        {
-          "name": "market",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  97,
-                  114,
-                  107,
-                  101,
-                  116,
-                  95,
-                  118,
-                  50
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market.base_mint",
-                "account": "market"
-              },
-              {
-                "kind": "account",
-                "path": "market.quote_mint",
-                "account": "market"
-              },
-              {
-                "kind": "account",
-                "path": "market.params_hash",
-                "account": "market"
-              }
-            ]
-          }
-        },
-        {
-          "name": "futarchyAuthority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  102,
-                  117,
-                  116,
-                  97,
-                  114,
-                  99,
-                  104,
-                  121,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "liquidator",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "debtAssetMint"
-        },
-        {
-          "name": "collateralAssetMint"
-        },
-        {
-          "name": "reserveVault",
-          "writable": true
-        },
-        {
-          "name": "interestVault",
-          "writable": true
-        },
-        {
-          "name": "collateralVault",
-          "writable": true
-        },
-        {
-          "name": "insuranceVault",
-          "writable": true
-        },
-        {
-          "name": "collateralInsuranceVault",
-          "writable": true
-        },
-        {
-          "name": "liquidatorDebtAccount",
-          "writable": true
-        },
-        {
-          "name": "liquidatorCollateralAccount",
-          "writable": true
-        },
-        {
-          "name": "marginPosition",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  97,
-                  114,
-                  103,
-                  105,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "market"
-              },
-              {
-                "kind": "account",
-                "path": "margin_position.owner",
-                "account": "marginPosition"
-              }
-            ]
-          }
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "token2022Program",
-          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
-        },
-        {
-          "name": "eventAuthority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  95,
-                  95,
-                  101,
-                  118,
-                  101,
-                  110,
-                  116,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "program"
-        }
-      ],
-      "args": [
-        {
-          "name": "args",
-          "type": {
-            "defined": {
-              "name": "liquidateArgs"
-            }
-          }
-        }
-      ]
-    },
-    {
       "name": "openHedge",
       "discriminator": [
         76,
@@ -2134,6 +1935,145 @@ export type OmnipairV2 = {
           }
         }
       ]
+    },
+    {
+      "name": "openLiquidationAuction",
+      "discriminator": [
+        71,
+        119,
+        13,
+        15,
+        59,
+        160,
+        197,
+        251
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.base_mint",
+                "account": "market"
+              },
+              {
+                "kind": "account",
+                "path": "market.quote_mint",
+                "account": "market"
+              },
+              {
+                "kind": "account",
+                "path": "market.params_hash",
+                "account": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "debtAssetMint"
+        },
+        {
+          "name": "collateralAssetMint"
+        },
+        {
+          "name": "marginPosition",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  103,
+                  105,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "margin_position.owner",
+                "account": "marginPosition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "liquidationAuction",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  113,
+                  117,
+                  105,
+                  100,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "marginPosition"
+              },
+              {
+                "kind": "account",
+                "path": "debtAssetMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "removeLiquidity",
@@ -2930,6 +2870,217 @@ export type OmnipairV2 = {
           "type": {
             "defined": {
               "name": "setYieldRecipientArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "settleLiquidationAuction",
+      "discriminator": [
+        116,
+        137,
+        231,
+        255,
+        220,
+        245,
+        108,
+        12
+      ],
+      "accounts": [
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.base_mint",
+                "account": "market"
+              },
+              {
+                "kind": "account",
+                "path": "market.quote_mint",
+                "account": "market"
+              },
+              {
+                "kind": "account",
+                "path": "market.params_hash",
+                "account": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "futarchyAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  117,
+                  116,
+                  97,
+                  114,
+                  99,
+                  104,
+                  121,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bidder",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "debtAssetMint"
+        },
+        {
+          "name": "collateralAssetMint"
+        },
+        {
+          "name": "reserveVault",
+          "writable": true
+        },
+        {
+          "name": "interestVault",
+          "writable": true
+        },
+        {
+          "name": "collateralVault",
+          "writable": true
+        },
+        {
+          "name": "insuranceVault",
+          "writable": true
+        },
+        {
+          "name": "collateralInsuranceVault",
+          "writable": true
+        },
+        {
+          "name": "bidderDebtAccount",
+          "writable": true
+        },
+        {
+          "name": "bidderCollateralAccount",
+          "writable": true
+        },
+        {
+          "name": "marginPosition",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  103,
+                  105,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "margin_position.owner",
+                "account": "marginPosition"
+              }
+            ]
+          }
+        },
+        {
+          "name": "liquidationAuction",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  113,
+                  117,
+                  105,
+                  100,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  97,
+                  117,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "marginPosition"
+              },
+              {
+                "kind": "account",
+                "path": "debtAssetMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "token2022Program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "settleLiquidationAuctionArgs"
             }
           }
         }
@@ -3882,6 +4033,19 @@ export type OmnipairV2 = {
       ]
     },
     {
+      "name": "liquidationAuction",
+      "discriminator": [
+        114,
+        80,
+        77,
+        48,
+        79,
+        174,
+        24,
+        141
+      ]
+    },
+    {
       "name": "marginPosition",
       "discriminator": [
         176,
@@ -3959,6 +4123,32 @@ export type OmnipairV2 = {
         168,
         104,
         6
+      ]
+    },
+    {
+      "name": "liquidationAuctionOpened",
+      "discriminator": [
+        51,
+        74,
+        110,
+        0,
+        143,
+        66,
+        255,
+        109
+      ]
+    },
+    {
+      "name": "liquidationAuctionSettled",
+      "discriminator": [
+        7,
+        101,
+        156,
+        17,
+        220,
+        37,
+        159,
+        218
       ]
     },
     {
@@ -4788,6 +4978,31 @@ export type OmnipairV2 = {
       "code": 6107,
       "name": "instructionNotLive",
       "msg": "Instruction is intentionally not live yet"
+    },
+    {
+      "code": 6108,
+      "name": "liquidationRepayTooLarge",
+      "msg": "Liquidation repay amount exceeds partial liquidation cap"
+    },
+    {
+      "code": 6109,
+      "name": "invalidLiquidationAuction",
+      "msg": "Invalid liquidation auction"
+    },
+    {
+      "code": 6110,
+      "name": "liquidationAuctionAlreadyActive",
+      "msg": "Liquidation auction is already active"
+    },
+    {
+      "code": 6111,
+      "name": "liquidationAuctionInactive",
+      "msg": "Liquidation auction is inactive"
+    },
+    {
+      "code": 6112,
+      "name": "staleLiquidationAuction",
+      "msg": "Liquidation auction is stale"
     }
   ],
   "types": [
@@ -5456,25 +5671,233 @@ export type OmnipairV2 = {
       }
     },
     {
-      "name": "liquidateArgs",
+      "name": "liquidationAuction",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "repayAmount",
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          },
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "marginPosition",
+            "type": "pubkey"
+          },
+          {
+            "name": "borrower",
+            "type": "pubkey"
+          },
+          {
+            "name": "debtAsset",
+            "type": "u8"
+          },
+          {
+            "name": "collateralAsset",
+            "type": "u8"
+          },
+          {
+            "name": "debtMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "collateralMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "positionRiskEpoch",
             "type": "u64"
           },
           {
-            "name": "minCollateralOut",
+            "name": "startSlot",
             "type": "u64"
           },
           {
-            "name": "maxInsuranceDraw",
+            "name": "endSlot",
             "type": "u64"
           },
           {
-            "name": "maxSocializedLoss",
+            "name": "startHealthBps",
             "type": "u64"
+          },
+          {
+            "name": "startIncentiveBps",
+            "type": "u16"
+          },
+          {
+            "name": "maxIncentiveBps",
+            "type": "u16"
+          },
+          {
+            "name": "maxRepayAmount",
+            "type": "u64"
+          },
+          {
+            "name": "referencePriceNad",
+            "type": "u64"
+          },
+          {
+            "name": "settledRepayAmount",
+            "type": "u64"
+          },
+          {
+            "name": "lastSettlementSlot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "liquidationAuctionOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "marginPosition",
+            "type": "pubkey"
+          },
+          {
+            "name": "borrower",
+            "type": "pubkey"
+          },
+          {
+            "name": "debtAssetMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "collateralAssetMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "startSlot",
+            "type": "u64"
+          },
+          {
+            "name": "endSlot",
+            "type": "u64"
+          },
+          {
+            "name": "startHealthBps",
+            "type": "u64"
+          },
+          {
+            "name": "startIncentiveBps",
+            "type": "u16"
+          },
+          {
+            "name": "maxIncentiveBps",
+            "type": "u16"
+          },
+          {
+            "name": "maxRepayAmount",
+            "type": "u64"
+          },
+          {
+            "name": "referencePriceNad",
+            "type": "u64"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "marketEventMetadata"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "liquidationAuctionSettled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "marginPosition",
+            "type": "pubkey"
+          },
+          {
+            "name": "borrower",
+            "type": "pubkey"
+          },
+          {
+            "name": "bidder",
+            "type": "pubkey"
+          },
+          {
+            "name": "debtAssetMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "collateralAssetMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "repaidAmount",
+            "type": "u64"
+          },
+          {
+            "name": "collateralToBidder",
+            "type": "u64"
+          },
+          {
+            "name": "collateralSeized",
+            "type": "u64"
+          },
+          {
+            "name": "insuranceFunded",
+            "type": "u64"
+          },
+          {
+            "name": "insuranceDrawn",
+            "type": "u64"
+          },
+          {
+            "name": "socializedLoss",
+            "type": "u64"
+          },
+          {
+            "name": "auctionIncentiveBps",
+            "type": "u16"
+          },
+          {
+            "name": "maxRepayAmount",
+            "type": "u64"
+          },
+          {
+            "name": "remainingDebt",
+            "type": "u128"
+          },
+          {
+            "name": "auctionActive",
+            "type": "bool"
+          },
+          {
+            "name": "metadata",
+            "type": {
+              "defined": {
+                "name": "marketEventMetadata"
+              }
+            }
           }
         ]
       }
@@ -5655,6 +6078,10 @@ export type OmnipairV2 = {
           {
             "name": "fixedQuoteShares",
             "type": "u128"
+          },
+          {
+            "name": "riskEpoch",
+            "type": "u64"
           },
           {
             "name": "bump",
@@ -6015,6 +6442,14 @@ export type OmnipairV2 = {
           },
           {
             "name": "marketHealthMinBps",
+            "type": "u16"
+          },
+          {
+            "name": "liquidationAuctionDurationSlots",
+            "type": "u64"
+          },
+          {
+            "name": "liquidationAuctionStartIncentiveBps",
             "type": "u16"
           },
           {
@@ -7156,6 +7591,30 @@ export type OmnipairV2 = {
       }
     },
     {
+      "name": "settleLiquidationAuctionArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "repayAmount",
+            "type": "u64"
+          },
+          {
+            "name": "minCollateralOut",
+            "type": "u64"
+          },
+          {
+            "name": "maxInsuranceDraw",
+            "type": "u64"
+          },
+          {
+            "name": "maxSocializedLoss",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "settleProtocolAuctionArgs",
       "type": {
         "kind": "struct",
@@ -7642,9 +8101,24 @@ export type OmnipairV2 = {
       "value": "[105, 110, 115, 117, 114, 97, 110, 99, 101]"
     },
     {
+      "name": "liquidationAuctionSeedPrefix",
+      "type": "bytes",
+      "value": "[108, 105, 113, 117, 105, 100, 97, 116, 105, 111, 110, 95, 97, 117, 99, 116, 105, 111, 110]"
+    },
+    {
       "name": "liquidationIncentiveBps",
       "type": "u16",
       "value": "100"
+    },
+    {
+      "name": "liquidationInsuranceFundingBps",
+      "type": "u16",
+      "value": "200"
+    },
+    {
+      "name": "liquidationMaxIncentiveBps",
+      "type": "u16",
+      "value": "500"
     },
     {
       "name": "liquidationPenaltyBps",

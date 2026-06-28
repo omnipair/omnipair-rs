@@ -47,6 +47,7 @@ impl DepositCollateral {
                     .ok_or(ErrorCode::MarketMathOverflow)?;
             }
         }
+        margin_position.record_risk_update()?;
 
         Ok(CollateralReceipt {
             collateral_credit: self.collateral_credit,
@@ -96,6 +97,7 @@ impl WithdrawCollateral {
                     .ok_or(ErrorCode::MarketMathOverflow)?;
             }
         }
+        margin_position.record_risk_update()?;
         market.refresh_market_health()?;
         market.assert_risk_circuit_breakers()?;
 

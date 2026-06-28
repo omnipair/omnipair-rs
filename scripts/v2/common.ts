@@ -502,6 +502,8 @@ export function defaultMarketConfig() {
     kEmaDrawdownBps: Number(process.env.OMNIPAIR_V2_K_EMA_DRAWDOWN_BPS ?? "1000"),
     recognizedCollateralCapBps: Number(process.env.OMNIPAIR_V2_RECOGNIZED_COLLATERAL_CAP_BPS ?? "15000"),
     marketHealthMinBps: Number(process.env.OMNIPAIR_V2_MARKET_HEALTH_MIN_BPS ?? "11000"),
+    liquidationAuctionDurationSlots: new anchor.BN(process.env.OMNIPAIR_V2_LIQUIDATION_AUCTION_DURATION_SLOTS ?? "1200"),
+    liquidationAuctionStartIncentiveBps: Number(process.env.OMNIPAIR_V2_LIQUIDATION_AUCTION_START_INCENTIVE_BPS ?? "0"),
     hedgedLpEnabled: process.env.OMNIPAIR_V2_HEDGED_LP_ENABLED !== "0",
     startTime: new anchor.BN(startTime),
   };

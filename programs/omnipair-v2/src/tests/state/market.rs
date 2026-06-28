@@ -100,6 +100,8 @@ use super::*;
         config.ema_half_life_ms = MIN_HALF_LIFE_MS;
         config.directional_ema_half_life_ms = MIN_HALF_LIFE_MS;
         config.k_ema_half_life_ms = MIN_HALF_LIFE_MS;
+        config.liquidation_auction_duration_slots = 1_200;
+        config.liquidation_auction_start_incentive_bps = 0;
 
         let action = market.prepare_config_update(manager, config, 7).unwrap();
         assert_eq!(

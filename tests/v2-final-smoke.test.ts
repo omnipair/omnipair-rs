@@ -38,6 +38,7 @@ import {
   deriveMarketFeeVaultAddress,
   deriveMarketInterestVaultAddress,
   deriveMarketReserveVaultAddress,
+  deriveLiquidationAuctionAddress,
   deriveMarginPositionAddress,
   deriveYieldAccountAddress,
   deriveYieldTransferHookValidationAddress,
@@ -76,6 +77,8 @@ function marketConfig() {
     kEmaDrawdownBps: 1_000,
     recognizedCollateralCapBps: 15_000,
     marketHealthMinBps: 11_000,
+    liquidationAuctionDurationSlots: new BN(1_200),
+    liquidationAuctionStartIncentiveBps: 0,
     hedgedLpEnabled: true,
     startTime: new BN(0),
   };
@@ -2026,17 +2029,38 @@ describe("Omnipair V2 final model smoke", () => {
     const baseCollateralBefore = positionBefore.base_collateral.toNumber();
     const quoteDebtSharesBefore = BigInt(positionBefore.fixed_quote_shares.toString());
     const ownerBaseBefore = await getAccount(connection as any, fixture.ownerBaseAccount);
+    const liquidationAuction = deriveLiquidationAuctionAddress(
+      fixture.market,
+      marginPosition,
+      fixture.quoteMint
+    )[0];
 
-    const liquidateTx = await program.methods
-      .liquidate({
-        repayAmount: new BN(1_000),
+    const openAuctionTx = await program.methods
+      .openLiquidationAuction()
+      .accounts({
+        keeper: payer.publicKey,
+        market: fixture.market,
+        debtAssetMint: fixture.quoteMint,
+        collateralAssetMint: fixture.baseMint,
+        marginPosition,
+        liquidationAuction,
+        systemProgram: SystemProgram.programId,
+      })
+      .transaction();
+    await connection.sendTransaction(openAuctionTx, [payer]);
+    trackV2Instruction("openLiquidationAuction", this.test?.title);
+
+    const settleAuctionTx = await program.methods
+      .settleLiquidationAuction({
+        repayAmount: new BN(1),
         minCollateralOut: new BN(1),
         maxInsuranceDraw: new BN(0),
         maxSocializedLoss: new BN(0),
       })
       .accounts({
         market: fixture.market,
-        liquidator: payer.publicKey,
+        futarchyAuthority,
+        bidder: payer.publicKey,
         debtAssetMint: fixture.quoteMint,
         collateralAssetMint: fixture.baseMint,
         reserveVault: fixture.quoteReserveVault,
@@ -2044,17 +2068,16 @@ describe("Omnipair V2 final model smoke", () => {
         collateralVault: fixture.baseCollateralVault,
         insuranceVault: fixture.quoteInsuranceVault,
         collateralInsuranceVault: fixture.baseInsuranceVault,
-        liquidatorDebtAccount: fixture.ownerQuoteAccount,
-        liquidatorCollateralAccount: fixture.ownerBaseAccount,
+        bidderDebtAccount: fixture.ownerQuoteAccount,
+        bidderCollateralAccount: fixture.ownerBaseAccount,
         marginPosition,
+        liquidationAuction,
         tokenProgram: TOKEN_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
-        eventAuthority: eventAuthority(),
-        program: OMNIPAIR_V2_PROGRAM_ID,
       })
       .transaction();
-    await connection.sendTransaction(liquidateTx, [payer]);
-    trackV2Instruction("liquidate", this.test?.title);
+    await connection.sendTransaction(settleAuctionTx, [payer]);
+    trackV2Instruction("settleLiquidationAuction", this.test?.title);
 
     const ownerBaseAfter = await getAccount(connection as any, fixture.ownerBaseAccount);
     expect(ownerBaseAfter.amount > ownerBaseBefore.amount).to.equal(true);

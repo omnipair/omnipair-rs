@@ -13,6 +13,10 @@ pub const MAX_MANAGER_FEE_BPS: u16 = 500;
 #[constant]
 pub const LIQUIDATION_INCENTIVE_BPS: u16 = 100;
 #[constant]
+pub const LIQUIDATION_MAX_INCENTIVE_BPS: u16 = 500;
+#[constant]
+pub const LIQUIDATION_INSURANCE_FUNDING_BPS: u16 = 200;
+#[constant]
 pub const LIQUIDATION_PENALTY_BPS: u16 = 300;
 #[constant]
 pub const MARKET_CREATION_FEE_LAMPORTS: u64 = 200_000_000; // 0.2 SOL, same fee as V1 pair creation
@@ -93,6 +97,8 @@ pub const YIELD_ACCOUNT_SEED_PREFIX: &[u8] = b"yield";
 pub const HLP_YLP_VAULT_SEED_PREFIX: &[u8] = b"hlp_ylp_vault";
 #[constant]
 pub const INSURANCE_SEED_PREFIX: &[u8] = b"insurance";
+#[constant]
+pub const LIQUIDATION_AUCTION_SEED_PREFIX: &[u8] = b"liquidation_auction";
 #[constant]
 pub const MARKET_VERSION: u8 = 2;
 

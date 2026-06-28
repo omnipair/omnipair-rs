@@ -180,9 +180,17 @@ pub mod omnipair_v2 {
         Repay::handle_repay(ctx, args)
     }
 
+    #[access_control(ctx.accounts.validate())]
+    pub fn open_liquidation_auction(ctx: Context<OpenLiquidationAuction>) -> Result<()> {
+        OpenLiquidationAuction::handle_open(ctx)
+    }
+
     #[access_control(ctx.accounts.validate(&args))]
-    pub fn liquidate(ctx: Context<Liquidate>, args: LiquidateArgs) -> Result<()> {
-        Liquidate::handle_liquidate(ctx, args)
+    pub fn settle_liquidation_auction(
+        ctx: Context<SettleLiquidationAuction>,
+        args: SettleLiquidationAuctionArgs,
+    ) -> Result<()> {
+        SettleLiquidationAuction::handle_settle(ctx, args)
     }
 
     #[access_control(ctx.accounts.validate(&args))]

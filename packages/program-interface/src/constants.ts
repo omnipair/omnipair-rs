@@ -45,6 +45,7 @@ export const SEEDS = {
   YIELD_ACCOUNT: Buffer.from("yield"),
   HLP_YLP_VAULT: Buffer.from("hlp_ylp_vault"),
   INSURANCE: Buffer.from("insurance"),
+  LIQUIDATION_AUCTION: Buffer.from("liquidation_auction"),
   USER_POSITION: Buffer.from("gamm_position"),
   FUTARCHY_AUTHORITY: Buffer.from("futarchy_authority"),
   RESERVE_VAULT: Buffer.from("reserve_vault"),
@@ -209,6 +210,25 @@ export function deriveMarginPositionAddress(
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [SEEDS.MARGIN_POSITION, market.toBuffer(), owner.toBuffer()],
+    OMNIPAIR_V2_PROGRAM_ID
+  );
+}
+
+/**
+ * Derive liquidation auction PDA address for a market margin position and debt mint.
+ */
+export function deriveLiquidationAuctionAddress(
+  market: PublicKey,
+  marginPosition: PublicKey,
+  debtMint: PublicKey
+): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [
+      SEEDS.LIQUIDATION_AUCTION,
+      market.toBuffer(),
+      marginPosition.toBuffer(),
+      debtMint.toBuffer(),
+    ],
     OMNIPAIR_V2_PROGRAM_ID
   );
 }

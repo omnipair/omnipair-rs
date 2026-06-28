@@ -147,11 +147,10 @@ impl Market {
         debt_asset: MarketAsset,
         debt_amount: u64,
     ) -> Result<u64> {
-        self.collateral_amount_for_debt_value_with_penalty(
+        self.collateral_amount_for_debt_value_with_penalty_bps(
             debt_asset,
             debt_amount,
             LIQUIDATION_PENALTY_BPS,
-            &self.current_risk()?,
         )
     }
 
@@ -160,10 +159,23 @@ impl Market {
         debt_asset: MarketAsset,
         debt_amount: u64,
     ) -> Result<u64> {
-        self.collateral_amount_for_debt_value_with_penalty(
+        self.collateral_amount_for_debt_value_with_penalty_bps(
             debt_asset,
             debt_amount,
             LIQUIDATION_INCENTIVE_BPS,
+        )
+    }
+
+    pub(crate) fn collateral_amount_for_debt_value_with_penalty_bps(
+        &self,
+        debt_asset: MarketAsset,
+        debt_amount: u64,
+        penalty_bps: u16,
+    ) -> Result<u64> {
+        self.collateral_amount_for_debt_value_with_penalty(
+            debt_asset,
+            debt_amount,
+            penalty_bps,
             &self.current_risk()?,
         )
     }

@@ -40,7 +40,6 @@ const V2_INSTRUCTIONS = [
   "updateProtocolRevenue",
   "updateRevenueRecipients",
   "setGlobalReduceOnly",
-  "claimProtocolFees",
   "initialize",
   "updateConfig",
   "setReduceOnly",
@@ -53,7 +52,8 @@ const V2_INSTRUCTIONS = [
   "withdrawCollateral",
   "borrow",
   "repay",
-  "liquidate",
+  "openLiquidationAuction",
+  "settleLiquidationAuction",
   "openHedge",
   "closeHedge",
 ];

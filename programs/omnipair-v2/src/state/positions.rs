@@ -14,6 +14,7 @@ pub struct MarginPosition {
     pub recognized_quote_collateral_for_base_debt: u64,
     pub fixed_base_shares: u128,
     pub fixed_quote_shares: u128,
+    pub risk_epoch: u64,
     pub bump: u8,
 }
 
@@ -21,6 +22,7 @@ impl MarginPosition {
     pub fn initialize(&mut self, owner: Pubkey, market: Pubkey, bump: u8) {
         self.owner = owner;
         self.market = market;
+        self.risk_epoch = 0;
         self.bump = bump;
     }
 
@@ -52,5 +54,13 @@ impl MarginPosition {
 
     pub fn fixed_quote_debt(&self, debt: &Debt) -> Result<u128> {
         Debt::shares_to_debt(self.fixed_quote_shares, debt.quote_borrow_index_nad)
+    }
+
+    pub fn record_risk_update(&mut self) -> Result<()> {
+        self.risk_epoch = self
+            .risk_epoch
+            .checked_add(1)
+            .ok_or(ErrorCode::MarketMathOverflow)?;
+        Ok(())
     }
 }

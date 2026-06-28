@@ -115,6 +115,7 @@ impl Borrow {
             self.min_health_bps,
             ErrorCode::InsufficientMarketHealth
         );
+        margin_position.record_risk_update()?;
         DebtReceipt::from_market(market, debt_delta, 0)
     }
 }
@@ -242,6 +243,7 @@ impl Repay {
                     .ok_or(ErrorCode::ReserveOverflow)?;
             }
         }
+        margin_position.record_risk_update()?;
         market.refresh_market_health()?;
         market.assert_risk_circuit_breakers()?;
         DebtReceipt::from_market(market, debt_delta, interest_paid)

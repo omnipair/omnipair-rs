@@ -24,6 +24,8 @@ use super::*;
             k_ema_drawdown_bps: 1_000,
             recognized_collateral_cap_bps: 15_000,
             market_health_min_bps: 11_000,
+            liquidation_auction_duration_slots: 1_200,
+            liquidation_auction_start_incentive_bps: 0,
             hedged_lp_enabled: true,
             start_time: 0,
         }

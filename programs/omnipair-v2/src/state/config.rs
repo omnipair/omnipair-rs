@@ -1,7 +1,10 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-    constants::{BPS_DENOMINATOR, MAX_HALF_LIFE_MS, MAX_MANAGER_FEE_BPS, MIN_HALF_LIFE_MS},
+    constants::{
+        BPS_DENOMINATOR, LIQUIDATION_MAX_INCENTIVE_BPS, MAX_HALF_LIFE_MS, MAX_MANAGER_FEE_BPS,
+        MIN_HALF_LIFE_MS,
+    },
     errors::ErrorCode,
 };
 
@@ -24,6 +27,8 @@ pub struct MarketConfig {
     pub k_ema_drawdown_bps: u16,
     pub recognized_collateral_cap_bps: u16,
     pub market_health_min_bps: u16,
+    pub liquidation_auction_duration_slots: u64,
+    pub liquidation_auction_start_incentive_bps: u16,
     pub hedged_lp_enabled: bool,
     pub start_time: i64,
 }
@@ -67,6 +72,11 @@ impl MarketConfig {
             self.recognized_collateral_cap_bps >= BPS_DENOMINATOR
                 && self.market_health_min_bps >= BPS_DENOMINATOR
                 && self.recognized_collateral_cap_bps >= self.market_health_min_bps,
+            ErrorCode::InvalidMarketConfig
+        );
+        require!(
+            self.liquidation_auction_duration_slots > 0
+                && self.liquidation_auction_start_incentive_bps <= LIQUIDATION_MAX_INCENTIVE_BPS,
             ErrorCode::InvalidMarketConfig
         );
         Ok(())
