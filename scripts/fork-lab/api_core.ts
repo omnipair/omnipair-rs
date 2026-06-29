@@ -43,6 +43,11 @@ const DEFAULT_PAIR = new PublicKey(
 const DEFAULT_FUNDING_RAW = BigInt(process.env.FORK_DEFAULT_TOKEN_FUNDING_RAW ?? '1000000000000');
 const CLOSE_PERMISSION = 1 << 0;
 const ORDER_KIND_TAKE_PROFIT = 1;
+const ORDER_KIND_STOP_LOSS = 2;
+// Deterministic order ids per kind so the UI can set/modify/remove a position's
+// single take-profit / stop-loss without tracking opaque order ids.
+const TP_ORDER_ID = 1;
+const SL_ORDER_ID = 2;
 const BPS_DENOMINATOR = 10_000n;
 const NAD = 1_000_000_000n;
 
@@ -342,8 +347,35 @@ function replacer(_key: string, value: unknown): unknown {
     return value;
 }
 
+function isBnLike(value: unknown): value is { toString(radix?: number): string } {
+    if (BN.isBN(value)) return true;
+    // Anchor decodes numbers with its own bundled bn.js copy, so a plain
+    // `instanceof`/`BN.isBN` check can miss them. Detect by shape instead.
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        Array.isArray((value as { words?: unknown }).words) &&
+        (value as { constructor?: { name?: string } }).constructor?.name === 'BN'
+    );
+}
+
+// Deep-convert BN/PublicKey/bigint to JSON-friendly *decimal* strings. We avoid
+// JSON.stringify here because it invokes `BN.toJSON()` (base-16) before any
+// replacer runs, which is what made numeric fields serialize as hex.
 function jsonSafe(value: unknown): unknown {
-    return JSON.parse(JSON.stringify(value, replacer));
+    if (value === null || value === undefined) return value;
+    if (typeof value === 'bigint') return value.toString();
+    if (value instanceof PublicKey) return value.toBase58();
+    if (isBnLike(value)) return value.toString(10);
+    if (Array.isArray(value)) return value.map((item) => jsonSafe(item));
+    if (typeof value === 'object') {
+        const out: Record<string, unknown> = {};
+        for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+            out[key] = jsonSafe(item);
+        }
+        return out;
+    }
+    return value;
 }
 
 function corsHeaders() {
@@ -764,6 +796,7 @@ export async function route(req: http.IncomingMessage, body: any) {
                 '/api/v1/fork/fund-wallet',
                 '/api/v1/fork/tx/open-leverage',
                 '/api/v1/fork/tx/create-current-price-take-profit',
+                '/api/v1/fork/tx/set-leverage-orders',
                 '/api/v1/fork/keeper/execute-take-profit',
             ],
         };
@@ -988,6 +1021,124 @@ export async function route(req: http.IncomingMessage, body: any) {
             userLeverageDelegation: derived.delegation,
             triggerCloseoutPriceNad: trigger,
             currentCloseoutValue: current.closeoutValue,
+        };
+    }
+
+    if (req.method === 'POST' && pathname === '/api/v1/fork/tx/set-leverage-orders') {
+        const owner = parsePubkey(body.owner, 'owner');
+        const pairKey = parsePair(body.pair);
+        const isDebtToken0 = parseBool(body.isDebtToken0, 'isDebtToken0');
+        const pair = await omnipair.account.pair.fetch(pairKey) as PairAccount;
+        const derived = side(pair, pairKey, owner, isDebtToken0);
+
+        const positionInfo = await connection.getAccountInfo(derived.position, 'confirmed');
+        if (!positionInfo) {
+            throw new Error('Leverage position not found for the given owner/pair/side');
+        }
+
+        // Each entry: undefined → leave unchanged, null → remove the order,
+        // raw closeout-price-NAD → create (or update) the order.
+        const targets = [
+            { kind: ORDER_KIND_TAKE_PROFIT, orderId: TP_ORDER_ID, input: body.takeProfit },
+            { kind: ORDER_KIND_STOP_LOSS, orderId: SL_ORDER_ID, input: body.stopLoss },
+        ];
+
+        const delegationExists = Boolean(
+            await connection.getAccountInfo(derived.delegation, 'confirmed'),
+        );
+        const ixs: TransactionInstruction[] = [];
+        const applied: Array<{ kind: number; action: string; order: PublicKey; trigger?: bigint }> = [];
+        let willHaveActiveOrder = false;
+
+        for (const target of targets) {
+            if (target.input === undefined) continue; // leave unchanged
+
+            const order = orderPda(derived.position, owner, target.orderId);
+            const orderExists = Boolean(await connection.getAccountInfo(order, 'confirmed'));
+
+            if (target.input === null) {
+                if (orderExists) {
+                    ixs.push(await leverageDelegate.methods
+                        .cancelLeverageOrder({ orderId: new BN(target.orderId) })
+                        .accounts({ order, owner })
+                        .instruction());
+                    applied.push({ kind: target.kind, action: 'cancel', order });
+                }
+                continue;
+            }
+
+            const trigger = parseRaw(target.input, 'triggerCloseoutPriceNad');
+            if (trigger <= 0n) {
+                throw new Error('triggerCloseoutPriceNad must be a positive integer');
+            }
+            willHaveActiveOrder = true;
+
+            if (orderExists) {
+                ixs.push(await leverageDelegate.methods
+                    .updateLeverageOrder({
+                        orderId: new BN(target.orderId),
+                        kind: target.kind,
+                        triggerCloseoutPriceNad: toBN(trigger),
+                    })
+                    .accounts({
+                        pair: pairKey,
+                        userLeveragePosition: derived.position,
+                        order,
+                        owner,
+                    })
+                    .instruction());
+                applied.push({ kind: target.kind, action: 'update', order, trigger });
+            } else {
+                ixs.push(await leverageDelegate.methods
+                    .createLeverageOrder({
+                        orderId: new BN(target.orderId),
+                        kind: target.kind,
+                        triggerCloseoutPriceNad: toBN(trigger),
+                    })
+                    .accounts({
+                        pair: pairKey,
+                        userLeveragePosition: derived.position,
+                        order,
+                        owner,
+                        systemProgram: SystemProgram.programId,
+                    })
+                    .instruction());
+                applied.push({ kind: target.kind, action: 'create', order, trigger });
+            }
+        }
+
+        if (ixs.length === 0) {
+            throw new Error('No take-profit / stop-loss changes were requested');
+        }
+
+        // The keeper can only execute the close if the position has delegated the
+        // CLOSE action to the delegate program. Create the delegation lazily the
+        // first time an order becomes active.
+        if (willHaveActiveOrder && !delegationExists) {
+            ixs.unshift(await omnipair.methods
+                .createLeverageDelegation({
+                    isDebtToken0,
+                    delegatedProgram: leverageDelegate.programId,
+                    approvedActions: CLOSE_PERMISSION,
+                })
+                .accounts({
+                    pair: pairKey,
+                    userLeveragePosition: derived.position,
+                    userLeverageDelegation: derived.delegation,
+                    owner,
+                    systemProgram: SystemProgram.programId,
+                })
+                .instruction());
+        }
+
+        return {
+            transaction: await serializeOwnerTx(owner, ixs),
+            pair: pairKey,
+            owner,
+            isDebtToken0,
+            userLeveragePosition: derived.position,
+            userLeverageDelegation: derived.delegation,
+            applied,
         };
     }
 
