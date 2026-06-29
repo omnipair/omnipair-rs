@@ -3,7 +3,8 @@ use super::*;
     #[test]
     fn swap_protocol_fee_splits_between_auction_lanes_at_accrual() {
         let mut side = MarketSide::default();
-        let receipt = RecordSwapFeeCredit::new(
+        let receipt = side
+            .record_swap_fee_credit(
             10_000,
             1_000,
             2_000,
@@ -12,7 +13,6 @@ use super::*;
                 buyback_auction_bps: 2_500,
             },
         )
-        .apply(&mut side)
         .unwrap();
 
         assert_eq!(receipt.manager_swap_fee_liability, 1_000);
@@ -27,7 +27,8 @@ use super::*;
     #[test]
     fn interest_protocol_fee_splits_between_auction_lanes_at_accrual() {
         let mut side = MarketSide::default();
-        let receipt = RecordInterestCredit::new(
+        let receipt = side
+            .record_interest_credit(
             10_000,
             500,
             1_000,
@@ -36,7 +37,6 @@ use super::*;
                 buyback_auction_bps: 6_000,
             },
         )
-        .apply(&mut side)
         .unwrap();
 
         assert_eq!(receipt.manager_swap_fee_liability, 0);
@@ -51,7 +51,8 @@ use super::*;
     #[test]
     fn invalid_auction_split_is_rejected_before_liabilities_move() {
         let mut side = MarketSide::default();
-        let err = RecordSwapFeeCredit::new(
+        let err = side
+            .record_swap_fee_credit(
             10_000,
             0,
             1_000,
@@ -60,7 +61,6 @@ use super::*;
                 buyback_auction_bps: 4_000,
             },
         )
-        .apply(&mut side)
         .unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::InvalidDistribution));

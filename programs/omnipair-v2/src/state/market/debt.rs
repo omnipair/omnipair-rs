@@ -125,5 +125,5 @@ impl Debt {
 
 #[cfg(test)]
 mod tests {
-    include!("../tests/state/debt.rs");
+    include!("../../tests/state/debt.rs");
 }

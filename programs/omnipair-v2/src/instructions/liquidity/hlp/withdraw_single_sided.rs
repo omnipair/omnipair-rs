@@ -14,10 +14,6 @@ use crate::{
         token::{token_burn, transfer_from_vault_to_user, transfer_from_vault_to_vault},
     },
     state::{FutarchyAuthority, Market, MarketAsset, YieldAccount, YieldTokenKind},
-    transitions::{
-        fee::RecordInterestCredit,
-        hedge::{checkpoint_hlp_yield_from_ylp, CloseHedge as CloseHedgeTransition},
-    },
 };
 
 use crate::instructions::common::{
@@ -27,15 +23,15 @@ use crate::instructions::common::{
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct CloseHedgeArgs {
+pub struct WithdrawSingleSidedArgs {
     pub hlp_amount: u64,
     pub min_target_amount_out: u64,
 }
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: CloseHedgeArgs)]
-pub struct CloseHedge<'info> {
+#[instruction(args: WithdrawSingleSidedArgs)]
+pub struct WithdrawSingleSided<'info> {
     #[account(
         mut,
         seeds = [
@@ -112,8 +108,8 @@ pub struct CloseHedge<'info> {
     pub system_program: Program<'info, System>,
 }
 
-impl<'info> CloseHedge<'info> {
-    pub fn validate(&self, args: &CloseHedgeArgs) -> Result<()> {
+impl<'info> WithdrawSingleSided<'info> {
+    pub fn validate(&self, args: &WithdrawSingleSidedArgs) -> Result<()> {
         self.market.assert_started()?;
         require!(args.hlp_amount > 0, ErrorCode::AmountZero);
         validate_side_vault_accounts(
@@ -183,14 +179,22 @@ impl<'info> CloseHedge<'info> {
         Ok(())
     }
 
-    pub fn handle_close(ctx: Context<Self>, args: CloseHedgeArgs) -> Result<()> {
+    pub fn update(&mut self) -> Result<()> {
+        self.market.update()
+    }
+
+    pub fn update_and_validate(&mut self, args: &WithdrawSingleSidedArgs) -> Result<()> {
+        self.update()?;
+        self.validate(args)
+    }
+
+    pub fn handle_withdraw(ctx: Context<Self>, args: WithdrawSingleSidedArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let target_asset = ctx
             .accounts
             .market
             .asset_for_hlp_mint(ctx.accounts.target_hlp_mint.key())?;
-        ctx.accounts.market.accrue_interest()?;
         let target_mint_key = match target_asset {
             MarketAsset::Base => ctx.accounts.base_mint.key(),
             MarketAsset::Quote => ctx.accounts.quote_mint.key(),
@@ -203,7 +207,9 @@ impl<'info> CloseHedge<'info> {
             target_mint_key,
             ctx.bumps.target_yield_account,
         )?;
-        checkpoint_hlp_yield_from_ylp(&mut ctx.accounts.market, target_asset)?;
+        ctx.accounts
+            .market
+            .checkpoint_hlp_yield_from_ylp(target_asset)?;
         let (swap_fee_growth_index_nad, interest_growth_index_nad) =
             hlp_yield_growth_indexes(&ctx.accounts.market, target_asset);
         ctx.accounts.target_yield_account.accrue(
@@ -226,8 +232,10 @@ impl<'info> CloseHedge<'info> {
             &[],
         )?;
 
-        let receipt = CloseHedgeTransition::new(target_asset, args.hlp_amount)
-            .apply(&mut ctx.accounts.market)?;
+        let receipt = ctx
+            .accounts
+            .market
+            .close_hedge(target_asset, args.hlp_amount)?;
         if receipt.interest_paid > 0 {
             let borrowed_asset = target_asset.opposite();
             let (borrowed_reserve_vault, borrowed_mint, borrowed_decimals) = match borrowed_asset {
@@ -261,13 +269,16 @@ impl<'info> CloseHedge<'info> {
                 &[&generate_market_seeds!(ctx.accounts.market)[..]],
             )?;
             ctx.accounts.borrowed_interest_vault.reload()?;
-            RecordInterestCredit::new(
-                receipt.interest_paid,
-                ctx.accounts.market.config.manager_fee_bps,
-                ctx.accounts.futarchy_authority.revenue_share.interest_bps,
-                ctx.accounts.futarchy_authority.protocol_auction_split,
-            )
-            .apply(ctx.accounts.market.side_mut(borrowed_asset)?)?;
+            let manager_fee_bps = ctx.accounts.market.config.manager_fee_bps;
+            ctx.accounts
+                .market
+                .side_mut(borrowed_asset)?
+                .record_interest_credit(
+                    receipt.interest_paid,
+                    manager_fee_bps,
+                    ctx.accounts.futarchy_authority.revenue_share.interest_bps,
+                    ctx.accounts.futarchy_authority.protocol_auction_split,
+                )?;
         }
 
         let ylp_program = token_program_for_mint(

@@ -10,7 +10,6 @@ use crate::{
     events::{MarketCollateralDeposited, MarketEventMetadata},
     shared::{account::get_size_with_discriminator, token::transfer_from_user_to_vault},
     state::{MarginPosition, Market},
-    transitions::collateral::DepositCollateral as DepositCollateralTransition,
 };
 
 use crate::instructions::common::{require_supported_asset_mint, token_program_for_mint};
@@ -91,6 +90,15 @@ impl<'info> DepositCollateral<'info> {
         Ok(())
     }
 
+    pub fn update(&mut self) -> Result<()> {
+        self.market.update()
+    }
+
+    pub fn update_and_validate(&mut self, args: &DepositCollateralArgs) -> Result<()> {
+        self.update()?;
+        self.validate(args)
+    }
+
     pub fn handle_deposit(ctx: Context<Self>, args: DepositCollateralArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
@@ -132,8 +140,10 @@ impl<'info> DepositCollateral<'info> {
             .ok_or(ErrorCode::MarketMathOverflow)?;
         require!(collateral_credit > 0, ErrorCode::AmountZero);
 
-        let collateral_receipt = DepositCollateralTransition::new(market_asset, collateral_credit)
-            .apply(&mut ctx.accounts.margin_position)?;
+        let collateral_receipt = ctx
+            .accounts
+            .margin_position
+            .deposit_collateral(market_asset, collateral_credit)?;
 
         emit_cpi!(MarketCollateralDeposited {
             market: market_key,

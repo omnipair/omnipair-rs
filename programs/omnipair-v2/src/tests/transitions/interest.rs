@@ -64,7 +64,7 @@ use super::*;
     fn no_time_elapsed_is_a_noop() {
         let mut market = test_market(1_000, 1_000);
         market.debt.last_accrual_slot = 100;
-        AccrueInterest::new(100).apply(&mut market).unwrap();
+        market.accrue_interest_to_slot(100).unwrap();
         assert_eq!(market.debt.quote_borrow_index_nad, NAD as u128);
         assert_eq!(
             market.debt.quote_rate_at_target_nad,
@@ -77,8 +77,8 @@ use super::*;
     fn idle_side_drifts_anchor_down_toward_min() {
         // Cash present, zero debt -> utilization 0 -> error -1 -> anchor falls.
         let mut market = test_market(1_000_000, 1_000_000);
-        AccrueInterest::new(slots_for_ms(MS_PER_YEAR))
-            .apply(&mut market)
+        market
+            .accrue_interest_to_slot(slots_for_ms(MS_PER_YEAR))
             .unwrap();
         assert!(market.debt.quote_rate_at_target_nad < INTEREST_INITIAL_RATE_AT_TARGET_NAD);
         assert!(market.debt.quote_rate_at_target_nad >= INTEREST_MIN_RATE_AT_TARGET_NAD);
@@ -90,8 +90,8 @@ use super::*;
         // error = +0.5 -> curve mult 2.5x -> rate = 4% * 2.5 = 10% APR.
         let mut market = test_market(1_000_000, 50);
         market.base_hlp_vault.debt_shares = 950;
-        AccrueInterest::new(slots_for_ms(MS_PER_YEAR))
-            .apply(&mut market)
+        market
+            .accrue_interest_to_slot(slots_for_ms(MS_PER_YEAR))
             .unwrap();
         // 10% APR over one year compounds the index to 1.10.
         assert_eq!(market.debt.quote_borrow_index_nad, (NAD as u128) * 110 / 100);
@@ -108,8 +108,8 @@ use super::*;
         let mut market = test_market(1_000_000, 40);
         market.debt.fixed_quote_shares = 480;
         market.base_hlp_vault.debt_shares = 480;
-        AccrueInterest::new(slots_for_ms(MS_PER_YEAR))
-            .apply(&mut market)
+        market
+            .accrue_interest_to_slot(slots_for_ms(MS_PER_YEAR))
             .unwrap();
         assert!(market.debt.quote_rate_at_target_nad > INTEREST_INITIAL_RATE_AT_TARGET_NAD);
     }
@@ -121,8 +121,8 @@ use super::*;
         let mut market = test_market(1_000_000, 1);
         market.base_hlp_vault.debt_shares = 10_000;
         for year in 1..=15u64 {
-            AccrueInterest::new(slots_for_ms(MS_PER_YEAR * year))
-                .apply(&mut market)
+            market
+                .accrue_interest_to_slot(slots_for_ms(MS_PER_YEAR * year))
                 .unwrap();
         }
         assert_eq!(

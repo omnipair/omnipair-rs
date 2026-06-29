@@ -11,10 +11,6 @@ use crate::{
     generate_market_seeds,
     shared::token::{token_burn, transfer_from_vault_to_user},
     state::{Market, YieldAccount, YieldTokenKind},
-    transitions::{
-        fee::{carry_forward_interest, carry_forward_swap_fees},
-        reserve::RemoveLiquidity as RemoveLiquidityTransition,
-    },
 };
 
 use crate::instructions::common::{
@@ -146,18 +142,25 @@ impl<'info> RemoveLiquidity<'info> {
         Ok(())
     }
 
+    pub fn update(&mut self) -> Result<()> {
+        self.market.update()
+    }
+
+    pub fn update_and_validate(&mut self, args: &RemoveLiquidityArgs) -> Result<()> {
+        self.update()?;
+        self.validate(args)
+    }
+
     pub fn handle_remove_liquidity(ctx: Context<Self>, args: RemoveLiquidityArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
 
-        ctx.accounts.market.accrue_interest()?;
-
         {
             let market = &mut ctx.accounts.market;
-            carry_forward_swap_fees(&mut market.base_side)?;
-            carry_forward_interest(&mut market.base_side)?;
-            carry_forward_swap_fees(&mut market.quote_side)?;
-            carry_forward_interest(&mut market.quote_side)?;
+            market.base_side.carry_forward_swap_fees()?;
+            market.base_side.carry_forward_interest()?;
+            market.quote_side.carry_forward_swap_fees()?;
+            market.quote_side.carry_forward_interest()?;
             ctx.accounts.base_yield_account.accrue(
                 ctx.accounts.owner_ylp_account.amount,
                 market.base_side.fees.swap_fee_growth_index_nad,
@@ -184,11 +187,7 @@ impl<'info> RemoveLiquidity<'info> {
             &[],
         )?;
 
-        let receipt = {
-            let market = &mut ctx.accounts.market;
-            let (base_side, quote_side) = market.base_quote_sides_mut();
-            RemoveLiquidityTransition::new(args.ylp_amount).apply(base_side, quote_side)?
-        };
+        let receipt = ctx.accounts.market.remove_liquidity(args.ylp_amount)?;
         ctx.accounts.market.enforce_daily_withdraw_limit(
             crate::state::MarketAsset::Base,
             receipt.base_amount_out,

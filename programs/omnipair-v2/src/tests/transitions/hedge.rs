@@ -4,7 +4,6 @@ use super::*;
         constants::{BPS_DENOMINATOR, MARKET_VERSION},
         math::calculate_raw_amount_out,
         state::{Insurance, MarketConfig, MarketHealth, MarketSide, Risk},
-        transitions::swap::Swap as SwapTransition,
     };
 
     fn valid_config() -> MarketConfig {
@@ -468,8 +467,9 @@ use super::*;
             amount_in_after_fee,
         )
         .unwrap();
-        let (market_side_in, market_side_out) = market.swap_sides_mut(MarketAsset::Base);
-        SwapTransition::new(
+        market
+            .swap_reserves(
+                MarketAsset::Base,
             amount_in_after_fee,
             amount_out,
             0,
@@ -477,7 +477,6 @@ use super::*;
             0,
             crate::state::ProtocolAuctionSplit::default(),
         )
-        .apply(market_side_in, market_side_out)
         .unwrap();
 
         let quoted_post_swap_price =

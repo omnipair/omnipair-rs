@@ -14,7 +14,6 @@ use crate::{
         token::{token_mint_to, transfer_from_user_to_vault},
     },
     state::{FutarchyAuthority, Market, MarketAsset, YieldAccount, YieldTokenKind},
-    transitions::hedge::OpenHedge as OpenHedgeTransition,
 };
 
 use crate::instructions::common::{
@@ -23,15 +22,15 @@ use crate::instructions::common::{
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct OpenHedgeArgs {
+pub struct DepositSingleSidedArgs {
     pub deposit_amount: u64,
     pub min_hlp_amount: u64,
 }
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(args: OpenHedgeArgs)]
-pub struct OpenHedge<'info> {
+#[instruction(args: DepositSingleSidedArgs)]
+pub struct DepositSingleSided<'info> {
     #[account(
         mut,
         seeds = [
@@ -106,8 +105,8 @@ pub struct OpenHedge<'info> {
     pub system_program: Program<'info, System>,
 }
 
-impl<'info> OpenHedge<'info> {
-    pub fn validate(&self, args: &OpenHedgeArgs) -> Result<()> {
+impl<'info> DepositSingleSided<'info> {
+    pub fn validate(&self, args: &DepositSingleSidedArgs) -> Result<()> {
         self.market
             .assert_live_with_futarchy(&self.futarchy_authority)?;
         require!(
@@ -170,14 +169,22 @@ impl<'info> OpenHedge<'info> {
         Ok(())
     }
 
-    pub fn handle_open(ctx: Context<Self>, args: OpenHedgeArgs) -> Result<()> {
+    pub fn update(&mut self) -> Result<()> {
+        self.market.update()
+    }
+
+    pub fn update_and_validate(&mut self, args: &DepositSingleSidedArgs) -> Result<()> {
+        self.update()?;
+        self.validate(args)
+    }
+
+    pub fn handle_deposit(ctx: Context<Self>, args: DepositSingleSidedArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let target_asset = ctx
             .accounts
             .market
             .asset_for_hlp_mint(ctx.accounts.target_hlp_mint.key())?;
-        ctx.accounts.market.accrue_interest()?;
         let target_mint_key = match target_asset {
             MarketAsset::Base => ctx.accounts.base_mint.key(),
             MarketAsset::Quote => ctx.accounts.quote_mint.key(),
@@ -236,8 +243,10 @@ impl<'info> OpenHedge<'info> {
         }
         .ok_or(ErrorCode::MarketMathOverflow)?;
 
-        let receipt = OpenHedgeTransition::new(target_asset, deposit_credit, args.min_hlp_amount)
-            .apply(&mut ctx.accounts.market)?;
+        let receipt =
+            ctx.accounts
+                .market
+                .open_hedge(target_asset, deposit_credit, args.min_hlp_amount)?;
         initialize_or_validate_hlp_yield_account(
             &mut ctx.accounts.target_yield_account,
             owner_key,

@@ -67,6 +67,15 @@ impl<'info> ClaimManagerFees<'info> {
         Ok(())
     }
 
+    pub fn update(&mut self) -> Result<()> {
+        self.market.update()
+    }
+
+    pub fn update_and_validate(&mut self) -> Result<()> {
+        self.update()?;
+        self.validate()
+    }
+
     pub fn handle_claim(ctx: Context<Self>) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let manager_key = ctx.accounts.manager.key();

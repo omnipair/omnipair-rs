@@ -51,6 +51,7 @@ pub struct LiquidationReceipt {
 }
 
 impl Liquidation {
+    #[cfg(test)]
     pub fn new(
         debt_asset: MarketAsset,
         repay_credit: u64,
@@ -245,43 +246,6 @@ impl Liquidation {
             max_repay_amount: self.terms.max_repay_amount,
         })
     }
-}
-
-pub fn insurance_request_for_liquidation(
-    market: &Market,
-    margin_position: &MarginPosition,
-    debt_asset: MarketAsset,
-    repay_credit: u64,
-    max_insurance_draw: u64,
-) -> Result<u64> {
-    let terms = liquidation_terms(market, margin_position, debt_asset)?;
-    insurance_request_for_liquidation_with_terms(
-        market,
-        margin_position,
-        debt_asset,
-        repay_credit,
-        max_insurance_draw,
-        terms,
-    )
-}
-
-pub(crate) fn insurance_request_for_liquidation_with_terms(
-    market: &Market,
-    margin_position: &MarginPosition,
-    debt_asset: MarketAsset,
-    repay_credit: u64,
-    max_insurance_draw: u64,
-    terms: LiquidationTerms,
-) -> Result<u64> {
-    insurance_request_for_liquidation_with_terms_and_pricing(
-        market,
-        margin_position,
-        debt_asset,
-        repay_credit,
-        max_insurance_draw,
-        terms,
-        LiquidationPricing::PessimisticReserves,
-    )
 }
 
 pub(crate) fn insurance_request_for_liquidation_with_terms_and_pricing(
@@ -782,5 +746,5 @@ fn recognized_decrease_after_seizure(
 
 #[cfg(test)]
 mod tests {
-    include!("../tests/transitions/liquidation.rs");
+    include!("../../../tests/transitions/liquidation.rs");
 }

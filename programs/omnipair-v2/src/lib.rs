@@ -7,7 +7,6 @@ pub mod instructions;
 pub mod math;
 pub mod shared;
 pub mod state;
-pub mod transitions;
 
 pub use instructions::*;
 pub use state::*;
@@ -126,17 +125,17 @@ pub mod omnipair_v2 {
         SetMarketAuthority::handle_set_manager(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate())]
+    #[access_control(ctx.accounts.update_and_validate())]
     pub fn claim_manager_fees(ctx: Context<ClaimManagerFees>) -> Result<()> {
         ClaimManagerFees::handle_claim(ctx)
     }
 
-    #[access_control(ctx.accounts.validate(&args))]
+    #[access_control(ctx.accounts.update_and_validate(&args))]
     pub fn add_liquidity(ctx: Context<AddLiquidity>, args: AddLiquidityArgs) -> Result<()> {
         AddLiquidity::handle_add_liquidity(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate(&args))]
+    #[access_control(ctx.accounts.update_and_validate(&args))]
     pub fn remove_liquidity(
         ctx: Context<RemoveLiquidity>,
         args: RemoveLiquidityArgs,
@@ -152,17 +151,17 @@ pub mod omnipair_v2 {
         SetYieldRecipient::handle_set(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate(&args))]
+    #[access_control(ctx.accounts.update_and_validate(&args))]
     pub fn claim_yield(ctx: Context<ClaimYield>, args: ClaimYieldArgs) -> Result<()> {
         ClaimYield::handle_claim(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate(&args))]
+    #[access_control(ctx.accounts.update_and_validate(&args))]
     pub fn swap<'info>(ctx: Context<'_, '_, '_, 'info, Swap<'info>>, args: SwapArgs) -> Result<()> {
         Swap::handle_swap(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate(&args))]
+    #[access_control(ctx.accounts.update_and_validate(&args))]
     pub fn deposit_collateral(
         ctx: Context<DepositCollateral>,
         args: DepositCollateralArgs,
@@ -170,7 +169,7 @@ pub mod omnipair_v2 {
         DepositCollateral::handle_deposit(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate(&args))]
+    #[access_control(ctx.accounts.update_and_validate(&args))]
     pub fn withdraw_collateral(
         ctx: Context<WithdrawCollateral>,
         args: WithdrawCollateralArgs,
@@ -178,22 +177,22 @@ pub mod omnipair_v2 {
         WithdrawCollateral::handle_withdraw(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate(&args))]
+    #[access_control(ctx.accounts.update_and_validate(&args))]
     pub fn borrow(ctx: Context<Borrow>, args: BorrowArgs) -> Result<()> {
         Borrow::handle_borrow(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate(&args))]
+    #[access_control(ctx.accounts.update_and_validate(&args))]
     pub fn repay(ctx: Context<Repay>, args: RepayArgs) -> Result<()> {
         Repay::handle_repay(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate())]
+    #[access_control(ctx.accounts.update_and_validate())]
     pub fn open_liquidation_auction(ctx: Context<OpenLiquidationAuction>) -> Result<()> {
         OpenLiquidationAuction::handle_open(ctx)
     }
 
-    #[access_control(ctx.accounts.validate(&args))]
+    #[access_control(ctx.accounts.update_and_validate(&args))]
     pub fn settle_liquidation_auction(
         ctx: Context<SettleLiquidationAuction>,
         args: SettleLiquidationAuctionArgs,
@@ -201,14 +200,20 @@ pub mod omnipair_v2 {
         SettleLiquidationAuction::handle_settle(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate(&args))]
-    pub fn open_hedge(ctx: Context<OpenHedge>, args: OpenHedgeArgs) -> Result<()> {
-        OpenHedge::handle_open(ctx, args)
+    #[access_control(ctx.accounts.update_and_validate(&args))]
+    pub fn deposit_single_sided(
+        ctx: Context<DepositSingleSided>,
+        args: DepositSingleSidedArgs,
+    ) -> Result<()> {
+        DepositSingleSided::handle_deposit(ctx, args)
     }
 
-    #[access_control(ctx.accounts.validate(&args))]
-    pub fn close_hedge(ctx: Context<CloseHedge>, args: CloseHedgeArgs) -> Result<()> {
-        CloseHedge::handle_close(ctx, args)
+    #[access_control(ctx.accounts.update_and_validate(&args))]
+    pub fn withdraw_single_sided(
+        ctx: Context<WithdrawSingleSided>,
+        args: WithdrawSingleSidedArgs,
+    ) -> Result<()> {
+        WithdrawSingleSided::handle_withdraw(ctx, args)
     }
 
     pub fn fallback<'info>(

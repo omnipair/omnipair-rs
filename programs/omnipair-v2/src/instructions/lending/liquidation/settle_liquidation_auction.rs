@@ -13,14 +13,7 @@ use crate::{
         get_transfer_fee, transfer_from_user_to_vault, transfer_from_vault_to_user,
         transfer_from_vault_to_vault,
     },
-    state::{FutarchyAuthority, LiquidationAuction, MarginPosition, Market},
-    transitions::{
-        fee::RecordInterestCredit,
-        liquidation::{
-            insurance_request_for_liquidation_with_terms_and_pricing, liquidation_terms,
-            liquidation_terms_with_incentive_and_pricing, Liquidation, LiquidationPricing,
-        },
-    },
+    state::{FutarchyAuthority, LiquidationAuction, LiquidationPricing, MarginPosition, Market},
 };
 
 use super::common::validate_liquidation_accounts;
@@ -147,6 +140,15 @@ impl<'info> SettleLiquidationAuction<'info> {
         Ok(())
     }
 
+    pub fn update(&mut self) -> Result<()> {
+        self.market.update()
+    }
+
+    pub fn update_and_validate(&mut self, args: &SettleLiquidationAuctionArgs) -> Result<()> {
+        self.update()?;
+        self.validate(args)
+    }
+
     pub fn handle_settle(ctx: Context<Self>, args: SettleLiquidationAuctionArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let margin_position_key = ctx.accounts.margin_position.key();
@@ -157,7 +159,6 @@ impl<'info> SettleLiquidationAuction<'info> {
         let current_slot = Clock::get()?.slot;
         let debt_asset = ctx.accounts.market.asset_for_mint(debt_asset_mint_key)?;
 
-        ctx.accounts.market.accrue_interest()?;
         ctx.accounts.liquidation_auction.assert_matches(
             market_key,
             margin_position_key,
@@ -174,11 +175,10 @@ impl<'info> SettleLiquidationAuction<'info> {
             health_bps < ctx.accounts.market.config.market_health_min_bps as u64,
             ErrorCode::PositionNotLiquidatable
         );
-        let live_terms = liquidation_terms(
-            &ctx.accounts.market,
-            &ctx.accounts.margin_position,
-            debt_asset,
-        )?;
+        let live_terms = ctx
+            .accounts
+            .market
+            .liquidation_terms(&ctx.accounts.margin_position, debt_asset)?;
         let auction_incentive_bps = ctx
             .accounts
             .liquidation_auction
@@ -186,13 +186,15 @@ impl<'info> SettleLiquidationAuction<'info> {
         let auction_pricing = LiquidationPricing::ReferencePrice {
             debt_per_collateral_price_nad: ctx.accounts.liquidation_auction.reference_price_nad,
         };
-        let auction_terms = liquidation_terms_with_incentive_and_pricing(
-            &ctx.accounts.market,
-            &ctx.accounts.margin_position,
-            debt_asset,
-            auction_incentive_bps,
-            LiquidationPricing::PessimisticReserves,
-        )?;
+        let auction_terms = ctx
+            .accounts
+            .market
+            .liquidation_terms_with_incentive_and_pricing(
+                &ctx.accounts.margin_position,
+                debt_asset,
+                auction_incentive_bps,
+                LiquidationPricing::PessimisticReserves,
+            )?;
         require_gte!(
             auction_terms.max_repay_amount,
             args.repay_amount,
@@ -224,15 +226,16 @@ impl<'info> SettleLiquidationAuction<'info> {
         )?;
 
         let insurance_request = if args.max_insurance_draw > 0 {
-            insurance_request_for_liquidation_with_terms_and_pricing(
-                &ctx.accounts.market,
-                &ctx.accounts.margin_position,
-                debt_asset,
-                repay_credit,
-                args.max_insurance_draw,
-                auction_terms,
-                auction_pricing,
-            )?
+            ctx.accounts
+                .market
+                .insurance_request_for_liquidation_with_terms_and_pricing(
+                    &ctx.accounts.margin_position,
+                    debt_asset,
+                    repay_credit,
+                    args.max_insurance_draw,
+                    auction_terms,
+                    auction_pricing,
+                )?
         } else {
             0
         };
@@ -265,7 +268,8 @@ impl<'info> SettleLiquidationAuction<'info> {
             (0, 0)
         };
 
-        let liquidation_receipt = Liquidation::new_with_pricing(
+        let liquidation_receipt = ctx.accounts.market.settle_liquidation(
+            &mut ctx.accounts.margin_position,
             debt_asset,
             repay_credit,
             insurance_spent,
@@ -273,8 +277,7 @@ impl<'info> SettleLiquidationAuction<'info> {
             args.max_socialized_loss,
             auction_terms,
             auction_pricing,
-        )
-        .apply(&mut ctx.accounts.market, &mut ctx.accounts.margin_position)?;
+        )?;
         if liquidation_receipt.interest_paid > 0 {
             transfer_from_vault_to_vault(
                 ctx.accounts.market.to_account_info(),
@@ -287,13 +290,16 @@ impl<'info> SettleLiquidationAuction<'info> {
                 &[&generate_market_seeds!(ctx.accounts.market)[..]],
             )?;
             ctx.accounts.interest_vault.reload()?;
-            RecordInterestCredit::new(
-                liquidation_receipt.interest_paid,
-                ctx.accounts.market.config.manager_fee_bps,
-                ctx.accounts.futarchy_authority.revenue_share.interest_bps,
-                ctx.accounts.futarchy_authority.protocol_auction_split,
-            )
-            .apply(ctx.accounts.market.side_mut(debt_asset)?)?;
+            let manager_fee_bps = ctx.accounts.market.config.manager_fee_bps;
+            ctx.accounts
+                .market
+                .side_mut(debt_asset)?
+                .record_interest_credit(
+                    liquidation_receipt.interest_paid,
+                    manager_fee_bps,
+                    ctx.accounts.futarchy_authority.revenue_share.interest_bps,
+                    ctx.accounts.futarchy_authority.protocol_auction_split,
+                )?;
         }
 
         let collateral_token_program = token_program_for_mint(

@@ -1,10 +1,12 @@
 use anchor_lang::prelude::*;
 
-use super::{MarginPosition, Market, MarketAsset};
 use crate::{
     constants::{BPS_DENOMINATOR, MARKET_VERSION},
     errors::ErrorCode,
+    state::{MarginPosition, Market, MarketAsset},
 };
+
+pub(crate) use crate::state::market::transitions::liquidation::LiquidationPricing;
 
 #[account]
 #[derive(Default, InitSpace)]
@@ -204,6 +206,79 @@ pub fn liquidation_auction_start_incentive_bps(
         ErrorCode::InvalidMarketConfig
     );
     Ok(configured_start_incentive_bps.min(max_incentive_bps))
+}
+
+impl Market {
+    pub fn liquidation_terms(
+        &self,
+        margin_position: &MarginPosition,
+        debt_asset: MarketAsset,
+    ) -> Result<crate::state::market::transitions::liquidation::LiquidationTerms> {
+        crate::state::market::transitions::liquidation::liquidation_terms(
+            self,
+            margin_position,
+            debt_asset,
+        )
+    }
+
+    pub fn liquidation_terms_with_incentive_and_pricing(
+        &self,
+        margin_position: &MarginPosition,
+        debt_asset: MarketAsset,
+        liquidation_incentive_bps: u16,
+        pricing: crate::state::market::transitions::liquidation::LiquidationPricing,
+    ) -> Result<crate::state::market::transitions::liquidation::LiquidationTerms> {
+        crate::state::market::transitions::liquidation::liquidation_terms_with_incentive_and_pricing(
+            self,
+            margin_position,
+            debt_asset,
+            liquidation_incentive_bps,
+            pricing,
+        )
+    }
+
+    pub fn insurance_request_for_liquidation_with_terms_and_pricing(
+        &self,
+        margin_position: &MarginPosition,
+        debt_asset: MarketAsset,
+        repay_credit: u64,
+        max_insurance_draw: u64,
+        terms: crate::state::market::transitions::liquidation::LiquidationTerms,
+        pricing: crate::state::market::transitions::liquidation::LiquidationPricing,
+    ) -> Result<u64> {
+        crate::state::market::transitions::liquidation::insurance_request_for_liquidation_with_terms_and_pricing(
+            self,
+            margin_position,
+            debt_asset,
+            repay_credit,
+            max_insurance_draw,
+            terms,
+            pricing,
+        )
+    }
+
+    pub fn settle_liquidation(
+        &mut self,
+        margin_position: &mut MarginPosition,
+        debt_asset: MarketAsset,
+        repay_credit: u64,
+        insurance_spent: u64,
+        insurance_credit: u64,
+        max_socialized_loss: u64,
+        terms: crate::state::market::transitions::liquidation::LiquidationTerms,
+        pricing: crate::state::market::transitions::liquidation::LiquidationPricing,
+    ) -> Result<crate::state::market::transitions::liquidation::LiquidationReceipt> {
+        crate::state::market::transitions::liquidation::Liquidation::new_with_pricing(
+            debt_asset,
+            repay_credit,
+            insurance_spent,
+            insurance_credit,
+            max_socialized_loss,
+            terms,
+            pricing,
+        )
+        .apply(self, margin_position)
+    }
 }
 
 #[cfg(test)]

@@ -44,5 +44,5 @@ impl DailyLimits {
 
 #[cfg(test)]
 mod tests {
-    include!("../tests/state/limits.rs");
+    include!("../../tests/state/limits.rs");
 }

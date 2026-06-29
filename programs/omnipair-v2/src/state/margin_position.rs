@@ -1,7 +1,15 @@
 use anchor_lang::prelude::*;
 
-use super::Debt;
 use crate::errors::ErrorCode;
+use crate::state::market::{Debt, MarketAsset};
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CollateralReceipt {
+    pub collateral_credit: u64,
+    pub collateral_debit: u64,
+    pub base_collateral: u64,
+    pub quote_collateral: u64,
+}
 
 #[account]
 #[derive(InitSpace)]
@@ -62,5 +70,35 @@ impl MarginPosition {
             .checked_add(1)
             .ok_or(ErrorCode::MarketMathOverflow)?;
         Ok(())
+    }
+
+    pub fn deposit_collateral(
+        &mut self,
+        market_asset: MarketAsset,
+        collateral_credit: u64,
+    ) -> Result<CollateralReceipt> {
+        require!(collateral_credit > 0, ErrorCode::AmountZero);
+        match market_asset {
+            MarketAsset::Base => {
+                self.base_collateral = self
+                    .base_collateral
+                    .checked_add(collateral_credit)
+                    .ok_or(ErrorCode::MarketMathOverflow)?;
+            }
+            MarketAsset::Quote => {
+                self.quote_collateral = self
+                    .quote_collateral
+                    .checked_add(collateral_credit)
+                    .ok_or(ErrorCode::MarketMathOverflow)?;
+            }
+        }
+        self.record_risk_update()?;
+
+        Ok(CollateralReceipt {
+            collateral_credit,
+            collateral_debit: 0,
+            base_collateral: self.base_collateral,
+            quote_collateral: self.quote_collateral,
+        })
     }
 }

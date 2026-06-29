@@ -10,11 +10,7 @@ use crate::{
     events::{MarketEventMetadata, YieldClaimed},
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
-    state::{Market, MarketAsset, YieldAccount, YieldTokenKind},
-    transitions::{
-        fee::{PrepareYieldClaim, SettleYieldClaim, YieldClaimReceipt},
-        hedge::checkpoint_hlp_yield_from_ylp,
-    },
+    state::{Market, MarketAsset, YieldAccount, YieldClaimReceipt, YieldTokenKind},
 };
 
 use crate::instructions::common::{
@@ -132,12 +128,20 @@ impl<'info> ClaimYield<'info> {
         )
     }
 
+    pub fn update(&mut self) -> Result<()> {
+        self.market.update()
+    }
+
+    pub fn update_and_validate(&mut self, args: &ClaimYieldArgs) -> Result<()> {
+        self.update()?;
+        self.validate(args)
+    }
+
     pub fn handle_claim(ctx: Context<Self>, args: ClaimYieldArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
         let market_asset = ctx.accounts.market.asset_for_mint(asset_mint_key)?;
-        ctx.accounts.market.accrue_interest()?;
         let token_program = token_program_for_mint(
             &ctx.accounts.asset_mint,
             &ctx.accounts.token_program,
@@ -152,11 +156,16 @@ impl<'info> ClaimYield<'info> {
         let receipt = match args.token_kind {
             YieldTokenKind::Ylp => {
                 let market_side = ctx.accounts.market.side_mut(market_asset)?;
-                PrepareYieldClaim::new(vault_balance, ctx.accounts.owner_lp_account.amount)
-                    .apply(market_side, &mut ctx.accounts.yield_account)?
+                market_side.prepare_yield_claim(
+                    &mut ctx.accounts.yield_account,
+                    vault_balance,
+                    ctx.accounts.owner_lp_account.amount,
+                )?
             }
             YieldTokenKind::Hlp => {
-                checkpoint_hlp_yield_from_ylp(&mut ctx.accounts.market, market_asset)?;
+                ctx.accounts
+                    .market
+                    .checkpoint_hlp_yield_from_ylp(market_asset)?;
                 let (swap_fee_growth_index_nad, interest_growth_index_nad) =
                     hlp_yield_growth_indexes(&ctx.accounts.market, market_asset);
                 ctx.accounts.yield_account.accrue(
@@ -214,14 +223,14 @@ impl<'info> ClaimYield<'info> {
         ctx.accounts.interest_vault.reload()?;
         {
             let market_side = ctx.accounts.market.side_mut(market_asset)?;
-            SettleYieldClaim {
-                claim_amount: receipt.claim_amount,
-                swap_fee_amount: receipt.swap_fee_amount,
-                interest_amount: receipt.interest_amount,
-                swap_fee_vault_balance: ctx.accounts.fee_vault.amount,
-                interest_vault_balance: ctx.accounts.interest_vault.amount,
-            }
-            .apply(market_side, &mut ctx.accounts.yield_account)?;
+            market_side.settle_yield_claim(
+                &mut ctx.accounts.yield_account,
+                receipt.claim_amount,
+                receipt.swap_fee_amount,
+                receipt.interest_amount,
+                ctx.accounts.fee_vault.amount,
+                ctx.accounts.interest_vault.amount,
+            )?;
         }
         emit_cpi!(YieldClaimed {
             market: market_key,

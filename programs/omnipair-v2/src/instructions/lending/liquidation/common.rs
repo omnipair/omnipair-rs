@@ -6,7 +6,7 @@ use crate::{
     state::{Market, MarketAsset},
 };
 
-pub(in crate::instructions::liquidation) fn validate_liquidation_accounts<'info>(
+pub(super) fn validate_liquidation_accounts<'info>(
     market: &Account<'info, Market>,
     liquidator: Pubkey,
     debt_asset_mint: &InterfaceAccount<'info, Mint>,

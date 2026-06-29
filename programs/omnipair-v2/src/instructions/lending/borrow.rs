@@ -11,7 +11,6 @@ use crate::{
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
     state::{FutarchyAuthority, MarginPosition, Market},
-    transitions::debt::Borrow as BorrowTransition,
 };
 
 use crate::instructions::common::{
@@ -101,16 +100,27 @@ impl<'info> Borrow<'info> {
         Ok(())
     }
 
+    pub fn update(&mut self) -> Result<()> {
+        self.market.update()
+    }
+
+    pub fn update_and_validate(&mut self, args: &BorrowArgs) -> Result<()> {
+        self.update()?;
+        self.validate(args)
+    }
+
     pub fn handle_borrow(ctx: Context<Self>, args: BorrowArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let debt_asset_mint_key = ctx.accounts.debt_asset_mint.key();
         let borrow_asset = ctx.accounts.market.asset_for_mint(debt_asset_mint_key)?;
 
-        ctx.accounts.market.accrue_interest()?;
-        let debt_receipt =
-            BorrowTransition::new(borrow_asset, args.borrow_amount, args.min_health_bps)
-                .apply(&mut ctx.accounts.market, &mut ctx.accounts.margin_position)?;
+        let debt_receipt = ctx.accounts.market.borrow(
+            &mut ctx.accounts.margin_position,
+            borrow_asset,
+            args.borrow_amount,
+            args.min_health_bps,
+        )?;
 
         let debt_token_program = token_program_for_mint(
             &ctx.accounts.debt_asset_mint,

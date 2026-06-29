@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
 
-use super::ProtocolAuctionLane;
-use crate::{constants::NAD, errors::ErrorCode};
+use crate::{constants::NAD, errors::ErrorCode, state::futarchy_authority::ProtocolAuctionLane};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct Fees {
@@ -96,5 +95,5 @@ impl Fees {
 
 #[cfg(test)]
 mod tests {
-    include!("../tests/state/fees.rs");
+    include!("../../tests/state/fees.rs");
 }

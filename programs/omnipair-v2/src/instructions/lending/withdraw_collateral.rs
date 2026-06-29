@@ -11,7 +11,6 @@ use crate::{
     generate_market_seeds,
     shared::token::transfer_from_vault_to_user,
     state::{FutarchyAuthority, MarginPosition, Market},
-    transitions::collateral::WithdrawCollateral as WithdrawCollateralTransition,
 };
 
 use crate::instructions::common::{
@@ -116,12 +115,20 @@ impl<'info> WithdrawCollateral<'info> {
         Ok(())
     }
 
+    pub fn update(&mut self) -> Result<()> {
+        self.market.update()
+    }
+
+    pub fn update_and_validate(&mut self, args: &WithdrawCollateralArgs) -> Result<()> {
+        self.update()?;
+        self.validate(args)
+    }
+
     pub fn handle_withdraw(ctx: Context<Self>, args: WithdrawCollateralArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let asset_mint_key = ctx.accounts.asset_mint.key();
         let market_asset = ctx.accounts.market.asset_for_mint(asset_mint_key)?;
-        ctx.accounts.market.accrue_interest()?;
         let owner_asset_balance_before = ctx.accounts.owner_asset_account.amount;
         let collateral_balance_before = ctx.accounts.collateral_vault.amount;
 
@@ -159,8 +166,11 @@ impl<'info> WithdrawCollateral<'info> {
             ErrorCode::SlippageExceeded
         );
 
-        let collateral_receipt = WithdrawCollateralTransition::new(market_asset, collateral_debit)
-            .apply(&mut ctx.accounts.market, &mut ctx.accounts.margin_position)?;
+        let collateral_receipt = ctx.accounts.market.withdraw_collateral(
+            &mut ctx.accounts.margin_position,
+            market_asset,
+            collateral_debit,
+        )?;
 
         emit_cpi!(MarketCollateralWithdrawn {
             market: market_key,

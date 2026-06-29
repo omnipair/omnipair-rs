@@ -14,10 +14,6 @@ use crate::{
         token::{token_mint_to, transfer_from_user_to_vault},
     },
     state::{FutarchyAuthority, Market, YieldAccount, YieldTokenKind},
-    transitions::{
-        fee::{carry_forward_interest, carry_forward_swap_fees},
-        reserve::AddLiquidity as AddLiquidityTransition,
-    },
 };
 
 use crate::instructions::common::{
@@ -158,11 +154,19 @@ impl<'info> AddLiquidity<'info> {
         Ok(())
     }
 
+    pub fn update(&mut self) -> Result<()> {
+        self.market.update()
+    }
+
+    pub fn update_and_validate(&mut self, args: &AddLiquidityArgs) -> Result<()> {
+        self.update()?;
+        self.validate(args)
+    }
+
     pub fn handle_add_liquidity(ctx: Context<Self>, args: AddLiquidityArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
 
-        ctx.accounts.market.accrue_interest()?;
         initialize_or_validate_yield_account(
             &mut ctx.accounts.base_yield_account,
             owner_key,
@@ -180,10 +184,10 @@ impl<'info> AddLiquidity<'info> {
 
         {
             let market = &mut ctx.accounts.market;
-            carry_forward_swap_fees(&mut market.base_side)?;
-            carry_forward_interest(&mut market.base_side)?;
-            carry_forward_swap_fees(&mut market.quote_side)?;
-            carry_forward_interest(&mut market.quote_side)?;
+            market.base_side.carry_forward_swap_fees()?;
+            market.base_side.carry_forward_interest()?;
+            market.quote_side.carry_forward_swap_fees()?;
+            market.quote_side.carry_forward_interest()?;
             ctx.accounts.base_yield_account.accrue(
                 ctx.accounts.owner_ylp_account.amount,
                 market.base_side.fees.swap_fee_growth_index_nad,
@@ -241,12 +245,10 @@ impl<'info> AddLiquidity<'info> {
             .checked_sub(quote_reserve_before)
             .ok_or(ErrorCode::MarketMathOverflow)?;
 
-        let receipt = {
-            let market = &mut ctx.accounts.market;
-            let (base_side, quote_side) = market.base_quote_sides_mut();
-            AddLiquidityTransition::new(base_reserve_credit, quote_reserve_credit)
-                .apply(base_side, quote_side)?
-        };
+        let receipt = ctx
+            .accounts
+            .market
+            .add_liquidity(base_reserve_credit, quote_reserve_credit)?;
         require_gte!(
             receipt.ylp_amount,
             args.min_ylp_amount,

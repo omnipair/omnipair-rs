@@ -1,7 +1,9 @@
 use anchor_lang::prelude::*;
 
-use super::{accrue_fee_liability, Debt, MarketAsset, MarketSide};
+use super::{accrue_fee_liability, Debt, Market, MarketAsset, MarketSide};
 use crate::{constants::NAD, errors::ErrorCode};
+
+pub(crate) use crate::state::market::transitions::hedge::HlpRebalanceReceipt;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
 pub struct HlpVault {
@@ -212,7 +214,50 @@ fn credit_hlp_growth(
     Ok(())
 }
 
+impl Market {
+    pub fn open_hedge(
+        &mut self,
+        target_asset: MarketAsset,
+        deposit_amount: u64,
+        min_hlp_amount: u64,
+    ) -> Result<crate::state::market::transitions::hedge::HedgeReceipt> {
+        crate::state::market::transitions::hedge::OpenHedge::new(
+            target_asset,
+            deposit_amount,
+            min_hlp_amount,
+        )
+        .apply(self)
+    }
+
+    pub fn close_hedge(
+        &mut self,
+        target_asset: MarketAsset,
+        hlp_amount: u64,
+    ) -> Result<crate::state::market::transitions::hedge::HedgeReceipt> {
+        crate::state::market::transitions::hedge::CloseHedge::new(target_asset, hlp_amount)
+            .apply(self)
+    }
+
+    pub fn checkpoint_hlp_vaults(&mut self, current_slot: u64) -> Result<(i128, i128)> {
+        crate::state::market::transitions::hedge::checkpoint_hlp_vaults(self, current_slot)
+    }
+
+    pub fn rebalance_hlp_vaults(
+        &mut self,
+        current_slot: u64,
+    ) -> Result<(
+        crate::state::market::transitions::hedge::HlpRebalanceReceipt,
+        crate::state::market::transitions::hedge::HlpRebalanceReceipt,
+    )> {
+        crate::state::market::transitions::hedge::rebalance_hlp_vaults(self, current_slot)
+    }
+
+    pub fn checkpoint_hlp_yield_from_ylp(&mut self, target_asset: MarketAsset) -> Result<()> {
+        crate::state::market::transitions::hedge::checkpoint_hlp_yield_from_ylp(self, target_asset)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    include!("../tests/state/hlp.rs");
+    include!("../../tests/state/hlp.rs");
 }

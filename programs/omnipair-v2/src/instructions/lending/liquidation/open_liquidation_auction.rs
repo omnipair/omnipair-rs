@@ -10,7 +10,6 @@ use crate::{
         liquidation_auction_reference_price_nad, liquidation_auction_start_incentive_bps,
         LiquidationAuction, MarginPosition, Market,
     },
-    transitions::liquidation::liquidation_terms,
 };
 
 use crate::instructions::common::require_supported_asset_mint;
@@ -85,6 +84,15 @@ impl<'info> OpenLiquidationAuction<'info> {
         Ok(())
     }
 
+    pub fn update(&mut self) -> Result<()> {
+        self.market.update()
+    }
+
+    pub fn update_and_validate(&mut self) -> Result<()> {
+        self.update()?;
+        self.validate()
+    }
+
     pub fn handle_open(ctx: Context<Self>) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let margin_position_key = ctx.accounts.margin_position.key();
@@ -94,8 +102,6 @@ impl<'info> OpenLiquidationAuction<'info> {
         let current_slot = Clock::get()?.slot;
         let debt_asset = ctx.accounts.market.asset_for_mint(debt_asset_mint_key)?;
 
-        ctx.accounts.market.accrue_interest()?;
-        ctx.accounts.market.refresh_market_health()?;
         require!(
             ctx.accounts
                 .liquidation_auction
@@ -110,11 +116,10 @@ impl<'info> OpenLiquidationAuction<'info> {
             health_bps < ctx.accounts.market.config.market_health_min_bps as u64,
             ErrorCode::PositionNotLiquidatable
         );
-        let terms = liquidation_terms(
-            &ctx.accounts.market,
-            &ctx.accounts.margin_position,
-            debt_asset,
-        )?;
+        let terms = ctx
+            .accounts
+            .market
+            .liquidation_terms(&ctx.accounts.margin_position, debt_asset)?;
         let start_incentive_bps = liquidation_auction_start_incentive_bps(
             ctx.accounts
                 .market

@@ -21,12 +21,7 @@ use crate::{
             transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault,
         },
     },
-    state::{FutarchyAuthority, Market, MarketAsset},
-    transitions::{
-        hedge::{rebalance_hlp_vaults, HlpRebalanceReceipt},
-        interest::AccrueInterest,
-        swap::Swap as SwapTransition,
-    },
+    state::{FutarchyAuthority, HlpRebalanceReceipt, Market, MarketAsset},
 };
 
 use crate::instructions::common::{
@@ -114,6 +109,15 @@ impl<'info> Swap<'info> {
         Ok(())
     }
 
+    pub fn update(&mut self) -> Result<()> {
+        self.market.update()
+    }
+
+    pub fn update_and_validate(&mut self, args: &SwapArgs) -> Result<()> {
+        self.update()?;
+        self.validate(args)
+    }
+
     pub fn handle_swap(mut ctx: Context<'_, '_, '_, 'info, Self>, args: SwapArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let trader_key = ctx.accounts.trader.key();
@@ -124,7 +128,6 @@ impl<'info> Swap<'info> {
         let protocol_fee_bps = ctx.accounts.futarchy_authority.revenue_share.swap_bps;
         let protocol_auction_split = ctx.accounts.futarchy_authority.protocol_auction_split;
 
-        AccrueInterest::new(Clock::get()?.slot).apply(&mut ctx.accounts.market)?;
         validate_hlp_rebalance_accounts(&ctx.accounts.market, ctx.remaining_accounts)?;
         ctx.accounts.market.refresh_risk()?;
         ctx.accounts.market.assert_risk_circuit_breakers()?;
@@ -181,21 +184,18 @@ impl<'info> Swap<'info> {
             ErrorCode::SlippageExceeded
         );
 
-        let swap_receipt = {
-            let (market_side_in, market_side_out) = ctx.accounts.market.swap_sides_mut(asset_in);
-            SwapTransition::new(
-                amount_in_after_fee,
-                amount_out,
-                fee_credit,
-                manager_fee_bps,
-                protocol_fee_bps,
-                protocol_auction_split,
-            )
-            .apply(market_side_in, market_side_out)?
-        };
+        let swap_receipt = ctx.accounts.market.swap_reserves(
+            asset_in,
+            amount_in_after_fee,
+            amount_out,
+            fee_credit,
+            manager_fee_bps,
+            protocol_fee_bps,
+            protocol_auction_split,
+        )?;
         let current_slot = Clock::get()?.slot;
         let (base_hlp_rebalance, quote_hlp_rebalance) =
-            rebalance_hlp_vaults(&mut ctx.accounts.market, current_slot)?;
+            ctx.accounts.market.rebalance_hlp_vaults(current_slot)?;
         let h_lp_tokens_changed = rebalance_executes_token_changes(&base_hlp_rebalance)
             || rebalance_executes_token_changes(&quote_hlp_rebalance);
         if h_lp_tokens_changed {

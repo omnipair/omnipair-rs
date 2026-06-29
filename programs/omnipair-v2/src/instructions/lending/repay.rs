@@ -11,7 +11,6 @@ use crate::{
     generate_market_seeds,
     shared::token::{transfer_from_user_to_vault, transfer_from_vault_to_vault},
     state::{FutarchyAuthority, MarginPosition, Market},
-    transitions::{debt::Repay as RepayTransition, fee::RecordInterestCredit},
 };
 
 use crate::instructions::common::{
@@ -101,12 +100,20 @@ impl<'info> Repay<'info> {
         Ok(())
     }
 
+    pub fn update(&mut self) -> Result<()> {
+        self.market.update()
+    }
+
+    pub fn update_and_validate(&mut self, args: &RepayArgs) -> Result<()> {
+        self.update()?;
+        self.validate(args)
+    }
+
     pub fn handle_repay(ctx: Context<Self>, args: RepayArgs) -> Result<()> {
         let market_key = ctx.accounts.market.key();
         let owner_key = ctx.accounts.owner.key();
         let debt_asset_mint_key = ctx.accounts.debt_asset_mint.key();
         let repay_asset = ctx.accounts.market.asset_for_mint(debt_asset_mint_key)?;
-        ctx.accounts.market.accrue_interest()?;
         let reserve_balance_before = ctx.accounts.reserve_vault.amount;
         let debt_token_program = token_program_for_mint(
             &ctx.accounts.debt_asset_mint,
@@ -131,8 +138,11 @@ impl<'info> Repay<'info> {
             .ok_or(ErrorCode::MarketMathOverflow)?;
         require!(repay_credit > 0, ErrorCode::AmountZero);
 
-        let debt_receipt = RepayTransition::new(repay_asset, repay_credit)
-            .apply(&mut ctx.accounts.market, &mut ctx.accounts.margin_position)?;
+        let debt_receipt = ctx.accounts.market.repay(
+            &mut ctx.accounts.margin_position,
+            repay_asset,
+            repay_credit,
+        )?;
         if debt_receipt.interest_paid > 0 {
             transfer_from_vault_to_vault(
                 ctx.accounts.market.to_account_info(),
@@ -145,13 +155,16 @@ impl<'info> Repay<'info> {
                 &[&generate_market_seeds!(ctx.accounts.market)[..]],
             )?;
             ctx.accounts.interest_vault.reload()?;
-            RecordInterestCredit::new(
-                debt_receipt.interest_paid,
-                ctx.accounts.market.config.manager_fee_bps,
-                ctx.accounts.futarchy_authority.revenue_share.interest_bps,
-                ctx.accounts.futarchy_authority.protocol_auction_split,
-            )
-            .apply(ctx.accounts.market.side_mut(repay_asset)?)?;
+            let manager_fee_bps = ctx.accounts.market.config.manager_fee_bps;
+            ctx.accounts
+                .market
+                .side_mut(repay_asset)?
+                .record_interest_credit(
+                    debt_receipt.interest_paid,
+                    manager_fee_bps,
+                    ctx.accounts.futarchy_authority.revenue_share.interest_bps,
+                    ctx.accounts.futarchy_authority.protocol_auction_split,
+                )?;
         }
 
         emit_cpi!(MarketDebtUpdated {

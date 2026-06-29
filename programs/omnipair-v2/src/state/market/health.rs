@@ -1,11 +1,12 @@
 use anchor_lang::prelude::*;
 
-use super::{MarginPosition, Market, MarketAsset, MarketHealth, Risk};
+use super::{Market, MarketAsset, MarketHealth, Risk};
 use crate::{
     constants::{BPS_DENOMINATOR, LIQUIDATION_INCENTIVE_BPS, LIQUIDATION_PENALTY_BPS},
     errors::ErrorCode,
     math::*,
     shared::math::ceil_div,
+    state::MarginPosition,
 };
 
 impl Market {

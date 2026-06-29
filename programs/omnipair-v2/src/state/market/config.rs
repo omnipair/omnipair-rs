@@ -89,5 +89,5 @@ fn half_life_in_bounds(half_life_ms: u64) -> bool {
 
 #[cfg(test)]
 mod tests {
-    include!("../tests/state/config.rs");
+    include!("../../tests/state/config.rs");
 }
