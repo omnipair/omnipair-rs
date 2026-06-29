@@ -702,9 +702,59 @@ async function leverageOrdersPayload(owner: PublicKey, pairKey: PublicKey, posit
         }));
 }
 
+async function leverageAllPositionsPayload(pairKey: PublicKey) {
+    const pair = await omnipair.account.pair.fetch(pairKey) as PairAccount;
+    const [positions, delegations, orders] = await Promise.all([
+        omnipair.account.userLeveragePosition.all(),
+        omnipair.account.userLeverageDelegation.all(),
+        leverageDelegate.account.leverageOrder.all(),
+    ]);
+
+    const delegationsByPosition = new Map<string, { address: PublicKey; account: any }>();
+    for (const { publicKey, account } of delegations) {
+        if (!account.pair.equals(pairKey)) continue;
+        delegationsByPosition.set(account.position.toBase58(), { address: publicKey, account });
+    }
+
+    const ordersByPosition = new Map<string, Array<{ address: PublicKey; order: any }>>();
+    for (const { publicKey, account } of orders) {
+        if (!account.pair.equals(pairKey)) continue;
+        const key = account.position.toBase58();
+        const current = ordersByPosition.get(key) ?? [];
+        current.push({ address: publicKey, order: account });
+        ordersByPosition.set(key, current);
+    }
+
+    const results = [];
+    for (const { publicKey, account } of positions) {
+        if (!account.pair.equals(pairKey)) continue;
+        if (toBigInt(account.collateralAmount) <= 0n) continue; // open positions only
+
+        const isDebtToken0 = Boolean(account.isDebtToken0);
+        const derived = side(pair, pairKey, account.owner, isDebtToken0);
+        const delegation = delegationsByPosition.get(publicKey.toBase58());
+
+        results.push({
+            address: publicKey,
+            owner: account.owner,
+            isDebtToken0,
+            debtMint: derived.debtMint,
+            collateralMint: derived.collateralMint,
+            leverageCollateralVault: derived.leverageCollateralVault,
+            delegationAddress: delegation?.address ?? derived.delegation,
+            delegation: delegation?.account ?? null,
+            orders: ordersByPosition.get(publicKey.toBase58()) ?? [],
+            position: account,
+        });
+    }
+
+    return results;
+}
+
 async function buildDelegatedCloseIxs(
     pairKey: PublicKey,
     orderId: number,
+    orderKind: number,
     order: PublicKey,
     owner: PublicKey,
     executor: PublicKey,
@@ -716,9 +766,15 @@ async function buildDelegatedCloseIxs(
     ownerTokenAccount: PublicKey,
     tokenMint: PublicKey,
 ) {
+    const beforeIxMethod = orderKind === ORDER_KIND_STOP_LOSS
+        ? leverageDelegate.methods.beforeStopLoss({ orderId: new BN(orderId) })
+        : orderKind === ORDER_KIND_TAKE_PROFIT
+            ? leverageDelegate.methods.beforeTakeProfit({ orderId: new BN(orderId) })
+            : null;
+    if (!beforeIxMethod) throw new Error(`Unsupported leverage order kind: ${orderKind}`);
+
     const [beforeIx, afterIx] = await Promise.all([
-        leverageDelegate.methods
-            .beforeTakeProfit({ orderId: new BN(orderId) })
+        beforeIxMethod
             .accounts({
                 order,
                 pair: pairKey,
@@ -792,12 +848,14 @@ export async function route(req: http.IncomingMessage, body: any) {
                 '/api/v1/fork/config',
                 '/api/v1/fork/pair',
                 '/api/v1/fork/leverage/positions',
+                '/api/v1/fork/leverage/positions/all',
                 '/api/v1/fork/leverage/orders',
                 '/api/v1/fork/fund-wallet',
                 '/api/v1/fork/tx/open-leverage',
                 '/api/v1/fork/tx/create-current-price-take-profit',
                 '/api/v1/fork/tx/set-leverage-orders',
                 '/api/v1/fork/keeper/execute-take-profit',
+                '/api/v1/fork/keeper/execute-order',
             ],
         };
     }
@@ -887,6 +945,11 @@ export async function route(req: http.IncomingMessage, body: any) {
         const owner = parsePubkey(url.searchParams.get('owner'), 'owner');
         const pairKey = parsePair(url.searchParams.get('pair'));
         return { data: jsonSafe(await leveragePositionsPayload(owner, pairKey)) };
+    }
+
+    if (req.method === 'GET' && pathname === '/api/v1/fork/leverage/positions/all') {
+        const pairKey = parsePair(url.searchParams.get('pair'));
+        return { data: jsonSafe(await leverageAllPositionsPayload(pairKey)) };
     }
 
     if (req.method === 'GET' && pathname === '/api/v1/fork/leverage/orders') {
@@ -1142,7 +1205,10 @@ export async function route(req: http.IncomingMessage, body: any) {
         };
     }
 
-    if (req.method === 'POST' && pathname === '/api/v1/fork/keeper/execute-take-profit') {
+    if (
+        req.method === 'POST' &&
+        (pathname === '/api/v1/fork/keeper/execute-take-profit' || pathname === '/api/v1/fork/keeper/execute-order')
+    ) {
         const owner = parsePubkey(body.owner, 'owner');
         const pairKey = parsePair(body.pair);
         const isDebtToken0 = parseBool(body.isDebtToken0, 'isDebtToken0');
@@ -1152,6 +1218,17 @@ export async function route(req: http.IncomingMessage, body: any) {
         const pair = await omnipair.account.pair.fetch(pairKey) as PairAccount;
         const derived = side(pair, pairKey, owner, isDebtToken0);
         const order = orderPda(derived.position, owner, orderId);
+        const orderAccount = await leverageDelegate.account.leverageOrder.fetch(order);
+        const orderKind = Number(orderAccount.kind);
+        if (orderKind !== ORDER_KIND_TAKE_PROFIT && orderKind !== ORDER_KIND_STOP_LOSS) {
+            throw new Error(`Unsupported leverage order kind: ${orderKind}`);
+        }
+        if (pathname === '/api/v1/fork/keeper/execute-take-profit' && orderKind !== ORDER_KIND_TAKE_PROFIT) {
+            throw new Error('execute-take-profit only supports take-profit orders');
+        }
+        if (body.kind !== undefined && Number(body.kind) !== orderKind) {
+            throw new Error(`Order kind mismatch. Expected ${orderKind} for this order`);
+        }
         const custodyAuth = custodyAuthority(order);
         const executor = payer.publicKey;
         const custodyTokenAccount = await ensureAta(derived.debtMint, custodyAuth, true);
@@ -1160,6 +1237,7 @@ export async function route(req: http.IncomingMessage, body: any) {
         const closeIxs = await buildDelegatedCloseIxs(
             pairKey,
             orderId,
+            orderKind,
             order,
             owner,
             executor,
@@ -1214,6 +1292,7 @@ export async function route(req: http.IncomingMessage, body: any) {
         return {
             signature,
             order,
+            orderKind,
             userLeveragePosition: derived.position,
             custodyTokenAccount,
             ownerTokenAccount,
