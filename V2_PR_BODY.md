@@ -1,5 +1,9 @@
 # Omnipair V2 Market Architecture
 
+Status update: V2 protocol development has moved to the dedicated
+`omnipair/dusk` repository: https://github.com/omnipair/dusk. This PR branch is
+kept only as historical context for the original Omnipair RS V2 import.
+
 Suggested PR title: `feat(v2): add standalone market architecture`
 
 ## Summary
