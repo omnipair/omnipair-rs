@@ -1,0 +1,22 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile.fork-lab-rpc-proxy",
+    "watchPatterns": [
+      "Dockerfile.fork-lab-rpc-proxy",
+      "package.json",
+      "package-lock.json",
+      "tsconfig.json",
+      "railway/rpc-proxy.json",
+      "scripts/fork-lab/rpc_proxy.ts"
+    ]
+  },
+  "deploy": {
+    "startCommand": "node dist/fork-lab/rpc_proxy.js",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 180,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  }
+}
