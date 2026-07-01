@@ -184,45 +184,22 @@ impl<'info> RemoveLiquidity<'info> {
             ..
         } = ctx.accounts;
 
-        // Calculate amounts to remove (before fee)
+        // Calculate amounts to remove
         let total_supply = pair.total_supply;
-        let amount0_gross: u64 = (args.liquidity_in as u128)
+        let amount0_out: u64 = (args.liquidity_in as u128)
             .checked_mul(pair.reserve0 as u128)
             .ok_or(ErrorCode::LiquidityMathOverflow)?
             .checked_div(total_supply as u128)
             .ok_or(ErrorCode::LiquidityMathOverflow)?
             .try_into()
             .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
-        let amount1_gross: u64 = (args.liquidity_in as u128)
+        let amount1_out: u64 = (args.liquidity_in as u128)
             .checked_mul(pair.reserve1 as u128)
             .ok_or(ErrorCode::LiquidityMathOverflow)?
             .checked_div(total_supply as u128)
             .ok_or(ErrorCode::LiquidityMathOverflow)?
             .try_into()
             .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
-
-        // Apply withdrawal fee (1%) - fee remains in reserves for remaining LPs
-        let fee0 = ceil_div(
-            (amount0_gross as u128)
-                .checked_mul(LIQUIDITY_WITHDRAWAL_FEE_BPS as u128)
-                .ok_or(ErrorCode::FeeMathOverflow)?,
-            BPS_DENOMINATOR as u128,
-        )
-        .ok_or(ErrorCode::FeeMathOverflow)? as u64;
-        let fee1 = ceil_div(
-            (amount1_gross as u128)
-                .checked_mul(LIQUIDITY_WITHDRAWAL_FEE_BPS as u128)
-                .ok_or(ErrorCode::FeeMathOverflow)?,
-            BPS_DENOMINATOR as u128,
-        )
-        .ok_or(ErrorCode::FeeMathOverflow)? as u64;
-
-        let amount0_out = amount0_gross
-            .checked_sub(fee0)
-            .ok_or(ErrorCode::LiquidityMathOverflow)?;
-        let amount1_out = amount1_gross
-            .checked_sub(fee1)
-            .ok_or(ErrorCode::LiquidityMathOverflow)?;
 
         // Check if amounts meet minimum (slippage protection)
         require!(
@@ -502,17 +479,9 @@ mod tests {
     }
 
     #[test]
-    fn liquidity_delta_withdrawal_solvency_accounts_for_fee_remaining_in_reserves() {
-        let gross = 100_u64;
-        let fee = ceil_div(
-            (gross as u128) * (LIQUIDITY_WITHDRAWAL_FEE_BPS as u128),
-            BPS_DENOMINATOR as u128,
-        )
-        .unwrap() as u64;
-        let amount_out = gross - fee;
+    fn liquidity_delta_withdrawal_solvency_charges_no_withdrawal_fee() {
+        let amount_out = 100_u64;
 
-        assert_eq!(fee, 1);
-        assert_eq!(amount_out, 99);
-        assert_eq!(1_000_u64 - amount_out, 901);
+        assert_eq!(1_000_u64 - amount_out, 900);
     }
 }

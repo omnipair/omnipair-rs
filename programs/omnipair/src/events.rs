@@ -150,6 +150,15 @@ pub struct UserPositionUpdatedEvent {
 }
 
 #[event]
+pub struct UserPositionTransferredEvent {
+    pub from_position: Pubkey,
+    pub to_position: Pubkey,
+    pub from_owner: Pubkey,
+    pub to_owner: Pubkey,
+    pub metadata: EventMetadata,
+}
+
+#[event]
 pub struct UserPositionLiquidatedEvent {
     pub position: Pubkey,
     pub liquidator: Pubkey,

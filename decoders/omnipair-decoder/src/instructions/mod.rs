@@ -17,6 +17,7 @@ pub mod repay;
 pub mod set_global_reduce_only;
 pub mod set_pair_reduce_only;
 pub mod swap;
+pub mod transfer_user_position;
 pub mod update_futarchy_authority;
 pub mod update_protocol_revenue;
 pub mod update_revenue_recipients;
@@ -35,6 +36,7 @@ pub mod update_pair_event;
 pub mod user_liquidity_position_updated_event;
 pub mod user_position_created_event;
 pub mod user_position_liquidated_event;
+pub mod user_position_transferred_event;
 pub mod user_position_updated_event;
 
 #[derive(carbon_core::InstructionType, serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone, Hash)]
@@ -53,6 +55,7 @@ pub enum OmnipairInstruction {
     SetGlobalReduceOnly(set_global_reduce_only::SetGlobalReduceOnly),
     SetPairReduceOnly(set_pair_reduce_only::SetPairReduceOnly),
     Swap(swap::Swap),
+    TransferUserPosition(transfer_user_position::TransferUserPosition),
     UpdateFutarchyAuthority(update_futarchy_authority::UpdateFutarchyAuthority),
     UpdateProtocolRevenue(update_protocol_revenue::UpdateProtocolRevenue),
     UpdateRevenueRecipients(update_revenue_recipients::UpdateRevenueRecipients),
@@ -71,6 +74,7 @@ pub enum OmnipairInstruction {
     UserLiquidityPositionUpdatedEvent(user_liquidity_position_updated_event::UserLiquidityPositionUpdatedEvent),
     UserPositionCreatedEvent(user_position_created_event::UserPositionCreatedEvent),
     UserPositionLiquidatedEvent(user_position_liquidated_event::UserPositionLiquidatedEvent),
+    UserPositionTransferredEvent(user_position_transferred_event::UserPositionTransferredEvent),
     UserPositionUpdatedEvent(user_position_updated_event::UserPositionUpdatedEvent),
 }
 
@@ -96,6 +100,7 @@ impl<'a> carbon_core::instruction::InstructionDecoder<'a> for OmnipairDecoder {
             OmnipairInstruction::SetGlobalReduceOnly => set_global_reduce_only::SetGlobalReduceOnly,
             OmnipairInstruction::SetPairReduceOnly => set_pair_reduce_only::SetPairReduceOnly,
             OmnipairInstruction::Swap => swap::Swap,
+            OmnipairInstruction::TransferUserPosition => transfer_user_position::TransferUserPosition,
             OmnipairInstruction::UpdateFutarchyAuthority => update_futarchy_authority::UpdateFutarchyAuthority,
             OmnipairInstruction::UpdateProtocolRevenue => update_protocol_revenue::UpdateProtocolRevenue,
             OmnipairInstruction::UpdateRevenueRecipients => update_revenue_recipients::UpdateRevenueRecipients,
@@ -114,6 +119,7 @@ impl<'a> carbon_core::instruction::InstructionDecoder<'a> for OmnipairDecoder {
             OmnipairInstruction::UserLiquidityPositionUpdatedEvent => user_liquidity_position_updated_event::UserLiquidityPositionUpdatedEvent,
             OmnipairInstruction::UserPositionCreatedEvent => user_position_created_event::UserPositionCreatedEvent,
             OmnipairInstruction::UserPositionLiquidatedEvent => user_position_liquidated_event::UserPositionLiquidatedEvent,
+            OmnipairInstruction::UserPositionTransferredEvent => user_position_transferred_event::UserPositionTransferredEvent,
             OmnipairInstruction::UserPositionUpdatedEvent => user_position_updated_event::UserPositionUpdatedEvent,
         )
     }
