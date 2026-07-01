@@ -27,8 +27,26 @@ function parseBase64Json(value: string): unknown {
     return JSON.parse(Buffer.from(value, 'base64').toString('utf8'));
 }
 
+function loadJsonFromPaths(paths: string[]): { json: unknown; source: string } | null {
+    for (const path of paths) {
+        if (!path || !existsSync(path)) continue;
+        try {
+            return { json: JSON.parse(readFileSync(path, 'utf8')), source: path };
+        } catch (error) {
+            console.warn(`Failed to parse JSON at ${path}:`, error);
+        }
+    }
+    return null;
+}
+
 const omnipairIdl = parseBase64Json(OMNIPAIR_IDL_BASE64);
-const leverageDelegateIdl = parseBase64Json(LEVERAGE_DELEGATE_IDL_BASE64);
+const leverageDelegateIdlLoad = loadJsonFromPaths([
+    process.env.FORK_LEVERAGE_DELEGATE_IDL_PATH ?? '',
+    resolve(process.cwd(), 'scripts/fork-lab/idl/leverage_delegate.json'),
+    resolve(process.cwd(), 'target/idl/leverage_delegate.json'),
+]);
+const leverageDelegateIdl = leverageDelegateIdlLoad?.json ?? parseBase64Json(LEVERAGE_DELEGATE_IDL_BASE64);
+const leverageDelegateIdlSource = leverageDelegateIdlLoad?.source ?? 'embedded-base64-fallback';
 
 const PORT = Number(process.env.PORT ?? process.env.FORK_API_PORT ?? 8080);
 const SURFPOOL_RPC_URL = process.env.SURFPOOL_RPC_URL ?? 'http://127.0.0.1:8899';
@@ -829,6 +847,7 @@ async function buildDelegatedCloseIxs(
                 order,
                 owner,
                 userLeveragePosition: position,
+                userLeverageDelegation: delegation,
                 custodyAuthority: custodyAuth,
                 custodyTokenAccount,
                 executorTokenAccount,
@@ -836,6 +855,7 @@ async function buildDelegatedCloseIxs(
                 tokenMint,
                 executor,
                 tokenProgram: TOKEN_PROGRAM_ID,
+                token2022Program: TOKEN_2022_PROGRAM_ID,
             })
             .instruction(),
     ]);
@@ -890,6 +910,7 @@ export async function route(req: http.IncomingMessage, body: any) {
             pair: DEFAULT_PAIR,
             omnipairProgramId: omnipair.programId,
             leverageDelegateProgramId: leverageDelegate.programId,
+            leverageDelegateIdlSource,
         };
     }
 
