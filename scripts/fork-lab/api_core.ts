@@ -44,6 +44,8 @@ const DEFAULT_FUNDING_RAW = BigInt(process.env.FORK_DEFAULT_TOKEN_FUNDING_RAW ??
 const CLOSE_PERMISSION = 1 << 0;
 const ORDER_KIND_TAKE_PROFIT = 1;
 const ORDER_KIND_STOP_LOSS = 2;
+const KEEPER_PAYER_MIN_SOL = Number(process.env.FORK_KEEPER_PAYER_MIN_SOL ?? 1);
+const KEEPER_PAYER_TARGET_SOL = Number(process.env.FORK_KEEPER_PAYER_TARGET_SOL ?? 25);
 // Deterministic order ids per kind so the UI can set/modify/remove a position's
 // single take-profit / stop-loss without tracking opaque order ids.
 const TP_ORDER_ID = 1;
@@ -260,6 +262,41 @@ async function setLamports(pubkey: PublicKey, sol: number) {
             },
         ]);
     }
+}
+
+async function ensurePayerFundedForKeeper() {
+    const minLamports = Math.floor(KEEPER_PAYER_MIN_SOL * LAMPORTS_PER_SOL);
+    const balanceBefore = await connection.getBalance(payer.publicKey, 'confirmed');
+    if (balanceBefore >= minLamports) {
+        return {
+            payer: payer.publicKey,
+            balanceBefore,
+            balanceAfter: balanceBefore,
+            toppedUp: false,
+        };
+    }
+
+    await setLamports(payer.publicKey, KEEPER_PAYER_TARGET_SOL);
+    const balanceAfter = await connection.getBalance(payer.publicKey, 'confirmed');
+
+    return {
+        payer: payer.publicKey,
+        balanceBefore,
+        balanceAfter,
+        toppedUp: true,
+    };
+}
+
+async function keeperStatusPayload() {
+    const balance = await connection.getBalance(payer.publicKey, 'confirmed');
+    return {
+        executor: payer.publicKey,
+        executorLamports: balance,
+        executorSol: balance / LAMPORTS_PER_SOL,
+        keeperPayerMinSol: KEEPER_PAYER_MIN_SOL,
+        keeperPayerTargetSol: KEEPER_PAYER_TARGET_SOL,
+        healthy: balance >= Math.floor(KEEPER_PAYER_MIN_SOL * LAMPORTS_PER_SOL),
+    };
 }
 
 async function setTokenBalance(owner: PublicKey, mint: PublicKey, amount: bigint) {
@@ -854,6 +891,8 @@ export async function route(req: http.IncomingMessage, body: any) {
                 '/api/v1/fork/tx/open-leverage',
                 '/api/v1/fork/tx/create-current-price-take-profit',
                 '/api/v1/fork/tx/set-leverage-orders',
+                '/api/v1/fork/keeper/status',
+                '/api/v1/fork/keeper/fund-executor',
                 '/api/v1/fork/keeper/execute-take-profit',
                 '/api/v1/fork/keeper/execute-order',
             ],
@@ -979,6 +1018,18 @@ export async function route(req: http.IncomingMessage, body: any) {
             token1: pair.token1,
             token0Account: getAssociatedTokenAddressSync(pair.token0, owner),
             token1Account: getAssociatedTokenAddressSync(pair.token1, owner),
+        };
+    }
+
+    if (req.method === 'GET' && pathname === '/api/v1/fork/keeper/status') {
+        return await keeperStatusPayload();
+    }
+
+    if (req.method === 'POST' && pathname === '/api/v1/fork/keeper/fund-executor') {
+        const funding = await ensurePayerFundedForKeeper();
+        return {
+            ...funding,
+            status: await keeperStatusPayload(),
         };
     }
 
@@ -1209,6 +1260,7 @@ export async function route(req: http.IncomingMessage, body: any) {
         req.method === 'POST' &&
         (pathname === '/api/v1/fork/keeper/execute-take-profit' || pathname === '/api/v1/fork/keeper/execute-order')
     ) {
+        const payerFunding = await ensurePayerFundedForKeeper();
         const owner = parsePubkey(body.owner, 'owner');
         const pairKey = parsePair(body.pair);
         const isDebtToken0 = parseBool(body.isDebtToken0, 'isDebtToken0');
@@ -1293,6 +1345,10 @@ export async function route(req: http.IncomingMessage, body: any) {
             signature,
             order,
             orderKind,
+            executor: payer.publicKey,
+            executorLamportsBefore: payerFunding.balanceBefore,
+            executorLamportsAfter: payerFunding.balanceAfter,
+            executorLamportsToppedUp: payerFunding.toppedUp,
             userLeveragePosition: derived.position,
             custodyTokenAccount,
             ownerTokenAccount,
