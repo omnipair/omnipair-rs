@@ -1,12 +1,10 @@
+use carbon_core::{account_utils::next_account, borsh, CarbonDeserialize};
 
-
-use carbon_core::{CarbonDeserialize, borsh, account_utils::next_account};
-
-
-#[derive(CarbonDeserialize, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Hash)]
+#[derive(
+    CarbonDeserialize, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Hash,
+)]
 #[carbon(discriminator = "0xdfb3e27d302e274a")]
-pub struct Liquidate{
-}
+pub struct Liquidate {}
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash, serde::Serialize, serde::Deserialize)]
 pub struct LiquidateInstructionAccounts {
@@ -17,7 +15,10 @@ pub struct LiquidateInstructionAccounts {
     pub collateral_vault: solana_pubkey::Pubkey,
     pub caller_token_account: solana_pubkey::Pubkey,
     pub collateral_token_mint: solana_pubkey::Pubkey,
-    pub reserve_vault: solana_pubkey::Pubkey,
+    pub debt_token_mint: solana_pubkey::Pubkey,
+    pub debt_reserve_vault: solana_pubkey::Pubkey,
+    pub liquidator_debt_token_account: solana_pubkey::Pubkey,
+    pub collateral_reserve_vault: solana_pubkey::Pubkey,
     pub position_owner: solana_pubkey::Pubkey,
     pub payer: solana_pubkey::Pubkey,
     pub token_program: solana_pubkey::Pubkey,
@@ -30,7 +31,9 @@ pub struct LiquidateInstructionAccounts {
 impl carbon_core::deserialize::ArrangeAccounts for Liquidate {
     type ArrangedAccounts = LiquidateInstructionAccounts;
 
-    fn arrange_accounts(accounts: &[solana_instruction::AccountMeta]) -> Option<Self::ArrangedAccounts> {
+    fn arrange_accounts(
+        accounts: &[solana_instruction::AccountMeta],
+    ) -> Option<Self::ArrangedAccounts> {
         let mut iter = accounts.iter();
         let pair = next_account(&mut iter)?;
         let user_position = next_account(&mut iter)?;
@@ -39,7 +42,10 @@ impl carbon_core::deserialize::ArrangeAccounts for Liquidate {
         let collateral_vault = next_account(&mut iter)?;
         let caller_token_account = next_account(&mut iter)?;
         let collateral_token_mint = next_account(&mut iter)?;
-        let reserve_vault = next_account(&mut iter)?;
+        let debt_token_mint = next_account(&mut iter)?;
+        let debt_reserve_vault = next_account(&mut iter)?;
+        let liquidator_debt_token_account = next_account(&mut iter)?;
+        let collateral_reserve_vault = next_account(&mut iter)?;
         let position_owner = next_account(&mut iter)?;
         let payer = next_account(&mut iter)?;
         let token_program = next_account(&mut iter)?;
@@ -56,7 +62,10 @@ impl carbon_core::deserialize::ArrangeAccounts for Liquidate {
             collateral_vault,
             caller_token_account,
             collateral_token_mint,
-            reserve_vault,
+            debt_token_mint,
+            debt_reserve_vault,
+            liquidator_debt_token_account,
+            collateral_reserve_vault,
             position_owner,
             payer,
             token_program,
