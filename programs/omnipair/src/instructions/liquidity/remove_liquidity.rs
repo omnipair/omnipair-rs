@@ -385,11 +385,11 @@ fn validate_post_withdraw_debt_coverage_with_prices(
     )?;
 
     require!(
-        (post_reserve1 as u128) >= with_required_debt_coverage(required_token1_for_debt0)?,
+        (post_reserve1 as u128) >= with_debt_coverage_buffer(required_token1_for_debt0)?,
         ErrorCode::InsufficientPostWithdrawDebtCoverage
     );
     require!(
-        (post_reserve0 as u128) >= with_required_debt_coverage(required_token0_for_debt1)?,
+        (post_reserve0 as u128) >= with_debt_coverage_buffer(required_token0_for_debt1)?,
         ErrorCode::InsufficientPostWithdrawDebtCoverage
     );
 
@@ -428,7 +428,7 @@ fn required_collateral_with_impact(
     CPCurve::calculate_amount_in(collateral_ema_reserve, debt_ema_reserve, debt_amount)
 }
 
-fn with_required_debt_coverage(amount: u64) -> Result<u128> {
+fn with_debt_coverage_buffer(amount: u64) -> Result<u128> {
     ceil_div(
         (amount as u128)
             .checked_mul(POST_WITHDRAW_DEBT_COVERAGE_BPS as u128)
@@ -443,7 +443,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn liquidity_delta_withdrawal_solvency_passes_with_required_coverage() {
+    fn liquidity_delta_withdrawal_solvency_passes_with_coverage_buffer() {
         validate_post_withdraw_debt_coverage_with_prices(
             1_000, 1_000, 100, 100, NAD, NAD, NAD, NAD,
         )
@@ -451,15 +451,17 @@ mod tests {
     }
 
     #[test]
-    fn liquidity_delta_withdrawal_solvency_accepts_exact_debt_coverage() {
-        validate_post_withdraw_debt_coverage_with_prices(
+    fn liquidity_delta_withdrawal_solvency_fails_at_exact_debt_coverage_without_buffer() {
+        let err = validate_post_withdraw_debt_coverage_with_prices(
             1_000, 1_000, 500, 0, NAD, NAD, NAD, NAD,
         )
-        .unwrap();
+        .unwrap_err();
+
+        assert_eq!(err, error!(ErrorCode::InsufficientPostWithdrawDebtCoverage));
     }
 
     #[test]
-    fn liquidity_delta_withdrawal_solvency_fails_without_required_coverage() {
+    fn liquidity_delta_withdrawal_solvency_fails_without_coverage_buffer() {
         let err = validate_post_withdraw_debt_coverage_with_prices(
             1_000, 1_000, 900, 0, NAD, NAD, NAD, NAD,
         )
