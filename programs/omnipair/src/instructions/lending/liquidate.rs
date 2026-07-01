@@ -306,7 +306,6 @@ impl<'info> Liquidate<'info> {
                 min(user_debt, debt as u64) // clamped to user's debt
             }
         };
-        require!(debt_to_reduce > 0, ErrorCode::ZeroDebtAmount);
 
         let max_repay_from_collateral = max_debt_repayable_by_collateral(
             user_collateral,
@@ -317,12 +316,19 @@ impl<'info> Liquidate<'info> {
             true => min(debt_to_reduce, max_repay_from_collateral),
             false => debt_to_reduce,
         };
-        require!(repay_amount > 0, ErrorCode::InsufficientDebt);
-        require_gte!(
-            liquidator_debt_token_account.amount,
+        validate_liquidation_progress(
+            is_insolvent,
+            shares_to_reduce,
+            debt_to_reduce,
             repay_amount,
-            ErrorCode::InsufficientBalance
-        );
+        )?;
+        if repay_amount > 0 {
+            require_gte!(
+                liquidator_debt_token_account.amount,
+                repay_amount,
+                ErrorCode::InsufficientBalance
+            );
+        }
 
         // Base collateral covers the repaid debt at the EMA reference price.
         let collateral_base =
@@ -384,15 +390,17 @@ impl<'info> Liquidate<'info> {
                 false => token_2022_program.to_account_info(),
             };
 
-        transfer_from_user_to_vault(
-            payer.to_account_info(),
-            liquidator_debt_token_account.to_account_info(),
-            debt_reserve_vault.to_account_info(),
-            debt_token_mint.to_account_info(),
-            debt_token_program,
-            repay_amount,
-            debt_token_mint.decimals,
-        )?;
+        if repay_amount > 0 {
+            transfer_from_user_to_vault(
+                payer.to_account_info(),
+                liquidator_debt_token_account.to_account_info(),
+                debt_reserve_vault.to_account_info(),
+                debt_token_mint.to_account_info(),
+                debt_token_program,
+                repay_amount,
+                debt_token_mint.decimals,
+            )?;
+        }
 
         // Pass exact shares to avoid edge cases where floor division leaves residual shares.
         user_position.decrease_debt(
@@ -584,6 +592,26 @@ fn max_debt_repayable_by_collateral(
     u64::try_from(repay_amount).map_err(|_| ErrorCode::DebtMathOverflow.into())
 }
 
+fn validate_liquidation_progress(
+    is_insolvent: bool,
+    shares_to_reduce: u128,
+    debt_to_reduce: u64,
+    repay_amount: u64,
+) -> Result<()> {
+    require!(shares_to_reduce > 0, ErrorCode::ZeroDebtAmount);
+
+    if is_insolvent {
+        // Insolvent cleanup must still be able to clear bad debt when the
+        // remaining collateral has zero repayable value after integer pricing.
+        return Ok(());
+    }
+
+    require!(debt_to_reduce > 0, ErrorCode::ZeroDebtAmount);
+    require!(repay_amount > 0, ErrorCode::InsufficientDebt);
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -630,5 +658,29 @@ mod tests {
             max_debt_repayable_by_collateral(103, NAD, LIQUIDATION_PENALTY_BPS).unwrap(),
             100
         );
+    }
+
+    #[test]
+    fn zero_value_insolvent_collateral_can_be_cleaned_up() {
+        assert_eq!(collateral_value_at_reference_price(1, 1).unwrap(), 0);
+        assert_eq!(
+            max_debt_repayable_by_collateral(1, 1, LIQUIDATION_PENALTY_BPS).unwrap(),
+            0
+        );
+        assert!(validate_liquidation_progress(true, 1, 1, 0).is_ok());
+    }
+
+    #[test]
+    fn insolvent_dust_shares_can_be_cleaned_up_without_nominal_debt() {
+        assert!(validate_liquidation_progress(true, 1, 0, 0).is_ok());
+    }
+
+    #[test]
+    fn solvent_zero_amount_liquidation_is_rejected() {
+        let err = validate_liquidation_progress(false, 1, 0, 0).unwrap_err();
+        assert_eq!(err, error!(ErrorCode::ZeroDebtAmount));
+
+        let err = validate_liquidation_progress(false, 1, 1, 0).unwrap_err();
+        assert_eq!(err, error!(ErrorCode::InsufficientDebt));
     }
 }

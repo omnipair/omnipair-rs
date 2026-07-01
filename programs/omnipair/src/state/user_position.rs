@@ -596,4 +596,66 @@ mod tests {
         assert_eq!(pair.cash_reserve0, 400);
         assert_eq!(pair.reserve0, 800);
     }
+
+    #[test]
+    fn liquidation_repayment_with_zero_cash_socializes_full_debt() {
+        let mut pair = test_pair();
+        let token0 = pair.token0;
+        pair.reserve0 = 1_000;
+        pair.cash_reserve0 = 100;
+        pair.total_debt0 = 500;
+        pair.total_debt0_shares = 500;
+
+        let mut user_position = test_position();
+        user_position.debt0_shares = 500;
+
+        user_position
+            .decrease_debt(
+                &mut pair,
+                &token0,
+                500,
+                DebtDecreaseReason::LiquidationRepayment {
+                    exact_shares: 500,
+                    cash_credit: 0,
+                },
+            )
+            .unwrap();
+
+        assert_eq!(user_position.debt0_shares, 0);
+        assert_eq!(pair.total_debt0_shares, 0);
+        assert_eq!(pair.total_debt0, 0);
+        assert_eq!(pair.cash_reserve0, 100);
+        assert_eq!(pair.reserve0, 500);
+    }
+
+    #[test]
+    fn liquidation_repayment_with_zero_amount_clears_dust_shares() {
+        let mut pair = test_pair();
+        let token0 = pair.token0;
+        pair.reserve0 = 1_000;
+        pair.cash_reserve0 = 100;
+        pair.total_debt0 = 1;
+        pair.total_debt0_shares = DEBT_SHARE_SCALE as u128;
+
+        let mut user_position = test_position();
+        user_position.debt0_shares = 1;
+
+        user_position
+            .decrease_debt(
+                &mut pair,
+                &token0,
+                0,
+                DebtDecreaseReason::LiquidationRepayment {
+                    exact_shares: 1,
+                    cash_credit: 0,
+                },
+            )
+            .unwrap();
+
+        assert_eq!(user_position.debt0_shares, 0);
+        assert_eq!(pair.total_debt0_shares, (DEBT_SHARE_SCALE - 1) as u128);
+        assert_eq!(pair.total_debt0, 1);
+        assert_eq!(pair.cash_reserve0, 100);
+        assert_eq!(pair.reserve0, 1_000);
+    }
 }
