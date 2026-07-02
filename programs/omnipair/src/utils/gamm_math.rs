@@ -206,11 +206,14 @@ pub fn pessimistic_max_debt(
         return Ok((0, 0, 0));
     }
 
-    // V_impact: impact-aware collateral value using virtual reserves at pessimistic price.
-    // This matches the valuation used in liquidation (CPCurve::calculate_amount_out),
-    // ensuring the borrow limit never exceeds the liquidation threshold.
-    // Without this, V_linear > V_impact for collateral > ~5.26% of AMM reserve,
-    // which would make max-borrow positions instantly liquidatable.
+    // V_impact: impact-aware collateral value using virtual reserves at the
+    // pessimistic directional/symmetric EMA price.
+    //
+    // This is intentionally stricter than liquidation's symmetric-EMA reference
+    // price. Borrowing and collateral removal are user-initiated risk increases,
+    // so they must not be able to front-run a stale high symmetric EMA after spot
+    // has already fallen. Liquidation stays on symmetric EMA to avoid giving an
+    // attacker a dump-spot-and-liquidate primitive.
     let (collateral_ema_reserve, debt_ema_reserve) = construct_virtual_reserves_at_pessimistic_price(
         collateral_amm_reserve,
         debt_amm_reserve,
@@ -288,9 +291,9 @@ pub fn pessimistic_max_debt(
         .saturating_mul((BPS_DENOMINATOR - LTV_BUFFER_BPS) as u32)
         / BPS_DENOMINATOR as u32) as u16;
 
-    // Final borrow limit = V_impact * max_allowed_cf_bps / BPS
-    // Uses impact-aware collateral value to match liquidation's valuation method,
-    // guaranteeing borrow_limit ≤ liquidation_limit for any collateral size.
+    // Final borrow limit = V_impact * max_allowed_cf_bps / BPS.
+    // This is the pessimistic admission/control limit; it is expected to differ
+    // from liquidation's symmetric-EMA reference-price check.
     let final_borrow_limit: u64 = collateral_value_with_impact
         .saturating_mul(max_allowed_cf_bps as u128)
         .checked_div(BPS_DENOMINATOR_U128)

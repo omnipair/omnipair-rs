@@ -177,10 +177,10 @@ impl<'info> Borrow<'info> {
             false => user_position.calculate_debt1(pair.total_debt1, pair.total_debt1_shares)?,
         };
 
-        // If EMA lags behind a falling spot price, there will be a window where the collateral value may be artificially inflated.
-        // To prevent bad debt, we compute a pessimistic collateral factor:
-        // CF_pessimistic = min(CF_base, P_spot / P_EMA * CF_base)
-        // This ensures the solvency invariant: P_spot >= P_EMA * CF
+        // Borrowing is a user-initiated risk increase, so it uses the directional
+        // EMA path to prevent front-running stale symmetric EMA after spot falls.
+        // Liquidation intentionally does not use this snap-down price, because that
+        // would let an attacker dump spot and immediately liquidate borrowers.
         let collateral_token = pair.get_collateral_token(&debt_token);
         let collateral_amount = match collateral_token == pair.token0 {
             true => user_position.collateral0,
