@@ -146,9 +146,6 @@ impl<'info> CommonAdjustCollateral<'info> {
         } else {
             user_position.collateral1
         };
-        // Removing collateral is a user-initiated risk increase, so refresh the
-        // liquidation CF through the pessimistic directional EMA path. Liquidation
-        // itself uses symmetric EMA to avoid dump-spot-and-liquidate attacks.
         let (_, _, liquidation_cf_bps) = pair.get_max_debt_and_cf_bps_for_collateral(&pair, &collateral_token, collateral_amount)?;
         user_position.set_liquidation_cf_for_debt_token(&debt_token, &pair, liquidation_cf_bps);
 

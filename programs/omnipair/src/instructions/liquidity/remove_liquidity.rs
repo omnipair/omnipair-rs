@@ -235,10 +235,6 @@ impl<'info> RemoveLiquidity<'info> {
             .reserve1
             .checked_sub(amount1_out)
             .ok_or(ErrorCode::ReserveUnderflow)?;
-        // LP withdrawal changes the pool's remaining debt coverage, so use the
-        // pessimistic directional EMA to prevent withdrawing against stale high
-        // symmetric EMA after spot falls. This is separate from liquidation, which
-        // uses symmetric EMA to avoid dump-spot-and-liquidate attacks.
         validate_post_withdraw_debt_coverage(pair, post_reserve0, post_reserve1)?;
 
         // Transfer tokens from pool to user

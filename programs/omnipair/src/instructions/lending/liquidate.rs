@@ -249,19 +249,11 @@ impl<'info> Liquidate<'info> {
 
         require!(collateral_ema_nad > 0, ErrorCode::InsufficientLiquidity);
 
-        // Reference-price collateral value in debt-token units.
-        //
-        // Liquidation deliberately uses the symmetric EMA, not the directional EMA:
-        // snapping liquidation down to the latest lower spot would let an attacker
-        // dump the pool price and immediately liquidate otherwise healthy borrowers.
-        //
-        // Borrow, collateral removal, and liquidity removal use the directional EMA
-        // as an anti-front-running control for user-initiated risk increases. That
-        // check prevents borrowing/removing against a stale high EMA when spot has
-        // already fallen; it is not meant to be a liquidation trigger.
-        //
-        // This also avoids AMM depth/price-impact valuation so LP withdrawals do
-        // not move liquidation eligibility through reserve depth alone.
+        // Reference-price collateral value in debt-token units. Liquidation uses
+        // symmetric EMA, not directional EMA, to avoid dump-spot-and-liquidate attacks.
+        // Directional EMA is reserved for user-initiated risk increases (borrow/remove).
+        // This deliberately avoids AMM depth/price-impact valuation so LP withdrawals
+        // do not move liquidation eligibility through reserve depth alone.
         let collateral_value =
             collateral_value_at_reference_price(user_collateral, collateral_ema_nad)?;
 
