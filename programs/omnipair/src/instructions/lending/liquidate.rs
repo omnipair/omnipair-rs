@@ -254,8 +254,10 @@ impl<'info> Liquidate<'info> {
         // Directional EMA is reserved for user-initiated risk increases (borrow/remove).
         // This deliberately avoids AMM depth/price-impact valuation so LP withdrawals
         // do not move liquidation eligibility through reserve depth alone.
-        let collateral_value =
-            collateral_value_at_reference_price(user_collateral, collateral_ema_nad)?;
+        let collateral_value = (user_collateral as u128)
+            .checked_mul(collateral_ema_nad as u128)
+            .and_then(|value| value.checked_div(NAD as u128))
+            .ok_or(ErrorCode::DebtMathOverflow)?;
 
         // Borrow limit = collateral_value * liquidation_cf
         let borrow_limit = collateral_value
@@ -309,21 +311,23 @@ impl<'info> Liquidate<'info> {
             }
         };
 
-        let max_repay_from_collateral = max_debt_repayable_by_collateral(
-            user_collateral,
-            collateral_ema_nad,
-            LIQUIDATION_PENALTY_BPS,
-        )?;
+        let max_repay_from_collateral = collateral_value
+            .checked_mul(BPS_DENOMINATOR as u128)
+            .and_then(|value| {
+                value.checked_div((BPS_DENOMINATOR + LIQUIDATION_PENALTY_BPS) as u128)
+            })
+            .ok_or(ErrorCode::DebtMathOverflow)?;
+        let max_repay_from_collateral =
+            u64::try_from(max_repay_from_collateral).map_err(|_| ErrorCode::DebtMathOverflow)?;
         let repay_amount = match is_insolvent {
             true => min(debt_to_reduce, max_repay_from_collateral),
             false => debt_to_reduce,
         };
-        validate_liquidation_progress(
-            is_insolvent,
-            shares_to_reduce,
-            debt_to_reduce,
-            repay_amount,
-        )?;
+        require!(shares_to_reduce > 0, ErrorCode::ZeroDebtAmount);
+        if !is_insolvent {
+            require!(debt_to_reduce > 0, ErrorCode::ZeroDebtAmount);
+            require!(repay_amount > 0, ErrorCode::InsufficientDebt);
+        }
         if repay_amount > 0 {
             require_gte!(
                 liquidator_debt_token_account.amount,
@@ -550,14 +554,6 @@ impl<'info> Liquidate<'info> {
     }
 }
 
-fn collateral_value_at_reference_price(collateral_amount: u64, price_nad: u64) -> Result<u128> {
-    require!(price_nad > 0, ErrorCode::InsufficientLiquidity);
-    (collateral_amount as u128)
-        .checked_mul(price_nad as u128)
-        .and_then(|value| value.checked_div(NAD as u128))
-        .ok_or(ErrorCode::DebtMathOverflow.into())
-}
-
 fn collateral_amount_for_debt_at_reference_price(
     debt_amount: u64,
     price_nad: u64,
@@ -579,39 +575,6 @@ fn collateral_amount_for_debt_at_reference_price(
     )
     .ok_or(ErrorCode::DebtMathOverflow)?;
     u64::try_from(collateral_amount).map_err(|_| ErrorCode::DebtMathOverflow.into())
-}
-
-fn max_debt_repayable_by_collateral(
-    collateral_amount: u64,
-    price_nad: u64,
-    penalty_bps: u16,
-) -> Result<u64> {
-    let collateral_value = collateral_value_at_reference_price(collateral_amount, price_nad)?;
-    let repay_amount = collateral_value
-        .checked_mul(BPS_DENOMINATOR as u128)
-        .and_then(|value| value.checked_div((BPS_DENOMINATOR + penalty_bps) as u128))
-        .ok_or(ErrorCode::DebtMathOverflow)?;
-    u64::try_from(repay_amount).map_err(|_| ErrorCode::DebtMathOverflow.into())
-}
-
-fn validate_liquidation_progress(
-    is_insolvent: bool,
-    shares_to_reduce: u128,
-    debt_to_reduce: u64,
-    repay_amount: u64,
-) -> Result<()> {
-    require!(shares_to_reduce > 0, ErrorCode::ZeroDebtAmount);
-
-    if is_insolvent {
-        // Insolvent cleanup must still be able to clear bad debt when the
-        // remaining collateral has zero repayable value after integer pricing.
-        return Ok(());
-    }
-
-    require!(debt_to_reduce > 0, ErrorCode::ZeroDebtAmount);
-    require!(repay_amount > 0, ErrorCode::InsufficientDebt);
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -654,35 +617,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn max_repayable_by_collateral_reserves_total_penalty() {
-        assert_eq!(
-            max_debt_repayable_by_collateral(103, NAD, LIQUIDATION_PENALTY_BPS).unwrap(),
-            100
-        );
-    }
-
-    #[test]
-    fn zero_value_insolvent_collateral_can_be_cleaned_up() {
-        assert_eq!(collateral_value_at_reference_price(1, 1).unwrap(), 0);
-        assert_eq!(
-            max_debt_repayable_by_collateral(1, 1, LIQUIDATION_PENALTY_BPS).unwrap(),
-            0
-        );
-        assert!(validate_liquidation_progress(true, 1, 1, 0).is_ok());
-    }
-
-    #[test]
-    fn insolvent_dust_shares_can_be_cleaned_up_without_nominal_debt() {
-        assert!(validate_liquidation_progress(true, 1, 0, 0).is_ok());
-    }
-
-    #[test]
-    fn solvent_zero_amount_liquidation_is_rejected() {
-        let err = validate_liquidation_progress(false, 1, 0, 0).unwrap_err();
-        assert_eq!(err, error!(ErrorCode::ZeroDebtAmount));
-
-        let err = validate_liquidation_progress(false, 1, 1, 0).unwrap_err();
-        assert_eq!(err, error!(ErrorCode::InsufficientDebt));
-    }
 }

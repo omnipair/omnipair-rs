@@ -68,7 +68,10 @@ impl<'info> TransferUserPosition<'info> {
             ErrorCode::InvalidPositionOwner
         );
         require!(
-            self.to_position.is_empty(),
+            self.to_position.collateral0 == 0
+                && self.to_position.collateral1 == 0
+                && self.to_position.debt0_shares == 0
+                && self.to_position.debt1_shares == 0,
             ErrorCode::RecipientPositionNotEmpty
         );
 
@@ -81,14 +84,30 @@ impl<'info> TransferUserPosition<'info> {
         let pair_key = ctx.accounts.pair.key();
         let current_owner_key = ctx.accounts.current_owner.key();
         let new_owner_key = ctx.accounts.new_owner.key();
+        let from_position_bump = ctx.accounts.from_position.bump;
         let to_position_bump = ctx.bumps.to_position;
 
-        ctx.accounts.from_position.transfer_to(
-            &mut ctx.accounts.to_position,
-            new_owner_key,
-            pair_key,
-            to_position_bump,
-        )?;
+        ctx.accounts.to_position.owner = new_owner_key;
+        ctx.accounts.to_position.pair = pair_key;
+        ctx.accounts.to_position.collateral0_liquidation_cf_bps =
+            ctx.accounts.from_position.collateral0_liquidation_cf_bps;
+        ctx.accounts.to_position.collateral1_liquidation_cf_bps =
+            ctx.accounts.from_position.collateral1_liquidation_cf_bps;
+        ctx.accounts.to_position.collateral0 = ctx.accounts.from_position.collateral0;
+        ctx.accounts.to_position.collateral1 = ctx.accounts.from_position.collateral1;
+        ctx.accounts.to_position.debt0_shares = ctx.accounts.from_position.debt0_shares;
+        ctx.accounts.to_position.debt1_shares = ctx.accounts.from_position.debt1_shares;
+        ctx.accounts.to_position.bump = to_position_bump;
+
+        ctx.accounts.from_position.owner = Pubkey::default();
+        ctx.accounts.from_position.pair = Pubkey::default();
+        ctx.accounts.from_position.collateral0_liquidation_cf_bps = 0;
+        ctx.accounts.from_position.collateral1_liquidation_cf_bps = 0;
+        ctx.accounts.from_position.collateral0 = 0;
+        ctx.accounts.from_position.collateral1 = 0;
+        ctx.accounts.from_position.debt0_shares = 0;
+        ctx.accounts.from_position.debt1_shares = 0;
+        ctx.accounts.from_position.bump = from_position_bump;
 
         emit_cpi!(UserPositionTransferredEvent {
             metadata: EventMetadata::new(current_owner_key, pair_key),

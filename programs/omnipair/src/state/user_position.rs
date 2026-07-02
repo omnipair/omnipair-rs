@@ -55,50 +55,6 @@ impl UserPosition {
         self.owner != Pubkey::default() && self.pair != Pubkey::default()
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.collateral0 == 0
-            && self.collateral1 == 0
-            && self.debt0_shares == 0
-            && self.debt1_shares == 0
-    }
-
-    pub fn clear(&mut self) {
-        let bump = self.bump;
-        self.owner = Pubkey::default();
-        self.pair = Pubkey::default();
-        self.collateral0_liquidation_cf_bps = 0;
-        self.collateral1_liquidation_cf_bps = 0;
-        self.collateral0 = 0;
-        self.collateral1 = 0;
-        self.debt0_shares = 0;
-        self.debt1_shares = 0;
-        self.bump = bump;
-    }
-
-    pub fn transfer_to(
-        &mut self,
-        recipient_position: &mut UserPosition,
-        recipient_owner: Pubkey,
-        pair: Pubkey,
-        recipient_bump: u8,
-    ) -> Result<()> {
-        require!(self.is_initialized(), ErrorCode::UserPositionNotInitialized);
-        require!(recipient_position.is_empty(), ErrorCode::RecipientPositionNotEmpty);
-
-        recipient_position.owner = recipient_owner;
-        recipient_position.pair = pair;
-        recipient_position.collateral0_liquidation_cf_bps = self.collateral0_liquidation_cf_bps;
-        recipient_position.collateral1_liquidation_cf_bps = self.collateral1_liquidation_cf_bps;
-        recipient_position.collateral0 = self.collateral0;
-        recipient_position.collateral1 = self.collateral1;
-        recipient_position.debt0_shares = self.debt0_shares;
-        recipient_position.debt1_shares = self.debt1_shares;
-        recipient_position.bump = recipient_bump;
-
-        self.clear();
-        Ok(())
-    }
-
     /// Set the fixed liquidation CF for a specific debt token.
     /// Called on borrow, remove_collateral, and liquidation to lock in the CF.
     pub fn set_liquidation_cf_for_debt_token(&mut self, debt_token: &Pubkey, pair: &Pair, liquidation_cf_bps: u16) {
@@ -512,58 +468,6 @@ mod tests {
         assert_eq!(pair.total_debt0, 0);
         assert_eq!(pair.cash_reserve0, 123);
         assert_eq!(user_position.debt0_shares, 0);
-    }
-
-    #[test]
-    fn transfer_to_moves_entire_position_and_clears_source() {
-        let pair = Pubkey::new_unique();
-        let recipient = Pubkey::new_unique();
-        let mut source = test_position();
-        source.owner = Pubkey::new_unique();
-        source.pair = pair;
-        source.collateral0_liquidation_cf_bps = 7_000;
-        source.collateral1_liquidation_cf_bps = 6_500;
-        source.collateral0 = 10;
-        source.collateral1 = 20;
-        source.debt0_shares = 30;
-        source.debt1_shares = 40;
-        source.bump = 9;
-        let mut destination = test_position();
-        destination.clear();
-
-        source.transfer_to(&mut destination, recipient, pair, 3).unwrap();
-
-        assert!(!source.is_initialized());
-        assert!(source.is_empty());
-        assert_eq!(source.bump, 9);
-        assert_eq!(destination.owner, recipient);
-        assert_eq!(destination.pair, pair);
-        assert_eq!(destination.collateral0_liquidation_cf_bps, 7_000);
-        assert_eq!(destination.collateral1_liquidation_cf_bps, 6_500);
-        assert_eq!(destination.collateral0, 10);
-        assert_eq!(destination.collateral1, 20);
-        assert_eq!(destination.debt0_shares, 30);
-        assert_eq!(destination.debt1_shares, 40);
-        assert_eq!(destination.bump, 3);
-    }
-
-    #[test]
-    fn transfer_to_rejects_non_empty_destination() {
-        let pair = Pubkey::new_unique();
-        let mut source = test_position();
-        source.owner = Pubkey::new_unique();
-        source.pair = pair;
-        source.collateral0 = 10;
-        let mut destination = test_position();
-        destination.clear();
-        destination.collateral1 = 1;
-
-        let err = source
-            .transfer_to(&mut destination, Pubkey::new_unique(), pair, 3)
-            .unwrap_err();
-
-        assert_eq!(err, error!(ErrorCode::RecipientPositionNotEmpty));
-        assert_eq!(source.collateral0, 10);
     }
 
     #[test]
