@@ -11,7 +11,6 @@ use crate::errors::ErrorCode;
 use crate::events::{BurnEvent, EventMetadata, UserLiquidityPositionUpdatedEvent};
 use crate::generate_gamm_pair_seeds;
 use crate::state::{futarchy_authority::FutarchyAuthority, pair::Pair, rate_model::RateModel};
-use crate::utils::gamm_math::{construct_virtual_reserves_at_pessimistic_price, CPCurve};
 use crate::utils::liquidity_delta_circuit_breaker::{
     require_no_same_tx_add_liquidity, require_top_level_liquidity_delta_ix,
     LiquidityDeltaInstruction,
@@ -353,9 +352,7 @@ fn validate_post_withdraw_debt_coverage(
         pair.total_debt0,
         pair.total_debt1,
         pair.ema_price0_nad(),
-        pair.directional_ema_price0_nad(),
         pair.ema_price1_nad(),
-        pair.directional_ema_price1_nad(),
     )
 }
 
@@ -365,77 +362,46 @@ fn validate_post_withdraw_debt_coverage_with_prices(
     total_debt0: u64,
     total_debt1: u64,
     token0_ema_price_nad: u64,
-    token0_directional_ema_price_nad: u64,
     token1_ema_price_nad: u64,
-    token1_directional_ema_price_nad: u64,
 ) -> Result<()> {
-    let required_token1_for_debt0 = required_collateral_with_impact(
-        total_debt0,
-        post_reserve1,
-        post_reserve0,
-        token1_ema_price_nad,
-        token1_directional_ema_price_nad,
-    )?;
-    let required_token0_for_debt1 = required_collateral_with_impact(
-        total_debt1,
-        post_reserve0,
-        post_reserve1,
-        token0_ema_price_nad,
-        token0_directional_ema_price_nad,
-    )?;
+    let required_token1_for_debt0 =
+        required_collateral_at_reference_price(total_debt0, token1_ema_price_nad)?;
+    let required_token0_for_debt1 =
+        required_collateral_at_reference_price(total_debt1, token0_ema_price_nad)?;
 
     require!(
-        (post_reserve1 as u128) >= with_debt_coverage_buffer(required_token1_for_debt0)?,
+        post_reserve1 >= required_token1_for_debt0,
         ErrorCode::InsufficientPostWithdrawDebtCoverage
     );
     require!(
-        (post_reserve0 as u128) >= with_debt_coverage_buffer(required_token0_for_debt1)?,
+        post_reserve0 >= required_token0_for_debt1,
         ErrorCode::InsufficientPostWithdrawDebtCoverage
     );
 
     Ok(())
 }
 
-fn required_collateral_with_impact(
+fn required_collateral_at_reference_price(
     debt_amount: u64,
-    collateral_spot_reserve: u64,
-    debt_spot_reserve: u64,
     collateral_ema_price_nad: u64,
-    collateral_directional_ema_price_nad: u64,
 ) -> Result<u64> {
     if debt_amount == 0 {
         return Ok(0);
     }
 
     require!(
-        collateral_ema_price_nad > 0 && collateral_directional_ema_price_nad > 0,
+        collateral_ema_price_nad > 0,
         ErrorCode::InsufficientPostWithdrawDebtCoverage
     );
 
-    let (collateral_ema_reserve, debt_ema_reserve) =
-        construct_virtual_reserves_at_pessimistic_price(
-            collateral_spot_reserve,
-            debt_spot_reserve,
-            collateral_ema_price_nad,
-            collateral_directional_ema_price_nad,
-        )?;
-
-    require!(
-        collateral_ema_reserve > 0 && debt_ema_reserve > debt_amount,
-        ErrorCode::InsufficientPostWithdrawDebtCoverage
-    );
-
-    CPCurve::calculate_amount_in(collateral_ema_reserve, debt_ema_reserve, debt_amount)
-}
-
-fn with_debt_coverage_buffer(amount: u64) -> Result<u128> {
-    ceil_div(
-        (amount as u128)
-            .checked_mul(POST_WITHDRAW_DEBT_COVERAGE_BPS as u128)
+    let required = ceil_div(
+        (debt_amount as u128)
+            .checked_mul(NAD as u128)
             .ok_or(ErrorCode::DebtMathOverflow)?,
-        BPS_DENOMINATOR as u128,
+        collateral_ema_price_nad as u128,
     )
-    .ok_or(ErrorCode::DebtMathOverflow.into())
+    .ok_or(ErrorCode::DebtMathOverflow)?;
+    u64::try_from(required).map_err(|_| ErrorCode::DebtMathOverflow.into())
 }
 
 #[cfg(test)]
@@ -443,39 +409,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn liquidity_delta_withdrawal_solvency_passes_with_coverage_buffer() {
-        validate_post_withdraw_debt_coverage_with_prices(
-            1_000, 1_000, 100, 100, NAD, NAD, NAD, NAD,
-        )
-        .unwrap();
+    fn liquidity_delta_withdrawal_solvency_passes_at_exact_reference_coverage() {
+        validate_post_withdraw_debt_coverage_with_prices(1_000, 500, 500, 0, NAD, NAD)
+            .unwrap();
     }
 
     #[test]
-    fn liquidity_delta_withdrawal_solvency_fails_at_exact_debt_coverage_without_buffer() {
-        let err = validate_post_withdraw_debt_coverage_with_prices(
-            1_000, 1_000, 500, 0, NAD, NAD, NAD, NAD,
-        )
-        .unwrap_err();
+    fn liquidity_delta_withdrawal_solvency_uses_linear_reference_price_not_impact() {
+        validate_post_withdraw_debt_coverage_with_prices(1_000, 1_000, 900, 0, NAD, NAD)
+            .unwrap();
+    }
+
+    #[test]
+    fn liquidity_delta_withdrawal_solvency_fails_below_reference_coverage() {
+        let err =
+            validate_post_withdraw_debt_coverage_with_prices(1_000, 499, 500, 0, NAD, NAD)
+                .unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::InsufficientPostWithdrawDebtCoverage));
     }
 
     #[test]
-    fn liquidity_delta_withdrawal_solvency_fails_without_coverage_buffer() {
-        let err = validate_post_withdraw_debt_coverage_with_prices(
-            1_000, 1_000, 900, 0, NAD, NAD, NAD, NAD,
-        )
-        .unwrap_err();
-
-        assert_eq!(err, error!(ErrorCode::InsufficientPostWithdrawDebtCoverage));
-    }
-
-    #[test]
-    fn liquidity_delta_withdrawal_solvency_fails_with_zero_pessimistic_price() {
-        let err = validate_post_withdraw_debt_coverage_with_prices(
-            1_000, 1_000, 100, 0, NAD, NAD, NAD, 0,
-        )
-        .unwrap_err();
+    fn liquidity_delta_withdrawal_solvency_fails_with_zero_reference_price() {
+        let err =
+            validate_post_withdraw_debt_coverage_with_prices(1_000, 1_000, 100, 0, NAD, 0)
+                .unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::InsufficientPostWithdrawDebtCoverage));
     }
