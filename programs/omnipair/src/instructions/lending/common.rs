@@ -1,18 +1,11 @@
-use anchor_lang::{
-    prelude::*,
-    solana_program::sysvar,
-};
-use anchor_spl::{
-    token::{Token, TokenAccount, Mint},
-    token_interface::{Token2022},
-};
 use crate::{
-    state::pair::Pair,
-    state::rate_model::RateModel,
-    state::user_position::UserPosition,
-    state::futarchy_authority::FutarchyAuthority,
-    constants::*,
-    errors::ErrorCode,
+    constants::*, errors::ErrorCode, state::futarchy_authority::FutarchyAuthority,
+    state::pair::Pair, state::rate_model::RateModel, state::user_position::UserPosition,
+};
+use anchor_lang::{prelude::*, solana_program::sysvar};
+use anchor_spl::{
+    token::Token,
+    token_interface::{Mint, Token2022, TokenAccount},
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -69,19 +62,19 @@ pub struct CommonAdjustCollateral<'info> {
         ],
         bump = pair.get_collateral_vault_bump(&collateral_token_mint.key())
     )]
-    pub collateral_vault: Box<Account<'info, TokenAccount>>,
+    pub collateral_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
         constraint = user_collateral_token_account.mint == pair.token0 || user_collateral_token_account.mint == pair.token1,
-        token::authority = user,
+        constraint = user_collateral_token_account.owner == user.key() @ ErrorCode::InvalidTokenAccount,
     )]
-    pub user_collateral_token_account: Box<Account<'info, TokenAccount>>,
+    pub user_collateral_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         constraint = collateral_token_mint.key() == pair.token0 || collateral_token_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub collateral_token_mint: Box<Account<'info, Mint>>,
+    pub collateral_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
@@ -161,19 +154,19 @@ pub struct CommonAdjustDebt<'info> {
         ],
         bump = pair.get_reserve_vault_bump(&reserve_token_mint.key())
     )]
-    pub reserve_vault: Box<Account<'info, TokenAccount>>,
+    pub reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
         constraint = user_reserve_token_account.mint == pair.token0 || user_reserve_token_account.mint == pair.token1,
-        token::authority = user,
+        constraint = user_reserve_token_account.owner == user.key() @ ErrorCode::InvalidTokenAccount,
     )]
-    pub user_reserve_token_account: Box<Account<'info, TokenAccount>>,
+    pub user_reserve_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         constraint = reserve_token_mint.key() == pair.token0 || reserve_token_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub reserve_token_mint: Box<Account<'info, Mint>>,
+    pub reserve_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,

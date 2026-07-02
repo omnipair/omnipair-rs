@@ -13,14 +13,15 @@ use crate::{
     utils::{
         math::ceil_div,
         token::{
+            amount_after_transfer_fee, amount_with_transfer_fee, token_program_for_mint,
             transfer_from_user_to_vault, transfer_from_vault_to_user, transfer_from_vault_to_vault,
         },
     },
 };
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    token::{Mint, Token, TokenAccount},
-    token_interface::Token2022,
+    token::Token,
+    token_interface::{Mint, Token2022, TokenAccount},
 };
 use std::cmp::min;
 
@@ -71,23 +72,23 @@ pub struct Liquidate<'info> {
         ],
         bump = pair.get_collateral_vault_bump(&collateral_token_mint.key())
     )]
-    pub collateral_vault: Box<Account<'info, TokenAccount>>,
+    pub collateral_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
         constraint = caller_token_account.mint == collateral_vault.mint,
     )]
-    pub caller_token_account: Box<Account<'info, TokenAccount>>,
+    pub caller_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         constraint = collateral_token_mint.key() == pair.token0 || collateral_token_mint.key() == pair.token1 @ ErrorCode::InvalidVault
     )]
-    pub collateral_token_mint: Box<Account<'info, Mint>>,
+    pub collateral_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         constraint = debt_token_mint.key() == pair.get_debt_token(&collateral_token_mint.key()) @ ErrorCode::InvalidMint
     )]
-    pub debt_token_mint: Box<Account<'info, Mint>>,
+    pub debt_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         mut,
@@ -98,14 +99,14 @@ pub struct Liquidate<'info> {
         ],
         bump = pair.get_reserve_vault_bump(&debt_token_mint.key())
     )]
-    pub debt_reserve_vault: Box<Account<'info, TokenAccount>>,
+    pub debt_reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
         constraint = liquidator_debt_token_account.mint == debt_token_mint.key() @ ErrorCode::InvalidTokenAccount,
         constraint = liquidator_debt_token_account.owner == payer.key() @ ErrorCode::InvalidTokenAccount,
     )]
-    pub liquidator_debt_token_account: Box<Account<'info, TokenAccount>>,
+    pub liquidator_debt_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -116,7 +117,7 @@ pub struct Liquidate<'info> {
         ],
         bump = pair.get_reserve_vault_bump(&collateral_token_mint.key())
     )]
-    pub collateral_reserve_vault: Box<Account<'info, TokenAccount>>,
+    pub collateral_reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// CHECK: This is the owner of the position being liquidated.
     #[account(address = user_position.owner)]
@@ -329,9 +330,11 @@ impl<'info> Liquidate<'info> {
             require!(repay_amount > 0, ErrorCode::InsufficientDebt);
         }
         if repay_amount > 0 {
+            let repay_transfer_amount =
+                amount_with_transfer_fee(&debt_token_mint.to_account_info(), repay_amount)?;
             require_gte!(
                 liquidator_debt_token_account.amount,
-                repay_amount,
+                repay_transfer_amount,
                 ErrorCode::InsufficientBalance
             );
         }
@@ -383,18 +386,22 @@ impl<'info> Liquidate<'info> {
         let collateral_to_reserves = collateral_final
             .checked_sub(collateral_to_liquidator)
             .ok_or(ErrorCode::DebtMathOverflow)?;
+        let collateral_to_reserves_after_fee = amount_after_transfer_fee(
+            &collateral_token_mint.to_account_info(),
+            collateral_to_reserves,
+        )?;
         let liquidation_bonus = collateral_to_liquidator.saturating_sub(collateral_base);
 
-        let debt_token_program = match debt_token_mint.to_account_info().owner == token_program.key
-        {
-            true => token_program.to_account_info(),
-            false => token_2022_program.to_account_info(),
-        };
-        let collateral_token_program =
-            match collateral_token_mint.to_account_info().owner == token_program.key {
-                true => token_program.to_account_info(),
-                false => token_2022_program.to_account_info(),
-            };
+        let debt_token_program = token_program_for_mint(
+            &debt_token_mint.to_account_info(),
+            &token_program.to_account_info(),
+            &token_2022_program.to_account_info(),
+        )?;
+        let collateral_token_program = token_program_for_mint(
+            &collateral_token_mint.to_account_info(),
+            &token_program.to_account_info(),
+            &token_2022_program.to_account_info(),
+        )?;
 
         if repay_amount > 0 {
             transfer_from_user_to_vault(
@@ -403,7 +410,7 @@ impl<'info> Liquidate<'info> {
                 debt_reserve_vault.to_account_info(),
                 debt_token_mint.to_account_info(),
                 debt_token_program,
-                repay_amount,
+                amount_with_transfer_fee(&debt_token_mint.to_account_info(), repay_amount)?,
                 debt_token_mint.decimals,
             )?;
         }
@@ -459,8 +466,13 @@ impl<'info> Liquidate<'info> {
                     .checked_sub(collateral_final)
                     .unwrap();
                 // Add remaining collateral (after incentive) to reserves
-                pair.reserve0 = pair.reserve0.checked_add(collateral_to_reserves).unwrap();
-                pair.cash_reserve0 = pair.cash_reserve0.saturating_add(collateral_to_reserves);
+                pair.reserve0 = pair
+                    .reserve0
+                    .checked_add(collateral_to_reserves_after_fee)
+                    .unwrap();
+                pair.cash_reserve0 = pair
+                    .cash_reserve0
+                    .saturating_add(collateral_to_reserves_after_fee);
             }
             false => {
                 user_position.collateral1 = user_position
@@ -472,8 +484,13 @@ impl<'info> Liquidate<'info> {
                     .checked_sub(collateral_final)
                     .unwrap();
                 // Add remaining collateral (after incentive) to reserves
-                pair.reserve1 = pair.reserve1.checked_add(collateral_to_reserves).unwrap();
-                pair.cash_reserve1 = pair.cash_reserve1.saturating_add(collateral_to_reserves);
+                pair.reserve1 = pair
+                    .reserve1
+                    .checked_add(collateral_to_reserves_after_fee)
+                    .unwrap();
+                pair.cash_reserve1 = pair
+                    .cash_reserve1
+                    .saturating_add(collateral_to_reserves_after_fee);
             }
         }
 
@@ -616,5 +633,4 @@ mod tests {
             52
         );
     }
-
 }

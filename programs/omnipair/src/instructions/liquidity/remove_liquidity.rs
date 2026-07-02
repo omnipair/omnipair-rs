@@ -2,8 +2,8 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::sysvar;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{Mint, Token, TokenAccount},
-    token_interface::Token2022,
+    token::{Mint as SplMint, Token, TokenAccount as SplTokenAccount},
+    token_interface::{Mint, Token2022, TokenAccount},
 };
 
 use crate::constants::*;
@@ -16,7 +16,9 @@ use crate::utils::liquidity_delta_circuit_breaker::{
     LiquidityDeltaInstruction,
 };
 use crate::utils::math::ceil_div;
-use crate::utils::token::{token_burn, transfer_from_vault_to_user};
+use crate::utils::token::{
+    amount_after_transfer_fee, token_burn, token_program_for_mint, transfer_from_vault_to_user,
+};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct RemoveLiquidityArgs {
@@ -61,7 +63,7 @@ pub struct RemoveLiquidity<'info> {
         ],
         bump = pair.vault_bumps.reserve0
     )]
-    pub reserve0_vault: Box<Account<'info, TokenAccount>>,
+    pub reserve0_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -72,37 +74,37 @@ pub struct RemoveLiquidity<'info> {
         ],
         bump = pair.vault_bumps.reserve1
     )]
-    pub reserve1_vault: Box<Account<'info, TokenAccount>>,
+    pub reserve1_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
-        token::mint = pair.token0,
-        token::authority = user,
+        constraint = user_token0_account.mint == pair.token0 @ ErrorCode::InvalidTokenAccount,
+        constraint = user_token0_account.owner == user.key() @ ErrorCode::InvalidTokenAccount,
     )]
-    pub user_token0_account: Box<Account<'info, TokenAccount>>,
+    pub user_token0_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
-        token::mint = pair.token1,
-        token::authority = user,
+        constraint = user_token1_account.mint == pair.token1 @ ErrorCode::InvalidTokenAccount,
+        constraint = user_token1_account.owner == user.key() @ ErrorCode::InvalidTokenAccount,
     )]
-    pub user_token1_account: Box<Account<'info, TokenAccount>>,
+    pub user_token1_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         address = pair.token0 @ ErrorCode::InvalidMint
     )]
-    pub token0_mint: Box<Account<'info, Mint>>,
+    pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         address = pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub token1_mint: Box<Account<'info, Mint>>,
+    pub token1_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         mut,
         address = pair.lp_mint @ ErrorCode::InvalidMint,
     )]
-    pub lp_mint: Box<Account<'info, Mint>>,
+    pub lp_mint: Box<Account<'info, SplMint>>,
 
     #[account(
         init_if_needed,
@@ -111,7 +113,7 @@ pub struct RemoveLiquidity<'info> {
         payer = user,
         token::token_program = token_program,
     )]
-    pub user_lp_token_account: Box<Account<'info, TokenAccount>>,
+    pub user_lp_token_account: Box<Account<'info, SplTokenAccount>>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -200,13 +202,18 @@ impl<'info> RemoveLiquidity<'info> {
             .try_into()
             .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
 
+        let amount0_user_out =
+            amount_after_transfer_fee(&token0_mint.to_account_info(), amount0_out)?;
+        let amount1_user_out =
+            amount_after_transfer_fee(&token1_mint.to_account_info(), amount1_out)?;
+
         // Check if amounts meet minimum (slippage protection)
         require!(
-            amount0_out >= args.min_amount0_out,
+            amount0_user_out >= args.min_amount0_out,
             ErrorCode::SlippageExceeded
         );
         require!(
-            amount1_out >= args.min_amount1_out,
+            amount1_user_out >= args.min_amount1_out,
             ErrorCode::SlippageExceeded
         );
 
@@ -242,10 +249,11 @@ impl<'info> RemoveLiquidity<'info> {
             reserve0_vault.to_account_info(),
             user_token0_account.to_account_info(),
             token0_mint.to_account_info(),
-            match token0_mint.to_account_info().owner == token_program.key {
-                true => token_program.to_account_info(),
-                false => token_2022_program.to_account_info(),
-            },
+            token_program_for_mint(
+                &token0_mint.to_account_info(),
+                &token_program.to_account_info(),
+                &token_2022_program.to_account_info(),
+            )?,
             amount0_out,
             token0_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
@@ -256,10 +264,11 @@ impl<'info> RemoveLiquidity<'info> {
             reserve1_vault.to_account_info(),
             user_token1_account.to_account_info(),
             token1_mint.to_account_info(),
-            match token1_mint.to_account_info().owner == token_program.key {
-                true => token_program.to_account_info(),
-                false => token_2022_program.to_account_info(),
-            },
+            token_program_for_mint(
+                &token1_mint.to_account_info(),
+                &token_program.to_account_info(),
+                &token_2022_program.to_account_info(),
+            )?,
             amount1_out,
             token1_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
@@ -410,30 +419,26 @@ mod tests {
 
     #[test]
     fn liquidity_delta_withdrawal_solvency_passes_at_exact_reference_coverage() {
-        validate_post_withdraw_debt_coverage_with_prices(1_000, 500, 500, 0, NAD, NAD)
-            .unwrap();
+        validate_post_withdraw_debt_coverage_with_prices(1_000, 500, 500, 0, NAD, NAD).unwrap();
     }
 
     #[test]
     fn liquidity_delta_withdrawal_solvency_uses_linear_reference_price_not_impact() {
-        validate_post_withdraw_debt_coverage_with_prices(1_000, 1_000, 900, 0, NAD, NAD)
-            .unwrap();
+        validate_post_withdraw_debt_coverage_with_prices(1_000, 1_000, 900, 0, NAD, NAD).unwrap();
     }
 
     #[test]
     fn liquidity_delta_withdrawal_solvency_fails_below_reference_coverage() {
-        let err =
-            validate_post_withdraw_debt_coverage_with_prices(1_000, 499, 500, 0, NAD, NAD)
-                .unwrap_err();
+        let err = validate_post_withdraw_debt_coverage_with_prices(1_000, 499, 500, 0, NAD, NAD)
+            .unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::InsufficientPostWithdrawDebtCoverage));
     }
 
     #[test]
     fn liquidity_delta_withdrawal_solvency_fails_with_zero_reference_price() {
-        let err =
-            validate_post_withdraw_debt_coverage_with_prices(1_000, 1_000, 100, 0, NAD, 0)
-                .unwrap_err();
+        let err = validate_post_withdraw_debt_coverage_with_prices(1_000, 1_000, 100, 0, NAD, 0)
+            .unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::InsufficientPostWithdrawDebtCoverage));
     }
