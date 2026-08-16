@@ -91,10 +91,25 @@ pub struct InitializeAndBootstrap<'info> {
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
 
+    /// Derived from the pair rather than passed as a fresh keypair, so creating
+    /// a market needs no signature beyond the deployer's. A keypair signer made
+    /// deployment impossible for a multisig, whose vault cannot produce one.
+    ///
+    /// Deliberately not seeded on the rate parameters: one pair owns one rate
+    /// model, which avoids `init_if_needed` and any chance of overwriting a
+    /// model another pair is already using. Sharing a model across pairs is
+    /// still available through `create_rate_model` + `set_pair_rate_model`.
+    ///
+    /// The bump is recomputed rather than stored: adding a field would change
+    /// `RateModel`'s size and break every account created before this change.
+    /// No other instruction validates this account by seeds, so it is only
+    /// needed here.
     #[account(
         init,
         payer = deployer,
         space = get_size_with_discriminator::<RateModel>(),
+        seeds = [RATE_MODEL_SEED_PREFIX, pair.key().as_ref()],
+        bump,
     )]
     pub rate_model: Box<Account<'info, RateModel>>,
 
