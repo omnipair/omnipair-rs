@@ -17,6 +17,7 @@ pub const WSOL_MINT_ADDRESS: Pubkey = pubkey!("So1111111111111111111111111111111
 pub const FUTARCHY_AUTHORITY_SEED_PREFIX: &[u8] = b"futarchy_authority";
 pub const METADATA_SEED_PREFIX: &[u8] = b"metadata";
 pub const PAIR_SEED_PREFIX: &[u8] = b"gamm_pair";
+pub const RATE_MODEL_SEED_PREFIX: &[u8] = b"rate_model";
 pub const LP_MINT_SEED_PREFIX: &[u8] = b"gamm_lp_mint";
 pub const POSITION_SEED_PREFIX: &[u8] = b"gamm_position";
 
