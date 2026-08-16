@@ -1,24 +1,24 @@
-use anchor_lang::prelude::*;
-use anchor_spl::{
-    token::{Token, TokenAccount, Mint},
-    token_interface::Token2022,
-    associated_token::AssociatedToken,
-};
 use crate::{
-    state::*,
     constants::*,
     errors::ErrorCode,
     events::{ClaimProtocolFeesEvent, EventMetadata},
-    utils::token::transfer_from_vault_to_vault,
     generate_gamm_pair_seeds,
+    state::*,
+    utils::token::{token_program_for_mint, transfer_from_vault_to_vault},
+};
+use anchor_lang::prelude::*;
+use anchor_spl::{
+    associated_token::{create_idempotent, AssociatedToken},
+    token::Token,
+    token_interface::{Mint, Token2022, TokenAccount},
 };
 
 /// Claims protocol fees from a pair and distributes them directly to revenue recipients.
-/// 
+///
 /// This instruction is permissionless - anyone can call it to trigger fee distribution.
 /// Fees are transferred directly from pair reserve vaults to recipient ATAs based on
 /// the distribution percentages stored in FutarchyAuthority.
-/// 
+///
 /// The recipient addresses in FutarchyAuthority are pubkeys not ATAs.
 /// ATAs are derived at runtime for each token being claimed.
 #[event_cpi]
@@ -57,7 +57,7 @@ pub struct ClaimProtocolFees<'info> {
         ],
         bump = pair.vault_bumps.reserve0
     )]
-    pub reserve0_vault: Box<Account<'info, TokenAccount>>,
+    pub reserve0_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -68,73 +68,49 @@ pub struct ClaimProtocolFees<'info> {
         ],
         bump = pair.vault_bumps.reserve1
     )]
-    pub reserve1_vault: Box<Account<'info, TokenAccount>>,
+    pub reserve1_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     // Token Mints
     #[account(address = pair.token0)]
-    pub token0_mint: Box<Account<'info, Mint>>,
-    
+    pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
+
     #[account(address = pair.token1)]
-    pub token1_mint: Box<Account<'info, Mint>>,
+    pub token1_mint: Box<InterfaceAccount<'info, Mint>>,
 
     // Futarchy Treasury ATAs (boxed to reduce stack usage)
-    #[account(
-        init_if_needed,
-        payer = caller,
-        associated_token::mint = token0_mint,
-        associated_token::authority = futarchy_treasury,
-    )]
-    pub futarchy_treasury_token0: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    /// CHECK: Created/validated as the recipient ATA in the handler.
+    pub futarchy_treasury_token0: UncheckedAccount<'info>,
 
-    #[account(
-        init_if_needed,
-        payer = caller,
-        associated_token::mint = token1_mint,
-        associated_token::authority = futarchy_treasury,
-    )]
-    pub futarchy_treasury_token1: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    /// CHECK: Created/validated as the recipient ATA in the handler.
+    pub futarchy_treasury_token1: UncheckedAccount<'info>,
 
     /// CHECK: Validated against futarchy_authority.recipients.futarchy_treasury
     #[account(address = futarchy_authority.recipients.futarchy_treasury @ ErrorCode::InvalidRecipient)]
     pub futarchy_treasury: AccountInfo<'info>,
 
     // Buybacks Vault ATAs (boxed to reduce stack usage)
-    #[account(
-        init_if_needed,
-        payer = caller,
-        associated_token::mint = token0_mint,
-        associated_token::authority = buybacks_vault,
-    )]
-    pub buybacks_vault_token0: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    /// CHECK: Created/validated as the recipient ATA in the handler.
+    pub buybacks_vault_token0: UncheckedAccount<'info>,
 
-    #[account(
-        init_if_needed,
-        payer = caller,
-        associated_token::mint = token1_mint,
-        associated_token::authority = buybacks_vault,
-    )]
-    pub buybacks_vault_token1: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    /// CHECK: Created/validated as the recipient ATA in the handler.
+    pub buybacks_vault_token1: UncheckedAccount<'info>,
 
     /// CHECK: Validated against futarchy_authority.recipients.buybacks_vault
     #[account(address = futarchy_authority.recipients.buybacks_vault @ ErrorCode::InvalidRecipient)]
     pub buybacks_vault: AccountInfo<'info>,
 
     // Team Treasury ATAs (boxed to reduce stack usage)
-    #[account(
-        init_if_needed,
-        payer = caller,
-        associated_token::mint = token0_mint,
-        associated_token::authority = team_treasury,
-    )]
-    pub team_treasury_token0: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    /// CHECK: Created/validated as the recipient ATA in the handler.
+    pub team_treasury_token0: UncheckedAccount<'info>,
 
-    #[account(
-        init_if_needed,
-        payer = caller,
-        associated_token::mint = token1_mint,
-        associated_token::authority = team_treasury,
-    )]
-    pub team_treasury_token1: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    /// CHECK: Created/validated as the recipient ATA in the handler.
+    pub team_treasury_token1: UncheckedAccount<'info>,
 
     /// CHECK: Validated against futarchy_authority.recipients.team_treasury
     #[account(address = futarchy_authority.recipients.team_treasury @ ErrorCode::InvalidRecipient)]
@@ -159,13 +135,13 @@ impl<'info> ClaimProtocolFees<'info> {
     }
 
     pub fn handle_claim(ctx: Context<Self>) -> Result<()> {
-        let ClaimProtocolFees { 
-            pair, 
-            reserve0_vault, 
-            reserve1_vault, 
+        let ClaimProtocolFees {
+            pair,
+            reserve0_vault,
+            reserve1_vault,
             futarchy_authority,
             caller,
-            .. 
+            ..
         } = ctx.accounts;
 
         // Defensive check: ensure distribution percentages sum to 100%
@@ -218,17 +194,71 @@ impl<'info> ClaimProtocolFees<'info> {
         let signer_seeds = &[&pair_seeds[..]];
 
         // Determine token programs
-        let token0_program = if ctx.accounts.token0_mint.to_account_info().owner == ctx.accounts.token_program.key {
-            ctx.accounts.token_program.to_account_info()
-        } else {
-            ctx.accounts.token_2022_program.to_account_info()
-        };
+        let token0_program = token_program_for_mint(
+            &ctx.accounts.token0_mint.to_account_info(),
+            &ctx.accounts.token_program.to_account_info(),
+            &ctx.accounts.token_2022_program.to_account_info(),
+        )?;
+        let token1_program = token_program_for_mint(
+            &ctx.accounts.token1_mint.to_account_info(),
+            &ctx.accounts.token_program.to_account_info(),
+            &ctx.accounts.token_2022_program.to_account_info(),
+        )?;
 
-        let token1_program = if ctx.accounts.token1_mint.to_account_info().owner == ctx.accounts.token_program.key {
-            ctx.accounts.token_program.to_account_info()
-        } else {
-            ctx.accounts.token_2022_program.to_account_info()
-        };
+        create_recipient_ata(
+            ctx.accounts.associated_token_program.to_account_info(),
+            caller.to_account_info(),
+            ctx.accounts.futarchy_treasury_token0.to_account_info(),
+            ctx.accounts.futarchy_treasury.to_account_info(),
+            ctx.accounts.token0_mint.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+            token0_program.clone(),
+        )?;
+        create_recipient_ata(
+            ctx.accounts.associated_token_program.to_account_info(),
+            caller.to_account_info(),
+            ctx.accounts.futarchy_treasury_token1.to_account_info(),
+            ctx.accounts.futarchy_treasury.to_account_info(),
+            ctx.accounts.token1_mint.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+            token1_program.clone(),
+        )?;
+        create_recipient_ata(
+            ctx.accounts.associated_token_program.to_account_info(),
+            caller.to_account_info(),
+            ctx.accounts.buybacks_vault_token0.to_account_info(),
+            ctx.accounts.buybacks_vault.to_account_info(),
+            ctx.accounts.token0_mint.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+            token0_program.clone(),
+        )?;
+        create_recipient_ata(
+            ctx.accounts.associated_token_program.to_account_info(),
+            caller.to_account_info(),
+            ctx.accounts.buybacks_vault_token1.to_account_info(),
+            ctx.accounts.buybacks_vault.to_account_info(),
+            ctx.accounts.token1_mint.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+            token1_program.clone(),
+        )?;
+        create_recipient_ata(
+            ctx.accounts.associated_token_program.to_account_info(),
+            caller.to_account_info(),
+            ctx.accounts.team_treasury_token0.to_account_info(),
+            ctx.accounts.team_treasury.to_account_info(),
+            ctx.accounts.token0_mint.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+            token0_program.clone(),
+        )?;
+        create_recipient_ata(
+            ctx.accounts.associated_token_program.to_account_info(),
+            caller.to_account_info(),
+            ctx.accounts.team_treasury_token1.to_account_info(),
+            ctx.accounts.team_treasury.to_account_info(),
+            ctx.accounts.token1_mint.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+            token1_program.clone(),
+        )?;
 
         // Token0 transfers
         // Transfer to futarchy treasury
@@ -331,4 +361,26 @@ impl<'info> ClaimProtocolFees<'info> {
 
         Ok(())
     }
+}
+
+fn create_recipient_ata<'a>(
+    associated_token_program: AccountInfo<'a>,
+    payer: AccountInfo<'a>,
+    associated_token: AccountInfo<'a>,
+    authority: AccountInfo<'a>,
+    mint: AccountInfo<'a>,
+    system_program: AccountInfo<'a>,
+    token_program: AccountInfo<'a>,
+) -> Result<()> {
+    create_idempotent(CpiContext::new(
+        associated_token_program,
+        anchor_spl::associated_token::Create {
+            payer,
+            associated_token,
+            authority,
+            mint,
+            system_program,
+            token_program,
+        },
+    ))
 }

@@ -10,6 +10,9 @@ pub enum DebtDecreaseReason {
     Repayment,
     /// WriteOff: expects exact debt shares to be written off
     WriteOff(u128),
+    /// LiquidationRepayment: expects exact debt shares, credits actual cash repaid,
+    /// and socializes any uncovered debt reduction through virtual reserves.
+    LiquidationRepayment { exact_shares: u128, cash_credit: u64 },
 }
 
 #[account]
@@ -154,6 +157,7 @@ impl UserPosition {
             true => {
                 let shares = match reason {
                     DebtDecreaseReason::WriteOff(exact_shares) => exact_shares,
+                    DebtDecreaseReason::LiquidationRepayment { exact_shares, .. } => exact_shares,
                     DebtDecreaseReason::Repayment => (amount as u128)
                         .checked_mul(pair.total_debt0_shares)
                         .ok_or(ErrorCode::DebtShareMathOverflow)?
@@ -168,6 +172,14 @@ impl UserPosition {
                     DebtDecreaseReason::Repayment => pair.cash_reserve0 = pair.cash_reserve0.saturating_add(amount),
                     // r_virtual can't reach zero during write off
                     DebtDecreaseReason::WriteOff(_) => pair.reserve0 = pair.reserve0.checked_sub(amount).unwrap_or(1),
+                    DebtDecreaseReason::LiquidationRepayment { cash_credit, .. } => {
+                        let cash_credit = cash_credit.min(amount);
+                        pair.cash_reserve0 = pair.cash_reserve0.saturating_add(cash_credit);
+                        let socialized_loss = amount.saturating_sub(cash_credit);
+                        if socialized_loss > 0 {
+                            pair.reserve0 = pair.reserve0.checked_sub(socialized_loss).unwrap_or(1);
+                        }
+                    }
                 };
                 // Sync debt and shares: if shares reaches 0, reset debt to avoid orphaned state
                 if pair.total_debt0_shares == 0 && pair.total_debt0 > 0 {
@@ -177,6 +189,7 @@ impl UserPosition {
             false => {
                 let shares = match reason {
                     DebtDecreaseReason::WriteOff(exact_shares) => exact_shares,
+                    DebtDecreaseReason::LiquidationRepayment { exact_shares, .. } => exact_shares,
                     DebtDecreaseReason::Repayment => (amount as u128)
                         .checked_mul(pair.total_debt1_shares)
                         .ok_or(ErrorCode::DebtShareMathOverflow)?
@@ -189,6 +202,14 @@ impl UserPosition {
                 match reason {
                     DebtDecreaseReason::Repayment => pair.cash_reserve1 = pair.cash_reserve1.saturating_add(amount),
                     DebtDecreaseReason::WriteOff(_) => pair.reserve1 = pair.reserve1.checked_sub(amount).unwrap_or(1),
+                    DebtDecreaseReason::LiquidationRepayment { cash_credit, .. } => {
+                        let cash_credit = cash_credit.min(amount);
+                        pair.cash_reserve1 = pair.cash_reserve1.saturating_add(cash_credit);
+                        let socialized_loss = amount.saturating_sub(cash_credit);
+                        if socialized_loss > 0 {
+                            pair.reserve1 = pair.reserve1.checked_sub(socialized_loss).unwrap_or(1);
+                        }
+                    }
                 };
                 // Sync debt and shares: if shares reaches 0, reset debt to avoid orphaned state
                 if pair.total_debt1_shares == 0 && pair.total_debt1 > 0 {
@@ -447,5 +468,98 @@ mod tests {
         assert_eq!(pair.total_debt0, 0);
         assert_eq!(pair.cash_reserve0, 123);
         assert_eq!(user_position.debt0_shares, 0);
+    }
+
+    #[test]
+    fn liquidation_repayment_credits_cash_and_socializes_shortfall() {
+        let mut pair = test_pair();
+        let token0 = pair.token0;
+        pair.reserve0 = 1_000;
+        pair.cash_reserve0 = 100;
+        pair.total_debt0 = 500;
+        pair.total_debt0_shares = 500;
+
+        let mut user_position = test_position();
+        user_position.debt0_shares = 500;
+
+        user_position
+            .decrease_debt(
+                &mut pair,
+                &token0,
+                500,
+                DebtDecreaseReason::LiquidationRepayment {
+                    exact_shares: 500,
+                    cash_credit: 300,
+                },
+            )
+            .unwrap();
+
+        assert_eq!(user_position.debt0_shares, 0);
+        assert_eq!(pair.total_debt0_shares, 0);
+        assert_eq!(pair.total_debt0, 0);
+        assert_eq!(pair.cash_reserve0, 400);
+        assert_eq!(pair.reserve0, 800);
+    }
+
+    #[test]
+    fn liquidation_repayment_with_zero_cash_socializes_full_debt() {
+        let mut pair = test_pair();
+        let token0 = pair.token0;
+        pair.reserve0 = 1_000;
+        pair.cash_reserve0 = 100;
+        pair.total_debt0 = 500;
+        pair.total_debt0_shares = 500;
+
+        let mut user_position = test_position();
+        user_position.debt0_shares = 500;
+
+        user_position
+            .decrease_debt(
+                &mut pair,
+                &token0,
+                500,
+                DebtDecreaseReason::LiquidationRepayment {
+                    exact_shares: 500,
+                    cash_credit: 0,
+                },
+            )
+            .unwrap();
+
+        assert_eq!(user_position.debt0_shares, 0);
+        assert_eq!(pair.total_debt0_shares, 0);
+        assert_eq!(pair.total_debt0, 0);
+        assert_eq!(pair.cash_reserve0, 100);
+        assert_eq!(pair.reserve0, 500);
+    }
+
+    #[test]
+    fn liquidation_repayment_with_zero_amount_clears_dust_shares() {
+        let mut pair = test_pair();
+        let token0 = pair.token0;
+        pair.reserve0 = 1_000;
+        pair.cash_reserve0 = 100;
+        pair.total_debt0 = 1;
+        pair.total_debt0_shares = DEBT_SHARE_SCALE as u128;
+
+        let mut user_position = test_position();
+        user_position.debt0_shares = 1;
+
+        user_position
+            .decrease_debt(
+                &mut pair,
+                &token0,
+                0,
+                DebtDecreaseReason::LiquidationRepayment {
+                    exact_shares: 1,
+                    cash_credit: 0,
+                },
+            )
+            .unwrap();
+
+        assert_eq!(user_position.debt0_shares, 0);
+        assert_eq!(pair.total_debt0_shares, (DEBT_SHARE_SCALE - 1) as u128);
+        assert_eq!(pair.total_debt0, 1);
+        assert_eq!(pair.cash_reserve0, 100);
+        assert_eq!(pair.reserve0, 1_000);
     }
 }

@@ -2364,6 +2364,7 @@ dependencies = [
  "rand 0.8.5",
  "solana-security-txt",
  "spl-math",
+ "spl-memo",
  "spl-token 4.0.2",
  "spl-token-2022",
  "uint 0.9.5",

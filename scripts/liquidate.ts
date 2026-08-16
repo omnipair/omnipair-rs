@@ -23,6 +23,16 @@ dotenv.config();
 const TOKEN0_MINT = new PublicKey(process.env.TOKEN0_MINT || '');
 const TOKEN1_MINT = new PublicKey(process.env.TOKEN1_MINT || '');
 
+function paramsHashFromEnv(): Buffer {
+    const raw = process.env.PARAMS_HASH || '';
+    const hex = raw.startsWith('0x') ? raw.slice(2) : raw;
+    const bytes = Buffer.from(hex, 'hex');
+    if (bytes.length !== 32) {
+        throw new Error('Set PAIR_ADDRESS or PARAMS_HASH as a 32-byte hex string');
+    }
+    return bytes;
+}
+
 async function main() {
     console.log('Starting liquidation operation...');
     
@@ -49,10 +59,12 @@ async function main() {
     console.log('User address:', userPublicKey.toBase58());
 
     // Find PDA for the pair
-    const [pairPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('gamm_pair'), TOKEN0_MINT.toBuffer(), TOKEN1_MINT.toBuffer()],
-        program.programId
-    );
+    const pairPda = process.env.PAIR_ADDRESS
+        ? new PublicKey(process.env.PAIR_ADDRESS)
+        : PublicKey.findProgramAddressSync(
+            [Buffer.from('gamm_pair'), TOKEN0_MINT.toBuffer(), TOKEN1_MINT.toBuffer(), paramsHashFromEnv()],
+            program.programId
+        )[0];
 
     // Get pair account to get rate model
     const pairAccount = await program.account.pair.fetch(pairPda);
@@ -98,20 +110,21 @@ async function main() {
         ? TOKEN_2022_PROGRAM_ID 
         : TOKEN_PROGRAM_ID;
 
-    // Get associated token addresses for vaults
-    const token0Vault = await getAssociatedTokenAddress(
-        TOKEN0_MINT,
-        pairPda,
-        true,
-        token0Program,
-        ASSOCIATED_TOKEN_PROGRAM_ID
+    const [reserve0Vault] = PublicKey.findProgramAddressSync(
+        [Buffer.from('reserve_vault'), pairPda.toBuffer(), TOKEN0_MINT.toBuffer()],
+        program.programId
     );
-    const token1Vault = await getAssociatedTokenAddress(
-        TOKEN1_MINT,
-        pairPda,
-        true,
-        token1Program,
-        ASSOCIATED_TOKEN_PROGRAM_ID
+    const [reserve1Vault] = PublicKey.findProgramAddressSync(
+        [Buffer.from('reserve_vault'), pairPda.toBuffer(), TOKEN1_MINT.toBuffer()],
+        program.programId
+    );
+    const [collateral0Vault] = PublicKey.findProgramAddressSync(
+        [Buffer.from('collateral_vault'), pairPda.toBuffer(), TOKEN0_MINT.toBuffer()],
+        program.programId
+    );
+    const [collateral1Vault] = PublicKey.findProgramAddressSync(
+        [Buffer.from('collateral_vault'), pairPda.toBuffer(), TOKEN1_MINT.toBuffer()],
+        program.programId
     );
 
     // Liquidation parameters
@@ -120,9 +133,11 @@ async function main() {
     console.log('Liquidating with parameters:');
     console.log('Token:', liquidateToken0 ? 'Token0' : 'Token1');
 
-    // Get caller's token account for receiving liquidation incentive
+    // Get caller's token accounts for receiving seized collateral and repaying debt.
     const collateralMint = liquidateToken0 ? TOKEN0_MINT : TOKEN1_MINT;
+    const debtMint = liquidateToken0 ? TOKEN1_MINT : TOKEN0_MINT;
     const collateralTokenProgram = liquidateToken0 ? token0Program : token1Program;
+    const debtTokenProgram = liquidateToken0 ? token1Program : token0Program;
     const callerTokenAccount = await getAssociatedTokenAddress(
         collateralMint,
         DEPLOYER_KEYPAIR.publicKey,
@@ -130,7 +145,15 @@ async function main() {
         collateralTokenProgram,
         ASSOCIATED_TOKEN_PROGRAM_ID
     );
-    console.log('Caller token account (for incentive):', callerTokenAccount.toBase58());
+    const liquidatorDebtTokenAccount = await getAssociatedTokenAddress(
+        debtMint,
+        DEPLOYER_KEYPAIR.publicKey,
+        false,
+        debtTokenProgram,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+    console.log('Caller token account (for seized collateral):', callerTokenAccount.toBase58());
+    console.log('Liquidator debt token account (for repayment):', liquidatorDebtTokenAccount.toBase58());
 
     // Create transaction
     const tx = await program.methods
@@ -142,9 +165,13 @@ async function main() {
             rateModel: RATE_MODEL,
             futarchyAuthority: futarchyAuthorityPda,
             userPosition: userPositionPda,
-            collateralVault: liquidateToken0 ? token0Vault : token1Vault,
+            collateralVault: liquidateToken0 ? collateral0Vault : collateral1Vault,
             callerTokenAccount: callerTokenAccount,
             collateralTokenMint: collateralMint,
+            debtTokenMint: debtMint,
+            debtReserveVault: liquidateToken0 ? reserve1Vault : reserve0Vault,
+            liquidatorDebtTokenAccount,
+            collateralReserveVault: liquidateToken0 ? reserve0Vault : reserve1Vault,
             tokenProgram: TOKEN_PROGRAM_ID,
             token2022Program: TOKEN_2022_PROGRAM_ID,
             systemProgram: SystemProgram.programId,
@@ -156,4 +183,4 @@ async function main() {
     console.log('Signature:', tx);
 }
 
-main().catch(console.error); 
+main().catch(console.error);

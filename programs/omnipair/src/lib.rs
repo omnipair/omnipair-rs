@@ -161,6 +161,11 @@ pub mod omnipair {
         Liquidate::handle_liquidate(ctx)
     }
 
+    #[access_control(ctx.accounts.validate_transfer())]
+    pub fn transfer_user_position(ctx: Context<TransferUserPosition>) -> Result<()> {
+        TransferUserPosition::handle_transfer(ctx)
+    }
+
     // Flash loan instruction
     #[access_control(ctx.accounts.update_and_validate(&args))]
     pub fn flashloan<'info>(ctx: Context<'_, '_, '_, 'info, Flashloan<'info>>, args: FlashloanArgs) -> Result<()> {

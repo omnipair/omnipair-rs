@@ -1,15 +1,23 @@
+use crate::{
+    constants::*,
+    errors::ErrorCode,
+    events::{
+        AdjustCollateralEvent, EventMetadata, UserPositionCreatedEvent, UserPositionUpdatedEvent,
+    },
+    instructions::lending::common::AdjustCollateralArgs,
+    state::{
+        futarchy_authority::FutarchyAuthority, pair::Pair, rate_model::RateModel,
+        user_position::UserPosition,
+    },
+    utils::{
+        account::get_size_with_discriminator,
+        token::{amount_with_transfer_fee, token_program_for_mint, transfer_from_user_to_vault},
+    },
+};
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    token::{Token, TokenAccount, Mint},
-    token_interface::{Token2022},
-};
-use crate::{
-    errors::ErrorCode,
-    events::{AdjustCollateralEvent, EventMetadata, UserPositionCreatedEvent, UserPositionUpdatedEvent},
-    utils::{token::transfer_from_user_to_vault, account::get_size_with_discriminator},
-    instructions::lending::common::AdjustCollateralArgs,
-    state::{user_position::UserPosition, pair::Pair, rate_model::RateModel, futarchy_authority::FutarchyAuthority},
-    constants::*,
+    token::Token,
+    token_interface::{Mint, Token2022, TokenAccount},
 };
 
 #[event_cpi]
@@ -63,19 +71,19 @@ pub struct AddCollateral<'info> {
         ],
         bump = pair.get_collateral_vault_bump(&collateral_token_mint.key())
     )]
-    pub collateral_vault: Box<Account<'info, TokenAccount>>,
+    pub collateral_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
         constraint = user_collateral_token_account.mint == pair.token0 || user_collateral_token_account.mint == pair.token1,
-        token::authority = user,
+        constraint = user_collateral_token_account.owner == user.key() @ ErrorCode::InvalidTokenAccount,
     )]
-    pub user_collateral_token_account: Box<Account<'info, TokenAccount>>,
+    pub user_collateral_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         constraint = collateral_token_mint.key() == pair.token0 || collateral_token_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub collateral_token_mint: Box<Account<'info, Mint>>,
+    pub collateral_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -87,18 +95,20 @@ pub struct AddCollateral<'info> {
 impl<'info> AddCollateral<'info> {
     pub fn validate_add(&self, args: &AdjustCollateralArgs) -> Result<()> {
         let AdjustCollateralArgs { amount } = args;
-        
+
         require!(*amount > 0, ErrorCode::AmountZero);
-        
+
+        let transfer_amount =
+            amount_with_transfer_fee(&self.collateral_token_mint.to_account_info(), *amount)?;
         require_gte!(
             self.user_collateral_token_account.amount,
-            *amount,
+            transfer_amount,
             ErrorCode::InsufficientBalanceForCollateral
         );
-        
+
         Ok(())
     }
-    
+
     pub fn update(&mut self) -> Result<()> {
         let pair_key = self.pair.to_account_info().key();
         self.pair.update(
@@ -117,9 +127,9 @@ impl<'info> AddCollateral<'info> {
     }
 
     pub fn handle_add_collateral(ctx: Context<Self>, args: AdjustCollateralArgs) -> Result<()> {
-        let AddCollateral { 
-            pair, 
-            user, 
+        let AddCollateral {
+            pair,
+            user,
             collateral_vault,
             collateral_token_mint,
             token_program,
@@ -130,11 +140,7 @@ impl<'info> AddCollateral<'info> {
         } = ctx.accounts;
 
         if !user_position.is_initialized() {
-            user_position.initialize(
-                user.key(),
-                pair.key(),
-                ctx.bumps.user_position,
-            )?;
+            user_position.initialize(user.key(), pair.key(), ctx.bumps.user_position)?;
 
             emit_cpi!(UserPositionCreatedEvent {
                 metadata: EventMetadata::new(user.key(), pair.key()),
@@ -150,22 +156,25 @@ impl<'info> AddCollateral<'info> {
             user_collateral_token_account.to_account_info(),
             collateral_vault.to_account_info(),
             collateral_token_mint.to_account_info(),
-            match collateral_token_mint.to_account_info().owner == token_program.key {
-                true => token_program.to_account_info(),
-                false => token_2022_program.to_account_info(),
-            },
-            args.amount,
+            token_program_for_mint(
+                &collateral_token_mint.to_account_info(),
+                &token_program.to_account_info(),
+                &token_2022_program.to_account_info(),
+            )?,
+            amount_with_transfer_fee(&collateral_token_mint.to_account_info(), args.amount)?,
             collateral_token_mint.decimals,
         )?;
 
         match is_collateral_token0 {
             true => {
                 pair.total_collateral0 = pair.total_collateral0.checked_add(args.amount).unwrap();
-                user_position.collateral0 = user_position.collateral0.checked_add(args.amount).unwrap();
-            },
+                user_position.collateral0 =
+                    user_position.collateral0.checked_add(args.amount).unwrap();
+            }
             false => {
                 pair.total_collateral1 = pair.total_collateral1.checked_add(args.amount).unwrap();
-                user_position.collateral1 = user_position.collateral1.checked_add(args.amount).unwrap();
+                user_position.collateral1 =
+                    user_position.collateral1.checked_add(args.amount).unwrap();
             }
         }
 
@@ -175,7 +184,7 @@ impl<'info> AddCollateral<'info> {
         } else {
             (0, args.amount as i64)
         };
-        
+
         emit_cpi!(AdjustCollateralEvent {
             metadata: EventMetadata::new(user.key(), pair.key()),
             amount0,

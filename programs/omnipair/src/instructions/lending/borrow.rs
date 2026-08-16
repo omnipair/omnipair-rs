@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::sysvar;
 use anchor_spl::{
-    token::{Mint, Token, TokenAccount},
-    token_interface::Token2022,
+    token::Token,
+    token_interface::{Mint, Token2022, TokenAccount},
 };
 
 use crate::{
@@ -17,7 +17,7 @@ use crate::{
     },
     utils::{
         liquidity_delta_circuit_breaker::require_no_same_tx_liquidity_delta,
-        token::transfer_from_vault_to_user,
+        token::{token_program_for_mint, transfer_from_vault_to_user},
     },
 };
 
@@ -70,19 +70,19 @@ pub struct Borrow<'info> {
         ],
         bump = pair.get_reserve_vault_bump(&reserve_token_mint.key())
     )]
-    pub reserve_vault: Box<Account<'info, TokenAccount>>,
+    pub reserve_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
         constraint = user_reserve_token_account.mint == reserve_token_mint.key() @ ErrorCode::InvalidMint,
-        token::authority = user,
+        constraint = user_reserve_token_account.owner == user.key() @ ErrorCode::InvalidTokenAccount,
     )]
-    pub user_reserve_token_account: Box<Account<'info, TokenAccount>>,
+    pub user_reserve_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         constraint = reserve_token_mint.key() == pair.token0 || reserve_token_mint.key() == pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub reserve_token_mint: Box<Account<'info, Mint>>,
+    pub reserve_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
@@ -219,10 +219,11 @@ impl<'info> Borrow<'info> {
             debt_token_vault.to_account_info(),
             user_reserve_token_account.to_account_info(),
             reserve_token_mint.to_account_info(),
-            match reserve_token_mint.to_account_info().owner == token_program.key {
-                true => token_program.to_account_info(),
-                false => token_2022_program.to_account_info(),
-            },
+            token_program_for_mint(
+                &reserve_token_mint.to_account_info(),
+                &token_program.to_account_info(),
+                &token_2022_program.to_account_info(),
+            )?,
             borrow_amount,
             reserve_token_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],

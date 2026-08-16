@@ -2,8 +2,8 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::sysvar;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{Mint, Token, TokenAccount},
-    token_interface::Token2022,
+    token::{Mint as SplMint, Token, TokenAccount as SplTokenAccount},
+    token_interface::{Mint, Token2022, TokenAccount},
 };
 
 use crate::constants::*;
@@ -11,13 +11,14 @@ use crate::errors::ErrorCode;
 use crate::events::{BurnEvent, EventMetadata, UserLiquidityPositionUpdatedEvent};
 use crate::generate_gamm_pair_seeds;
 use crate::state::{futarchy_authority::FutarchyAuthority, pair::Pair, rate_model::RateModel};
-use crate::utils::gamm_math::{construct_virtual_reserves_at_pessimistic_price, CPCurve};
 use crate::utils::liquidity_delta_circuit_breaker::{
     require_no_same_tx_add_liquidity, require_top_level_liquidity_delta_ix,
     LiquidityDeltaInstruction,
 };
 use crate::utils::math::ceil_div;
-use crate::utils::token::{token_burn, transfer_from_vault_to_user};
+use crate::utils::token::{
+    amount_after_transfer_fee, token_burn, token_program_for_mint, transfer_from_vault_to_user,
+};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct RemoveLiquidityArgs {
@@ -62,7 +63,7 @@ pub struct RemoveLiquidity<'info> {
         ],
         bump = pair.vault_bumps.reserve0
     )]
-    pub reserve0_vault: Box<Account<'info, TokenAccount>>,
+    pub reserve0_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -73,37 +74,37 @@ pub struct RemoveLiquidity<'info> {
         ],
         bump = pair.vault_bumps.reserve1
     )]
-    pub reserve1_vault: Box<Account<'info, TokenAccount>>,
+    pub reserve1_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
-        token::mint = pair.token0,
-        token::authority = user,
+        constraint = user_token0_account.mint == pair.token0 @ ErrorCode::InvalidTokenAccount,
+        constraint = user_token0_account.owner == user.key() @ ErrorCode::InvalidTokenAccount,
     )]
-    pub user_token0_account: Box<Account<'info, TokenAccount>>,
+    pub user_token0_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
-        token::mint = pair.token1,
-        token::authority = user,
+        constraint = user_token1_account.mint == pair.token1 @ ErrorCode::InvalidTokenAccount,
+        constraint = user_token1_account.owner == user.key() @ ErrorCode::InvalidTokenAccount,
     )]
-    pub user_token1_account: Box<Account<'info, TokenAccount>>,
+    pub user_token1_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         address = pair.token0 @ ErrorCode::InvalidMint
     )]
-    pub token0_mint: Box<Account<'info, Mint>>,
+    pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         address = pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub token1_mint: Box<Account<'info, Mint>>,
+    pub token1_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         mut,
         address = pair.lp_mint @ ErrorCode::InvalidMint,
     )]
-    pub lp_mint: Box<Account<'info, Mint>>,
+    pub lp_mint: Box<Account<'info, SplMint>>,
 
     #[account(
         init_if_needed,
@@ -112,7 +113,7 @@ pub struct RemoveLiquidity<'info> {
         payer = user,
         token::token_program = token_program,
     )]
-    pub user_lp_token_account: Box<Account<'info, TokenAccount>>,
+    pub user_lp_token_account: Box<Account<'info, SplTokenAccount>>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -184,16 +185,16 @@ impl<'info> RemoveLiquidity<'info> {
             ..
         } = ctx.accounts;
 
-        // Calculate amounts to remove (before fee)
+        // Calculate amounts to remove
         let total_supply = pair.total_supply;
-        let amount0_gross: u64 = (args.liquidity_in as u128)
+        let amount0_out: u64 = (args.liquidity_in as u128)
             .checked_mul(pair.reserve0 as u128)
             .ok_or(ErrorCode::LiquidityMathOverflow)?
             .checked_div(total_supply as u128)
             .ok_or(ErrorCode::LiquidityMathOverflow)?
             .try_into()
             .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
-        let amount1_gross: u64 = (args.liquidity_in as u128)
+        let amount1_out: u64 = (args.liquidity_in as u128)
             .checked_mul(pair.reserve1 as u128)
             .ok_or(ErrorCode::LiquidityMathOverflow)?
             .checked_div(total_supply as u128)
@@ -201,36 +202,18 @@ impl<'info> RemoveLiquidity<'info> {
             .try_into()
             .map_err(|_| ErrorCode::LiquidityConversionOverflow)?;
 
-        // Apply withdrawal fee (1%) - fee remains in reserves for remaining LPs
-        let fee0 = ceil_div(
-            (amount0_gross as u128)
-                .checked_mul(LIQUIDITY_WITHDRAWAL_FEE_BPS as u128)
-                .ok_or(ErrorCode::FeeMathOverflow)?,
-            BPS_DENOMINATOR as u128,
-        )
-        .ok_or(ErrorCode::FeeMathOverflow)? as u64;
-        let fee1 = ceil_div(
-            (amount1_gross as u128)
-                .checked_mul(LIQUIDITY_WITHDRAWAL_FEE_BPS as u128)
-                .ok_or(ErrorCode::FeeMathOverflow)?,
-            BPS_DENOMINATOR as u128,
-        )
-        .ok_or(ErrorCode::FeeMathOverflow)? as u64;
-
-        let amount0_out = amount0_gross
-            .checked_sub(fee0)
-            .ok_or(ErrorCode::LiquidityMathOverflow)?;
-        let amount1_out = amount1_gross
-            .checked_sub(fee1)
-            .ok_or(ErrorCode::LiquidityMathOverflow)?;
+        let amount0_user_out =
+            amount_after_transfer_fee(&token0_mint.to_account_info(), amount0_out)?;
+        let amount1_user_out =
+            amount_after_transfer_fee(&token1_mint.to_account_info(), amount1_out)?;
 
         // Check if amounts meet minimum (slippage protection)
         require!(
-            amount0_out >= args.min_amount0_out,
+            amount0_user_out >= args.min_amount0_out,
             ErrorCode::SlippageExceeded
         );
         require!(
-            amount1_out >= args.min_amount1_out,
+            amount1_user_out >= args.min_amount1_out,
             ErrorCode::SlippageExceeded
         );
 
@@ -266,10 +249,11 @@ impl<'info> RemoveLiquidity<'info> {
             reserve0_vault.to_account_info(),
             user_token0_account.to_account_info(),
             token0_mint.to_account_info(),
-            match token0_mint.to_account_info().owner == token_program.key {
-                true => token_program.to_account_info(),
-                false => token_2022_program.to_account_info(),
-            },
+            token_program_for_mint(
+                &token0_mint.to_account_info(),
+                &token_program.to_account_info(),
+                &token_2022_program.to_account_info(),
+            )?,
             amount0_out,
             token0_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
@@ -280,10 +264,11 @@ impl<'info> RemoveLiquidity<'info> {
             reserve1_vault.to_account_info(),
             user_token1_account.to_account_info(),
             token1_mint.to_account_info(),
-            match token1_mint.to_account_info().owner == token_program.key {
-                true => token_program.to_account_info(),
-                false => token_2022_program.to_account_info(),
-            },
+            token_program_for_mint(
+                &token1_mint.to_account_info(),
+                &token_program.to_account_info(),
+                &token_2022_program.to_account_info(),
+            )?,
             amount1_out,
             token1_mint.decimals,
             &[&generate_gamm_pair_seeds!(pair)[..]],
@@ -376,9 +361,7 @@ fn validate_post_withdraw_debt_coverage(
         pair.total_debt0,
         pair.total_debt1,
         pair.ema_price0_nad(),
-        pair.directional_ema_price0_nad(),
         pair.ema_price1_nad(),
-        pair.directional_ema_price1_nad(),
     )
 }
 
@@ -388,77 +371,46 @@ fn validate_post_withdraw_debt_coverage_with_prices(
     total_debt0: u64,
     total_debt1: u64,
     token0_ema_price_nad: u64,
-    token0_directional_ema_price_nad: u64,
     token1_ema_price_nad: u64,
-    token1_directional_ema_price_nad: u64,
 ) -> Result<()> {
-    let required_token1_for_debt0 = required_collateral_with_impact(
-        total_debt0,
-        post_reserve1,
-        post_reserve0,
-        token1_ema_price_nad,
-        token1_directional_ema_price_nad,
-    )?;
-    let required_token0_for_debt1 = required_collateral_with_impact(
-        total_debt1,
-        post_reserve0,
-        post_reserve1,
-        token0_ema_price_nad,
-        token0_directional_ema_price_nad,
-    )?;
+    let required_token1_for_debt0 =
+        required_collateral_at_reference_price(total_debt0, token1_ema_price_nad)?;
+    let required_token0_for_debt1 =
+        required_collateral_at_reference_price(total_debt1, token0_ema_price_nad)?;
 
     require!(
-        (post_reserve1 as u128) >= with_debt_coverage_buffer(required_token1_for_debt0)?,
+        post_reserve1 >= required_token1_for_debt0,
         ErrorCode::InsufficientPostWithdrawDebtCoverage
     );
     require!(
-        (post_reserve0 as u128) >= with_debt_coverage_buffer(required_token0_for_debt1)?,
+        post_reserve0 >= required_token0_for_debt1,
         ErrorCode::InsufficientPostWithdrawDebtCoverage
     );
 
     Ok(())
 }
 
-fn required_collateral_with_impact(
+fn required_collateral_at_reference_price(
     debt_amount: u64,
-    collateral_spot_reserve: u64,
-    debt_spot_reserve: u64,
     collateral_ema_price_nad: u64,
-    collateral_directional_ema_price_nad: u64,
 ) -> Result<u64> {
     if debt_amount == 0 {
         return Ok(0);
     }
 
     require!(
-        collateral_ema_price_nad > 0 && collateral_directional_ema_price_nad > 0,
+        collateral_ema_price_nad > 0,
         ErrorCode::InsufficientPostWithdrawDebtCoverage
     );
 
-    let (collateral_ema_reserve, debt_ema_reserve) =
-        construct_virtual_reserves_at_pessimistic_price(
-            collateral_spot_reserve,
-            debt_spot_reserve,
-            collateral_ema_price_nad,
-            collateral_directional_ema_price_nad,
-        )?;
-
-    require!(
-        collateral_ema_reserve > 0 && debt_ema_reserve > debt_amount,
-        ErrorCode::InsufficientPostWithdrawDebtCoverage
-    );
-
-    CPCurve::calculate_amount_in(collateral_ema_reserve, debt_ema_reserve, debt_amount)
-}
-
-fn with_debt_coverage_buffer(amount: u64) -> Result<u128> {
-    ceil_div(
-        (amount as u128)
-            .checked_mul(POST_WITHDRAW_DEBT_COVERAGE_BPS as u128)
+    let required = ceil_div(
+        (debt_amount as u128)
+            .checked_mul(NAD as u128)
             .ok_or(ErrorCode::DebtMathOverflow)?,
-        BPS_DENOMINATOR as u128,
+        collateral_ema_price_nad as u128,
     )
-    .ok_or(ErrorCode::DebtMathOverflow.into())
+    .ok_or(ErrorCode::DebtMathOverflow)?;
+    u64::try_from(required).map_err(|_| ErrorCode::DebtMathOverflow.into())
 }
 
 #[cfg(test)]
@@ -466,45 +418,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn liquidity_delta_withdrawal_solvency_passes_with_coverage_buffer() {
-        validate_post_withdraw_debt_coverage_with_prices(
-            1_000, 1_000, 100, 100, NAD, NAD, NAD, NAD,
-        )
-        .unwrap();
+    fn liquidity_delta_withdrawal_solvency_passes_at_exact_reference_coverage() {
+        validate_post_withdraw_debt_coverage_with_prices(1_000, 500, 500, 0, NAD, NAD).unwrap();
     }
 
     #[test]
-    fn liquidity_delta_withdrawal_solvency_fails_without_coverage_buffer() {
-        let err = validate_post_withdraw_debt_coverage_with_prices(
-            1_000, 1_000, 900, 0, NAD, NAD, NAD, NAD,
-        )
-        .unwrap_err();
+    fn liquidity_delta_withdrawal_solvency_uses_linear_reference_price_not_impact() {
+        validate_post_withdraw_debt_coverage_with_prices(1_000, 1_000, 900, 0, NAD, NAD).unwrap();
+    }
+
+    #[test]
+    fn liquidity_delta_withdrawal_solvency_fails_below_reference_coverage() {
+        let err = validate_post_withdraw_debt_coverage_with_prices(1_000, 499, 500, 0, NAD, NAD)
+            .unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::InsufficientPostWithdrawDebtCoverage));
     }
 
     #[test]
-    fn liquidity_delta_withdrawal_solvency_fails_with_zero_pessimistic_price() {
-        let err = validate_post_withdraw_debt_coverage_with_prices(
-            1_000, 1_000, 100, 0, NAD, NAD, NAD, 0,
-        )
-        .unwrap_err();
+    fn liquidity_delta_withdrawal_solvency_fails_with_zero_reference_price() {
+        let err = validate_post_withdraw_debt_coverage_with_prices(1_000, 1_000, 100, 0, NAD, 0)
+            .unwrap_err();
 
         assert_eq!(err, error!(ErrorCode::InsufficientPostWithdrawDebtCoverage));
     }
 
     #[test]
-    fn liquidity_delta_withdrawal_solvency_accounts_for_fee_remaining_in_reserves() {
-        let gross = 100_u64;
-        let fee = ceil_div(
-            (gross as u128) * (LIQUIDITY_WITHDRAWAL_FEE_BPS as u128),
-            BPS_DENOMINATOR as u128,
-        )
-        .unwrap() as u64;
-        let amount_out = gross - fee;
+    fn liquidity_delta_withdrawal_solvency_charges_no_withdrawal_fee() {
+        let amount_out = 100_u64;
 
-        assert_eq!(fee, 1);
-        assert_eq!(amount_out, 99);
-        assert_eq!(1_000_u64 - amount_out, 901);
+        assert_eq!(1_000_u64 - amount_out, 900);
     }
 }

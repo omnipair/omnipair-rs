@@ -72,6 +72,8 @@ pub mod user_position_created_event;
 pub use user_position_created_event::*;
 pub mod user_position_liquidated_event;
 pub use user_position_liquidated_event::*;
+pub mod user_position_transferred_event;
+pub use user_position_transferred_event::*;
 pub mod user_position_updated_event;
 pub use user_position_updated_event::*;
 pub mod user_position_view_kind;

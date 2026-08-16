@@ -2,19 +2,20 @@
 /// https://github.com/raydium-io/raydium-cp-swap/blob/master/programs/cp-swap/src/utils/token.rs
 /// Handles token transfers and minting with support for old token program and spl_token_2022
 use crate::errors::ErrorCode;
-use anchor_lang::{prelude::*, system_program, solana_program::program::invoke};
+use anchor_lang::{prelude::*, solana_program::program::invoke, system_program};
 use anchor_spl::{
-    token::{self, Token, TokenAccount},
+    token::{self, Token, TokenAccount as SplTokenAccount},
     token_2022::{
         self,
-        Token2022,
         spl_token_2022::{
             self,
             extension::{
                 transfer_fee::{TransferFeeConfig, MAX_FEE_BASIS_POINTS},
+                transfer_hook::TransferHook,
                 ExtensionType, StateWithExtensions,
             },
         },
+        Token2022,
     },
     token_interface::{
         initialize_account3, spl_token_2022::extension::BaseStateWithExtensions,
@@ -32,14 +33,8 @@ pub fn sync_native_if_wsol<'a>(
 ) -> Result<()> {
     if *mint == spl_token::native_mint::id() {
         invoke(
-            &spl_token::instruction::sync_native(
-                token_program.key,
-                token_account.key,
-            )?,
-            &[
-                token_program.clone(),
-                token_account.clone(),
-            ],
+            &spl_token::instruction::sync_native(token_program.key, token_account.key)?,
+            &[token_program.clone(), token_account.clone()],
         )?;
     }
     Ok(())
@@ -59,6 +54,7 @@ pub fn transfer_from_user_to_vault<'a>(
     }
 
     if *token_program.key == Token2022::id() {
+        emit_token_2022_transfer_memo()?;
         token_2022::transfer_checked(
             CpiContext::new(
                 token_program.to_account_info(),
@@ -103,6 +99,7 @@ pub fn transfer_from_vault<'a>(
         return Ok(());
     }
     if *token_program.key == Token2022::id() {
+        emit_token_2022_transfer_memo()?;
         token_2022::transfer_checked(
             CpiContext::new_with_signer(
                 token_program.to_account_info(),
@@ -136,7 +133,7 @@ pub fn transfer_from_vault<'a>(
 }
 
 /// Transfers tokens from one vault account to another vault account.
-/// 
+///
 /// This function is an explicit alias for `transfer_from_vault`, providing clearer intent for vault-to-vault token movement.
 /// Arguments:
 ///   - `authority`: The account authorized to sign for the transfer (typically a PDA).
@@ -167,7 +164,7 @@ pub fn transfer_from_vault_to_vault<'a>(
 }
 
 /// Transfers tokens from one vault account to a user's token account.
-/// 
+///
 /// This function is an explicit alias for `transfer_from_vault`, providing clearer intent for vault-to-user token movement.
 /// Arguments:
 ///   - `authority`: The account authorized to sign for the transfer (typically a PDA).
@@ -200,6 +197,17 @@ pub fn transfer_from_vault_to_user<'a>(
         mint_decimals,
         signer_seeds,
     )
+}
+
+#[cfg(not(feature = "no-spl-memo"))]
+fn emit_token_2022_transfer_memo() -> Result<()> {
+    invoke(&spl_memo::build_memo(b"omnipair", &[]), &[])?;
+    Ok(())
+}
+
+#[cfg(feature = "no-spl-memo")]
+fn emit_token_2022_transfer_memo() -> Result<()> {
+    Ok(())
 }
 
 /// Issue a spl_token `MintTo` instruction.
@@ -259,7 +267,7 @@ pub fn get_transfer_inverse_fee(mint_info: &AccountInfo, post_fee_amount: u64) -
         return Ok(0);
     }
     if post_fee_amount == 0 {
-        return err!(ErrorCode::AmountZero);
+        return Ok(0);
     }
     let mint_data = mint_info.try_borrow_data()?;
     let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
@@ -273,12 +281,19 @@ pub fn get_transfer_inverse_fee(mint_info: &AccountInfo, post_fee_amount: u64) -
         } else {
             transfer_fee_config
                 .calculate_inverse_epoch_fee(epoch, post_fee_amount)
-                .unwrap()
+                .ok_or(ErrorCode::FeeMathOverflow)?
         }
     } else {
         0
     };
     Ok(fee)
+}
+
+pub fn amount_with_transfer_fee(mint_info: &AccountInfo, post_fee_amount: u64) -> Result<u64> {
+    let fee = get_transfer_inverse_fee(mint_info, post_fee_amount)?;
+    post_fee_amount
+        .checked_add(fee)
+        .ok_or(ErrorCode::FeeMathOverflow.into())
 }
 
 /// Calculate the fee for input amount
@@ -292,11 +307,32 @@ pub fn get_transfer_fee(mint_info: &AccountInfo, pre_fee_amount: u64) -> Result<
     let fee = if let Ok(transfer_fee_config) = mint.get_extension::<TransferFeeConfig>() {
         transfer_fee_config
             .calculate_epoch_fee(Clock::get()?.epoch, pre_fee_amount)
-            .unwrap()
+            .ok_or(ErrorCode::FeeMathOverflow)?
     } else {
         0
     };
     Ok(fee)
+}
+
+pub fn amount_after_transfer_fee(mint_info: &AccountInfo, pre_fee_amount: u64) -> Result<u64> {
+    let fee = get_transfer_fee(mint_info, pre_fee_amount)?;
+    pre_fee_amount
+        .checked_sub(fee)
+        .ok_or(ErrorCode::FeeMathOverflow.into())
+}
+
+pub fn token_program_for_mint<'a>(
+    mint_info: &AccountInfo<'a>,
+    token_program: &AccountInfo<'a>,
+    token_2022_program: &AccountInfo<'a>,
+) -> Result<AccountInfo<'a>> {
+    if mint_info.owner == token_program.key {
+        Ok(token_program.clone())
+    } else if mint_info.owner == token_2022_program.key {
+        Ok(token_2022_program.clone())
+    } else {
+        err!(ErrorCode::InvalidTokenProgram)
+    }
 }
 
 pub fn is_supported_mint(mint_account: &InterfaceAccount<Mint>) -> Result<bool> {
@@ -304,16 +340,28 @@ pub fn is_supported_mint(mint_account: &InterfaceAccount<Mint>) -> Result<bool> 
     if *mint_info.owner == Token::id() {
         return Ok(true);
     }
+    if spl_token_2022::native_mint::check_id(mint_info.key) {
+        return Ok(false);
+    }
 
     let mint_data = mint_info.try_borrow_data()?;
     let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
     let extensions = mint.get_extension_types()?;
     for e in extensions {
-        if e != ExtensionType::TransferFeeConfig
-            && e != ExtensionType::MetadataPointer
-            && e != ExtensionType::TokenMetadata
-        {
-            return Ok(false);
+        match e {
+            ExtensionType::TransferFeeConfig
+            | ExtensionType::MetadataPointer
+            | ExtensionType::TokenMetadata
+            | ExtensionType::InterestBearingConfig => {}
+            ExtensionType::TransferHook => {
+                let hook = mint.get_extension::<TransferHook>()?;
+                if Option::<Pubkey>::from(hook.program_id).is_some()
+                    || Option::<Pubkey>::from(hook.authority).is_some()
+                {
+                    return Ok(false);
+                }
+            }
+            _ => return Ok(false),
         }
     }
     Ok(true)
@@ -341,7 +389,7 @@ pub fn create_token_account<'a>(
                 &required_extensions,
             )?
         } else {
-            TokenAccount::LEN
+            SplTokenAccount::LEN
         }
     };
     create_or_allocate_account(

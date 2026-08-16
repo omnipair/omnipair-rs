@@ -1,20 +1,23 @@
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program::{
-    instruction::{Instruction, AccountMeta},
-    program::invoke,
-    hash::hash,
-};
-use anchor_spl::{
-    token::{Token, TokenAccount, Mint},
-    token_interface::{Token2022},
-};
 use crate::{
-    state::*,
     constants::*,
     errors::ErrorCode,
     events::*,
-    utils::{token::{transfer_from_vault_to_user, sync_native_if_wsol}, math::ceil_div},
     generate_gamm_pair_seeds,
+    state::*,
+    utils::{
+        math::ceil_div,
+        token::{sync_native_if_wsol, token_program_for_mint, transfer_from_vault_to_user},
+    },
+};
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::{
+    hash::hash,
+    instruction::{AccountMeta, Instruction},
+    program::invoke,
+};
+use anchor_spl::{
+    token::Token,
+    token_interface::{Mint, Token2022, TokenAccount},
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -55,7 +58,7 @@ pub struct Flashloan<'info> {
         bump = futarchy_authority.bump
     )]
     pub futarchy_authority: Account<'info, FutarchyAuthority>,
-    
+
     #[account(
         mut,
         seeds = [
@@ -65,8 +68,8 @@ pub struct Flashloan<'info> {
         ],
         bump = pair.vault_bumps.reserve0
     )]
-    pub reserve0_vault: Account<'info, TokenAccount>,
-    
+    pub reserve0_vault: InterfaceAccount<'info, TokenAccount>,
+
     #[account(
         mut,
         seeds = [
@@ -76,49 +79,46 @@ pub struct Flashloan<'info> {
         ],
         bump = pair.vault_bumps.reserve1
     )]
-    pub reserve1_vault: Account<'info, TokenAccount>,
+    pub reserve1_vault: InterfaceAccount<'info, TokenAccount>,
 
     #[account(
         address = pair.token0 @ ErrorCode::InvalidMint
     )]
-    pub token0_mint: Box<Account<'info, Mint>>,
-    
+    pub token0_mint: Box<InterfaceAccount<'info, Mint>>,
+
     #[account(
         address = pair.token1 @ ErrorCode::InvalidMint
     )]
-    pub token1_mint: Box<Account<'info, Mint>>,
+    pub token1_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         mut,
         constraint = receiver_token0_account.mint == pair.token0,
     )]
-    pub receiver_token0_account: Account<'info, TokenAccount>,
-    
+    pub receiver_token0_account: InterfaceAccount<'info, TokenAccount>,
+
     #[account(
         mut,
         constraint = receiver_token1_account.mint == pair.token1,
     )]
-    pub receiver_token1_account: Account<'info, TokenAccount>,
+    pub receiver_token1_account: InterfaceAccount<'info, TokenAccount>,
 
     /// CHECK: The receiver program that implements the flash loan callback
     /// This program will be invoked via CPI
     pub receiver_program: UncheckedAccount<'info>,
-    
+
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub token_2022_program: Program<'info, Token2022>,
-    
+
     /// CHECK: System program for CPI
     pub system_program: Program<'info, System>,
 }
 
 impl<'info> Flashloan<'info> {
     pub fn validate(&self, args: &FlashloanArgs) -> Result<()> {
-        require!(
-            args.amount0 > 0 || args.amount1 > 0,
-            ErrorCode::AmountZero
-        );
-        
+        require!(args.amount0 > 0 || args.amount1 > 0, ErrorCode::AmountZero);
+
         // Ensure loan amounts doesn't exceed available cash reserves
         if args.amount0 > 0 {
             require_gte!(
@@ -127,7 +127,7 @@ impl<'info> Flashloan<'info> {
                 ErrorCode::BorrowExceedsReserve
             );
         }
-        
+
         if args.amount1 > 0 {
             require_gte!(
                 self.pair.cash_reserve1,
@@ -135,7 +135,7 @@ impl<'info> Flashloan<'info> {
                 ErrorCode::BorrowExceedsReserve
             );
         }
-        
+
         Ok(())
     }
 
@@ -156,7 +156,10 @@ impl<'info> Flashloan<'info> {
         Ok(())
     }
 
-    pub fn handle_flashloan(ctx: Context<'_, '_, '_, 'info, Self>, args: FlashloanArgs) -> Result<()> {
+    pub fn handle_flashloan(
+        ctx: Context<'_, '_, '_, 'info, Self>,
+        args: FlashloanArgs,
+    ) -> Result<()> {
         let Flashloan {
             pair,
             reserve0_vault,
@@ -172,24 +175,40 @@ impl<'info> Flashloan<'info> {
             ..
         } = ctx.accounts;
 
-        let FlashloanArgs { amount0, amount1, data } = args;
+        let FlashloanArgs {
+            amount0,
+            amount1,
+            data,
+        } = args;
 
         // Calculate fees (5 bps = 0.05%)
-        let fee0 = ceil_div((amount0 as u128)
-            .checked_mul(FLASHLOAN_FEE_BPS as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)?,
+        let fee0 = ceil_div(
+            (amount0 as u128)
+                .checked_mul(FLASHLOAN_FEE_BPS as u128)
+                .ok_or(ErrorCode::FeeMathOverflow)?,
             BPS_DENOMINATOR as u128,
-        ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
-        
-        let fee1 = ceil_div((amount1 as u128)
-            .checked_mul(FLASHLOAN_FEE_BPS as u128)
-            .ok_or(ErrorCode::FeeMathOverflow)?,
+        )
+        .ok_or(ErrorCode::FeeMathOverflow)? as u64;
+
+        let fee1 = ceil_div(
+            (amount1 as u128)
+                .checked_mul(FLASHLOAN_FEE_BPS as u128)
+                .ok_or(ErrorCode::FeeMathOverflow)?,
             BPS_DENOMINATOR as u128,
-        ).ok_or(ErrorCode::FeeMathOverflow)? as u64;
+        )
+        .ok_or(ErrorCode::FeeMathOverflow)? as u64;
 
         // Sync native SOL for WSOL vaults before recording balances
-        sync_native_if_wsol(&pair.token0, &reserve0_vault.to_account_info(), &token_program.to_account_info())?;
-        sync_native_if_wsol(&pair.token1, &reserve1_vault.to_account_info(), &token_program.to_account_info())?;
+        sync_native_if_wsol(
+            &pair.token0,
+            &reserve0_vault.to_account_info(),
+            &token_program.to_account_info(),
+        )?;
+        sync_native_if_wsol(
+            &pair.token1,
+            &reserve1_vault.to_account_info(),
+            &token_program.to_account_info(),
+        )?;
 
         // Record balances before the flash loan
         reserve0_vault.reload()?;
@@ -204,10 +223,11 @@ impl<'info> Flashloan<'info> {
                 reserve0_vault.to_account_info(),
                 receiver_token0_account.to_account_info(),
                 token0_mint.to_account_info(),
-                match token0_mint.to_account_info().owner == token_program.key {
-                    true => token_program.to_account_info(),
-                    false => token_2022_program.to_account_info(),
-                },
+                token_program_for_mint(
+                    &token0_mint.to_account_info(),
+                    &token_program.to_account_info(),
+                    &token_2022_program.to_account_info(),
+                )?,
                 amount0,
                 token0_mint.decimals,
                 &[&generate_gamm_pair_seeds!(pair)[..]],
@@ -220,16 +240,17 @@ impl<'info> Flashloan<'info> {
                 reserve1_vault.to_account_info(),
                 receiver_token1_account.to_account_info(),
                 token1_mint.to_account_info(),
-                match token1_mint.to_account_info().owner == token_program.key {
-                    true => token_program.to_account_info(),
-                    false => token_2022_program.to_account_info(),
-                },
+                token_program_for_mint(
+                    &token1_mint.to_account_info(),
+                    &token_program.to_account_info(),
+                    &token_2022_program.to_account_info(),
+                )?,
                 amount1,
                 token1_mint.decimals,
                 &[&generate_gamm_pair_seeds!(pair)[..]],
             )?;
         }
-        
+
         // Prepare callback data
         let callback_data = FlashLoanCallbackData {
             initiator: user.key(),
@@ -241,19 +262,19 @@ impl<'info> Flashloan<'info> {
         // Build the instruction data with Anchor discriminator
         // Anchor computes discriminators as: first 8 bytes of SHA256("global:instruction_name")
         let discriminator = &hash(b"global:flash_loan_callback").to_bytes()[..8];
-        
+
         let mut callback_instruction_data = Vec::new();
         callback_instruction_data.extend_from_slice(discriminator);
         callback_data.serialize(&mut callback_instruction_data)?;
 
-        // Build account metas for the CPI instruction  
+        // Build account metas for the CPI instruction
         // Order must match the receiver's FlashLoanCallback account struct
         let mut callback_account_metas = vec![
-            AccountMeta::new_readonly(user.key(), true),           // initiator
+            AccountMeta::new_readonly(user.key(), true), // initiator
             AccountMeta::new(receiver_token0_account.key(), false), // receiver_token0_account
             AccountMeta::new(receiver_token1_account.key(), false), // receiver_token1_account
-            AccountMeta::new_readonly(token0_mint.key(), false),    // token0_mint
-            AccountMeta::new_readonly(token1_mint.key(), false),    // token1_mint
+            AccountMeta::new_readonly(token0_mint.key(), false), // token0_mint
+            AccountMeta::new_readonly(token1_mint.key(), false), // token1_mint
         ];
 
         // Add remaining accounts (vaults + any additional accounts)
@@ -265,9 +286,10 @@ impl<'info> Flashloan<'info> {
                 is_writable: acc.is_writable,
             });
         }
-        
-        // Add token_program as the last account
+
+        // Add token programs after receiver-specific accounts.
         callback_account_metas.push(AccountMeta::new_readonly(token_program.key(), false));
+        callback_account_metas.push(AccountMeta::new_readonly(token_2022_program.key(), false));
 
         // Build the CPI instruction to the receiver program
         let callback_instruction = Instruction {
@@ -276,25 +298,28 @@ impl<'info> Flashloan<'info> {
             data: callback_instruction_data,
         };
 
-        // Execute the CPI callback
-        // Create a slice of base accounts, then we'll include remaining accounts
+        // Execute the CPI callback with account infos ordered to match callback_account_metas.
         let base_accounts = &[
             user.to_account_info(),
             receiver_token0_account.to_account_info(),
             receiver_token1_account.to_account_info(),
             token0_mint.to_account_info(),
             token1_mint.to_account_info(),
-            token_program.to_account_info(),
         ];
-        
-        // For the CPI, we need to pass all account infos
-        // Combine base accounts with remaining accounts into a single slice
-        let all_accounts = [base_accounts, ctx.remaining_accounts].concat();
+        let token_program_accounts = &[
+            token_program.to_account_info(),
+            token_2022_program.to_account_info(),
+        ];
 
-        invoke(
-            &callback_instruction,
-            &all_accounts,
-        )?;
+        // For the CPI, we need to pass all account infos.
+        let all_accounts = [
+            base_accounts,
+            ctx.remaining_accounts,
+            token_program_accounts,
+        ]
+        .concat();
+
+        invoke(&callback_instruction, &all_accounts)?;
 
         // Reload vault accounts to get updated balances after callback execution
         reserve0_vault.reload()?;

@@ -89,6 +89,12 @@ pub enum ErrorCode {
     #[msg("User position not initialized")]
     UserPositionNotInitialized,
 
+    #[msg("Recipient position is not empty")]
+    RecipientPositionNotEmpty,
+
+    #[msg("Invalid position owner")]
+    InvalidPositionOwner,
+
     #[msg("Zero debt amount")]
     ZeroDebtAmount,
 
