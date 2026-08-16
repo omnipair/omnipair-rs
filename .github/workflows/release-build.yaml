@@ -569,8 +569,9 @@ jobs:
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
+      # Not gated on check-verified: the IDL publish below needs this even when
+      # the binary is already verified.
       - name: Install Solana CLI
-        if: steps.check-verified.outputs.skip != 'true'
         run: |
           sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
           echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
@@ -583,8 +584,8 @@ jobs:
         if: steps.check-verified.outputs.skip != 'true'
         run: cargo install solana-verify
 
+      # Not gated on check-verified, for the same reason as the CLI install.
       - name: Setup deployer keypair
-        if: steps.check-verified.outputs.skip != 'true'
         run: |
           # Use deployer keypair for OtterSec attestation and IDL publishing (needs SOL for on-chain tx)
           mkdir -p ~/.config/solana
@@ -716,9 +717,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      # Deliberately not gated on check-verified. Binary verification and IDL
+      # publishing are independent: a program can be verified while its
+      # published IDL is several releases stale, which is exactly what happened
+      # for v0.10.5. Tying them meant the publish silently never ran.
       - name: Publish IDL on-chain
-        if: success() && steps.check-verified.outputs.skip != 'true'
+        if: success()
         run: |
+          set -uo pipefail
           RPC_URL="${{ secrets.MAINNET_RPC_URL || vars.MAINNET_RPC_URL }}"
           if [ -z "$RPC_URL" ]; then
             RPC_URL="https://api.mainnet-beta.solana.com"
@@ -726,17 +732,28 @@ jobs:
 
           echo "Publishing IDL on-chain for ${{ env.PROGRAM_ID }}..."
 
-          # Try upgrade first (IDL account already exists), fall back to init
-          anchor idl upgrade \
+          # Upgrade when the IDL account exists, otherwise create it.
+          if anchor idl upgrade \
             --provider.cluster "$RPC_URL" \
             --filepath target/idl/omnipair.json \
-            ${{ env.PROGRAM_ID }} || \
-          anchor idl init \
-            --provider.cluster "$RPC_URL" \
-            --filepath target/idl/omnipair.json \
-            ${{ env.PROGRAM_ID }}
+            ${{ env.PROGRAM_ID }}; then
+            echo "IDL upgraded"
+            exit 0
+          fi
 
-          echo "IDL published successfully"
+          if anchor idl init \
+            --provider.cluster "$RPC_URL" \
+            --filepath target/idl/omnipair.json \
+            ${{ env.PROGRAM_ID }}; then
+            echo "IDL initialised"
+            exit 0
+          fi
+
+          # Both paths fail when the IDL account exists but is owned by someone
+          # other than this keypair, which no retry can resolve.
+          DEPLOYER=$(solana-keygen pubkey ~/.config/solana/id.json 2>/dev/null || echo "unknown")
+          echo "::error::Could not publish the IDL. 'upgrade' needs this keypair to be the IDL authority and 'init' needs the account not to exist. Deployer is $DEPLOYER. Check the IDL authority with 'anchor idl authority ${{ env.PROGRAM_ID }}' and transfer it with 'anchor idl set-authority' if it belongs to a personal wallet."
+          exit 1
 
       - name: Verification status
         run: |
