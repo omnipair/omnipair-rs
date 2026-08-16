@@ -595,7 +595,7 @@ jobs:
           chmod 600 deployer-keypair.json
           DEPLOYER_PUBKEY=$(solana address -k deployer-keypair.json)
           echo "DEPLOYER_PUBKEY=$DEPLOYER_PUBKEY" >> $GITHUB_ENV
-          solana config set --url ${{ vars.MAINNET_RPC_URL || 'https://api.mainnet-beta.solana.com' }}
+          solana config set --url ${{ secrets.MAINNET_RPC_URL || vars.MAINNET_RPC_URL || 'https://api.mainnet-beta.solana.com' }}
           echo "Deployer pubkey: $DEPLOYER_PUBKEY"
           echo "Deployer balance:"
           solana balance || echo "Could not check balance"
