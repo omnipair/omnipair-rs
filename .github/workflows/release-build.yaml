@@ -390,7 +390,17 @@ jobs:
 
       - name: Check deployer balance
         run: |
-          solana balance deployer-keypair.json -u ${{ vars.MAINNET_RPC_URL || 'https://api.mainnet-beta.solana.com' }}
+          set -euo pipefail
+          RPC_URL="${{ secrets.MAINNET_RPC_URL || vars.MAINNET_RPC_URL || 'https://api.mainnet-beta.solana.com' }}"
+          BALANCE=$(solana balance deployer-keypair.json -u "$RPC_URL" | awk '{print $1}')
+          echo "Deployer balance: $BALANCE SOL"
+
+          # Buffer rent scales with binary size; the current program needs ~7.4 SOL.
+          MIN_SOL=8
+          if awk "BEGIN {exit !($BALANCE < $MIN_SOL)}"; then
+            echo "::error::Deployer has $BALANCE SOL but the buffer needs at least $MIN_SOL SOL. Fund $(solana-keygen pubkey deployer-keypair.json) and re-run."
+            exit 1
+          fi
 
       - name: Generate buffer keypair
         run: |
@@ -406,7 +416,12 @@ jobs:
           max_attempts: 10
           shell: bash
           command: |
-            RPC_URL="${{ vars.MAINNET_RPC_URL }}"
+            # Without this the step's exit code comes from the trailing echo,
+            # so a failed write-buffer reports success and the next step runs
+            # against a buffer that was never created.
+            set -euo pipefail
+
+            RPC_URL="${{ secrets.MAINNET_RPC_URL || vars.MAINNET_RPC_URL }}"
             if [ -z "$RPC_URL" ]; then
               RPC_URL="https://api.mainnet-beta.solana.com"
             fi
@@ -426,7 +441,7 @@ jobs:
 
       - name: Transfer buffer authority to Squads
         run: |
-          RPC_URL="${{ vars.MAINNET_RPC_URL }}"
+          RPC_URL="${{ secrets.MAINNET_RPC_URL || vars.MAINNET_RPC_URL }}"
           if [ -z "$RPC_URL" ]; then
             RPC_URL="https://api.mainnet-beta.solana.com"
           fi
@@ -567,7 +582,7 @@ jobs:
       - name: Verify from repository (hash check)
         if: steps.check-verified.outputs.skip != 'true'
         run: |
-          RPC_URL="${{ vars.MAINNET_RPC_URL }}"
+          RPC_URL="${{ secrets.MAINNET_RPC_URL || vars.MAINNET_RPC_URL }}"
           if [ -z "$RPC_URL" ]; then
             RPC_URL="https://api.mainnet-beta.solana.com"
           fi
@@ -683,7 +698,7 @@ jobs:
       - name: Publish IDL on-chain
         if: success() && steps.check-verified.outputs.skip != 'true'
         run: |
-          RPC_URL="${{ vars.MAINNET_RPC_URL }}"
+          RPC_URL="${{ secrets.MAINNET_RPC_URL || vars.MAINNET_RPC_URL }}"
           if [ -z "$RPC_URL" ]; then
             RPC_URL="https://api.mainnet-beta.solana.com"
           fi
