@@ -1929,7 +1929,7 @@ pub mod omnipair {
             self.accounts.futarchy_authority =
                 AccountMeta::new_readonly(accounts.futarchy_authority, false);
 
-            self.accounts.rate_model = AccountMeta::new(accounts.rate_model, true);
+            self.accounts.rate_model = AccountMeta::new(accounts.rate_model, false);
 
             self.accounts.lp_mint = AccountMeta::new(accounts.lp_mint, false);
 
