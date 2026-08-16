@@ -7,7 +7,7 @@ use crate::{
     },
     utils::{
         EVENT_AUTHORITY_ADDRESS, METADATA_SEED_PREFIX,
-        MPL_TOKEN_METADATA_ID, PAIR_SEED_PREFIX, TOKEN_PROGRAM,
+        MPL_TOKEN_METADATA_ID, PAIR_SEED_PREFIX, RATE_MODEL_SEED_PREFIX, TOKEN_PROGRAM,
     },
     FuzzTest,
 };
@@ -185,8 +185,14 @@ impl FuzzTest {
         // futarchy authority PDA
         let futarchy_authority = self.fuzz_accounts.futarchy_authority.get(&mut self.trident).expect("Futarchy authority should exist");
 
-        // rate model
-        let rate_model = self.trident.random_keypair().pubkey();
+        // rate model PDA, derived from the pair
+        let rate_model = self
+            .trident
+            .find_program_address(
+                &[RATE_MODEL_SEED_PREFIX, pair.as_ref()],
+                &omnipair::program_id(),
+            )
+            .0;
 
         // lp mint
 

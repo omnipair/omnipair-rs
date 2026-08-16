@@ -108,6 +108,8 @@ pub const RESERVE_VAULT_SEED_PREFIX: &[u8] = b"reserve_vault";
 #[constant]
 pub const COLLATERAL_VAULT_SEED_PREFIX: &[u8] = b"collateral_vault";
 #[constant]
+pub const RATE_MODEL_SEED_PREFIX: &[u8] = b"rate_model";
+#[constant]
 pub const VERSION: u8 = 1;
 
 /// Emergency signer authorized to toggle reduce-only mode.
