@@ -20,7 +20,9 @@ omnipair = "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE"
 omnipair = "omnixgS8fnqHfCcTGKWj6JtKjzpJZ1Y5y9pyFkQDkYE"
 
 [registry]
-url = "https://mainnet.helius-rpc.com/?api-key=30168341-6376-4364-98bd-e7bb7da3d5e1"
+# Keyed endpoints do not belong in a tracked file. Override locally with
+# ANCHOR_PROVIDER_URL, or pass -u to the CLI.
+url = "https://api.mainnet-beta.solana.com"
 
 [provider]
 cluster = "mainnet"

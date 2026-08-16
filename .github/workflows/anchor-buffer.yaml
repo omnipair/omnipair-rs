@@ -120,7 +120,7 @@ jobs:
         id: rpc
         run: |
           if [ "${{ inputs.network }}" = "mainnet-beta" ]; then
-            RPC="${{ vars.MAINNET_RPC_URL }}"
+            RPC="${{ secrets.MAINNET_RPC_URL || vars.MAINNET_RPC_URL }}"
             if [ -z "$RPC" ]; then
               RPC="https://api.mainnet-beta.solana.com"
             fi
