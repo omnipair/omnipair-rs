@@ -439,6 +439,27 @@ jobs:
             echo "address=$BUFFER_ADDRESS" >> $GITHUB_OUTPUT
             echo "Buffer deployed: $BUFFER_ADDRESS"
 
+      # A buffer whose authority has not yet moved to Squads is still ours to
+      # close. Without this an aborted run strands its rent (~8 SOL) forever,
+      # because rent is only refunded when an upgrade executes against it.
+      - name: Close buffer if the deploy failed
+        if: failure()
+        run: |
+          set -uo pipefail
+          RPC_URL="${{ secrets.MAINNET_RPC_URL || vars.MAINNET_RPC_URL || 'https://api.mainnet-beta.solana.com' }}"
+          BUFFER_ADDRESS=$(solana-keygen pubkey buffer-keypair.json)
+
+          if ! solana account "$BUFFER_ADDRESS" -u "$RPC_URL" >/dev/null 2>&1; then
+            echo "Buffer $BUFFER_ADDRESS was never created; nothing to reclaim."
+            exit 0
+          fi
+
+          echo "Closing orphaned buffer $BUFFER_ADDRESS"
+          solana program close "$BUFFER_ADDRESS" \
+            --recipient $(solana-keygen pubkey deployer-keypair.json) \
+            --keypair deployer-keypair.json \
+            -u "$RPC_URL" || echo "::warning::Could not close $BUFFER_ADDRESS. If its authority already moved to Squads, reclaim it with scripts/close-orphaned-buffers.mjs."
+
       - name: Transfer buffer authority to Squads
         run: |
           RPC_URL="${{ secrets.MAINNET_RPC_URL || vars.MAINNET_RPC_URL }}"
